@@ -163,26 +163,37 @@ if [ ! -f "/docker_data/promtail/config.yaml" ]; then
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
+
 positions:
   filename: /tmp/positions.yaml
+
 clients:
   - url: http://loki:3100/loki/api/v1/push
+
 scrape_configs:
-  - job_name: containers
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: containerlogs
-          __path__: /var/lib/docker/containers/*/*-json.log
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_label_app']
+        target_label: 'app'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'compose_project'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      - source_labels: ['__meta_docker_container_id']
+        target_label: 'container_id'
+      - source_labels: ['__meta_docker_container_id']
+        target_label: '__path__'
+        replacement: /var/lib/docker/containers/$1/$1-json.log
     pipeline_stages:
-      - json:
-          expressions:
-            output: log
-            stream: stream
-            timestamp: time
-      - output:
-          source: output
+      - docker: {}
 PROMCONF
     echo -e "${GREEN}✓ Promtail 설정 파일 생성 완료${NC}"
 fi
