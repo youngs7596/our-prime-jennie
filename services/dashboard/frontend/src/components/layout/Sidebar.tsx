@@ -24,6 +24,7 @@ const navItems = [
 
   { path: '/news', icon: Newspaper, label: 'News & Sentiment' },
   { path: '/analyst', icon: Target, label: 'AI Analyst' },
+  // Trading Logic (Factors)
   { path: '/logic', icon: Brain, label: 'Trading Logic' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
