@@ -114,17 +114,13 @@ echo "Setting up for user: $REAL_USER in $PROJECT_DIR"
 # Change ownership of directory to user to avoid permission issues
 chown -R $REAL_USER:$REAL_USER $PROJECT_DIR
 
-sudo -u $REAL_USER bash <<EOF
-    # Create Directories
-    mkdir -p data/mariadb logs models tokens
-    
-    # Create Docker data directories (Loki, Promtail, Grafana)
-    sudo mkdir -p /docker_data/loki /docker_data/loki_data /docker_data/promtail /docker_data/redis_data /docker_data/scheduler_data
-    sudo chown -R $REAL_USER:$REAL_USER /docker_data
-    
-    # Create Loki config if not exists
-    if [ ! -f "/docker_data/loki/local-config.yaml" ]; then
-        cat > /docker_data/loki/local-config.yaml << 'LOKICONF'
+# Create Docker data directories (run as root)
+echo -e "${YELLOW}[4/6] 모니터링 서비스 설정 파일 생성 중...${NC}"
+mkdir -p /docker_data/loki /docker_data/loki_data /docker_data/promtail /docker_data/redis_data /docker_data/scheduler_data
+
+# Create Loki config if not exists
+if [ ! -f "/docker_data/loki/local-config.yaml" ]; then
+    cat > /docker_data/loki/local-config.yaml << 'LOKICONF'
 auth_enabled: false
 server:
   http_listen_port: 3100
@@ -158,12 +154,12 @@ schema_config:
 ruler:
   alertmanager_url: http://localhost:9093
 LOKICONF
-        echo "✓ Loki 설정 파일 생성 완료"
-    fi
-    
-    # Create Promtail config if not exists
-    if [ ! -f "/docker_data/promtail/config.yaml" ]; then
-        cat > /docker_data/promtail/config.yaml << 'PROMCONF'
+    echo -e "${GREEN}✓ Loki 설정 파일 생성 완료${NC}"
+fi
+
+# Create Promtail config if not exists
+if [ ! -f "/docker_data/promtail/config.yaml" ]; then
+    cat > /docker_data/promtail/config.yaml << 'PROMCONF'
 server:
   http_listen_port: 9080
   grpc_listen_port: 0
@@ -188,8 +184,19 @@ scrape_configs:
       - output:
           source: output
 PROMCONF
-        echo "✓ Promtail 설정 파일 생성 완료"
-    fi
+    echo -e "${GREEN}✓ Promtail 설정 파일 생성 완료${NC}"
+fi
+
+chown -R $REAL_USER:$REAL_USER /docker_data
+
+# [5/6] User environment setup
+echo -e "\n${YELLOW}[5/6] 사용자 환경 설정 중...${NC}"
+
+sudo -u $REAL_USER bash <<EOF
+    cd $PROJECT_DIR
+    
+    # Create Directories
+    mkdir -p data/mariadb logs models tokens
     
     # Python Venv
     if [ ! -d "venv" ]; then
