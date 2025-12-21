@@ -882,7 +882,7 @@ services:
     network_mode: host
     volumes:
       - ./secrets.json:/config/secrets.json:ro
-    restart: unless-stopped
+    restart: on-failure # 토큰 없으면 exit 0으로 종료, 재시작 안함
     labels:
       - app=cloudflared
       - stack=carbon-silicons-council
