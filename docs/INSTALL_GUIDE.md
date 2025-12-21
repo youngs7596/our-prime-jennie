@@ -201,6 +201,18 @@ curl http://localhost:8090/api/health
 | Grafana | admin | admin | 첫 로그인 시 비밀번호 변경 요청됨 |
 | RabbitMQ | guest | guest | http://localhost:15672 |
 
+### 📊 서비스별 로그 모니터링 (Grafana Explore)
+
+| 서비스 | Grafana Explore 링크 |
+|--------|---------------------|
+| 🔍 Scout Job | [scout-job](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22scout-job%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 📰 News Crawler | [news-crawler](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22news-crawler%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 🛒 Buy Scanner | [buy-scanner](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22buy-scanner%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 💰 Buy Executor | [buy-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22buy-executor%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 📈 Price Monitor | [price-monitor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22price-monitor%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 💸 Sell Executor | [sell-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22sell-executor%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+| 🔌 KIS Gateway | [kis-gateway](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bjob%3D%5C%22containerlogs%5C%22%7D%20%7C%3D%20%5C%22kis-gateway%5C%22%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+
 ---
 
 ## 🔧 문제 해결
