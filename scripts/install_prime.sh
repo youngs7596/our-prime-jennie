@@ -181,6 +181,11 @@ echo -e ""
 echo -e "4. 대시보드 접속:"
 echo -e "   ${YELLOW}http://localhost:3000${NC}"
 echo -e ""
+echo -e "5. 자동화 작업 등록 (Cron Jobs - 선택사항):"
+echo -e "   ${YELLOW}./scripts/setup_cron_jobs.sh${NC}"
+echo -e "   ${CYAN}  - 주간 팩터 분석: 매주 일요일 오전 3시${NC}"
+echo -e "   ${CYAN}  - 일일 브리핑: 평일 오후 5시 (텔레그램 발송)${NC}"
+echo -e ""
 echo -e "${GREEN}📖 상세 가이드: docs/INSTALL_GUIDE.md${NC}"
 echo -e "${GREEN}🔧 설정 재구성: python3 scripts/generate_secrets.py${NC}"
 echo -e "\n🚀 Happy Trading!"

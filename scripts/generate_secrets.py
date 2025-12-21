@@ -120,6 +120,16 @@ FIELD_DESCRIPTIONS = {
         "name": "뉴스 감성 분석 활성화",
         "desc": "뉴스 크롤링 및 LLM 감성 분석 기능을 활성화합니다.",
         "where": "true=활성화 (LLM 비용 발생), false=비활성화"
+    },
+    "telegram-bot-token": {
+        "name": "Telegram Bot Token",
+        "desc": "텔레그램 알림을 받기 위한 봇 토큰입니다 (선택사항).",
+        "where": "@BotFather에서 /newbot 명령으로 생성 후 발급받은 토큰"
+    },
+    "telegram-chat-id": {
+        "name": "Telegram Chat ID",
+        "desc": "알림을 받을 텔레그램 채팅방 ID입니다 (선택사항).",
+        "where": "@userinfobot 또는 @getidsbot에게 메시지를 보내면 확인 가능"
     }
 }
 
@@ -228,7 +238,13 @@ def main():
             new_secrets[key] = prompt_value(key, template[key])
 
     print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}⚙️  5단계: 운영 설정{RESET}")
+    print(f"{CYAN}📱 5단계: 텔레그램 알림 설정 (선택사항){RESET}")
+    for key in ["telegram-bot-token", "telegram-chat-id"]:
+        if key in template:
+            new_secrets[key] = prompt_value(key, template[key])
+
+    print(f"\n{CYAN}{'─' * 60}{RESET}")
+    print(f"{CYAN}⚙️  6단계: 운영 설정{RESET}")
     for key in ["SCOUT_UNIVERSE_SIZE", "ENABLE_NEWS_ANALYSIS"]:
         if key in template:
             new_secrets[key] = prompt_value(key, template[key])
