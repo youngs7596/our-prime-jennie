@@ -1,0 +1,130 @@
+# requirements.txt
+# ============================================
+# Carbon Silicons Council - Python Dependencies
+# ============================================
+#
+# 설치 방법:
+#   python -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# ============================================
+
+# -------------------------------------------
+# Core Dependencies
+# -------------------------------------------
+
+# Flask (API 서비스)
+flask>=3.0.0
+gunicorn>=21.0.0
+
+# 환경 변수 로딩
+python-dotenv>=1.0.0
+
+# -------------------------------------------
+# Database
+# -------------------------------------------
+
+# MariaDB/MySQL 연결
+pymysql>=1.0.0
+SQLAlchemy>=2.0.31
+
+# Redis (캐싱, 실시간 데이터)
+redis>=4.0.0
+
+# -------------------------------------------
+# Data Processing
+# -------------------------------------------
+
+# 데이터 분석
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Arrow (Pandas 최적화)
+pyarrow>=14.0.0
+
+# -------------------------------------------
+# HTTP & Web Scraping
+# -------------------------------------------
+
+# HTTP 요청
+requests>=2.31.0
+
+# WebSocket (KIS 실시간 데이터)
+websocket-client>=1.8.0
+
+# 웹 스크래핑 (뉴스 수집)
+beautifulsoup4>=4.12.0
+
+# -------------------------------------------
+# LLM Providers (Scout Pipeline)
+# -------------------------------------------
+
+# Google Gemini (뉴스 임베딩)
+google-generativeai>=0.5.0
+
+# OpenAI (Judge)
+openai>=1.0.0
+
+# Anthropic Claude (Hunter, Debate)
+anthropic>=0.30.0
+
+# -------------------------------------------
+# LangChain & RAG
+# -------------------------------------------
+
+# LangChain Core
+langchain-core>=0.3.0
+
+# Gemini Embeddings
+langchain-google-genai>=2.0.0
+
+# ChromaDB 연동
+langchain-chroma>=0.1.0
+
+# Vector DB
+chromadb>=0.4.0
+
+# -------------------------------------------
+# Financial Data
+# -------------------------------------------
+
+# 한국 주식 데이터 (KOSPI 200 등)
+finance-datareader>=0.9.0
+
+# -------------------------------------------
+# Message Queue
+# -------------------------------------------
+
+# RabbitMQ 클라이언트
+pika>=1.3.0
+
+# -------------------------------------------
+# Utilities
+# -------------------------------------------
+
+# 데이터 검증
+pydantic>=2.0.0
+
+# 시간대 처리
+pytz>=2024.1
+
+# 파일 락
+filelock>=3.14.0
+
+# -------------------------------------------
+# Testing
+# -------------------------------------------
+
+# 테스트 프레임워크
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+pytest-asyncio>=0.21.0
+
+# Redis Mock (Unit Test용)
+fakeredis>=2.20.0
+
+feedparser>=6.0.10
+langchain-text-splitters

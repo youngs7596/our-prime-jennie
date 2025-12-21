@@ -1,0 +1,71 @@
+{
+  "date": "2025-12-19",
+  "summary_stats": {
+    "veto_count": 865,
+    "no_trade_ratio": 1.0,
+    "total_scanned": 951,
+    "selected_candidates": 0
+  },
+  "representative_cases": [
+    {
+      "case_id": "2566",
+      "category": "VETO",
+      "symbol": "282330",
+      "reasoning_summary": "This case represents a successful VETO. The stock received extremely low scores (15s) from both short-term and long-term strategies, with strong '회피' (avoid) recommendations. Negative momentum and news signals further justified the rejection, preventing a potentially poor investment.",
+      "model_decision": "REJECT"
+    },
+    {
+      "case_id": "2564",
+      "category": "VETO",
+      "symbol": "036460",
+      "reasoning_summary": "Another clear example of a justified VETO. The stock received 'F' grades across all sniper strategies, with very low scores in momentum, technicals (RSI), and news. This indicates a fundamentally weak stock that was correctly filtered out.",
+      "model_decision": "REJECT"
+    },
+    {
+      "case_id": "285",
+      "category": "VIOLATION",
+      "symbol": "006400",
+      "reasoning_summary": "This is a critical violation. The Hunter module assigned the highest score (81.0) among all LLM decisions, yet the system auto-rejected it with the reason 'Hunter Score(0) failed to meet Judge Threshold(70)'. This indicates a severe discrepancy or bug in how the Hunter score is passed or interpreted by the Judge, leading to a missed opportunity for a potentially strong candidate.",
+      "market_context": "BEAR",
+      "model_decision": "HOLD"
+    },
+    {
+      "case_id": "232",
+      "category": "VIOLATION",
+      "symbol": "005380",
+      "reasoning_summary": "Similar to the previous violation, this case shows a high Hunter score (79.65) being auto-rejected due to the 'Hunter Score(0)' error. This reinforces the pattern of the system failing to correctly process promising Hunter scores, leading to consistent 'HOLD' decisions despite positive initial evaluations.",
+      "market_context": "BEAR",
+      "model_decision": "HOLD"
+    },
+    {
+      "case_id": "285",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "Despite being auto-rejected due to a system bug, this case represents the 'best potential' identified by the Hunter module, with the highest score of 81.0. If the system were functioning correctly, this stock would have been the most promising candidate for a BUY decision, making it a significant missed opportunity.",
+      "market_context": "BEAR",
+      "model_decision": "HOLD"
+    },
+    {
+      "case_id": "2562",
+      "category": "WORST",
+      "symbol": "001040",
+      "reasoning_summary": "This case highlights a stock with exceptionally poor quantitative metrics, including extremely low short-term (14.8) and long-term (5.0) sniper scores, negative momentum, and adverse news signals. Its strong rejection by the ShadowRadarLog demonstrates the system effectively preventing investment in a truly low-quality asset.",
+      "model_decision": "REJECT"
+    },
+    {
+      "case_id": "2573",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "This case is typical of the ShadowRadarLog's filtering behavior. CJ Logistics received consistently low scores (53.39 total, 15.2/15.0 for dual track) and strong '회피' recommendations across multiple factors like momentum, technicals, and news. It represents a standard, justified rejection based on quantitative weakness.",
+      "model_decision": "REJECT"
+    },
+    {
+      "case_id": "208",
+      "category": "NORMAL",
+      "symbol": "005930",
+      "reasoning_summary": "This case exemplifies the common behavior observed in the LLMDecisionLedger. Samsung Electronics received a respectable Hunter score of 75.0 but was auto-rejected with a 'HOLD' decision due to the recurring 'Hunter Score(0)' error. This is a typical instance of the system's current operational flaw preventing valid decisions.",
+      "market_context": "BEAR",
+      "model_decision": "HOLD"
+    }
+  ]
+}

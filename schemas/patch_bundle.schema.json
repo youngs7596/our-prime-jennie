@@ -1,0 +1,42 @@
+{
+    "type": "object",
+    "properties": {
+        "bundle_id": {
+            "type": "string"
+        },
+        "created_at": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "patches": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "target_file": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "diff": {
+                        "type": "string"
+                    },
+                    "safety_check": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "target_file",
+                    "description",
+                    "diff"
+                ]
+            }
+        }
+    },
+    "required": [
+        "bundle_id",
+        "created_at",
+        "patches"
+    ]
+}

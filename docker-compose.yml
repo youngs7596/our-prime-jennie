@@ -1,0 +1,1005 @@
+name: carbon-silicons-council
+
+services:
+  # ============================================================================
+  # 0. Messaging / Supporting Services
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    profiles: [ "infra" ]
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    restart: always
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks:
+      - msa-network
+    labels:
+      - app=rabbitmq
+      - stack=carbon-silicons-council
+
+  # ============================================================================
+  # 0. Infrastructure Dependencies (ChromaDB & Redis)
+  # ============================================================================
+  chromadb:
+    image: chromadb/chroma
+    profiles: [ "infra" ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - /docker_data/chroma_data:/data
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000'" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - msa-network
+    labels:
+      - app=chromadb
+      - stack=carbon-silicons-council
+
+  mariadb:
+    image: mariadb:10.11
+    profiles: [ "infra" ]
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_PASSWORD:-q1w2e3R$}
+      - MARIADB_DATABASE=${MARIADB_DBNAME:-jennie_db}
+    command: --lower_case_table_names=1
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./docker/mariadb/data_v2:/var/lib/mysql
+      - ./docker/init:/docker-entrypoint-initdb.d
+    restart: always
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - msa-network
+    labels:
+      - app=mariadb
+      - stack=carbon-silicons-council
+
+  redis:
+    image: redis:alpine
+    profiles: [ "infra" ]
+    labels:
+      - app=redis
+      - stack=carbon-silicons-council
+    ports:
+      - "6379:6379"
+    volumes:
+      - /docker_data/redis_data:/data
+    restart: always
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - msa-network
+
+  # ============================================================================
+  #  \\u2601\\ufe0f Observability Stack (Loki + Promtail + Grafana)
+  # ============================================================================
+  loki:
+    image: grafana/loki:2.9.4
+    profiles: [ "infra" ]
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+      - -distributor.replication-factor=1
+      - -replication-factor=1
+    user: "0"
+    ports:
+      - "3400:3100"
+    volumes:
+      - /docker_data/loki/local-config.yaml:/etc/loki/local-config.yaml:ro
+      - /docker_data/loki_data:/tmp/loki
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+    networks:
+      - msa-network
+    labels:
+      - app=loki
+      - stack=carbon-silicons-council
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    profiles: [ "infra" ]
+    command: -config.file=/etc/promtail/config.yaml
+    volumes:
+      - /docker_data/promtail/config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - msa-network
+    labels:
+      - app=promtail
+      - stack=carbon-silicons-council
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: [ "infra" ]
+    user: "0"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_DEFAULT_THEME=dark
+    ports:
+      - "3300:3000"
+    volumes:
+      - /docker_data/grafana_data:/var/lib/grafana
+    restart: always
+    depends_on:
+      loki:
+        condition: service_healthy
+    networks:
+      - msa-network
+    labels:
+      - app=grafana
+      - stack=carbon-silicons-council
+
+  # ============================================================================
+  # 0-bis. Scheduler Service
+  # ============================================================================
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: services/scheduler-service/Dockerfile
+    profiles: [ "real" ]
+    network_mode: host
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - PORT=8095
+      - RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - /docker_data/scheduler_data:/app/data
+    labels:
+      - app=scheduler-service
+      - stack=carbon-silicons-council
+    depends_on:
+      kis-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  scheduler-service-mock:
+    build:
+      context: .
+      dockerfile: services/scheduler-service/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    environment:
+      - PORT=9095
+      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+    volumes:
+      - /docker_data/scheduler_data:/app/data
+    labels:
+      - app=scheduler-service-mock
+      - stack=carbon-silicons-council
+    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      kis-gateway-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9095/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    command: [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9095" ]
+
+  # ============================================================================
+  # 1. KIS Mock Server (간단한 HTTP REST API 버전)
+  # WebSocket은 Cloud Run 환경에서만 테스트 (DB 의존성 때문)
+  # ============================================================================
+  kis-mock:
+    build:
+      context: .
+      dockerfile: docker/kis-mock/Dockerfile
+    profiles: [ "mock" ]
+    environment:
+      - PORT=9443
+    network_mode: host
+    labels:
+      - app=kis-mock
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:9443/health').raise_for_status()" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ============================================================================
+  # 2. KIS Gateway (토큰 관리 및 API Rate Limiting)
+  # ============================================================================
+  kis-gateway:
+    build:
+      context: .
+      dockerfile: services/kis-gateway/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8080
+      - SECRETS_FILE=/app/config/secrets.json
+      - GUNICORN_CMD_ARGS=--timeout 600
+    # WSL2 mirrored mode: 127.0.0.1로 MariaDB/Redis 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=kis-gateway
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health').raise_for_status()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  kis-gateway-mock:
+    build:
+      context: .
+      dockerfile: services/kis-gateway/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9080
+      - SECRETS_FILE=/app/config/secrets.json
+      - GUNICORN_CMD_ARGS=--timeout 600
+      - KIS_BASE_URL_MOCK=http://localhost:9443
+    network_mode: host
+    labels:
+      - app=kis-gateway-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      kis-mock:
+        condition: service_healthy
+    command: [ "gunicorn", "--bind", "0.0.0.0:9080", "--workers", "1", "--threads", "1", "--timeout", "600", "--chdir", "/app/kis-gateway", "main:app" ]
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:9080/health').raise_for_status()" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================================
+  # 3. Buy Scanner (매수 신호 탐지)
+  # ============================================================================
+  buy-scanner:
+    build:
+      context: .
+      dockerfile: services/buy-scanner/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8081
+      - SECRETS_FILE=/app/config/secrets.json
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=buy-scanner
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  buy-scanner-mock:
+    build:
+      context: .
+      dockerfile: services/buy-scanner/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9081
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+    network_mode: host
+    labels:
+      - app=buy-scanner-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 4. Buy Executor (매수 실행)
+  # ============================================================================
+  buy-executor:
+    build:
+      context: .
+      dockerfile: services/buy-executor/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8082
+      - SECRETS_FILE=/app/config/secrets.json
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=buy-executor
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  buy-executor-mock:
+    build:
+      context: .
+      dockerfile: services/buy-executor/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9082
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+    network_mode: host
+    labels:
+      - app=buy-executor-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 5. Sell Executor (매도 실행)
+  # ============================================================================
+  sell-executor:
+    build:
+      context: .
+      dockerfile: services/sell-executor/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8083
+      - SECRETS_FILE=/app/config/secrets.json
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=sell-executor
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  sell-executor-mock:
+    build:
+      context: .
+      dockerfile: services/sell-executor/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9083
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+    network_mode: host
+    labels:
+      - app=sell-executor-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 5.5. Command Handler (Telegram 명령 처리)
+  # ============================================================================
+  command-handler:
+    build:
+      context: .
+      dockerfile: services/command-handler/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8091
+      - SECRETS_FILE=/app/config/secrets.json
+      - AUTO_START_POLLING=true
+      - POLL_INTERVAL_SECONDS=5
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=command-handler
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8091/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  command-handler-mock:
+    build:
+      context: .
+      dockerfile: services/command-handler/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9091
+      - SECRETS_FILE=/app/config/secrets.json
+      - AUTO_START_POLLING=true
+      - POLL_INTERVAL_SECONDS=5
+      - KIS_GATEWAY_URL=http://localhost:9080
+    network_mode: host
+    labels:
+      - app=command-handler-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 6. Price Monitor (가격 모니터링)
+  # ============================================================================
+  price-monitor:
+    build:
+      context: .
+      dockerfile: services/price-monitor/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8088
+      - SECRETS_FILE=/app/config/secrets.json
+      - GUNICORN_CMD_ARGS=--timeout 600
+      - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=price-monitor
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  price-monitor-mock:
+    build:
+      context: .
+      dockerfile: services/price-monitor/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9088
+      - SECRETS_FILE=/app/config/secrets.json
+      - GUNICORN_CMD_ARGS=--timeout 600
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - KIS_TOKEN_PROVIDER_URL=http://localhost:9080/api/token
+      - REDIS_URL=redis://localhost:6379
+      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+    network_mode: host
+    labels:
+      - app=price-monitor-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 7. Daily Briefing (일일 브리핑)
+  # ============================================================================
+  daily-briefing:
+    build:
+      context: .
+      dockerfile: services/daily-briefing/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8086
+      - SECRETS_FILE=/app/config/secrets.json
+      - TIER_THINKING_PROVIDER=gemini
+      - LLM_MODEL_NAME=gemini-2.0-flash-exp
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=daily-briefing
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  daily-briefing-mock:
+    build:
+      context: .
+      dockerfile: services/daily-briefing/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9086
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+    network_mode: host
+    labels:
+      - app=daily-briefing-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 8. Scout Job (종목 발굴)
+  # ============================================================================
+  scout-job:
+    build:
+      context: .
+      dockerfile: services/scout-job/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - /docker_data/llm_debug_logs:/app/logs # [v1.4] LLM 디버그 로그
+    environment:
+      - PORT=8087
+      - SECRETS_FILE=/app/config/secrets.json
+      - USE_OLLAMA_GATEWAY=true
+      - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - LLM_DEBUG_ENABLED=false # [v1.5] 로깅 옵션 (기본값: false)
+      - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl # [v1.4] 디버그 로깅
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=scout-job
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8087/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  scout-job-mock:
+    build:
+      context: .
+      dockerfile: services/scout-job/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9087
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - CHROMA_SERVER_HOST=localhost
+      - REDIS_URL=redis://localhost:6379
+    network_mode: host
+    labels:
+      - app=scout-job-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 9. News Crawler (뉴스 수집)
+  # ============================================================================
+  news-crawler:
+    build:
+      context: .
+      dockerfile: services/news-crawler/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=8089
+      - SECRETS_FILE=/app/config/secrets.json
+      - USE_OLLAMA_GATEWAY=true
+      - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - ENABLE_NEWS_ANALYSIS=true
+      - TIER_FAST_PROVIDER=openai
+      - OPENAI_MODEL_NAME=gpt-5-nano
+    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=news-crawler
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  news-crawler-mock:
+    build:
+      context: .
+      dockerfile: services/news-crawler/Dockerfile
+    profiles: [ "mock" ]
+    env_file:
+      - infrastructure/env-vars-mock.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    environment:
+      - PORT=9089
+      - SECRETS_FILE=/app/config/secrets.json
+      - KIS_GATEWAY_URL=http://localhost:9080
+      - CHROMA_SERVER_HOST=localhost
+      - REDIS_URL=redis://localhost:6379
+    network_mode: host
+    labels:
+      - app=news-crawler-mock
+      - stack=carbon-silicons-council
+    depends_on:
+      scheduler-service-mock:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      chromadb:
+        condition: service_healthy
+        required: false
+
+  # ============================================================================
+  # 10. Dashboard (React + FastAPI)
+  # ============================================================================
+  dashboard-backend:
+    build:
+      context: .
+      dockerfile: services/dashboard/backend/Dockerfile
+    profiles: [ "real" ]
+    network_mode: host
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-your-jwt-secret-here}
+      - REDIS_URL=redis://localhost:6379/0
+      - KIS_GATEWAY_URL=http://localhost:8080
+      - SECRETS_FILE=/app/config/secrets.json
+      - MARIADB_HOST=127.0.0.1
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    labels:
+      - app=dashboard-backend
+      - stack=carbon-silicons-council
+
+  dashboard-frontend:
+    build:
+      context: ./services/dashboard/frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+        - VITE_API_URL=/api
+    profiles: [ "real" ]
+    network_mode: host
+    depends_on:
+      dashboard-backend:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "sh", "-c", "pgrep nginx > /dev/null" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+    labels:
+      - app=dashboard-frontend
+      - stack=carbon-silicons-council
+
+  # Cloudflare Tunnel - 외부 접근을 위한 보안 터널 (상시 구동)
+  # secrets.json의 cloudflare-tunnel-token 사용
+  cloudflared:
+    build:
+      context: ./infrastructure/cloudflared
+      dockerfile: Dockerfile
+    profiles: [ "infra" ]
+    network_mode: host
+    volumes:
+      - ./secrets.json:/config/secrets.json:ro
+    restart: unless-stopped
+    labels:
+      - app=cloudflared
+      - stack=carbon-silicons-council
+
+  # ============================================================================
+  # CI - Jenkins (Dockerized) - 상시 구동
+  # ============================================================================
+  jenkins:
+    build:
+      context: ./docker/jenkins
+      dockerfile: Dockerfile
+    image: my-jenkins:latest
+    profiles: [ "infra" ]
+    user: "0" # root로 실행해 docker.sock 접근 허용
+    environment:
+      - TZ=Asia/Seoul
+    ports:
+      - "8180:8080" # 호스트 8180 → Jenkins 8080
+    volumes:
+      - /docker_data/jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/youngs75/projects/carbon-silicons-council:/home/youngs75/projects/carbon-silicons-council
+    restart: unless-stopped
+    labels:
+      - app=jenkins
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8080/login || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - msa-network
+
+  # ============================================================================
+  # 11. AI/LLM Services
+  # ============================================================================
+
+  # Ollama Gateway - 중앙화된 Local LLM 요청 처리 (순차 처리 보장)
+  ollama-gateway:
+    build:
+      context: .
+      dockerfile: services/ollama-gateway/Dockerfile
+    container_name: ollama-gateway
+    profiles: [ "real" ]
+    network_mode: host
+    environment:
+      - OLLAMA_HOST=http://localhost:11434
+      - REDIS_URL=redis://localhost:6379/0
+      - OLLAMA_RATE_LIMIT=60 per minute
+      - OLLAMA_CIRCUIT_FAIL_MAX=5
+      - OLLAMA_CIRCUIT_RESET_TIMEOUT=120
+    restart: unless-stopped
+    labels:
+      - app=ollama-gateway
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:11500/health').raise_for_status()" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ollama-gateway-mock:
+    build:
+      context: .
+      dockerfile: services/ollama-gateway/Dockerfile
+    container_name: ollama-gateway-mock
+    profiles: [ "mock" ]
+    network_mode: host
+    environment:
+      - PORT=11501
+      - OLLAMA_HOST=http://localhost:11434
+      - REDIS_URL=redis://localhost:6379/0
+      - OLLAMA_RATE_LIMIT=1 per 5 seconds
+    restart: unless-stopped
+    labels:
+      - app=ollama-gateway-mock
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:11501/health').raise_for_status()" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    profiles: [ "infra" ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    ports:
+      - "11434:11434"
+    volumes:
+      - /docker_data/ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_KEEP_ALIVE=5m
+    restart: unless-stopped
+    networks:
+      - msa-network
+    labels:
+      - app=ollama
+      - stack=carbon-silicons-council
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  msa-network:
+    driver: bridge

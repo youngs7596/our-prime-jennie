@@ -1,0 +1,165 @@
+#!/bin/bash
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}================================================================${NC}"
+echo -e "${GREEN}   Project Prime: Universal Installer (Ubuntu/WSL2)             ${NC}"
+echo -e "${GREEN}================================================================${NC}"
+
+# 1. Prerequisites Check
+echo -e "\n${YELLOW}[1/5] Checking Prerequisites...${NC}"
+
+if [ "$EUID" -ne 0 ]; then 
+  echo -e "${RED}Please run as root (sudo ./install_prime.sh)${NC}"
+  exit 1
+fi
+
+# Check Internet
+if ! ping -c 1 google.com &> /dev/null; then
+    echo -e "${RED}Error: No internet connection.${NC}"
+    exit 1
+fi
+
+# Check GPU
+if command -v nvidia-smi &> /dev/null; then
+    echo -e "${GREEN}✓ NVIDIA GPU detected.${NC}"
+    HAS_GPU=true
+else
+    echo -e "${YELLOW}! No NVIDIA GPU detected. LLaMA/Tensorflow will run on CPU (Slow).${NC}"
+    HAS_GPU=false
+fi
+
+# 2. System Packages
+echo -e "\n${YELLOW}[2/5] Installing System Packages...${NC}"
+apt-get update
+apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    git \
+    python3 \
+    python3-venv \
+    python3-pip \
+    build-essential \
+    pkg-config \
+    libmariadb-dev \
+    net-tools
+
+# Install Docker if not exists
+if ! command -v docker &> /dev/null; then
+    echo "Installing Docker..."
+    # Add Docker's official GPG key:
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+
+    # Set up the repository:
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null
+    
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+else
+    echo -e "${GREEN}✓ Docker already installed.${NC}"
+fi
+
+# Install NVIDIA Container Toolkit if GPU exists
+if [ "$HAS_GPU" = true ]; then
+    if ! dpkg -l | grep -q nvidia-container-toolkit; then
+        echo "Installing NVIDIA Container Toolkit..."
+        curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+        && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+            sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+            tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+        
+        apt-get update
+        apt-get install -y nvidia-container-toolkit
+        nvidia-ctk runtime configure --runtime=docker
+        systemctl restart docker || echo "Warning: Could not restart docker (if in WSL, restart manually)"
+    else
+         echo -e "${GREEN}✓ NVIDIA Container Toolkit already installed.${NC}"
+    fi
+fi
+
+# 3. Environment Setup (Run as SUDO_USER if sudo used)
+echo -e "\n${YELLOW}[3/5] Setting up User Environment...${NC}"
+REAL_USER=${SUDO_USER:-$USER}
+USER_HOME=$(getent passwd $REAL_USER | cut -d: -f6)
+PROJECT_DIR=$(pwd)
+
+echo "Setting up for user: $REAL_USER in $PROJECT_DIR"
+
+# Change ownership of directory to user to avoid permission issues
+chown -R $REAL_USER:$REAL_USER $PROJECT_DIR
+
+# Run setup operations as the real user
+sudo -u $REAL_USER bash <<EOF
+    # Create Directories
+    mkdir -p data/mariadb logs models
+    
+    # Python Venv
+    if [ ! -d "venv" ]; then
+        echo "Creating Python virtual environment..."
+        python3 -m venv venv
+    fi
+    
+    # Activate and Install Requirements
+    echo "Installing Python dependencies..."
+    source venv/bin/activate
+    pip install --upgrade pip
+    if [ -f "requirements.txt" ]; then
+        pip install -r requirements.txt
+    else
+        echo "Warning: requirements.txt not found."
+    fi
+EOF
+
+# 4. Data Initialization
+echo -e "\n${YELLOW}[4/5] Preparing Data...${NC}"
+# Check if init_dump.sql exists
+if [ -f "docker/init/init_dump.sql" ]; then
+    echo -e "${GREEN}✓ Custom database dump detected. It will be imported automatically.${NC}"
+else
+    echo -e "${GREEN}✓ No custom dump found. The database will handle schema initialization (Clean Install).${NC}"
+fi
+
+# 5. Secrets Configuration
+echo -e "\n${YELLOW}[5/6] Configuring Secrets...${NC}"
+
+if [ ! -f "secrets.json" ]; then
+    echo -e "${YELLOW}secrets.json not found. Launching configuration wizard...${NC}"
+    
+    # Check if template exists
+    if [ ! -f "secrets.json.template" ]; then
+         echo -e "${RED}Error: secrets.json.template not found! Cannot generate secrets.${NC}"
+         exit 1
+    fi
+    
+    # Run python script
+    python3 scripts/generate_secrets.py
+    
+    if [ ! -f "secrets.json" ]; then
+        echo -e "${RED}Error: Secrets generation failed or cancelled.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ secrets.json found.${NC}"
+fi
+
+# 6. Final Instructions
+echo -e "\n${GREEN}================================================================${NC}"
+echo -e "${GREEN}   Setup Complete!                                              ${NC}"
+echo -e "${GREEN}================================================================${NC}"
+echo -e "Next Steps:"
+echo -e "1. Activate environment: source venv/bin/activate"
+echo -e "2. Start Services: docker compose up -d"
+echo -e "3. Verify Status: docker compose ps"
+echo -e "\nHappy Trading!"

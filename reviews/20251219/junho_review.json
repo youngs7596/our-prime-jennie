@@ -1,0 +1,45 @@
+{
+  "reviewer": "Junho",
+  "strategy_analysis": "Zero selections with 100% no-trade ratio were driven by a systemic ingestion bug: Hunter scores are being read as 0 by Judge, forcing HOLDs on top-rated names. VETO behavior appears broadly correct; BEST/WORST cases show the filters are working, but the Hunter→Judge score handoff is broken. Priority is to fix score mapping and add integrity guards; do not change MIN_VOLUME or MAX_VOLATILITY until the ingestion bug is resolved and we can observe normal selection flow.",
+  "key_findings": [
+    {
+      "case_id": "285",
+      "observation": "VIOLATION/BEST for 006400: Hunter scored 81.0 (highest of the day) but Judge evaluated 'Hunter Score(0) < Judge Threshold(70)' and issued HOLD. This indicates the Judge is reading a default 0 instead of the Hunter score.",
+      "suggestion": "In 'services/judge/ingest.py' and 'services/judge/threshold_gate.py', replace the score source from payload.get('hunter_score', 0) to a canonical path: envelope['hunter']['score']. Add a null/zero guard that raises InputIntegrityError if envelope['hunter']['score'] is None/0 while envelope['hunter']['raw_output'] exists. Ensure serializer in 'services/hunter/emit.py' writes hunter.score as a numeric float at envelope.hunter.score (not only as 'score' at top-level)."
+    },
+    {
+      "case_id": "232",
+      "observation": "VIOLATION for 005380: High Hunter score (79.65) was also treated as 0 by Judge, repeating the same wiring error and causing an unnecessary HOLD.",
+      "suggestion": "Add an end-to-end contract test: in 'tests/integration/test_hunter_judge_contract.py' assert that a sample envelope with hunter.score=79.65 yields Judge gate input >= 79.65. In 'schemas/decision_envelope.py' enforce Pydantic validation: hunter.score: float, required, ge=0; and if hunter.recommendation in {BUY, STRONG_BUY} then hunter.score > 0.0."
+    },
+    {
+      "case_id": "208",
+      "observation": "NORMAL for 005930: Hunter score 75.0 again read as 0 → HOLD. This confirms the issue is systemic (not a one-off), likely due to a key mismatch or schema drift between Hunter and Judge.",
+      "suggestion": "Centralize key mapping in 'services/common/envelope_adapter.py': define get_hunter_score(envelope) to first read envelope['hunter']['score'], else fallback to envelope['scores']['hunter'], never to default=0 silently. Log a WARN and trigger a retry when parsed score == 0 but hunter.raw_output contains a numeric score."
+    },
+    {
+      "case_id": "2566",
+      "observation": "VETO for 282330 was justified: very low dual-track scores and negative momentum/news. This indicates core VETO filters are functioning correctly on weak names.",
+      "suggestion": "No relaxation of MIN_VOLUME/MAX_VOLATILITY at this time. After the Hunter→Judge fix, re-evaluate veto rate; only then consider dynamic tuning. Add metrics to 'monitoring/metrics_alerts.yaml' to break down veto reasons (volume, volatility, momentum) so we can attribute high veto_count precisely."
+    },
+    {
+      "case_id": "2562",
+      "observation": "WORST for 001040 was correctly rejected due to extremely low scores and adverse signals; no evidence of over-tight filters here.",
+      "suggestion": "Keep current rejection criteria. Add a safeguard in 'shadow_radar/aggregate_signals.py' to ensure negative news and momentum aren’t double-counted (dedupe by source_id/day) to avoid bias inflation; parameter: set news_weight_cap=0.35 and momentum_weight_cap=0.40."
+    }
+  ],
+  "action_items_for_minji": [
+    "Fix score mapping: In 'services/judge/ingest.py' and 'services/judge/threshold_gate.py', read Hunter score from envelope['hunter']['score'] (float). Remove payload.get('hunter_score', 0) fallbacks that mask missing data.",
+    "Align serialization: In 'services/hunter/emit.py', ensure the emitted envelope includes hunter.score (float) at envelope['hunter']['score']; avoid only top-level 'score' naming.",
+    "Schema enforcement: In 'schemas/decision_envelope.py', define hunter.score: float (required, ge=0). If hunter.recommendation in {BUY, STRONG_BUY}, assert hunter.score > 0. Add clear validation errors instead of defaulting to 0.",
+    "Integrity guard: In 'services/judge/threshold_gate.py', before gating, if parsed hunter_score == 0 and envelope['hunter']['raw_output'] exists or hunter.recommendation is set, raise InputIntegrityError and route to RETRY, not HOLD.",
+    "Adapter utility: Create 'services/common/envelope_adapter.py' with get_hunter_score(envelope) that checks envelope['hunter']['score'] then envelope['scores']['hunter']; never return 0 silently—log WARN and escalate if none found.",
+    "Circuit breaker: In 'services/guardian/circuit_breakers.py', add rule 'hunter_judge_mismatch': if count of cases where hunter.raw_score >= JudgeThreshold but judge_input_score == 0 >= 3 within 30 minutes, pause decisions and page #ops-trading.",
+    "Monitoring/alerts: In 'monitoring/metrics_alerts.yaml', add metrics hunter_score_nonzero_rate, judge_input_zero_rate, and no_trade_ratio. Trigger HIGH severity if no_trade_ratio == 1.0 and total_scanned > 200.",
+    "Contract tests: Add 'tests/integration/test_hunter_judge_contract.py' to assert Hunter score propagation (e.g., 79.65 → Judge gate input 79.65) and that JudgeThreshold=70 passes. Include a test that malformed envelopes raise validation errors.",
+    "Post-fix backfill: Rerun the 2025-12-19 selection with the corrected pipeline in dry-run first, then commit results to evaluate hit rate.",
+    "Veto parameters: Do not change MIN_VOLUME or MAX_VOLATILITY now. After one stable day post-fix, review veto attribution; if vetoes are dominated by volatility in BEAR, consider setting MAX_ATR_PCT_BEAR = current_MAX_ATR_PCT + 1.5 and revisit only with data.",
+    "Weight caps: In 'shadow_radar/aggregate_signals.py', cap feature contributions to avoid double penalization: set news_weight_cap=0.35 and momentum_weight_cap=0.40 and add dedupe by source_id/day.",
+    "Judge thresholds by regime: In 'services/judge/config.yaml', keep JUDGE_THRESHOLD=70 but add JUDGE_THRESHOLD_BEAR=72 (only apply after score ingestion is fixed). Do not enable until monitoring confirms normal flow."
+  ]
+}

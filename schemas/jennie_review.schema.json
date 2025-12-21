@@ -1,0 +1,38 @@
+{
+    "type": "object",
+    "properties": {
+        "reviewer": {
+            "const": "Jennie"
+        },
+        "feedback": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "target_case_id": {
+                        "type": "string"
+                    },
+                    "critique": {
+                        "type": "string"
+                    },
+                    "suggestion": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "target_case_id",
+                    "critique",
+                    "suggestion"
+                ]
+            }
+        },
+        "generic_advice": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "reviewer",
+        "feedback",
+        "generic_advice"
+    ]
+}

@@ -1,0 +1,17 @@
+# /etc/systemd/system/carbon-silicons-council.service
+[Unit]
+Description=Carbon Silicons Council AI Trading Stack
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=AUTOSTART_COMPOSE_PROFILES=infra real
+WorkingDirectory=/home/youngs75/projects/carbon-silicons-council
+ExecStart=/home/youngs75/projects/carbon-silicons-council/scripts/systemd_autostart.sh
+ExecStop=/usr/bin/docker compose --profile real down
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

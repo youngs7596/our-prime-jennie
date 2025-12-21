@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "date": { "type": "string", "format": "date" },
+    "summary_stats": {
+      "type": "object",
+      "properties": {
+        "veto_count": { "type": "integer" },
+        "no_trade_ratio": { "type": "number" },
+        "total_scanned": { "type": "integer" },
+        "selected_candidates": { "type": "integer" }
+      },
+      "required": ["veto_count", "no_trade_ratio", "total_scanned", "selected_candidates"]
+    },
+    "representative_cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "case_id": { "type": "string" },
+          "category": { "type": "string", "enum": ["VETO", "VIOLATION", "WORST", "BEST", "NORMAL"] },
+          "symbol": { "type": "string" },
+          "reasoning_summary": { "type": "string" },
+          "model_decision": { "type": "string" },
+          "market_context": { "type": "string" }
+        },
+        "required": ["case_id", "category", "symbol", "reasoning_summary", "model_decision"]
+      }
+    }
+  },
+  "required": ["date", "summary_stats", "representative_cases"]
+}

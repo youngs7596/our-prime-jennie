@@ -1,0 +1,38 @@
+{
+    "type": "object",
+    "properties": {
+        "reviewer": {
+            "const": "Minji"
+        },
+        "code_improvements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string"
+                    },
+                    "issue": {
+                        "type": "string"
+                    },
+                    "proposed_fix": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "file_path",
+                    "issue",
+                    "proposed_fix"
+                ]
+            }
+        },
+        "risk_assessment": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "reviewer",
+        "code_improvements",
+        "risk_assessment"
+    ]
+}
