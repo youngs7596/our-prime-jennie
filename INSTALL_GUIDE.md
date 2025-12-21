@@ -186,7 +186,26 @@ docker compose ps
 
 ---
 
-## ✅ Step 4: 설치 확인
+## ⚡ Step 4: 서비스 초기화 (Job 등록)
+
+서비스가 처음 실행된 후, 스케줄러에 기본 작업(Job)을 등록해야 합니다.
+
+```bash
+# 가상환경 활성화 (이미 되어있다면 생략)
+source venv/bin/activate
+
+# 기본 Job 등록 스크립트 실행
+python3 scripts/register_default_jobs.py
+```
+
+등록되는 작업:
+- `scout-job`: 30분 간격 실행
+- `news-crawler`: 20분 간격 실행 (08:00 ~ 18:00)
+- `price-monitor-pulse`: 5분 간격 실행 (장중)
+
+---
+
+## ✅ Step 5: 설치 확인
 
 ```bash
 # 대시보드 접속 테스트
