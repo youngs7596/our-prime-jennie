@@ -154,7 +154,7 @@ services:
       - "3300:3000"
     volumes:
       - /docker_data/grafana_data:/var/lib/grafana
-      - ./observability/grafana/provisioning:/var/lib/grafana/provisioning:ro
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
     restart: always
     depends_on:
       loki:
