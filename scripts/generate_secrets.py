@@ -130,6 +130,12 @@ FIELD_DESCRIPTIONS = {
         "name": "Telegram Chat ID",
         "desc": "알림을 받을 텔레그램 채팅방 ID입니다 (선택사항).",
         "where": "@userinfobot 또는 @getidsbot에게 메시지를 보내면 확인 가능"
+    },
+    "cloudflare-tunnel-token": {
+        "name": "Cloudflare Tunnel Token",
+        "desc": "외부 접속을 위한 Cloudflare Tunnel 토큰입니다 (선택사항).",
+        "where": "Cloudflare Zero Trust 대시보드 → Tunnels → Install에서 확인 가능",
+        "secret": True
     }
 }
 
@@ -290,6 +296,12 @@ def main():
         print(f"\n{CYAN}{'─' * 60}{RESET}")
         print(f"{CYAN}⚙️  6단계: 운영 설정{RESET}")
         process_keys(ops_keys)
+
+    cf_keys = ["cloudflare-tunnel-token"]
+    if has_missing_in_section(cf_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}🌐 7단계: Cloudflare Tunnel 설정 (선택사항){RESET}")
+        process_keys(cf_keys)
 
     # 파일 저장
     try:
