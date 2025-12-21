@@ -54,6 +54,8 @@ services:
     profiles: [ "infra" ]
     environment:
       - MARIADB_ROOT_PASSWORD=${MARIADB_PASSWORD:-q1w2e3R$}
+      - MARIADB_USER=${MARIADB_USER:-jennie}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD:-q1w2e3R$}
       - MARIADB_DATABASE=${MARIADB_DBNAME:-jennie_db}
     command: --lower_case_table_names=1
     ports:
