@@ -1,10 +1,10 @@
 # Daily Council Pipeline Implementation Plan
 
-## Phase 0: Project Migration (carbon-silicons-council)
+## Phase 0: Project Migration (my-prime-jennie)
 **Goal**: Establish a clean slate environment for the Daily Council V2 system, removing legacy artifacts.
 
 ### 0.1 Initialization
-- Create new repository: `carbon-silicons-council`
+- Create new repository: `my-prime-jennie`
 - Initialize Git and Python environment (`.venv`)
 
 ### 0.2 Selective Migration (Assets to Transfer)
@@ -48,35 +48,35 @@ Implement the "Daily Council" pipeline where a local Qwen model generates a dail
 ## Proposed Changes
 
 ### Schemas
-#### [NEW] [daily_packet.schema.json](file:///home/youngs75/projects/carbon-silicons-council/schemas/daily_packet.schema.json)
+#### [NEW] [daily_packet.schema.json](file:///home/youngs75/projects/my-prime-jennie/schemas/daily_packet.schema.json)
 Schema for the daily summary. **Must include `summary_stats` (veto_count, no_trade_ratio, etc.).**
-#### [NEW] [jennie_review.schema.json](file:///home/youngs75/projects/carbon-silicons-council/schemas/jennie_review.schema.json)
-#### [NEW] [minji_review.schema.json](file:///home/youngs75/projects/carbon-silicons-council/schemas/minji_review.schema.json)
-#### [NEW] [patch_bundle.schema.json](file:///home/youngs75/projects/carbon-silicons-council/schemas/patch_bundle.schema.json)
+#### [NEW] [jennie_review.schema.json](file:///home/youngs75/projects/my-prime-jennie/schemas/jennie_review.schema.json)
+#### [NEW] [minji_review.schema.json](file:///home/youngs75/projects/my-prime-jennie/schemas/minji_review.schema.json)
+#### [NEW] [patch_bundle.schema.json](file:///home/youngs75/projects/my-prime-jennie/schemas/patch_bundle.schema.json)
 Must support unified diff format and explicit target file paths.
 
 ### Prompts
-#### [NEW] [qwen_system.txt](file:///home/youngs75/projects/carbon-silicons-council/prompts/qwen_system.txt)
+#### [NEW] [qwen_system.txt](file:///home/youngs75/projects/my-prime-jennie/prompts/qwen_system.txt)
 Instructs Qwen to output `confidence_breakdown` only (no final math).
-#### [NEW] [jennie_system.txt](file:///home/youngs75/projects/carbon-silicons-council/prompts/council/jennie_system.txt)
-#### [NEW] [minji_system.txt](file:///home/youngs75/projects/carbon-silicons-council/prompts/council/minji_system.txt)
-#### [NEW] [junho_system.txt](file:///home/youngs75/projects/carbon-silicons-council/prompts/council/junho_system.txt)
+#### [NEW] [jennie_system.txt](file:///home/youngs75/projects/my-prime-jennie/prompts/council/jennie_system.txt)
+#### [NEW] [minji_system.txt](file:///home/youngs75/projects/my-prime-jennie/prompts/council/minji_system.txt)
+#### [NEW] [junho_system.txt](file:///home/youngs75/projects/my-prime-jennie/prompts/council/junho_system.txt)
 Moderator prompt to synthesize reviews into a structured `patch_bundle`.
 
 ### Scripts
-#### [NEW] [build_daily_packet.py](file:///home/youngs75/projects/carbon-silicons-council/scripts/build_daily_packet.py)
+#### [NEW] [build_daily_packet.py](file:///home/youngs75/projects/my-prime-jennie/scripts/build_daily_packet.py)
 - **Sampling Logic**: 6-10 cases (2 veto, 2 violations, 1 worst, 1 best, 1-2 normal).
 - **Security**: Allowlist-based masking for sensitive fields.
 - **Stats**: Generate `summary_stats`.
 - **Validation**: Strict schema check (exit on failure).
 
-#### [NEW] [run_daily_council.py](file:///home/youngs75/projects/carbon-silicons-council/scripts/run_daily_council.py)
+#### [NEW] [run_daily_council.py](file:///home/youngs75/projects/my-prime-jennie/scripts/run_daily_council.py)
 - **Orchestration**: Jennie -> Minji -> Junho.
 - **Robustness**: 1 retry on schema failure. Stop on 2nd failure. Save errors to `reviews/.../errors/`.
 - **JSON Enforcement**: Force JSON output via system prompt + strict parser.
 - **Rate Limits**: Handle 429/5xx with backoff.
 
-#### [NEW] [apply_patch_bundle.py](file:///home/youngs75/projects/carbon-silicons-council/scripts/apply_patch_bundle.py)
+#### [NEW] [apply_patch_bundle.py](file:///home/youngs75/projects/my-prime-jennie/scripts/apply_patch_bundle.py)
 - **Safety**:
     - Default to `--dry-run`. Explicit `--apply` required.
     - **Allowed Targets**: `schemas/`, `prompts/`, `rules/`, `tests/` only. Core logic blocked.
@@ -85,8 +85,8 @@ Moderator prompt to synthesize reviews into a structured `patch_bundle`.
 - **Diff Format**: Unified diff application.
 
 ### Tests
-#### [NEW] [test_schema_validation.py](file:///home/youngs75/projects/carbon-silicons-council/tests/test_schema_validation.py)
-#### [NEW] [test_pipeline_smoke.py](file:///home/youngs75/projects/carbon-silicons-council/tests/test_pipeline_smoke.py)
+#### [NEW] [test_schema_validation.py](file:///home/youngs75/projects/my-prime-jennie/tests/test_schema_validation.py)
+#### [NEW] [test_pipeline_smoke.py](file:///home/youngs75/projects/my-prime-jennie/tests/test_pipeline_smoke.py)
 End-to-end smoke test:
 1. `build_daily_packet --dummy` -> passes schema?
 2. `run_daily_council` (mocked) -> produces valid reviews?

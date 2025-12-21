@@ -109,4 +109,4 @@ LLM의 사전 분석 결과를 저장하기 위해 컬럼을 추가했습니다.
 
 ---
 
-*작성: Carbon Silicons Council v1.0 (2025-12-05)*
+*작성: my-prime-jennie v1.0 (2025-12-05)*

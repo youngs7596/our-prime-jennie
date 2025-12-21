@@ -1,6 +1,6 @@
-# Carbon Silicons Council Next Level 발전 로드맵
+# my-prime-jennie Next Level 발전 로드맵
 
-> Gemini(공격적 수익 극대화)와 GPT(방어적 안정성 강화)의 제안을 현재 `carbon-silicons-council` 프로젝트 상태에 맞게 종합한 실행 계획입니다.
+> Gemini(공격적 수익 극대화)와 GPT(방어적 안정성 강화)의 제안을 현재 `my-prime-jennie` 프로젝트 상태에 맞게 종합한 실행 계획입니다.
 > 
 > **작성일**: 2025-12-12  
 > **버전**: v1.0
@@ -167,7 +167,7 @@ graph TB
 
 ```mermaid
 gantt
-    title Carbon Silicons Council Next Level 로드맵
+    title my-prime-jennie Next Level 로드맵
     dateFormat  YYYY-MM-DD
     
     section Phase 1 (수비)

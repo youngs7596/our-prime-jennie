@@ -1,8 +1,8 @@
-digraph CarbonSiliconsCouncil {
+digraph my_prime_jennie {
     // 전체 스타일 설정
     bgcolor="#1a1a2e";
     fontname="Helvetica,Arial,sans-serif";
-    label="Carbon Silicons Council - AI 자율 트레이딩 시스템\n(WSL2 Docker Compose)";
+    label="my-prime-jennie - AI 자율 트레이딩 시스템\n(WSL2 Docker Compose)";
     labelloc=t;
     fontsize=18;
     fontcolor="white";

@@ -2,7 +2,7 @@ digraph BuySellDecisionFlow {
     // 전체 스타일 설정
     bgcolor="#1a1a2e";
     fontname="Helvetica,Arial,sans-serif";
-    label="Carbon Silicons Council - 매수/매도 의사결정 흐름";
+    label="my-prime-jennie - 매수/매도 의사결정 흐름";
     labelloc=t;
     fontsize=18;
     fontcolor="white";

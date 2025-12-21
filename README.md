@@ -1,8 +1,8 @@
-# 🤖 Carbon Silicons Council (CSC) - 자율 진화형 AI 트레이딩 에이전트
+# 🤖 my-prime-jennie (CSC) - 자율 진화형 AI 트레이딩 에이전트
 > *구 명칭: my-ultra-jennie (Project Jennie)*
 
 **자율 진화형 에이전트 시스템**
-Carbon Silicons Council은 프로젝트의 다음 단계로, AI 에이전트 3인(Jennie, Minji, Junho)이 매일 자율적으로 토론하고, 시스템을 검토하고, 패치를 제안하는 "Daily Council" 기능에 집중합니다.
+my-prime-jennie은 프로젝트의 다음 단계로, AI 에이전트 3인(Jennie, Minji, Junho)이 매일 자율적으로 토론하고, 시스템을 검토하고, 패치를 제안하는 "Daily Council" 기능에 집중합니다.
 
 <div align="center">
 
@@ -49,7 +49,7 @@ Carbon Silicons Council은 프로젝트의 다음 단계로, AI 에이전트 3�
 ### 파일 구조
 
 ```
-carbon-silicons-council/
+my-prime-jennie/
 ├── .ai/
 │   ├── RULES.md              ← 마스터 룰 (핵심!)
 │   └── sessions/             ← 세션 핸드오프 파일 저장
@@ -110,7 +110,7 @@ carbon-silicons-council/
 
 ## 🎯 개요
 
-**Carbon Silicons Council**는 한국투자증권 Open API를 활용한 AI 기반 자율 트레이딩 에이전트입니다.
+**my-prime-jennie**는 한국투자증권 Open API를 활용한 AI 기반 자율 트레이딩 에이전트입니다.
 
 3개의 LLM(Gemini, Claude, OpenAI)을 활용한 멀티 에이전트 시스템으로, 정량적 팩터 분석과 LLM 정성 분석을 결합한 **하이브리드 스코어링**으로 투자 판단을 내립니다.
 
@@ -234,7 +234,7 @@ Scout 파이프라인(Phase 1.8)에서 종목별 투자 주체(외국인/기관/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          Carbon Silicons Council System                            │
+│                          my-prime-jennie System                            │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐           │
@@ -363,8 +363,8 @@ Scout 파이프라인(Phase 1.8)에서 종목별 투자 주체(외국인/기관/
 
      ```bash
 # 저장소 클론
-git clone https://github.com/youngs7596/carbon-silicons-council.git
-cd carbon-silicons-council
+git clone https://github.com/youngs7596/my-prime-jennie.git
+cd my-prime-jennie
 
 # 시크릿 파일 생성
 cp secrets.example.json secrets.json
@@ -432,7 +432,7 @@ docker compose run --rm scout-job python scripts/init_competitor_data.py
 ## 📁 프로젝트 구조
 
 ```
-carbon-silicons-council/
+my-prime-jennie/
 ├── services/                    # 마이크로서비스
 │   ├── scout-job/              # AI 종목 발굴
 │   ├── buy-scanner/            # 매수 신호 스캔
@@ -729,18 +729,18 @@ docker compose --profile infra --profile real up -d
 
 - 위치: `http://localhost:8180` (프로파일 `infra`)
 - 이미지: `docker/jenkins/Dockerfile` (Docker CLI 포함)
-- 볼륨: `./jenkins_home:/var/jenkins_home`, `/var/run/docker.sock`, `/home/youngs75/projects/carbon-silicons-council-main` (배포 전용 워킹트리)
+- 볼륨: `./jenkins_home:/var/jenkins_home`, `/var/run/docker.sock`, `/home/youngs75/projects/my-prime-jennie-main` (배포 전용 워킹트리)
 - 파이프라인 동작:
   - `development` 브랜치 push/PR: Unit Test만 실행 (pytest)
   - `main` 브랜치: Unit Test → Docker Build → Deploy (`--profile real`)
-- 배포 경로: `/home/youngs75/projects/carbon-silicons-council-main` (main 전용 워킹트리, Jenkins가 `git fetch/reset`으로 동기화)
-- 필요 Credential: `carbon-silicons-council-github` (Username + PAT, scope: `repo`, `admin:repo_hook`)
+- 배포 경로: `/home/youngs75/projects/my-prime-jennie-main` (main 전용 워킹트리, Jenkins가 `git fetch/reset`으로 동기화)
+- 필요 Credential: `my-prime-jennie-github` (Username + PAT, scope: `repo`, `admin:repo_hook`)
 
 배포용 워킹트리 준비:
 ```bash
 cd /home/youngs75/projects
-git clone https://github.com/youngs7596/carbon-silicons-council.git carbon-silicons-council-main
-cd carbon-silicons-council-main && git checkout main
+git clone https://github.com/youngs7596/my-prime-jennie.git my-prime-jennie-main
+cd my-prime-jennie-main && git checkout main
 ```
 
 재시작:
@@ -867,7 +867,7 @@ MIT License
 
 <div align="center">
 
-**Carbon Silicons Council v1.0**
+**my-prime-jennie v1.0**
 
 *AI가 발굴하고, 통계가 검증하고, 사람이 결정한다.*
 

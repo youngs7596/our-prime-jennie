@@ -1,6 +1,6 @@
 # 3현자 리뷰 시스템 (Three Sages Council) - 아키텍처 문서
 
-> **Carbon Silicons Council v1.1** - AI 에이전트와 LLM이 협업하여 시스템을 자율 개선하는 Daily Council 시스템
+> **my-prime-jennie v1.1** - AI 에이전트와 LLM이 협업하여 시스템을 자율 개선하는 Daily Council 시스템
 
 ---
 
@@ -91,7 +91,7 @@ flowchart TB
 ## 3. 디렉토리 구조
 
 ```
-carbon-silicons-council/
+my-prime-jennie/
 ├── scripts/
 │   ├── build_daily_packet.py    # DB → Daily Packet 생성
 │   ├── run_daily_council.py     # Packet → Council → Bundle
@@ -392,4 +392,4 @@ python scripts/run_daily_council.py \
 
 ---
 
-*작성: Carbon Silicons Council v1.0 (2025-12-19)*
+*작성: my-prime-jennie v1.0 (2025-12-19)*

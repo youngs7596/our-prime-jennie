@@ -24,7 +24,7 @@ class DailyReporter:
         # JennieBrain 초기화 (Factory/Tier 자동 처리)
         try:
             secrets = auth._load_local_secrets()
-            project_id = secrets.get("project_id", "carbon-silicons-council")
+            project_id = secrets.get("project_id", "my-prime-jennie")
             gemini_key_secret = "gemini-api-key" # Legacy init param, not strictly used in v6 Factory
             
             self.jennie_brain = JennieBrain(project_id, gemini_key_secret)

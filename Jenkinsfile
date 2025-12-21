@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
-        // docker-compose.yml의 name: carbon-silicons-council와 일치
-        COMPOSE_PROJECT_NAME = 'carbon-silicons-council'
+        // docker-compose.yml의 name: my-prime-jennie와 일치
+        COMPOSE_PROJECT_NAME = 'my-prime-jennie'
     }
 
     stages {
@@ -67,14 +67,14 @@ pipeline {
             steps {
                 echo '🚀 Deploying to production...'
 
-                withCredentials([usernamePassword(credentialsId: 'carbon-silicons-council-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
                         git config --global --add safe.directory "*" 
                         
-                        cd /home/youngs75/projects/carbon-silicons-council
+                        cd /home/youngs75/projects/my-prime-jennie
 
                         # 1. 최신 코드 강제 동기화
-                        git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/carbon-silicons-council.git main
+                        git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git main
                         git reset --hard FETCH_HEAD
                         git clean -fd
                         

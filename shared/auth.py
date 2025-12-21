@@ -1,5 +1,5 @@
 """
-shared/auth.py - Carbon Silicons Council 인증 및 시크릿 관리 모듈
+shared/auth.py - my-prime-jennie 인증 및 시크릿 관리 모듈
 ====================================================
 
 이 모듈은 secrets.json 파일 및 환경 변수에서 시크릿을 로드합니다.

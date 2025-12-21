@@ -452,7 +452,9 @@ def bootstrap_default_jobs():
         logger.error(f"❌ 기본 Job Bootstrap 실패: {e}")
 
 
-app = FastAPI(title="CSC Scheduler Service", version="1.0.0")
+from shared.version import get_service_title, VERSION
+
+app = FastAPI(title=get_service_title("Scheduler Service"), version=VERSION)
 
 
 @app.on_event("startup")

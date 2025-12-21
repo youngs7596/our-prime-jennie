@@ -1,6 +1,6 @@
 # requirements.txt
 # ============================================
-# Carbon Silicons Council - Python Dependencies
+# my-prime-jennie - Python Dependencies
 # ============================================
 #
 # 설치 방법:

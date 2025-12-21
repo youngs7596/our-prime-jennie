@@ -154,7 +154,7 @@ newgrp docker
 ### MariaDB 연결 실패
 ```bash
 # 컨테이너 로그 확인
-docker logs carbon-silicons-council-mariadb-1
+docker logs my-prime-jennie-mariadb-1
 
 # secrets.json의 비밀번호가 docker-compose.yml과 일치하는지 확인
 ```

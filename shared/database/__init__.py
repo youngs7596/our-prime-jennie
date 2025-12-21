@@ -1,5 +1,5 @@
 """
-shared/database/__init__.py - Carbon Silicons Council 데이터베이스 유틸리티 Facade
+shared/database/__init__.py - my-prime-jennie 데이터베이스 유틸리티 Facade
 ================================================================
 
 이 패키지는 `shared/database/` 하위 모듈들을 통합하여 제공하는 Facade입니다.

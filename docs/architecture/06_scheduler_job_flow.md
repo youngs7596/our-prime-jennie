@@ -1,4 +1,4 @@
-# Carbon Silicons Council - Scheduler/Job Flow (RabbitMQ Delay 패턴, Mermaid)
+# my-prime-jennie - Scheduler/Job Flow (RabbitMQ Delay 패턴, Mermaid)
 
 ```mermaid
 flowchart LR

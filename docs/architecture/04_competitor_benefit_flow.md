@@ -1,4 +1,4 @@
-# Carbon Silicons Council - Competitor Benefit Flow (Mermaid)
+# my-prime-jennie - Competitor Benefit Flow (Mermaid)
 
 ```mermaid
 flowchart LR

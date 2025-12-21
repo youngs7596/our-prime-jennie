@@ -234,11 +234,13 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("👋 Dashboard Backend 종료")
 
+from shared.version import PROJECT_NAME, VERSION, get_service_title
+
 # --- FastAPI 앱 ---
 app = FastAPI(
-    title="Carbon Silicons Council - Dashboard API",
+    title=get_service_title("Dashboard API"),
     description="AI 자율 트레이딩 시스템 대시보드 API",
-    version="1.0.0",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -1176,7 +1178,7 @@ async def health_check():
 async def root():
     """루트 엔드포인트"""
     return {
-        "service": "Carbon Silicons Council - Dashboard API",
+        "service": get_service_title("Dashboard API"),
         "version": "1.0.0",
         "docs": "/docs",
     }

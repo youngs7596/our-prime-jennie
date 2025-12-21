@@ -12,7 +12,7 @@
 # ==============================================================================
 
 # Configuration
-PROJECT_ROOT="/home/youngs75/projects/carbon-silicons-council"
+PROJECT_ROOT="/home/youngs75/projects/my-prime-jennie"
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 LOG_DIR="$PROJECT_ROOT/logs/council"
 WEEK=$(date +%Y-W%V)  # ISO Week number (e.g., 2025-W51)

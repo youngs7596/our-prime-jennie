@@ -2,7 +2,7 @@ digraph MSAModuleLinks {
     // 전체 스타일 설정
     bgcolor="#1a1a2e";
     fontname="Helvetica,Arial,sans-serif";
-    label="Carbon Silicons Council - MSA 모듈 연계도";
+    label="my-prime-jennie - MSA 모듈 연계도";
     labelloc=t;
     fontsize=18;
     fontcolor="white";

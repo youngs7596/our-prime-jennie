@@ -139,11 +139,11 @@
 - Overview 페이지 UI 개선
 
 ### 아키텍처 문서 리팩토링
-- 6개 아키텍처 문서 `Carbon Silicons Council` 프로젝트명 및 LLM 참조 (Gemini/Ollama) 업데이트
+- 6개 아키텍처 문서 `my-prime-jennie` 프로젝트명 및 LLM 참조 (Gemini/Ollama) 업데이트
 - Pair Trading/Backtester 미구현 컴포넌트 제거
 
 ### CSC v1.0 마이그레이션
-- 프로젝트 브랜딩 `carbon-silicons-council` 통일
+- 프로젝트 브랜딩 `my-prime-jennie` 통일
 - FAST tier Gemini 전환
 - Docker 21개 컨테이너 마이그레이션
 - GitHub 리포지토리 생성

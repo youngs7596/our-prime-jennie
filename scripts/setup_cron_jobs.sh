@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Carbon Silicons Council - Cron Job 설정 스크립트
+# my-prime-jennie - Cron Job 설정 스크립트
 # =============================================================================
 # 주간 팩터 분석 배치 작업을 cron에 등록합니다.
 #
@@ -28,7 +28,7 @@ else
 fi
 
 # Cron job 정의
-CRON_MARKER="# Carbon Silicons Council Cron Jobs"
+CRON_MARKER="# my-prime-jennie Cron Jobs"
 WEEKLY_FACTOR_SCRIPT="${PROJECT_ROOT}/scripts/weekly_factor_analysis_batch.py"
 DAILY_BRIEFING_SCRIPT="${PROJECT_ROOT}/scripts/run_daily_briefing.py"
 LOG_DIR="${PROJECT_ROOT}/logs/cron"
@@ -38,7 +38,7 @@ mkdir -p "$LOG_DIR"
 
 show_help() {
     cat << EOF
-Carbon Silicons Council Cron Job 설정 스크립트
+my-prime-jennie Cron Job 설정 스크립트
 
 사용법:
   $0              cron job 등록
@@ -64,27 +64,27 @@ EOF
 }
 
 list_jobs() {
-    echo "📋 현재 등록된 Carbon Silicons Council cron jobs:"
+    echo "📋 현재 등록된 my-prime-jennie cron jobs:"
     echo "----------------------------------------"
     crontab -l 2>/dev/null | grep -A1 "$CRON_MARKER" || echo "(등록된 작업 없음)"
 }
 
 remove_jobs() {
-    echo "🗑️  Carbon Silicons Council cron jobs 제거 중..."
+    echo "🗑️  my-prime-jennie cron jobs 제거 중..."
     
-    # 기존 crontab에서 Carbon Silicons Council 관련 항목 제거
+    # 기존 crontab에서 my-prime-jennie 관련 항목 제거
     crontab -l 2>/dev/null | grep -v "$CRON_MARKER" | grep -v "weekly_factor_analysis_batch.py" | crontab - 2>/dev/null || true
     
     echo "✅ cron jobs 제거 완료!"
 }
 
 install_jobs() {
-    echo "📝 Carbon Silicons Council cron jobs 등록 중..."
+    echo "📝 my-prime-jennie cron jobs 등록 중..."
     echo "   Python: $PYTHON_PATH"
     echo "   Project: $PROJECT_ROOT"
     echo ""
     
-    # 기존 crontab 백업 및 Carbon Silicons Council 항목 제거
+    # 기존 crontab 백업 및 my-prime-jennie 항목 제거
     EXISTING_CRON=$(crontab -l 2>/dev/null | grep -v "$CRON_MARKER" | grep -v "weekly_factor_analysis_batch.py" || true)
     
     # 새 cron job 정의

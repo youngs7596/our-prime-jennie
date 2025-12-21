@@ -1,5 +1,5 @@
 #
-# carbon-silicons-council 환경 변수 (WSL2 + Docker Compose)
+# my-prime-jennie 환경 변수 (WSL2 + Docker Compose)
 # Cloud Run 없이 로컬/WSL2에서 실행하기 위한 기본값입니다.
 
 # 1. 공통 런타임 설정

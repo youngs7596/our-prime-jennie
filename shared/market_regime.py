@@ -1,5 +1,5 @@
 """
-shared/market_regime.py - Carbon Silicons Council 시장 국면 분석 모듈
+shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 =======================================================
 
 이 모듈은 KOSPI 지수를 기반으로 시장 국면을 분석합니다.

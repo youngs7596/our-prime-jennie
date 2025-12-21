@@ -1,5 +1,5 @@
 """
-shared/hybrid_scoring - Carbon Silicons Council 하이브리드 스코어링 시스템
+shared/hybrid_scoring - my-prime-jennie 하이브리드 스코어링 시스템
 =============================================================
 
 이 패키지는 정량적 팩터 분석과 LLM 정성 분석을 결합한 

@@ -5,7 +5,9 @@ services/command-handler/messages.py
 """
 
 
-HELP_TEXT = """📚 *Carbon Silicons Council 명령어 (24개)*
+from shared.version import PROJECT_NAME
+
+HELP_TEXT = f"""📚 *{PROJECT_NAME} 명령어 (24개)*
 
 _(매수/매도는 실행 서비스로 큐 전송 후 처리됩니다)_ 
 

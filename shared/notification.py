@@ -1,5 +1,5 @@
 """
-shared/notification.py - Carbon Silicons Council 알림 모듈
+shared/notification.py - my-prime-jennie 알림 모듈
 ==============================================
 
 이 모듈은 텔레그램을 통한 실시간 알림 발송 및 명령 수신을 담당합니다.

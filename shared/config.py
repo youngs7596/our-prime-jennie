@@ -1,6 +1,6 @@
 
 """
-shared/config.py - Carbon Silicons Council 설정 관리 모듈
+shared/config.py - my-prime-jennie 설정 관리 모듈
 =============================================
 
 이 모듈은 중앙화된 설정 관리를 담당합니다.

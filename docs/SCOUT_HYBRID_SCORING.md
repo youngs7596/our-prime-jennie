@@ -295,5 +295,5 @@ PBR:     8% → 3%  (48.6% 무효)
 
 ---
 
-*작성: Carbon Silicons Council v1.0 (2025-12-05)*
+*작성: my-prime-jennie v1.0 (2025-12-05)*
 

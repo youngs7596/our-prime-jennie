@@ -1,5 +1,5 @@
 """
-shared/rabbitmq.py - Carbon Silicons Council RabbitMQ 클라이언트 모듈
+shared/rabbitmq.py - my-prime-jennie RabbitMQ 클라이언트 모듈
 ========================================================
 
 이 모듈은 마이크로서비스 간 비동기 메시지 통신을 담당합니다.

@@ -1,4 +1,4 @@
-# Carbon Silicons Council - LLM Decision Chain (Hunter/Judge, Mermaid)
+# my-prime-jennie - LLM Decision Chain (Hunter/Judge, Mermaid)
 
 ```mermaid
 flowchart LR

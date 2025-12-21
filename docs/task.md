@@ -1,7 +1,7 @@
 # Daily Council Pipeline Implementation
 
-- [x] **Project Migration: carbon-silicons-council**
-    - [x] Initialize new project directory: `/home/youngs75/projects/carbon-silicons-council`
+- [x] **Project Migration: my-prime-jennie**
+    - [x] Initialize new project directory: `/home/youngs75/projects/my-prime-jennie`
     - [x] **Selective Migration (Cleanup Decision)**:
         - [x] Migrate `shared/` (Core libs, excluding deprecated modules)
         - [x] Migrate `services/` (Active services only: Scout, Briefing, Crawler, Gateway, etc.)

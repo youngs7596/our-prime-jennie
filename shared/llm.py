@@ -1,5 +1,5 @@
 
-# Version: v1.0 (Carbon Silicons Council) - LLM 오케스트레이션 모듈
+# Version: v1.0 (my-prime-jennie) - LLM 오케스트레이션 모듈
 # Jennie Brain Module - LLM Orchestrator
 #
 # Roles:

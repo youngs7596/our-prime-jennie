@@ -1,12 +1,12 @@
 # Project Prime Migration Plan: Clean History Strategy
 
 ## 1. Strategy Overview
-To ensure `my-prime-jennie` and `our-prime-jennie` start with a pristine git history and a fully working "One-Click" setup, we will execute all structural changes (MariaDB containerization, Installer script) within the **current repository** (`carbon-silicons-council`) first. Only after full verification will we copy the finalized files to the new repositories.
+To ensure `my-prime-jennie` and `our-prime-jennie` start with a pristine git history and a fully working "One-Click" setup, we will execute all structural changes (MariaDB containerization, Installer script) within the **current repository** (`my-prime-jennie`) first. Only after full verification will we copy the finalized files to the new repositories.
 
 ---
 
 ## 2. Phase 1: In-Place Modernization (Current Repo)
-*Execute these steps in the current `carbon-silicons-council` repository.*
+*Execute these steps in the current `my-prime-jennie` repository.*
 
 ### A. MariaDB Dockerization (Priority 1)
 Migrate the database from Windows Host to a Docker container to ensure system portability.
