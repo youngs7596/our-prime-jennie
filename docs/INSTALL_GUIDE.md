@@ -93,7 +93,14 @@ sudo ./scripts/install_prime.sh
 | `openai-api-key` | ❌ | https://platform.openai.com/api-keys |
 | `claude-api-key` | ❌ | https://console.anthropic.com/settings/keys |
 
-### ⚙️ 5단계: 운영 설정
+### 📱 5단계: 텔레그램 알림 설정 (선택사항)
+
+| 항목 | 설명 | 발급처 |
+|------|------|--------|
+| `telegram-bot-token` | 텔레그램 봇 토큰 | @BotFather → /newbot |
+| `telegram-chat-id` | 알림 받을 채팅방 ID | @userinfobot에게 메시지 전송 |
+
+### ⚙️ 6단계: 운영 설정
 
 | 항목 | 기본값 | 권장 설정 |
 |------|--------|-----------|
@@ -106,28 +113,58 @@ sudo ./scripts/install_prime.sh
 
 ## 🐳 Step 3: Docker 서비스 시작
 
+### ⚠️ 중요: Docker 권한 적용
+
+설치 스크립트 실행 후, **반드시 다음 명령을 실행**해야 Docker를 사용할 수 있습니다:
+
 ```bash
-# Python 환경 활성화
+newgrp docker  # 또는 터미널 재시작
+```
+
+### Docker 프로파일 설명
+
+서비스는 **프로파일** 단위로 구성됩니다:
+
+| 프로파일 | 용도 | 포함 서비스 |
+|----------|------|-------------|
+| `infra` | **기반 인프라** (필수) | MariaDB, Redis, RabbitMQ, ChromaDB, Ollama, Grafana |
+| `mock` | **모의투자 테스트** | KIS Mock Server, 모의투자용 서비스들 |
+| `real` | **실전투자 운영** | 실전투자용 전체 서비스 (대시보드 포함) |
+| `ci` | **CI/CD** (개발용) | Jenkins (빌드 필요) |
+
+### 시작 명령어
+
+```bash
+# 1. Python 환경 활성화
 source venv/bin/activate
 
-# Docker 서비스 시작
-docker compose up -d
+# 2. 프로파일 선택하여 시작
+
+# [인프라만] - DB, Redis 등 기반 서비스
+docker compose --profile infra up -d
+
+# [모의투자] - 인프라 + 모의투자 서비스
+docker compose --profile infra --profile mock up -d
+
+# [실전투자] - 인프라 + 실전 서비스 (대시보드 포함)
+docker compose --profile infra --profile real up -d
 
 # 상태 확인
 docker compose ps
 ```
 
-### 주요 서비스 목록
+### 주요 서비스 및 포트
 
-| 서비스 | 포트 | 설명 |
-|--------|------|------|
-| dashboard-backend | 8090 | 대시보드 API 서버 |
-| dashboard-frontend | 3000 | 대시보드 웹 UI |
-| mariadb | 3307 | 데이터베이스 |
-| redis | 6379 | 캐시 서버 |
-| rabbitmq | 5672/15672 | 메시지 큐 |
-| chromadb | 8000 | 벡터 DB (RAG) |
-| ollama | 11434 | 로컬 LLM (GPU 필요) |
+| 서비스 | 포트 | 프로파일 | 설명 |
+|--------|------|----------|------|
+| mariadb | 3307 | infra | 데이터베이스 |
+| redis | 6379 | infra | 캐시 서버 |
+| rabbitmq | 5672/15672 | infra | 메시지 큐 |
+| chromadb | 8000 | infra | 벡터 DB (RAG) |
+| ollama | 11434 | infra | 로컬 LLM (GPU) |
+| grafana | 3001 | infra | 모니터링 대시보드 |
+| dashboard-frontend | 3000 | real | 웹 대시보드 |
+| dashboard-backend | 8090 | real | 대시보드 API |
 
 ---
 
