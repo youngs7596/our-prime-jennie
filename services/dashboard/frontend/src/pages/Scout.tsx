@@ -70,7 +70,7 @@ export function ScoutPage() {
                 Scout-Debate-Judge Pipeline
               </h1>
               <p className="text-sm text-jennie-gold font-medium">
-                🧠 The Slow Brain of Supreme Jennie
+                🧠 The Slow Brain of Prime Jennie
               </p>
             </div>
           </div>

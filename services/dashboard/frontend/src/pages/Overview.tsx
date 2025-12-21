@@ -148,7 +148,13 @@ export function OverviewPage() {
   const { data: llmStats } = useQuery({
     queryKey: ['llm-stats'],
     queryFn: llmApi.getStats,
-    refetchInterval: 120000, // 2분마다
+    refetchInterval: 120000,
+  })
+
+  // NEW: LLM Config (Dynamic Model Info)
+  const { data: llmConfig } = useQuery({
+    queryKey: ['llm-config'],
+    queryFn: llmApi.getConfig,
   })
 
   // 포트폴리오 파이 차트 데이터
@@ -495,25 +501,46 @@ export function OverviewPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-yellow-400" />
-                LLM 사용 통계 (오늘)
+                LLM 사용 통계 & 모델 정보
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4">
                 <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-                  <p className="text-xs text-muted-foreground">News (OpenAI gpt-5-nano)</p>
-                  <p className="text-xl font-bold text-green-400">{llmStats.news_analysis?.calls || llmStats.fast?.calls || 0}회</p>
-                  <p className="text-xs text-green-400/70 mt-1">
-                    {((llmStats.news_analysis?.tokens || 0)).toLocaleString()} tokens
+                  <p className="text-xs text-muted-foreground mb-1">News Analysis (Fast)</p>
+                  <p className="text-xs font-semibold text-green-300 truncate">
+                    {llmConfig?.fast ? `${llmConfig.fast.provider.toUpperCase()} ${llmConfig.fast.model_name}` : 'Loading...'}
                   </p>
+                  <div className="mt-2 text-right">
+                    <p className="text-xl font-bold text-green-400">{llmStats.news_analysis?.calls || llmStats.fast?.calls || 0}회</p>
+                    <p className="text-xs text-green-400/70">
+                      {((llmStats.news_analysis?.tokens || 0)).toLocaleString()} tokens
+                    </p>
+                  </div>
                 </div>
                 <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                  <p className="text-xs text-muted-foreground">Scout (gpt-oss:20b Local)</p>
-                  <p className="text-xl font-bold text-blue-400">{llmStats.scout?.calls || llmStats.reasoning?.calls || 0}회</p>
+                  <p className="text-xs text-muted-foreground mb-1">Scout & Debate (Reasoning)</p>
+                  <p className="text-xs font-semibold text-blue-300 truncate">
+                    {llmConfig?.reasoning ? `${llmConfig.reasoning.provider.toUpperCase()} ${llmConfig.reasoning.model_name}` : 'Loading...'}
+                  </p>
+                  <div className="mt-2 text-right">
+                    <p className="text-xl font-bold text-blue-400">{llmStats.scout?.calls || llmStats.reasoning?.calls || 0}회</p>
+                    <p className="text-xs text-blue-400/70">
+                      {((llmStats.scout?.tokens || 0)).toLocaleString()} tokens
+                    </p>
+                  </div>
                 </div>
                 <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                  <p className="text-xs text-muted-foreground">Briefing (Gemini 2.0 Flash)</p>
-                  <p className="text-xl font-bold text-purple-400">{llmStats.briefing?.calls || llmStats.thinking?.calls || 0}회</p>
+                  <p className="text-xs text-muted-foreground mb-1">Judge & Briefing (Thinking)</p>
+                  <p className="text-xs font-semibold text-purple-300 truncate">
+                    {llmConfig?.thinking ? `${llmConfig.thinking.provider.toUpperCase()} ${llmConfig.thinking.model_name}` : 'Loading...'}
+                  </p>
+                  <div className="mt-2 text-right">
+                    <p className="text-xl font-bold text-purple-400">{llmStats.briefing?.calls || llmStats.thinking?.calls || 0}회</p>
+                    <p className="text-xs text-purple-400/70">
+                      {((llmStats.briefing?.tokens || 0)).toLocaleString()} tokens
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>

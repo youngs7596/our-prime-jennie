@@ -344,11 +344,11 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
 def main():
     start_time = time.time()
     
-    # [Operating Hours Check] - TEMPORARILY DISABLED FOR TESTING
-    # from shared.utils import is_operating_hours
-    # if not is_operating_hours():
-    #     logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-    #     return
+    # [Operating Hours Check]
+    from shared.utils import is_operating_hours
+    if not is_operating_hours():
+        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
+        return
 
     logger.info("--- 🤖 'Scout Job' 실행 시작 ---")
     
@@ -574,9 +574,10 @@ def main():
                 feedback_context = None
                 try:
                     redis_conn = _get_redis()
-                    feedback_bytes = redis_conn.get("analyst:feedback:summary")
-                    if feedback_bytes:
-                        feedback_context = feedback_bytes.decode('utf-8')
+                    feedback_data = redis_conn.get("analyst:feedback:summary")
+                    if feedback_data:
+                        # redis-py가 decode_responses=True이면 이미 str 반환
+                        feedback_context = feedback_data if isinstance(feedback_data, str) else feedback_data.decode('utf-8')
                         logger.info(f"   🧠 [Feedback] Analyst 전략 교훈 로드 완료 ({len(feedback_context)} chars)")
                     else:
                         logger.info("   🧠 [Feedback] 저장된 전략 교훈이 없습니다.")

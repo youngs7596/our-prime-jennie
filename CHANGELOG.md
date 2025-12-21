@@ -2,6 +2,12 @@
 
 ## 2025-12-21
 
+### Dashboard & Rebranding (v1.3)
+- **Dynamic Config**: `Overview` 페이지에 현재 사용 중인 LLM 모델(Provider, Model Name)과 일일 사용량을 동적으로 표시
+- **Rebranding**: 대시보드 및 Chrome 탭 타이틀의 "My Supreme Jennie"를 "My Prime Jennie"로 일괄 변경
+- **Backend**: `/api/llm/config` 및 `/api/llm/stats` API 추가
+- **Configuration**: Scout 및 News Crawler의 운영 시간 체크 로직(07:00~17:00) 원상복귀 및 Judge 모델 로컬(`qwen3:32b`) 전환
+
 ### Scout Hybrid Scoring 검증 및 Oracle 레거시 코드 제거
 - **Scout Hybrid Scoring 활성화**: `SCOUT_V5_ENABLED` 환경변수 추가로 하이브리드 스코어링 활성화
 - **SQLAlchemy 호환성 수정**: `quant_scorer.py`의 4개 함수에서 cursor → SQLAlchemy text() 변환

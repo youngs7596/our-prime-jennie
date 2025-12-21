@@ -14,7 +14,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  
+
   const navigate = useNavigate()
   const login = useAuthStore((state) => state.login)
 
@@ -60,7 +60,7 @@ export function LoginPage() {
             <span className="text-white font-bold text-3xl font-display">J</span>
           </div>
           <h1 className="text-3xl font-display font-bold gradient-text">
-            My Supreme Jennie
+            My Prime Jennie
           </h1>
           <p className="text-muted-foreground mt-2">AI Trading Dashboard</p>
         </motion.div>
@@ -145,7 +145,7 @@ export function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground mt-6">
-          © 2025 My Supreme Jennie. All rights reserved.
+          © 2025 My Prime Jennie. All rights reserved.
         </p>
       </motion.div>
     </div>

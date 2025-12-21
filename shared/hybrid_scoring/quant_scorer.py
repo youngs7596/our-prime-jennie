@@ -329,14 +329,14 @@ class QuantScorer:
             # 종목별 뉴스 통계 조회
             if news_category:
                 query_result = self.db_conn.execute(text("""
-                    SELECT WIN_RATE_D5, RETURN_D5, SAMPLE_COUNT, CONFIDENCE_LEVEL
+                    SELECT WIN_RATE, AVG_RETURN, SAMPLE_COUNT, CONFIDENCE_LEVEL
                     FROM NEWS_FACTOR_STATS
                     WHERE TARGET_CODE = :stock_code AND NEWS_CATEGORY = :news_category
                     AND SENTIMENT = 'POSITIVE'
                 """), {"stock_code": stock_code, "news_category": news_category})
             else:
                 query_result = self.db_conn.execute(text("""
-                    SELECT AVG(WIN_RATE_D5), AVG(RETURN_D5), SUM(SAMPLE_COUNT), 
+                    SELECT AVG(WIN_RATE), AVG(AVG_RETURN), SUM(SAMPLE_COUNT), 
                            MAX(CONFIDENCE_LEVEL)
                     FROM NEWS_FACTOR_STATS
                     WHERE TARGET_CODE = :stock_code AND SENTIMENT = 'POSITIVE'
@@ -1455,22 +1455,7 @@ class QuantScorer:
                           market_regime: str = 'ALL',
                           score_date: datetime = None) -> int:
         """
-        DAILY_QUANT_SCORE 테이블에 일별 점수 저장
-        
-        GPT 피드백: "최종 선정된 종목을 DAILY_QUANT_SCORE에 저장하는 부분 미구현" 해결
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
-        
-        역추적(Backtrace)을 위한 점수 기록:
-        - "Scout가 왜 이 종목을 뽑았지?" 추적 가능
-        - 백테스트용 데이터 축적
-        
-        Args:
-            results: QuantScoreResult 리스트
-            market_regime: 시장 국면
-            score_date: 점수 산출일 (기본값: 오늘)
-        
-        Returns:
-            저장된 레코드 수
+        DAILY_QUANT_SCORE 테이블에 일별 점수 저장 (SQLAlchemy + MariaDB)
         """
         if score_date is None:
             score_date = datetime.now(timezone.utc).date()
@@ -1478,56 +1463,71 @@ class QuantScorer:
         saved_count = 0
         
         try:
-            cursor = self.db_connection.cursor()
-            
-            columns = [
-                'SCORE_DATE', 'STOCK_CODE', 'STOCK_NAME',
-                'TOTAL_QUANT_SCORE',
-                'MOMENTUM_SCORE', 'QUALITY_SCORE', 'VALUE_SCORE',
-                'TECHNICAL_SCORE', 'NEWS_STAT_SCORE', 'SUPPLY_DEMAND_SCORE',
-                'MATCHED_CONDITION', 'CONDITION_WIN_RATE', 'CONDITION_SAMPLE_COUNT',
-                'IS_PASSED_FILTER', 'FILTER_RANK',
-                'MARKET_REGIME'
-            ]
-            unique_keys = ['SCORE_DATE', 'STOCK_CODE']
+            from sqlalchemy import text
             
             for result in results:
                 try:
                     # 매칭된 조건을 문자열로 변환 (최대 200자)
                     matched_condition = ','.join(result.matched_conditions[:5])[:200] if result.matched_conditions else ''
                     
-                    values = (
-                        score_date,
-                        result.stock_code,
-                        result.stock_name,
-                        result.total_score,
-                        result.momentum_score,
-                        result.quality_score,
-                        result.value_score,
-                        result.technical_score,
-                        result.news_stat_score,
-                        result.supply_demand_score,
-                        matched_condition,
-                        result.condition_win_rate,
-                        result.condition_sample_count,
-                        1 if result.is_passed_filter else 0,
-                        result.rank,
-                        market_regime,
-                    )
-                    
-                    execute_upsert(cursor, 'DAILY_QUANT_SCORE', columns, values, unique_keys)
+                    self.db_connection.execute(text("""
+                        INSERT INTO DAILY_QUANT_SCORE (
+                            SCORE_DATE, STOCK_CODE, STOCK_NAME,
+                            TOTAL_QUANT_SCORE, MOMENTUM_SCORE, QUALITY_SCORE, VALUE_SCORE,
+                            TECHNICAL_SCORE, NEWS_STAT_SCORE, SUPPLY_DEMAND_SCORE,
+                            MATCHED_CONDITION, CONDITION_WIN_RATE, CONDITION_SAMPLE_COUNT,
+                            IS_PASSED_FILTER, FILTER_RANK, MARKET_REGIME
+                        ) VALUES (
+                            :score_date, :stock_code, :stock_name,
+                            :total_score, :momentum_score, :quality_score, :value_score,
+                            :technical_score, :news_stat_score, :supply_demand_score,
+                            :matched_condition, :condition_win_rate, :condition_sample_count,
+                            :is_passed_filter, :rank, :market_regime
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            TOTAL_QUANT_SCORE = VALUES(TOTAL_QUANT_SCORE),
+                            MOMENTUM_SCORE = VALUES(MOMENTUM_SCORE),
+                            QUALITY_SCORE = VALUES(QUALITY_SCORE),
+                            VALUE_SCORE = VALUES(VALUE_SCORE),
+                            TECHNICAL_SCORE = VALUES(TECHNICAL_SCORE),
+                            NEWS_STAT_SCORE = VALUES(NEWS_STAT_SCORE),
+                            SUPPLY_DEMAND_SCORE = VALUES(SUPPLY_DEMAND_SCORE),
+                            MATCHED_CONDITION = VALUES(MATCHED_CONDITION),
+                            CONDITION_WIN_RATE = VALUES(CONDITION_WIN_RATE),
+                            CONDITION_SAMPLE_COUNT = VALUES(CONDITION_SAMPLE_COUNT),
+                            IS_PASSED_FILTER = VALUES(IS_PASSED_FILTER),
+                            FILTER_RANK = VALUES(FILTER_RANK),
+                            MARKET_REGIME = VALUES(MARKET_REGIME)
+                    """), {
+                        "score_date": score_date,
+                        "stock_code": result.stock_code,
+                        "stock_name": result.stock_name,
+                        "total_score": result.total_score,
+                        "momentum_score": result.momentum_score,
+                        "quality_score": result.quality_score,
+                        "value_score": result.value_score,
+                        "technical_score": result.technical_score,
+                        "news_stat_score": result.news_stat_score,
+                        "supply_demand_score": result.supply_demand_score,
+                        "matched_condition": matched_condition,
+                        "condition_win_rate": result.condition_win_rate,
+                        "condition_sample_count": result.condition_sample_count,
+                        "is_passed_filter": 1 if result.is_passed_filter else 0,
+                        "rank": result.rank,
+                        "market_regime": market_regime
+                    })
                     saved_count += 1
                     
                 except Exception as e:
                     logger.debug(f"   {result.stock_code} 저장 실패: {e}")
             
             self.db_connection.commit()
-            cursor.close()
-            
             logger.info(f"   (QuantScorer) 📊 DAILY_QUANT_SCORE 저장 완료: {saved_count}/{len(results)}개")
             
         except Exception as e:
             logger.error(f"   (QuantScorer) DAILY_QUANT_SCORE 저장 실패: {e}")
+            if hasattr(self.db_connection, 'rollback'):
+                self.db_connection.rollback()
         
         return saved_count
     
@@ -1535,16 +1535,7 @@ class QuantScorer:
                              hybrid_results: List,  # HybridScoreResult
                              score_date: datetime = None) -> int:
         """
-        DAILY_QUANT_SCORE에 하이브리드 점수 업데이트
-        
-        최종 하이브리드 스코어링 결과를 기존 레코드에 업데이트
-        
-        Args:
-            hybrid_results: HybridScoreResult 리스트
-            score_date: 점수 산출일
-        
-        Returns:
-            업데이트된 레코드 수
+        DAILY_QUANT_SCORE에 하이브리드 점수 업데이트 (SQLAlchemy)
         """
         if score_date is None:
             score_date = datetime.now(timezone.utc).date()
@@ -1552,35 +1543,35 @@ class QuantScorer:
         updated_count = 0
         
         try:
-            cursor = self.db_connection.cursor()
+            from sqlalchemy import text
             
             for result in hybrid_results:
                 try:
-                    cursor.execute("""
+                    self.db_connection.execute(text("""
                         UPDATE DAILY_QUANT_SCORE
-                        SET LLM_SCORE = %s,
-                            HYBRID_SCORE = %s,
-                            IS_FINAL_SELECTED = %s
-                        WHERE SCORE_DATE = %s AND STOCK_CODE = %s
-                    """, (
-                        result.llm_score,
-                        result.hybrid_score,
-                        1 if result.is_selected else 0,
-                        score_date,
-                        result.stock_code,
-                    ))
+                        SET LLM_SCORE = :llm_score,
+                            HYBRID_SCORE = :hybrid_score,
+                            IS_FINAL_SELECTED = :is_selected
+                        WHERE SCORE_DATE = :score_date AND STOCK_CODE = :stock_code
+                    """), {
+                        "llm_score": result.llm_score,
+                        "hybrid_score": result.hybrid_score,
+                        "is_selected": 1 if result.is_selected else 0,
+                        "score_date": score_date,
+                        "stock_code": result.stock_code
+                    })
                     updated_count += 1
                     
                 except Exception as e:
                     logger.debug(f"   {result.stock_code} 업데이트 실패: {e}")
             
             self.db_connection.commit()
-            cursor.close()
-            
             logger.info(f"   (QuantScorer) 📊 하이브리드 점수 업데이트 완료: {updated_count}개")
             
         except Exception as e:
             logger.error(f"   (QuantScorer) 하이브리드 점수 업데이트 실패: {e}")
+            if hasattr(self.db_connection, 'rollback'):
+                self.db_connection.rollback()
         
         return updated_count
 

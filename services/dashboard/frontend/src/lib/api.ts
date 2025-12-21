@@ -142,6 +142,10 @@ export const llmApi = {
     const response = await api.get('/llm/stats')
     return response.data
   },
+  getConfig: async () => {
+    const response = await api.get('/llm/config')
+    return response.data
+  },
 }
 
 // NEW: 3 Sages Council API
