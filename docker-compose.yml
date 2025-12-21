@@ -971,7 +971,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: ollama
-    profiles: [ "infra" ]
+    profiles: [ "gpu" ] # GPU가 있는 환경에서만 실행 (infra와 분리)
     deploy:
       resources:
         reservations:
