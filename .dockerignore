@@ -1,0 +1,32 @@
+# Docker build context에서 제외할 파일/디렉토리
+# MariaDB 데이터 (root 권한으로 생성됨)
+docker/mariadb/data_v2/
+
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs and data
+logs/
+*.log
+data/
+
+# Secrets
+secrets.json
+
+# Node modules (frontend)
+node_modules/
+
+# Docker data volumes
+/docker_data/
