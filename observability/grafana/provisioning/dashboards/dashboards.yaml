@@ -9,4 +9,4 @@ providers:
     disableDeletion: false
     updateIntervalSeconds: 30
     options:
-      path: /var/lib/grafana/provisioning/dashboards/json
+      path: /etc/grafana/provisioning/dashboards/json
