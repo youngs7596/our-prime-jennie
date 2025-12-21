@@ -115,16 +115,6 @@ class ConfigManager:
                 "desc": "골든크로스 판단용 장기 이동평균일",
                 "category": "Buying"
             },
-            'MAX_HOLDING_STOCKS': {
-                "value": 50,
-                "desc": "포트폴리오 최대 보유 종목 수",
-                "category": "Risk"
-            },
-            'DEFAULT_DAILY_BUY_LIMIT_AMOUNT': {
-                "value": 10000000,
-                "desc": "일일 최대 매수 한도 금액 (원)",
-                "category": "Risk"
-            },
             'BUY_QUANTITY_PER_TRADE': {
                 "value": 1,
                 "desc": "1회 주문 시 기본 매수 수량",

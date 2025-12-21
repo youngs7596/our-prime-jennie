@@ -12,11 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY services/dashboard/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# shared 라이브러리 복사
-COPY shared /app/shared
-
-# 애플리케이션 코드 복사
+# 애플리케이션 코드 복사 (routers 포함)
 COPY services/dashboard/backend /app
+
+# shared 라이브러리 복사 (별도 디렉토리)
+COPY shared /app/shared
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

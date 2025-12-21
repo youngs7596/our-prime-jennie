@@ -103,5 +103,6 @@ LOCAL_MODEL_THINKING: "gpt-oss:20b"           # [Judge] Deep Reasoning
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)
-SCOUT_UNIVERSE_SIZE: "secrets.SCOUT_UNIVERSE_SIZE"  # secrets.json에서 로드
-ENABLE_NEWS_ANALYSIS: "secrets.ENABLE_NEWS_ANALYSIS" # secrets.json에서 로드
+SCOUT_UNIVERSE_SIZE: "200"
+ENABLE_NEWS_ANALYSIS: "true"
+SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화

@@ -89,16 +89,10 @@ def save_to_watchlist(session, candidates: List[Dict]):
     
     # Step 1: 24시간 지난 오래된 종목 삭제 (TTL)
     logger.info("   (DB) 1. 24시간 지난 오래된 종목 정리 중...")
-    if _is_mariadb():
-        session.execute(text("""
-            DELETE FROM WatchList 
-            WHERE LLM_UPDATED_AT < DATE_SUB(NOW(), INTERVAL 24 HOUR)
-        """))
-    else:
-        session.execute(text("""
-            DELETE FROM WatchList 
-            WHERE LLM_UPDATED_AT < SYSTIMESTAMP - INTERVAL '24' HOUR
-        """))
+    session.execute(text("""
+        DELETE FROM WatchList 
+        WHERE LLM_UPDATED_AT < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    """))
     
     logger.info(f"   (DB) 2. 우량주 후보 {len(candidates)}건 UPSERT...")
     

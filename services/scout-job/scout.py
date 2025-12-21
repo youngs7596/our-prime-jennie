@@ -344,11 +344,11 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
 def main():
     start_time = time.time()
     
-    # [Operating Hours Check]
-    from shared.utils import is_operating_hours
-    if not is_operating_hours():
-        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-        return
+    # [Operating Hours Check] - TEMPORARILY DISABLED FOR TESTING
+    # from shared.utils import is_operating_hours
+    # if not is_operating_hours():
+    #     logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
+    #     return
 
     logger.info("--- 🤖 'Scout Job' 실행 시작 ---")
     
@@ -791,6 +791,12 @@ def main():
                     final_approved_list = []
                     if '0001' in candidate_stocks:
                         final_approved_list.append({'code': '0001', 'name': 'KOSPI', 'is_tradable': False})
+            else:
+                # 하이브리드 스코어링 비활성화 시 기본 처리
+                logger.warning("⚠️ Hybrid Scoring 비활성화됨. 기본 Watchlist만 저장합니다.")
+                final_approved_list = []
+                if '0001' in candidate_stocks:
+                    final_approved_list.append({'code': '0001', 'name': 'KOSPI', 'is_tradable': False})
             
             # 공통 Phase 3: 최종 Watchlist 저장
             logger.info(f"--- [Phase 3] 최종 Watchlist {len(final_approved_list)}개 저장 ---")

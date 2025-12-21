@@ -218,22 +218,19 @@ class QuantScorer:
             return weights
         
         try:
-            cursor = self.db_conn.cursor()
-            cursor.execute("""
+            from sqlalchemy import text
+            result = self.db_conn.execute(text("""
                 SELECT FACTOR_KEY, RECOMMENDED_WEIGHT 
                 FROM FACTOR_METADATA 
-                WHERE MARKET_REGIME IN (%s, 'ALL')
-                ORDER BY CASE WHEN MARKET_REGIME = %s THEN 0 ELSE 1 END
-            """, (self.market_regime, self.market_regime))
+                WHERE MARKET_REGIME IN (:regime, 'ALL')
+                ORDER BY CASE WHEN MARKET_REGIME = :regime THEN 0 ELSE 1 END
+            """), {"regime": self.market_regime})
             
-            rows = cursor.fetchall()
-            cursor.close()
+            rows = result.fetchall()
             
             for row in rows:
-                if isinstance(row, dict):
-                    key, weight = row['FACTOR_KEY'], row['RECOMMENDED_WEIGHT']
-                else:
-                    key, weight = row[0], row[1]
+                key = row[0] if hasattr(row, '__getitem__') else row.FACTOR_KEY
+                weight = row[1] if hasattr(row, '__getitem__') else row.RECOMMENDED_WEIGHT
                 
                 if key and weight is not None:
                     weights[key] = float(weight)
@@ -268,43 +265,32 @@ class QuantScorer:
             return result
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             # 1. 개별 종목 수준 조회
-            cursor.execute("""
+            query_result = self.db_conn.execute(text("""
                 SELECT CONDITION_KEY, CONDITION_DESC, WIN_RATE, AVG_RETURN, 
                        SAMPLE_COUNT, CONFIDENCE_LEVEL, RECENT_WIN_RATE
                 FROM FACTOR_PERFORMANCE
-                WHERE TARGET_TYPE = 'STOCK' AND TARGET_CODE = %s
-                AND HOLDING_DAYS = %s
+                WHERE TARGET_TYPE = 'STOCK' AND TARGET_CODE = :stock_code
+                AND HOLDING_DAYS = :holding_days
                 ORDER BY WIN_RATE DESC
                 LIMIT 5
-            """, (stock_code, self.DEFAULT_HOLDING_DAYS))
+            """), {"stock_code": stock_code, "holding_days": self.DEFAULT_HOLDING_DAYS})
             
-            rows = cursor.fetchall()
+            rows = query_result.fetchall()
             
             if rows:
                 for row in rows:
-                    if isinstance(row, dict):
-                        condition = {
-                            'key': row['CONDITION_KEY'],
-                            'desc': row['CONDITION_DESC'],
-                            'win_rate': float(row['WIN_RATE']) if row['WIN_RATE'] else 0,
-                            'avg_return': float(row['AVG_RETURN']) if row['AVG_RETURN'] else 0,
-                            'sample_count': row['SAMPLE_COUNT'] or 0,
-                            'confidence': row['CONFIDENCE_LEVEL'] or 'LOW',
-                            'recent_win_rate': float(row['RECENT_WIN_RATE']) if row['RECENT_WIN_RATE'] else None,
-                        }
-                    else:
-                        condition = {
-                            'key': row[0],
-                            'desc': row[1],
-                            'win_rate': float(row[2]) if row[2] else 0,
-                            'avg_return': float(row[3]) if row[3] else 0,
-                            'sample_count': row[4] or 0,
-                            'confidence': row[5] or 'LOW',
-                            'recent_win_rate': float(row[6]) if row[6] else None,
-                        }
+                    condition = {
+                        'key': row[0],
+                        'desc': row[1],
+                        'win_rate': float(row[2]) if row[2] else 0,
+                        'avg_return': float(row[3]) if row[3] else 0,
+                        'sample_count': row[4] or 0,
+                        'confidence': row[5] or 'LOW',
+                        'recent_win_rate': float(row[6]) if row[6] else None,
+                    }
                     result['conditions'].append(condition)
                 
                 # 가장 높은 승률 조건 선택
@@ -312,8 +298,6 @@ class QuantScorer:
                 result['best_win_rate'] = best['win_rate']
                 result['sample_count'] = best['sample_count']
                 result['confidence'] = best['confidence']
-            
-            cursor.close()
             
         except Exception as e:
             logger.debug(f"   (QuantScorer) {stock_code} 조건부 승률 로드 실패: {e}")
@@ -340,38 +324,31 @@ class QuantScorer:
             return result
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             # 종목별 뉴스 통계 조회
             if news_category:
-                cursor.execute("""
+                query_result = self.db_conn.execute(text("""
                     SELECT WIN_RATE_D5, RETURN_D5, SAMPLE_COUNT, CONFIDENCE_LEVEL
                     FROM NEWS_FACTOR_STATS
-                    WHERE TARGET_CODE = %s AND NEWS_CATEGORY = %s
+                    WHERE TARGET_CODE = :stock_code AND NEWS_CATEGORY = :news_category
                     AND SENTIMENT = 'POSITIVE'
-                """, (stock_code, news_category))
+                """), {"stock_code": stock_code, "news_category": news_category})
             else:
-                cursor.execute("""
+                query_result = self.db_conn.execute(text("""
                     SELECT AVG(WIN_RATE_D5), AVG(RETURN_D5), SUM(SAMPLE_COUNT), 
                            MAX(CONFIDENCE_LEVEL)
                     FROM NEWS_FACTOR_STATS
-                    WHERE TARGET_CODE = %s AND SENTIMENT = 'POSITIVE'
-                """, (stock_code,))
+                    WHERE TARGET_CODE = :stock_code AND SENTIMENT = 'POSITIVE'
+                """), {"stock_code": stock_code})
             
-            row = cursor.fetchone()
-            cursor.close()
+            row = query_result.fetchone()
             
             if row:
-                if isinstance(row, dict):
-                    result['win_rate_d5'] = float(row.get('WIN_RATE_D5') or row.get('AVG(WIN_RATE_D5)') or 0)
-                    result['avg_return_d5'] = float(row.get('RETURN_D5') or row.get('AVG(RETURN_D5)') or 0)
-                    result['sample_count'] = row.get('SAMPLE_COUNT') or row.get('SUM(SAMPLE_COUNT)') or 0
-                    result['confidence'] = row.get('CONFIDENCE_LEVEL') or row.get('MAX(CONFIDENCE_LEVEL)') or 'LOW'
-                else:
-                    result['win_rate_d5'] = float(row[0]) if row[0] else None
-                    result['avg_return_d5'] = float(row[1]) if row[1] else None
-                    result['sample_count'] = row[2] or 0
-                    result['confidence'] = row[3] or 'LOW'
+                result['win_rate_d5'] = float(row[0]) if row[0] else None
+                result['avg_return_d5'] = float(row[1]) if row[1] else None
+                result['sample_count'] = row[2] or 0
+                result['confidence'] = row[3] or 'LOW'
         
         except Exception as e:
             logger.debug(f"   (QuantScorer) {stock_code} 뉴스 통계 로드 실패: {e}")
@@ -395,20 +372,16 @@ class QuantScorer:
             return sector
         
         try:
-            cursor = self.db_conn.cursor()
-            cursor.execute("""
+            from sqlalchemy import text
+            query_result = self.db_conn.execute(text("""
                 SELECT SECTOR_KOSPI200 FROM STOCK_MASTER 
-                WHERE STOCK_CODE = %s
-            """, (stock_code,))
+                WHERE STOCK_CODE = :stock_code
+            """), {"stock_code": stock_code})
             
-            row = cursor.fetchone()
-            cursor.close()
+            row = query_result.fetchone()
             
             if row:
-                if isinstance(row, dict):
-                    sector = row.get('SECTOR_KOSPI200') or '미분류'
-                else:
-                    sector = row[0] or '미분류'
+                sector = row[0] or '미분류'
         except Exception as e:
             logger.debug(f"   (QuantScorer) {stock_code} 섹터 조회 실패: {e}")
         

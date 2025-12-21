@@ -46,8 +46,23 @@ const Factors: React.FC = () => {
                         Trading Factors
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        현재 적용된 트레이딩 팩터 및 설정값입니다. (config.py 연동)
+                        현재 적용된 트레이딩 팩터 및 설정값입니다.
                     </p>
+                </div>
+            </div>
+
+            {/* Configuration Guide */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">📝 설정값 변경 방법</h3>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                    아래 설정값을 변경하려면 <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">shared/config.py</code> 파일의 <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">_defaults</code> 딕셔너리를 수정하세요.
+                </p>
+                <h3 className="font-semibold text-blue-800 dark:text-blue-200 mb-2">🧪 백테스트 실행</h3>
+                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                    <p><strong>단일 백테스트:</strong></p>
+                    <p className="ml-2"><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">python utilities/backtest_gpt_v2.py --days 180</code></p>
+                    <p className="mt-2"><strong>그리드 최적화 (여러 파라미터 조합 테스트):</strong></p>
+                    <p className="ml-2"><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">python utilities/auto_optimize_backtest_gpt_v2.py --days 180</code></p>
                 </div>
             </div>
 

@@ -60,6 +60,7 @@ services:
     command: --lower_case_table_names=1
     ports:
       - "3307:3306"
+    volumes:
       - /docker_data/mariadb_data:/var/lib/mysql
       - ./docker/init:/docker-entrypoint-initdb.d
     restart: always

@@ -28,7 +28,7 @@ if ! ping -c 1 google.com &> /dev/null; then
 fi
 
 # Check GPU
-if command -v nvidia-smi &> /dev/null; then
+if command -v nvidia-smi &> /dev/null || [ -f "/usr/lib/wsl/lib/nvidia-smi" ]; then
     echo -e "${GREEN}✓ NVIDIA GPU detected.${NC}"
     HAS_GPU=true
 else
@@ -302,11 +302,16 @@ echo -e "   ${YELLOW}./scripts/setup_cron_jobs.sh${NC}"
 echo -e "   ${CYAN}  - 주간 팩터 분석: 매주 일요일 오전 3시${NC}"
 echo -e "   ${CYAN}  - 일일 브리핑: 평일 오후 5시 (텔레그램 발송)${NC}"
 echo -e ""
-echo -e "7. 시스템 시작 시 자동 실행 (systemd - 선택사항):"
+echo -e "7. 시스템 시작 시 자동 실행 (systemd - 권장):"
 echo -e "   ${YELLOW}sudo cp infrastructure/my-prime-jennie.service /etc/systemd/system/${NC}"
 echo -e "   ${YELLOW}sudo systemctl daemon-reload${NC}"
 echo -e "   ${YELLOW}sudo systemctl enable my-prime-jennie${NC}"
 echo -e "   ${YELLOW}sudo systemctl start my-prime-jennie${NC}"
+echo -e ""
+echo -e "8. Ollama 모델 사전 다운로드 (Ollama 사용 시 권장):"
+echo -e "   ${CYAN}Scout/News 서비스에서 사용하는 LLM 모델을 미리 다운로드합니다.${NC}"
+echo -e "   ${YELLOW}ollama pull qwen3:32b${NC}"
+echo -e "   ${YELLOW}ollama pull gpt-oss:20b${NC}"
 echo -e ""
 echo -e "${GREEN}📖 상세 가이드: INSTALL_GUIDE.md${NC}"
 echo -e "${GREEN}🔧 설정 재구성: python3 scripts/generate_secrets.py${NC}"

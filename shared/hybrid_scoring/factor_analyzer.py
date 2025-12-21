@@ -175,27 +175,26 @@ class FactorAnalyzer:
             return self._market_regime_cache
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             # KOSPI 200 지수 데이터 조회 (종목코드 '0001' 또는 별도 테이블)
-            cursor.execute("""
+            result = self.db_conn.execute(text("""
                 SELECT CLOSE_PRICE, PRICE_DATE
                 FROM STOCK_DAILY_PRICES_3Y
                 WHERE STOCK_CODE = '0001'
                 ORDER BY PRICE_DATE DESC
-                LIMIT %s
-            """, (lookback_days,))
+                LIMIT :days
+            """), {"days": lookback_days})
             
-            rows = cursor.fetchall()
-            cursor.close()
+            rows = result.fetchall()
             
             if len(rows) < 30:
                 logger.warning("   시장 국면 감지: KOSPI 데이터 부족, SIDEWAYS 기본값 사용")
                 return 'SIDEWAYS'
             
             # 수익률 계산
-            recent_price = rows[0][0] if not isinstance(rows[0], dict) else rows[0]['CLOSE_PRICE']
-            old_price = rows[-1][0] if not isinstance(rows[-1], dict) else rows[-1]['CLOSE_PRICE']
+            recent_price = rows[0][0]
+            old_price = rows[-1][0]
             
             returns = (recent_price / old_price - 1)
             
@@ -231,19 +230,18 @@ class FactorAnalyzer:
             if self.repository is not None:
                 market_cap = self.repository.get_market_cap(stock_code)
             else:
-                # 레거시 모드
-                cursor = self.db_conn.cursor()
-                cursor.execute("""
-                    SELECT MARKET_CAP FROM STOCK_MASTER WHERE STOCK_CODE = %s
-                """, (stock_code,))
+                # 레거시 모드 - SQLAlchemy
+                from sqlalchemy import text
+                result = self.db_conn.execute(text("""
+                    SELECT MARKET_CAP FROM STOCK_MASTER WHERE STOCK_CODE = :stock_code
+                """), {"stock_code": stock_code})
                 
-                row = cursor.fetchone()
-                cursor.close()
+                row = result.fetchone()
                 
                 if not row:
                     return 'SMALL'
                 
-                market_cap = row[0] if not isinstance(row, dict) else row.get('MARKET_CAP', 0)
+                market_cap = row[0]
             
             if market_cap is None:
                 market_cap = 0
@@ -303,19 +301,18 @@ class FactorAnalyzer:
                 sector_kospi, industry_code = self.repository.get_stock_sector(stock_code)
                 sector = sector_kospi or industry_code
             else:
-                # 레거시 모드
-                cursor = self.db_conn.cursor()
-                cursor.execute("""
+                # 레거시 모드 - SQLAlchemy
+                from sqlalchemy import text
+                result = self.db_conn.execute(text("""
                     SELECT SECTOR_KOSPI200, INDUSTRY_CODE 
                     FROM STOCK_MASTER 
-                    WHERE STOCK_CODE = %s
-                """, (stock_code,))
+                    WHERE STOCK_CODE = :stock_code
+                """), {"stock_code": stock_code})
                 
-                row = cursor.fetchone()
-                cursor.close()
+                row = result.fetchone()
                 
                 if row:
-                    sector = row[0] if not isinstance(row, dict) else row.get('SECTOR_KOSPI200')
+                    sector = row[0]
                 else:
                     sector = None
             
@@ -403,35 +400,30 @@ class FactorAnalyzer:
         if self.repository is not None:
             return self.repository.get_historical_prices_bulk(stock_codes, days)
         
-        # 레거시 모드 (raw SQL)
+        # 레거시 모드 - SQLAlchemy
         result = {}
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             for code in stock_codes:
-                cursor.execute("""
+                query_result = self.db_conn.execute(text("""
                     SELECT PRICE_DATE, CLOSE_PRICE, VOLUME, HIGH_PRICE, LOW_PRICE
                     FROM STOCK_DAILY_PRICES_3Y
-                    WHERE STOCK_CODE = %s
+                    WHERE STOCK_CODE = :stock_code
                     ORDER BY PRICE_DATE DESC
-                    LIMIT %s
-                """, (code, days))
+                    LIMIT :days
+                """), {"stock_code": code, "days": days})
                 
-                rows = cursor.fetchall()
+                rows = query_result.fetchall()
                 
                 if rows:
-                    if isinstance(rows[0], dict):
-                        df = pd.DataFrame(rows)
-                    else:
-                        df = pd.DataFrame(rows, columns=[
-                            'PRICE_DATE', 'CLOSE_PRICE', 'VOLUME', 'HIGH_PRICE', 'LOW_PRICE'
-                        ])
+                    df = pd.DataFrame(rows, columns=[
+                        'PRICE_DATE', 'CLOSE_PRICE', 'VOLUME', 'HIGH_PRICE', 'LOW_PRICE'
+                    ])
                     
                     df = df.sort_values('PRICE_DATE').reset_index(drop=True)
                     result[code] = df
-            
-            cursor.close()
             
         except Exception as e:
             logger.error(f"   (FactorAnalyzer) 가격 데이터 조회 실패: {e}")
@@ -727,33 +719,46 @@ class FactorAnalyzer:
         NaN/inf 값을 None으로 변환하여 MySQL 호환성 확보
         """
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
-            columns = [
-                'FACTOR_KEY', 'FACTOR_NAME', 'MARKET_REGIME',
-                'IC_MEAN', 'IC_STD', 'IR', 'HIT_RATE',
-                'RECOMMENDED_WEIGHT', 'SAMPLE_COUNT',
-                'ANALYSIS_START_DATE', 'ANALYSIS_END_DATE'
-            ]
-            values = (
-                result.factor_key,
-                result.factor_name,
-                market_regime,
-                self._sanitize_for_db(result.ic_mean),
-                self._sanitize_for_db(result.ic_std),
-                self._sanitize_for_db(result.ir),
-                self._sanitize_for_db(result.hit_rate),
-                self._sanitize_for_db(result.recommended_weight),
-                result.sample_count,
-                datetime.now() - timedelta(days=self.DEFAULT_LOOKBACK_YEARS * 365),
-                datetime.now(),
-            )
-            unique_keys = ['FACTOR_KEY', 'MARKET_REGIME']
+            # execute_upsert는 cursor를 사용하므로 직접 SQL 실행
+            sql = text("""
+                INSERT INTO FACTOR_METADATA (
+                    FACTOR_KEY, FACTOR_NAME, MARKET_REGIME,
+                    IC_MEAN, IC_STD, IR, HIT_RATE,
+                    RECOMMENDED_WEIGHT, SAMPLE_COUNT,
+                    ANALYSIS_START_DATE, ANALYSIS_END_DATE, UPDATED_AT
+                ) VALUES (
+                    :factor_key, :factor_name, :market_regime,
+                    :ic_mean, :ic_std, :ir, :hit_rate,
+                    :weight, :sample_count,
+                    :start_date, :end_date, NOW()
+                ) ON DUPLICATE KEY UPDATE
+                    FACTOR_NAME = VALUES(FACTOR_NAME),
+                    IC_MEAN = VALUES(IC_MEAN), IC_STD = VALUES(IC_STD),
+                    IR = VALUES(IR), HIT_RATE = VALUES(HIT_RATE),
+                    RECOMMENDED_WEIGHT = VALUES(RECOMMENDED_WEIGHT),
+                    SAMPLE_COUNT = VALUES(SAMPLE_COUNT),
+                    ANALYSIS_START_DATE = VALUES(ANALYSIS_START_DATE),
+                    ANALYSIS_END_DATE = VALUES(ANALYSIS_END_DATE),
+                    UPDATED_AT = NOW()
+            """)
             
-            execute_upsert(cursor, 'FACTOR_METADATA', columns, values, unique_keys)
+            self.db_conn.execute(sql, {
+                'factor_key': result.factor_key,
+                'factor_name': result.factor_name,
+                'market_regime': market_regime,
+                'ic_mean': self._sanitize_for_db(result.ic_mean),
+                'ic_std': self._sanitize_for_db(result.ic_std),
+                'ir': self._sanitize_for_db(result.ir),
+                'hit_rate': self._sanitize_for_db(result.hit_rate),
+                'weight': self._sanitize_for_db(result.recommended_weight),
+                'sample_count': result.sample_count,
+                'start_date': datetime.now() - timedelta(days=self.DEFAULT_LOOKBACK_YEARS * 365),
+                'end_date': datetime.now(),
+            })
             
             self.db_conn.commit()
-            cursor.close()
             return True
             
         except Exception as e:
@@ -767,39 +772,51 @@ class FactorAnalyzer:
         Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
         """
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             confidence_level = get_confidence_level(result.sample_count)
             
-            columns = [
-                'TARGET_TYPE', 'TARGET_CODE', 'TARGET_NAME',
-                'CONDITION_KEY', 'CONDITION_DESC',
-                'WIN_RATE', 'AVG_RETURN', 'HOLDING_DAYS',
-                'SAMPLE_COUNT', 'CONFIDENCE_LEVEL',
-                'RECENT_WIN_RATE', 'RECENT_SAMPLE_COUNT',
-                'ANALYSIS_DATE'
-            ]
-            values = (
-                result.target_type,
-                result.target_code,
-                '',  # TARGET_NAME - 별도 조회 필요시 추가
-                result.condition_key,
-                result.condition_desc,
-                result.win_rate,
-                result.avg_return,
-                holding_days,
-                result.sample_count,
-                confidence_level,
-                result.recent_win_rate,
-                result.recent_sample_count,
-                datetime.now().date(),
-            )
-            unique_keys = ['TARGET_TYPE', 'TARGET_CODE', 'CONDITION_KEY', 'HOLDING_DAYS']
+            sql = text("""
+                INSERT INTO FACTOR_PERFORMANCE (
+                    TARGET_TYPE, TARGET_CODE, TARGET_NAME,
+                    CONDITION_KEY, CONDITION_DESC,
+                    WIN_RATE, AVG_RETURN, HOLDING_DAYS,
+                    SAMPLE_COUNT, CONFIDENCE_LEVEL,
+                    RECENT_WIN_RATE, RECENT_SAMPLE_COUNT,
+                    ANALYSIS_DATE, UPDATED_AT
+                ) VALUES (
+                    :target_type, :target_code, :target_name,
+                    :condition_key, :condition_desc,
+                    :win_rate, :avg_return, :holding_days,
+                    :sample_count, :confidence_level,
+                    :recent_win_rate, :recent_sample_count,
+                    :analysis_date, NOW()
+                ) ON DUPLICATE KEY UPDATE
+                    TARGET_NAME = VALUES(TARGET_NAME),
+                    CONDITION_DESC = VALUES(CONDITION_DESC),
+                    WIN_RATE = VALUES(WIN_RATE), AVG_RETURN = VALUES(AVG_RETURN),
+                    SAMPLE_COUNT = VALUES(SAMPLE_COUNT), CONFIDENCE_LEVEL = VALUES(CONFIDENCE_LEVEL),
+                    RECENT_WIN_RATE = VALUES(RECENT_WIN_RATE), RECENT_SAMPLE_COUNT = VALUES(RECENT_SAMPLE_COUNT),
+                    ANALYSIS_DATE = VALUES(ANALYSIS_DATE), UPDATED_AT = NOW()
+            """)
             
-            execute_upsert(cursor, 'FACTOR_PERFORMANCE', columns, values, unique_keys)
+            self.db_conn.execute(sql, {
+                'target_type': result.target_type,
+                'target_code': result.target_code,
+                'target_name': '',
+                'condition_key': result.condition_key,
+                'condition_desc': result.condition_desc,
+                'win_rate': result.win_rate,
+                'avg_return': result.avg_return,
+                'holding_days': holding_days,
+                'sample_count': result.sample_count,
+                'confidence_level': confidence_level,
+                'recent_win_rate': result.recent_win_rate,
+                'recent_sample_count': result.recent_sample_count,
+                'analysis_date': datetime.now().date(),
+            })
             
             self.db_conn.commit()
-            cursor.close()
             return True
             
         except Exception as e:
@@ -823,43 +840,27 @@ class FactorAnalyzer:
         result = {}
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
-            # FINANCIAL_METRICS_QUARTERLY 테이블에서 분기별 재무 데이터 조회
-            if self._is_mariadb():
-                placeholders = ','.join(['%s'] * len(stock_codes))
-                cursor.execute(f"""
-                    SELECT STOCK_CODE, QUARTER_DATE, PER, PBR, ROE
-                    FROM FINANCIAL_METRICS_QUARTERLY
-                    WHERE STOCK_CODE IN ({placeholders})
-                    ORDER BY STOCK_CODE, QUARTER_DATE
-                """, stock_codes)
-            else:
-                placeholders = ','.join([f':p{i}' for i in range(len(stock_codes))])
-                params = {f'p{i}': code for i, code in enumerate(stock_codes)}
-                cursor.execute(f"""
-                    SELECT STOCK_CODE, QUARTER_DATE, PER, PBR, ROE
-                    FROM FINANCIAL_METRICS_QUARTERLY
-                    WHERE STOCK_CODE IN ({placeholders})
-                    ORDER BY STOCK_CODE, QUARTER_DATE
-                """, params)
+            # IN 절을 위한 동적 플레이스홀더 생성
+            placeholders = ','.join([f':p{i}' for i in range(len(stock_codes))])
+            params = {f'p{i}': code for i, code in enumerate(stock_codes)}
             
-            rows = cursor.fetchall()
-            cursor.close()
+            query_result = self.db_conn.execute(text(f"""
+                SELECT STOCK_CODE, QUARTER_DATE, PER, PBR, ROE
+                FROM FINANCIAL_METRICS_QUARTERLY
+                WHERE STOCK_CODE IN ({placeholders})
+                ORDER BY STOCK_CODE, QUARTER_DATE
+            """), params)
+            
+            rows = query_result.fetchall()
             
             for row in rows:
-                if isinstance(row, dict):
-                    code = row.get('STOCK_CODE')
-                    q_date = row.get('QUARTER_DATE')
-                    per = row.get('PER')
-                    pbr = row.get('PBR')
-                    roe = row.get('ROE')
-                else:
-                    code = row[0]
-                    q_date = row[1]
-                    per = row[2]
-                    pbr = row[3]
-                    roe = row[4] if len(row) > 4 else None
+                code = row[0]
+                q_date = row[1]
+                per = row[2]
+                pbr = row[3]
+                roe = row[4] if len(row) > 4 else None
                 
                 # 날짜를 문자열로 변환
                 if hasattr(q_date, 'strftime'):
@@ -940,36 +941,26 @@ class FactorAnalyzer:
         result = {}
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             for code in stock_codes:
-                cursor.execute("""
+                query_result = self.db_conn.execute(text("""
                     SELECT TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY
                     FROM STOCK_INVESTOR_TRADING
-                    WHERE STOCK_CODE = %s
+                    WHERE STOCK_CODE = :stock_code
                     ORDER BY TRADE_DATE DESC
-                    LIMIT %s
-                """, (code, days))
+                    LIMIT :days
+                """), {"stock_code": code, "days": days})
                 
-                rows = cursor.fetchall()
+                rows = query_result.fetchall()
                 
                 if rows:
-                    if isinstance(rows[0], dict):
-                        df = pd.DataFrame(rows)
-                        # 컬럼명 정규화
-                        if 'FOREIGN_NET_BUY' in df.columns:
-                            df = df.rename(columns={
-                                'FOREIGN_NET_BUY': 'FOREIGN_NET',
-                                'INSTITUTION_NET_BUY': 'INST_NET'
-                            })
-                    else:
-                        df = pd.DataFrame(rows, columns=[
-                            'TRADE_DATE', 'FOREIGN_NET', 'INST_NET'
-                        ])
+                    df = pd.DataFrame(rows, columns=[
+                        'TRADE_DATE', 'FOREIGN_NET', 'INST_NET'
+                    ])
                     df = df.sort_values('TRADE_DATE').reset_index(drop=True)
                     result[code] = df
             
-            cursor.close()
             logger.debug(f"   (FactorAnalyzer) 수급 데이터 로드: {len(result)}개 종목")
             
         except Exception as e:
@@ -989,30 +980,26 @@ class FactorAnalyzer:
         result = {}
         
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
             for code in stock_codes:
-                cursor.execute("""
+                query_result = self.db_conn.execute(text("""
                     SELECT NEWS_DATE, SENTIMENT_SCORE, CATEGORY
                     FROM STOCK_NEWS_SENTIMENT
-                    WHERE STOCK_CODE = %s
+                    WHERE STOCK_CODE = :stock_code
                     ORDER BY NEWS_DATE DESC
-                    LIMIT %s
-                """, (code, days))
+                    LIMIT :days
+                """), {"stock_code": code, "days": days})
                 
-                rows = cursor.fetchall()
+                rows = query_result.fetchall()
                 
                 if rows:
-                    if isinstance(rows[0], dict):
-                        df = pd.DataFrame(rows)
-                    else:
-                        df = pd.DataFrame(rows, columns=[
-                            'NEWS_DATE', 'SENTIMENT_SCORE', 'CATEGORY'
-                        ])
+                    df = pd.DataFrame(rows, columns=[
+                        'NEWS_DATE', 'SENTIMENT_SCORE', 'CATEGORY'
+                    ])
                     df = df.sort_values('NEWS_DATE').reset_index(drop=True)
                     result[code] = df
             
-            cursor.close()
             logger.debug(f"   (FactorAnalyzer) 뉴스 감성 데이터 로드: {len(result)}개 종목")
             
         except Exception as e:
@@ -1238,27 +1225,21 @@ class FactorAnalyzer:
         STOCK_DISCLOSURES 테이블에서 공시 데이터 로드
         """
         logger.info(f"   (FactorAnalyzer) 공시 데이터 로드 ({lookback_days}일)")
-        cursor = self.db_conn.cursor()
+        
+        from sqlalchemy import text
+        
         result = {code: [] for code in stock_codes}
         start_date = datetime.now() - timedelta(days=lookback_days)
 
         for code in stock_codes:
             try:
-                if _is_mariadb():
-                    cursor.execute(f"""
-                        SELECT DISCLOSURE_DATE, CATEGORY
-                        FROM {self.DISCLOSURE_TABLE}
-                        WHERE STOCK_CODE = %s AND DISCLOSURE_DATE >= %s
-                        ORDER BY DISCLOSURE_DATE ASC
-                    """, (code, start_date))
-                else:
-                    cursor.execute(f"""
-                        SELECT DISCLOSURE_DATE, CATEGORY
-                        FROM {self.DISCLOSURE_TABLE}
-                        WHERE STOCK_CODE = :1 AND DISCLOSURE_DATE >= :2
-                        ORDER BY DISCLOSURE_DATE ASC
-                    """, [code, start_date])
-                rows = cursor.fetchall()
+                query_result = self.db_conn.execute(text(f"""
+                    SELECT DISCLOSURE_DATE, CATEGORY
+                    FROM {self.DISCLOSURE_TABLE}
+                    WHERE STOCK_CODE = :stock_code AND DISCLOSURE_DATE >= :start_date
+                    ORDER BY DISCLOSURE_DATE ASC
+                """), {"stock_code": code, "start_date": start_date})
+                rows = query_result.fetchall()
                 entries = []
                 for row in rows:
                     disc_date = row[0]
@@ -1273,7 +1254,6 @@ class FactorAnalyzer:
                 result[code] = entries
             except Exception as e:
                 logger.debug(f"   ⚠️ 공시 로드 실패 ({code}): {e}")
-        cursor.close()
         return result
     
     def _calculate_recency_weight(self, 
@@ -1318,35 +1298,45 @@ class FactorAnalyzer:
         Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
         """
         try:
-            cursor = self.db_conn.cursor()
+            from sqlalchemy import text
             
-            columns = [
-                'NEWS_CATEGORY', 'STOCK_GROUP', 'MARKET_REGIME',
-                'WIN_RATE', 'AVG_RETURN', 'SAMPLE_COUNT',
-                'CONFIDENCE_LEVEL', 'HOLDING_DAYS',
-                'RECENT_WIN_RATE', 'RECENT_SAMPLE_COUNT',
-                'RECENCY_WEIGHT', 'ANALYSIS_DATE'
-            ]
-            values = (
-                result['category'],
-                'ALL',  # 전체 종목 대상
-                'ALL',  # 전체 시장 국면
-                result['win_rate'],
-                result['avg_return'],
-                result['sample_count'],
-                result['confidence'],
-                result['holding_days'],
-                result['recent_win_rate'],
-                result['recent_sample_count'],
-                result['recency_weight'],
-                datetime.now().date(),
-            )
-            unique_keys = ['NEWS_CATEGORY', 'STOCK_GROUP', 'MARKET_REGIME', 'HOLDING_DAYS']
+            sql = text("""
+                INSERT INTO NEWS_FACTOR_STATS (
+                    NEWS_CATEGORY, STOCK_GROUP, MARKET_REGIME,
+                    WIN_RATE, AVG_RETURN, SAMPLE_COUNT,
+                    CONFIDENCE_LEVEL, HOLDING_DAYS,
+                    RECENT_WIN_RATE, RECENT_SAMPLE_COUNT,
+                    RECENCY_WEIGHT, ANALYSIS_DATE, UPDATED_AT
+                ) VALUES (
+                    :category, :stock_group, :market_regime,
+                    :win_rate, :avg_return, :sample_count,
+                    :confidence, :holding_days,
+                    :recent_win_rate, :recent_sample_count,
+                    :recency_weight, :analysis_date, NOW()
+                ) ON DUPLICATE KEY UPDATE
+                    WIN_RATE = VALUES(WIN_RATE), AVG_RETURN = VALUES(AVG_RETURN),
+                    SAMPLE_COUNT = VALUES(SAMPLE_COUNT), CONFIDENCE_LEVEL = VALUES(CONFIDENCE_LEVEL),
+                    RECENT_WIN_RATE = VALUES(RECENT_WIN_RATE), RECENT_SAMPLE_COUNT = VALUES(RECENT_SAMPLE_COUNT),
+                    RECENCY_WEIGHT = VALUES(RECENCY_WEIGHT), ANALYSIS_DATE = VALUES(ANALYSIS_DATE),
+                    UPDATED_AT = NOW()
+            """)
             
-            execute_upsert(cursor, 'NEWS_FACTOR_STATS', columns, values, unique_keys)
+            self.db_conn.execute(sql, {
+                'category': result['category'],
+                'stock_group': 'ALL',
+                'market_regime': 'ALL',
+                'win_rate': result['win_rate'],
+                'avg_return': result['avg_return'],
+                'sample_count': result['sample_count'],
+                'confidence': result['confidence'],
+                'holding_days': result['holding_days'],
+                'recent_win_rate': result['recent_win_rate'],
+                'recent_sample_count': result['recent_sample_count'],
+                'recency_weight': result['recency_weight'],
+                'analysis_date': datetime.now().date(),
+            })
             
             self.db_conn.commit()
-            cursor.close()
             return True
             
         except Exception as e:
@@ -2069,19 +2059,18 @@ class FactorAnalyzer:
     def _get_all_stock_codes(self) -> List[str]:
         """DB에서 전체 종목 코드 조회"""
         try:
-            cursor = self.db_conn.cursor()
-            cursor.execute("""
+            from sqlalchemy import text
+            
+            query_result = self.db_conn.execute(text("""
                 SELECT DISTINCT STOCK_CODE 
                 FROM STOCK_DAILY_PRICES_3Y
                 WHERE STOCK_CODE != '0001'
                 LIMIT 200
-            """)
-            rows = cursor.fetchall()
-            cursor.close()
+            """))
+            rows = query_result.fetchall()
             
             if rows:
-                return [row[0] if not isinstance(row, dict) else row['STOCK_CODE'] 
-                        for row in rows]
+                return [row[0] for row in rows]
             return []
         except Exception as e:
             logger.error(f"   종목 코드 조회 실패: {e}")

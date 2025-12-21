@@ -2,6 +2,12 @@
 
 ## 2025-12-21
 
+### Scout Hybrid Scoring 검증 및 Oracle 레거시 코드 제거
+- **Scout Hybrid Scoring 활성화**: `SCOUT_V5_ENABLED` 환경변수 추가로 하이브리드 스코어링 활성화
+- **SQLAlchemy 호환성 수정**: `quant_scorer.py`의 4개 함수에서 cursor → SQLAlchemy text() 변환
+- **Oracle 레거시 완전 제거**: `factor_analyzer.py` (12개 함수), `financial_data_collector.py` (3개 함수), `database/trading.py` (1개 분기)에서 Oracle 전용 코드 SQLAlchemy로 변환
+- **영향**: 섹터별 RSI 가중치, 조건부 승률 보너스, 뉴스 통계가 정상 반영되도록 수정
+
 ### Scout 코드 클린업 (Phase 1 완료)
 - `scout_pipeline.py`: Deprecated `process_llm_decision_task` 함수 제거 (~110줄)
 - `scout_cache.py`: Legacy 캐시 함수 제거 (`_load_llm_cache`, `_save_llm_cache`)

@@ -32,29 +32,26 @@ def calculate_roe_from_financial_data(connection, stock_code):
     ROE = (당기순이익 / 자기자본) * 100
     
     Args:
-        connection: DB 연결
+        connection: DB 연결 (SQLAlchemy Session 또는 raw connection)
         stock_code: 종목 코드
     
     Returns:
         float: ROE (%), 없으면 None
     """
-    cursor = None
     try:
-        cursor = connection.cursor()
+        from sqlalchemy import text
         
-        # 최신 재무 데이터 조회 (TOTAL_EQUITY가 없으면 계산)
-        sql = """
-        SELECT NET_INCOME, TOTAL_EQUITY, TOTAL_ASSETS, TOTAL_LIABILITIES
-        FROM (
+        # MariaDB 호환 SQL (LIMIT 사용)
+        sql = text("""
             SELECT NET_INCOME, TOTAL_EQUITY, TOTAL_ASSETS, TOTAL_LIABILITIES
             FROM FINANCIAL_DATA
-            WHERE STOCK_CODE = :1
+            WHERE STOCK_CODE = :stock_code
             ORDER BY REPORT_DATE DESC
-        )
-        WHERE ROWNUM <= 1
-        """
-        cursor.execute(sql, [stock_code])
-        row = cursor.fetchone()
+            LIMIT 1
+        """)
+        
+        result = connection.execute(sql, {"stock_code": stock_code})
+        row = result.fetchone()
         
         if row and row[0] is not None:  # NET_INCOME이 있어야 함
             net_income = float(row[0])
@@ -80,9 +77,6 @@ def calculate_roe_from_financial_data(connection, stock_code):
     except Exception as e:
         logger.debug(f"   (Financial) {stock_code} ROE 계산 실패: {e}")
         return None
-    finally:
-        if cursor:
-            cursor.close()
 
 
 def get_growth_rates_from_financial_data(connection, stock_code):
@@ -90,29 +84,26 @@ def get_growth_rates_from_financial_data(connection, stock_code):
     FINANCIAL_DATA 테이블에서 매출 성장률 및 EPS 성장률 조회
     
     Args:
-        connection: DB 연결
+        connection: DB 연결 (SQLAlchemy Session 또는 raw connection)
         stock_code: 종목 코드
     
     Returns:
         tuple: (sales_growth, eps_growth), 없으면 (None, None)
     """
-    cursor = None
     try:
-        cursor = connection.cursor()
+        from sqlalchemy import text
         
-        # 최신 재무 데이터 조회 (SALES_GROWTH, EPS_GROWTH 컬럼 사용)
-        sql = """
-        SELECT SALES_GROWTH, EPS_GROWTH
-        FROM (
+        # MariaDB 호환 SQL (LIMIT 사용)
+        sql = text("""
             SELECT SALES_GROWTH, EPS_GROWTH
             FROM FINANCIAL_DATA
-            WHERE STOCK_CODE = :1
+            WHERE STOCK_CODE = :stock_code
             ORDER BY REPORT_DATE DESC
-        )
-        WHERE ROWNUM <= 1
-        """
-        cursor.execute(sql, [stock_code])
-        row = cursor.fetchone()
+            LIMIT 1
+        """)
+        
+        result = connection.execute(sql, {"stock_code": stock_code})
+        row = result.fetchone()
         
         if row:
             sales_growth = float(row[0]) if row[0] is not None else None
@@ -124,9 +115,6 @@ def get_growth_rates_from_financial_data(connection, stock_code):
     except Exception as e:
         logger.debug(f"   (Financial) {stock_code} 성장률 조회 실패: {e}")
         return None, None
-    finally:
-        if cursor:
-            cursor.close()
 
 
 def scrape_pbr_per_from_naver(stock_code, debug=False, max_retries=3):
@@ -333,14 +321,15 @@ def update_watchlist_financial_data(connection, stock_code):
     WatchList 종목의 재무 데이터 업데이트
     
     Args:
-        connection: DB 연결
+        connection: DB 연결 (SQLAlchemy Session)
         stock_code: 종목 코드
     
     Returns:
         bool: 성공 여부
     """
-    cursor = None
     try:
+        from sqlalchemy import text
+        
         # 1. ROE 계산 (FINANCIAL_DATA 기반)
         roe_from_db = calculate_roe_from_financial_data(connection, stock_code)
         
@@ -353,7 +342,7 @@ def update_watchlist_financial_data(connection, stock_code):
         # 4. ROE 우선순위: 네이버 크롤링 > DB 계산
         roe = roe_from_naver if roe_from_naver is not None else roe_from_db
         
-        # 5. EPS_GROWTH 직접 계산 (네이버 크롤링 데이터 기반, DB 저장은 생략)
+        # 5. EPS_GROWTH 직접 계산 (네이버 크롤링 데이터 기반)
         eps_growth_from_naver = None
         if eps_list_from_naver and len(eps_list_from_naver) > 0:
             logger.info(f"   (Financial) {stock_code} ✅ EPS 크롤링 성공: {len(eps_list_from_naver)}개 연도 - {eps_list_from_naver}")
@@ -378,88 +367,47 @@ def update_watchlist_financial_data(connection, stock_code):
         
         eps_growth = eps_growth_from_naver  # EPS_GROWTH 사용 (네이버 크롤링 기반)
         
-        # 6. WatchList 업데이트 (NULL 값은 기존 값 유지)
-        cursor = connection.cursor()
+        # 6. WatchList 업데이트 (SQLAlchemy)
         now = datetime.now(timezone.utc)
         
-        # MariaDB/Oracle 호환 - 조건부 SQL 생성
-        update_fields = []
-        params_list = []  # MariaDB용 순서 기반 파라미터
-        params_dict = {'stock_code': stock_code}  # Oracle용 이름 기반 파라미터
+        # 동적 UPDATE 쿼리 생성
+        update_parts = []
+        params = {'stock_code': stock_code}
         
-        if _is_mariadb():
-            # MariaDB: %s 플레이스홀더 사용
-            if roe is not None:
-                update_fields.append("ROE = %s")
-                params_list.append(roe)
-            if sales_growth is not None:
-                update_fields.append("SALES_GROWTH = %s")
-                params_list.append(sales_growth)
-            if eps_growth is not None:
-                update_fields.append("EPS_GROWTH = %s")
-                params_list.append(eps_growth)
-            if pbr is not None:
-                update_fields.append("PBR = %s")
-                params_list.append(pbr)
-            if per is not None:
-                update_fields.append("PER = %s")
-                params_list.append(per)
-            if market_cap is not None:
-                update_fields.append("MARKET_CAP = %s")
-                params_list.append(market_cap)
-            
-            # 항상 업데이트할 필드
-            update_fields.append("FINANCIAL_UPDATED_AT = %s")
-            params_list.append(now)
-            
-            if len(update_fields) == 1:  # FINANCIAL_UPDATED_AT만 있는 경우
-                logger.debug(f"   (Financial) {stock_code} 업데이트할 데이터가 없음")
-                return False
-            
-            # WHERE 조건 파라미터 추가
-            params_list.append(stock_code)
-            
-            sql = f"""
+        if roe is not None:
+            update_parts.append("ROE = :roe")
+            params['roe'] = roe
+        if sales_growth is not None:
+            update_parts.append("SALES_GROWTH = :sales_growth")
+            params['sales_growth'] = sales_growth
+        if eps_growth is not None:
+            update_parts.append("EPS_GROWTH = :eps_growth")
+            params['eps_growth'] = eps_growth
+        if pbr is not None:
+            update_parts.append("PBR = :pbr")
+            params['pbr'] = pbr
+        if per is not None:
+            update_parts.append("PER = :per")
+            params['per'] = per
+        if market_cap is not None:
+            update_parts.append("MARKET_CAP = :market_cap")
+            params['market_cap'] = market_cap
+        
+        # 항상 업데이트할 필드
+        update_parts.append("FINANCIAL_UPDATED_AT = :updated_at")
+        params['updated_at'] = now
+        
+        if len(update_parts) == 1:  # FINANCIAL_UPDATED_AT만 있는 경우
+            logger.debug(f"   (Financial) {stock_code} 업데이트할 데이터가 없음")
+            return False
+        
+        sql = text(f"""
             UPDATE WATCHLIST
-            SET {', '.join(update_fields)}
-            WHERE STOCK_CODE = %s
-            """
-            cursor.execute(sql, params_list)
-        else:
-            # Oracle: :name 플레이스홀더 사용
-            if roe is not None:
-                update_fields.append("ROE = :roe")
-                params_dict['roe'] = roe
-            if sales_growth is not None:
-                update_fields.append("SALES_GROWTH = :sales_growth")
-                params_dict['sales_growth'] = sales_growth
-            if eps_growth is not None:
-                update_fields.append("EPS_GROWTH = :eps_growth")
-                params_dict['eps_growth'] = eps_growth
-            if pbr is not None:
-                update_fields.append("PBR = :pbr")
-                params_dict['pbr'] = pbr
-            if per is not None:
-                update_fields.append("PER = :per")
-                params_dict['per'] = per
-            if market_cap is not None:
-                update_fields.append("MARKET_CAP = :market_cap")
-                params_dict['market_cap'] = market_cap
-            
-            # 항상 업데이트할 필드
-            update_fields.append("FINANCIAL_UPDATED_AT = SYSTIMESTAMP")
-            
-            if len(update_fields) == 1:  # FINANCIAL_UPDATED_AT만 있는 경우
-                logger.debug(f"   (Financial) {stock_code} 업데이트할 데이터가 없음")
-                return False
-            
-            sql = f"""
-            UPDATE WATCHLIST
-            SET {', '.join(update_fields)}
+            SET {', '.join(update_parts)}
             WHERE STOCK_CODE = :stock_code
-            """
-            cursor.execute(sql, params_dict)
+        """)
         
+        connection.execute(sql, params)
         connection.commit()
         
         logger.info(f"   (Financial) {stock_code} ✅ WATCHLIST 업데이트 완료 - ROE: {roe}, EPS_GROWTH: {eps_growth}, SALES_GROWTH: {sales_growth}, PBR: {pbr}, PER: {per}")
@@ -467,12 +415,11 @@ def update_watchlist_financial_data(connection, stock_code):
         
     except Exception as e:
         logger.error(f"   (Financial) {stock_code} 재무 데이터 업데이트 실패: {e}")
-        if connection:
+        try:
             connection.rollback()
+        except:
+            pass
         return False
-    finally:
-        if cursor:
-            cursor.close()
 
 
 def batch_update_watchlist_financial_data(connection, stock_codes, max_workers=1):
