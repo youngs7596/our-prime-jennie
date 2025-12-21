@@ -139,7 +139,6 @@ def prompt_value(key, default_value):
     name = info.get("name", key)
     desc = info.get("desc", "")
     where = info.get("where", "")
-    is_secret = info.get("secret", False)
     
     print(f"\n{CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{RESET}")
     print(f"{GREEN}[{name}]{RESET}")
@@ -149,17 +148,13 @@ def prompt_value(key, default_value):
         print(f"  {YELLOW}📍 {where}{RESET}")
     
     # 기본값이 있으면 표시
-    if default_value and not is_secret:
+    if default_value:
         suffix = f" [{default_value}]: "
     else:
         suffix = ": "
     
     try:
-        if is_secret:
-            print(f"  (입력 시 화면에 표시되지 않습니다)")
-            user_input = getpass.getpass(prompt=f"  입력{suffix}")
-        else:
-            user_input = input(f"  입력{suffix}")
+        user_input = input(f"  입력{suffix}")
     except KeyboardInterrupt:
         print(f"\n{YELLOW}설치가 취소되었습니다.{RESET}")
         sys.exit(0)
@@ -188,8 +183,8 @@ def main():
     print(f"secrets.json 파일을 생성합니다.\n")
     print(f"{YELLOW}💡 도움말:{RESET}")
     print(f"  - 기본값을 사용하려면 Enter를 누르세요")
-    print(f"  - 비밀번호/API Key는 화면에 표시되지 않습니다")
     print(f"  - 설치 취소: Ctrl+C")
+    print(f"  - {CYAN}재설치 방법: python3 scripts/generate_secrets.py{RESET}")
 
     if os.path.exists(SECRETS_FILE):
         print(f"\n{YELLOW}⚠️  {SECRETS_FILE} 파일이 이미 존재합니다.{RESET}")
