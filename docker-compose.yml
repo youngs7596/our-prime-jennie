@@ -893,7 +893,7 @@ services:
       context: ./docker/jenkins
       dockerfile: Dockerfile
     image: my-jenkins:latest
-    profiles: [ "infra" ]
+    profiles: [ "ci" ] # Jenkins는 별도 프로파일 (내부 CI용, 신규 설치 불필요)
     user: "0" # root로 실행해 docker.sock 접근 허용
     environment:
       - TZ=Asia/Seoul
