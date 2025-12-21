@@ -17,7 +17,7 @@
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VENV_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+VENV_PYTHON="${PROJECT_ROOT}/venv/bin/python"
 SYSTEM_PYTHON="python3"
 
 # Python 경로 결정

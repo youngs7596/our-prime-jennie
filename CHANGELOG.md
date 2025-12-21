@@ -13,6 +13,7 @@
 - **MariaDB Dockerization**: Windows MariaDB → Docker Container (`mariadb:10.11`, Port 3307) 이관 및 데이터 521MB 덤프/복원 완료
 - **Infrastructure**: `docker-compose.yml` DB 서비스 추가, `verify_migration.py` 검증 스크립트 작성
 - **Automation**: `scripts/install_prime.sh` 유니버셜 설치 스크립트 구현 (Docker, NVIDIA, Python 환경 자동화)
+- **Refactoring**: `Carbon Silicons Council` → `my-prime-jennie` 리브랜딩 및 데이터 경로 `/docker_data` 표준화 완료
 
 ### Dashboard Refactoring & Script Cleanup (v1.0)
 - **Dashboard**: `package.json` v1.0.0 (jennie-dashboard), `main.py` V2 명칭 제거

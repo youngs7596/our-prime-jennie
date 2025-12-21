@@ -115,8 +115,8 @@ echo "Setting up for user: $REAL_USER in $PROJECT_DIR"
 chown -R $REAL_USER:$REAL_USER $PROJECT_DIR
 
 # Create Docker data directories (run as root)
-echo -e "${YELLOW}[4/6] 모니터링 서비스 설정 파일 생성 중...${NC}"
-mkdir -p /docker_data/loki /docker_data/loki_data /docker_data/promtail /docker_data/redis_data /docker_data/scheduler_data
+echo -e "${YELLOW}[4/6] 모니터링 서비스 및 DB 데이터 폴더 생성 중...${NC}"
+mkdir -p /docker_data/loki /docker_data/loki_data /docker_data/promtail /docker_data/redis_data /docker_data/scheduler_data /docker_data/mariadb_data /docker_data/chroma_data
 
 # Create Loki config if not exists
 if [ ! -f "/docker_data/loki/local-config.yaml" ]; then
@@ -221,8 +221,16 @@ sudo -u $REAL_USER bash <<EOF
     echo "Installing Python dependencies..."
     source venv/bin/activate
     pip install --upgrade pip
+    
     if [ -f "requirements.txt" ]; then
-        pip install -r requirements.txt
+        echo -e "${YELLOW}Python 라이브러리를 설치하시겠습니까? (호스트에서 실행되는 주간 분석 작업에 필요)${NC}"
+        echo -e "${YELLOW}Docker만 사용하신다면 건너뛰어도 됩니다.${NC}"
+        read -p "설치 진행? (y/N): " install_deps
+        if [[ "$install_deps" =~ ^[Yy]$ ]]; then
+            pip install -r requirements.txt
+        else
+            echo "Python 라이브러리 설치를 건너뜁니다."
+        fi
     else
         echo "Warning: requirements.txt not found."
     fi

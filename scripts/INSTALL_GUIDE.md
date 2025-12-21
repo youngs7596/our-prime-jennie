@@ -129,6 +129,18 @@ docker compose ps
 | chromadb | 8000 | 벡터 DB (RAG) |
 | ollama | 11434 | 로컬 LLM (GPU 필요) |
 
+### 📁 데이터 저장소 (Data Persistence)
+모든 영구 데이터는 호스트의 `/docker_data` 디렉토리 하위에 저장됩니다:
+
+- **MariaDB**: `/docker_data/mariadb_data` (주요 거래 데이터)
+- **Redis**: `/docker_data/redis_data` (캐시)
+- **ChromaDB**: `/docker_data/chroma_data` (벡터 데이터)
+- **Loki/Promtail**: `/docker_data/loki_data`, `/docker_data/loki` (로그)
+- **Scheduler**: `/docker_data/scheduler_data` (작업 상태)
+- **Grafana**: `/docker_data/grafana_data` (대시보드 설정)
+
+> ⚠️ **백업 안내**: 시스템을 재설치하거나 이전할 때 `/docker_data` 폴더 전체를 백업하면 모든 데이터를 보존할 수 있습니다.
+
 ---
 
 ## ✅ Step 4: 설치 확인
