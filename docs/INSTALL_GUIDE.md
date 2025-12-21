@@ -109,6 +109,16 @@ sudo ./scripts/install_prime.sh
 
 > ⚠️ **비용 주의**: `SCOUT_UNIVERSE_SIZE` 값이 클수록 LLM API 호출 횟수가 증가합니다.
 
+### 🌐 7단계: Cloudflare Tunnel (선택사항)
+
+외부에서 대시보드에 접근하려면 Cloudflare Tunnel 토큰이 필요합니다:
+
+| 항목 | 설명 | 발급처 |
+|------|------|--------|
+| `cloudflare-tunnel-token` | 터널 연결 토큰 | Cloudflare Zero Trust → Tunnels |
+
+> 💡 토큰이 없으면 cloudflared 컨테이너는 자동으로 비활성화됩니다.
+
 ---
 
 ## 🐳 Step 3: Docker 서비스 시작
@@ -127,7 +137,8 @@ newgrp docker  # 또는 터미널 재시작
 
 | 프로파일 | 용도 | 포함 서비스 |
 |----------|------|-------------|
-| `infra` | **기반 인프라** (필수) | MariaDB, Redis, RabbitMQ, ChromaDB, Ollama, Grafana |
+| `infra` | **기반 인프라** (필수) | MariaDB, Redis, RabbitMQ, ChromaDB, Loki, Grafana |
+| `gpu` | **로컬 LLM** (GPU 필요) | Ollama |
 | `mock` | **모의투자 테스트** | KIS Mock Server, 모의투자용 서비스들 |
 | `real` | **실전투자 운영** | 실전투자용 전체 서비스 (대시보드 포함) |
 | `ci` | **CI/CD** (개발용) | Jenkins (빌드 필요) |
@@ -142,6 +153,9 @@ source venv/bin/activate
 
 # [인프라만] - DB, Redis 등 기반 서비스
 docker compose --profile infra up -d
+
+# [인프라 + GPU] - Ollama 포함 (NVIDIA GPU 필요)
+docker compose --profile infra --profile gpu up -d
 
 # [모의투자] - 인프라 + 모의투자 서비스
 docker compose --profile infra --profile mock up -d
@@ -161,8 +175,9 @@ docker compose ps
 | redis | 6379 | infra | 캐시 서버 |
 | rabbitmq | 5672/15672 | infra | 메시지 큐 |
 | chromadb | 8000 | infra | 벡터 DB (RAG) |
-| ollama | 11434 | infra | 로컬 LLM (GPU) |
-| grafana | 3001 | infra | 모니터링 대시보드 |
+| grafana | 3300 | infra | 모니터링 대시보드 |
+| loki | 3400 | infra | 로그 수집 |
+| ollama | 11434 | gpu | 로컬 LLM (GPU 필요) |
 | dashboard-frontend | 3000 | real | 웹 대시보드 |
 | dashboard-backend | 8090 | real | 대시보드 API |
 
@@ -191,9 +206,13 @@ newgrp docker
 ### MariaDB 연결 실패
 ```bash
 # 컨테이너 로그 확인
-docker logs carbon-silicons-council-mariadb-1
+docker logs my-prime-jennie-mariadb-1
 
 # secrets.json의 비밀번호가 docker-compose.yml과 일치하는지 확인
+# MariaDB 데이터 초기화 (비밀번호 변경 시)
+docker compose --profile infra down
+sudo rm -rf docker/mariadb/data_v2/*
+docker compose --profile infra up -d
 ```
 
 ### GPU가 감지되지 않음
