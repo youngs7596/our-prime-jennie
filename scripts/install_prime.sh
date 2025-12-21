@@ -124,9 +124,11 @@ if [ ! -f "/docker_data/loki/local-config.yaml" ]; then
 auth_enabled: false
 server:
   http_listen_port: 3100
+  http_listen_address: 0.0.0.0
   grpc_listen_port: 9096
+  grpc_listen_address: 0.0.0.0
 common:
-  instance_addr: 127.0.0.1
+  instance_addr: 0.0.0.0
   path_prefix: /tmp/loki
   storage:
     filesystem:
