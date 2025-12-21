@@ -178,8 +178,11 @@ docker compose ps
 | grafana | 3300 | infra | 모니터링 대시보드 |
 | loki | 3400 | infra | 로그 수집 |
 | ollama | 11434 | gpu | 로컬 LLM (GPU 필요) |
-| dashboard-frontend | 3000 | real | 웹 대시보드 |
+| dashboard-frontend | **80** | real | 웹 대시보드 (http://localhost) |
 | dashboard-backend | 8090 | real | 대시보드 API |
+| scout-job | 8087 | real | Scout 서비스 |
+| news-crawler | 8089 | real | 뉴스 크롤러 |
+| price-monitor | 8088 | real | 가격 모니터 |
 
 ---
 
@@ -189,8 +192,8 @@ docker compose ps
 # 대시보드 접속 테스트
 curl http://localhost:8090/api/health
 
-# 웹 브라우저에서 접속
-# http://localhost:3000
+# 웹 브라우저에서 접속 (포트 80)
+# http://localhost
 ```
 
 ### 기본 로그인 정보
