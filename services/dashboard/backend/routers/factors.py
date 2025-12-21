@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from shared.config import ConfigManager
 
 router = APIRouter(
-    prefix="/settings", # Keeping 'settings' prefix for future extensibility, or consider '/factors'
+    prefix="/api/settings", # Changed to /api/settings to match frontend routing
     tags=["factors"],
     responses={404: {"description": "Not found"}},
 )
