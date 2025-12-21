@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY shared /app/shared
 
 # 애플리케이션 코드 복사
-COPY services/dashboard/backend/*.py /app/
+COPY services/dashboard/backend /app
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
