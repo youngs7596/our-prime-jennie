@@ -69,8 +69,20 @@ if ! command -v docker &> /dev/null; then
     
     apt-get update
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    
+    # 실제 사용자를 docker 그룹에 추가 (SUDO_USER 또는 현재 사용자)
+    REAL_USER="${SUDO_USER:-$USER}"
+    usermod -aG docker "$REAL_USER"
+    echo -e "${GREEN}✓ Docker 설치 완료. 사용자 '$REAL_USER'를 docker 그룹에 추가했습니다.${NC}"
+    echo -e "${YELLOW}⚠️  Docker 명령어를 sudo 없이 사용하려면 재로그인 또는 'newgrp docker'를 실행하세요.${NC}"
 else
     echo -e "${GREEN}✓ Docker already installed.${NC}"
+    # 기존 Docker가 있어도 docker 그룹 확인
+    REAL_USER="${SUDO_USER:-$USER}"
+    if ! groups "$REAL_USER" | grep -q docker; then
+        usermod -aG docker "$REAL_USER"
+        echo -e "${YELLOW}⚠️  사용자 '$REAL_USER'를 docker 그룹에 추가했습니다. 재로그인 또는 'newgrp docker'가 필요합니다.${NC}"
+    fi
 fi
 
 # Install NVIDIA Container Toolkit if GPU exists
