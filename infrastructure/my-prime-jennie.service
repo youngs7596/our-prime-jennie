@@ -1,0 +1,17 @@
+# /etc/systemd/system/my-prime-jennie.service
+[Unit]
+Description=My Prime Jennie AI Trading Stack
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+Environment=AUTOSTART_COMPOSE_PROFILES=infra real
+WorkingDirectory=/home/%u/my-prime-jennie
+ExecStart=/home/%u/my-prime-jennie/scripts/systemd_autostart.sh
+ExecStop=/usr/bin/docker compose --profile real down
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
