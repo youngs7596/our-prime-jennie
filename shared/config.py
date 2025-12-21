@@ -81,43 +81,129 @@ class ConfigManager:
         self._db_cache: Dict[str, tuple] = {}  # {key: (value, timestamp)}
         
         # 기본값 정의 (AgentConfig에서 가져온 값들)
+        # 딕셔너리 구조 변경: 값 -> {"value": 값, "desc": "설명", "category": "카테고리"}
+        # 하위 호환성을 위해 get() 메서드에서 처리 로직 추가 필요
         self._defaults = {
-            # 매수 관련
-            'SCAN_INTERVAL_SEC': 600,
-            'MARKET_INDEX_MA_PERIOD': 20,
-            'BUY_BOLLINGER_PERIOD': 20,
-            'BUY_RSI_OVERSOLD_THRESHOLD': 30,
-            'BUY_GOLDEN_CROSS_SHORT': 5,
-            'BUY_GOLDEN_CROSS_LONG': 20,
-            'MAX_HOLDING_STOCKS': 50,
-            'DEFAULT_DAILY_BUY_LIMIT_AMOUNT': 10000000,
-            'BUY_QUANTITY_PER_TRADE': 1,
-            'ALLOW_BEAR_TRADING': False,
-            'MIN_LLM_CONFIDENCE_BEAR': 85,
-            'BEAR_POSITION_RATIO': 0.2,
-            'BEAR_STOP_LOSS_ATR_MULT': 2.0,
-            'BEAR_FIRST_TP_PCT': 0.03,
-            'BEAR_PARTIAL_CLOSE_RATIO': 0.5,
-            'BEAR_VOLUME_SPIKE_MULTIPLIER': 1.5,
+            # 매수 관련 (Buying)
+            'SCAN_INTERVAL_SEC': {
+                "value": 600,
+                "desc": "종목 스캔 및 분석 주기 (초 단위)",
+                "category": "Buying"
+            },
+            'MARKET_INDEX_MA_PERIOD': {
+                "value": 20,
+                "desc": "시장 지수 이동평균 산출 기간 (일)",
+                "category": "Buying"
+            },
+            'BUY_BOLLINGER_PERIOD': {
+                "value": 20,
+                "desc": "볼린저 밴드 계산 기간",
+                "category": "Buying"
+            },
+            'BUY_RSI_OVERSOLD_THRESHOLD': {
+                "value": 30,
+                "desc": "매수 시그널 발생을 위한 RSI 과매도 기준값",
+                "category": "Buying"
+            },
+            'BUY_GOLDEN_CROSS_SHORT': {
+                "value": 5,
+                "desc": "골든크로스 판단용 단기 이동평균일",
+                "category": "Buying"
+            },
+            'BUY_GOLDEN_CROSS_LONG': {
+                "value": 20,
+                "desc": "골든크로스 판단용 장기 이동평균일",
+                "category": "Buying"
+            },
+            'MAX_HOLDING_STOCKS': {
+                "value": 50,
+                "desc": "포트폴리오 최대 보유 종목 수",
+                "category": "Risk"
+            },
+            'DEFAULT_DAILY_BUY_LIMIT_AMOUNT': {
+                "value": 10000000,
+                "desc": "일일 최대 매수 한도 금액 (원)",
+                "category": "Risk"
+            },
+            'BUY_QUANTITY_PER_TRADE': {
+                "value": 1,
+                "desc": "1회 주문 시 기본 매수 수량",
+                "category": "Buying"
+            },
+            'ALLOW_BEAR_TRADING': {
+                "value": False,
+                "desc": "하락장(Bear Market) 매매 허용 여부",
+                "category": "Strategy"
+            },
+            'MIN_LLM_CONFIDENCE_BEAR': {
+                "value": 85,
+                "desc": "하락장 진입을 위한 최소 LLM 확신도",
+                "category": "Strategy"
+            },
             
-            # 매도 관련
-            'ATR_PERIOD': 14,
-            'ATR_MULTIPLIER_INITIAL_STOP': 2.0,
-            'ATR_MULTIPLIER_TRAILING_STOP': 1.5,
-            'SELL_RSI_THRESHOLD': 70,
-            'RSI_THRESHOLD_1': 72.0,
-            'RSI_THRESHOLD_2': 75.0,
-            'RSI_THRESHOLD_3': 78.0,
-            'PROFIT_TARGET_FULL': 8.0,
-            'PROFIT_TARGET_PARTIAL': 6.0,
-            'TIME_BASED_BULL': 20,
-            'TIME_BASED_SIDEWAYS': 35,
+            # 매도 관련 (Selling)
+            'ATR_PERIOD': {
+                "value": 14,
+                "desc": "ATR(평균진폭범위) 계산 기간",
+                "category": "Selling"
+            },
+            'ATR_MULTIPLIER_INITIAL_STOP': {
+                "value": 2.0,
+                "desc": "초기 손절가 설정을 위한 ATR 승수",
+                "category": "Selling"
+            },
+            'ATR_MULTIPLIER_TRAILING_STOP': {
+                "value": 1.5,
+                "desc": "트레일링 스탑을 위한 ATR 승수",
+                "category": "Selling"
+            },
+            'SELL_RSI_THRESHOLD': {
+                "value": 70,
+                "desc": "매도 검토를 시작하는 RSI 기준값",
+                "category": "Selling"
+            },
+            'PROFIT_TARGET_FULL': {
+                "value": 8.0,
+                "desc": "전량 익절 목표 수익률 (%)",
+                "category": "Selling"
+            },
+            'SELL_STOP_LOSS_PCT': {
+                "value": 5.0, # 누락된 키 복구
+                "desc": "기본 손절매 기준 (%)",
+                "category": "Buying"
+            },
+            'TIME_BASED_BULL': {
+                "value": 20,
+                "desc": "상승장에서의 최대 보유 기간 (거래일)",
+                "category": "Selling"
+            },
+            'TIME_BASED_SIDEWAYS': {
+                "value": 35,
+                "desc": "횡보장에서의 최대 보유 기간 (거래일)",
+                "category": "Selling"
+            },
             
-            # 포지션 사이징
-            'MAX_POSITION_PCT': 15, # Used in Backtest & Scout Optimizer
-            'MAX_POSITION_VALUE_PCT': 15.0, # Backtest Optimized (15%)
-            'CASH_KEEP_PCT': 10, # Backtest Optimized (10%)
-            'RISK_PER_TRADE_PCT': 2.0, # 거래당 리스크 기본값 (2%)
+            # 포지션/리스크 (Risk)
+            'MAX_POSITION_PCT': {
+                "value": 15,
+                "desc": "단일 종목 최대 비중 (%) (백테스트용)",
+                "category": "Risk"
+            },
+            'MAX_POSITION_VALUE_PCT': {
+                "value": 15.0,
+                "desc": "단일 종목 최대 평가금액 비중 (%)",
+                "category": "Risk"
+            },
+            'CASH_KEEP_PCT': {
+                "value": 10,
+                "desc": "최소 현금 보유 비중 (%)",
+                "category": "Risk"
+            },
+            'RISK_PER_TRADE_PCT': {
+                "value": 2.0,
+                "desc": "트레이드 당 리스크 허용치 (%)",
+                "category": "Risk"
+            },
         }
     
     def get(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
@@ -176,7 +262,13 @@ class ConfigManager:
             return default
         
         if key in self._defaults:
-            default_value = self._defaults[key]
+            default_entry = self._defaults[key]
+            # 딕셔너리 구조(값+설명)인 경우 값만 추출
+            if isinstance(default_entry, dict) and "value" in default_entry:
+                default_value = default_entry["value"]
+            else:
+                default_value = default_entry
+                
             # 초기화 시에는 INFO 레벨로 로그 (설정값이 제대로 적용되는지 확인)
             logger.info(f"[Config] 내장 기본값 사용 '{key}': {default_value}")
             return default_value
@@ -279,7 +371,13 @@ class ConfigManager:
         
         # 기본값이 있는 경우 타입 참고
         if key in self._defaults:
-            default_value = self._defaults[key]
+            default_entry = self._defaults[key]
+            # 딕셔너리 구조(값+설명)인 경우 값만 추출
+            if isinstance(default_entry, dict) and "value" in default_entry:
+                default_value = default_entry["value"]
+            else:
+                default_value = default_entry
+                
             if isinstance(default_value, int):
                 try:
                     return int(value)

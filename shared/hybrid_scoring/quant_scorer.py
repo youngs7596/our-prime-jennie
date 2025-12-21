@@ -171,6 +171,7 @@ class QuantScorer:
     RANK_CUTOFF = QC_RANK_CUTOFF
     NEWS_TIME_EFFECT = QC_NEWS_TIME_EFFECT
     
+    
     def __init__(self, db_conn=None, market_regime: str = 'SIDEWAYS', 
                  strategy_mode: StrategyMode = StrategyMode.DUAL):
         """
@@ -184,6 +185,15 @@ class QuantScorer:
         self.db_conn = db_conn
         self.market_regime = market_regime
         self.strategy_mode = strategy_mode
+        
+        # 설정 관리자 초기화
+        from shared.config import ConfigManager
+        self.config = ConfigManager(db_conn)
+        
+        # 상수 로드 (ConfigManager 우선)
+        self.DEFAULT_FILTER_CUTOFF = self.config.get_float("DEFAULT_FILTER_CUTOFF", QC_DEFAULT_FILTER_CUTOFF)
+        self.DEFAULT_HOLDING_DAYS = self.config.get_int("DEFAULT_HOLDING_DAYS", QC_DEFAULT_HOLDING_DAYS)
+        self.SECTOR_RSI_MULTIPLIER = QC_SECTOR_RSI_MULTIPLIER # 섹터별 가중치는 딕셔너리라 일단 유지
         
         # 팩터 가중치 로드 (DB 우선, 없으면 기본값)
         self.factor_weights = self._load_factor_weights()
@@ -425,8 +435,12 @@ class QuantScorer:
             'bonus_applied': 0.0,
         }
         
-        # 조건 1: RSI 과매도 (RSI < 30)
-        is_rsi_oversold = rsi is not None and rsi < 30
+        
+        # 설정값 로드
+        rsi_threshold = self.config.get_float("BUY_RSI_OVERSOLD_THRESHOLD", 30.0)
+        
+        # 조건 1: RSI 과매도 (RSI < Threshold)
+        is_rsi_oversold = rsi is not None and rsi < rsi_threshold
         
         # 조건 2: 외국인 순매수
         is_foreign_buying = False
@@ -435,7 +449,7 @@ class QuantScorer:
                 # 거래량 대비 1% 이상 순매수
                 is_foreign_buying = (foreign_net_buy / avg_volume) > 0.01
             else:
-                # 절대값 기준 10만주 이상 순매수
+                # 절대값 기준 10만주 이상 순매수 (설정값 사용 가능하게 확장 가능)
                 is_foreign_buying = foreign_net_buy > 100_000
         
         # 복합 조건 체크
@@ -443,7 +457,7 @@ class QuantScorer:
             # RSI 과매도 + 외국인 순매수 → 55.5% 승률 → +5점 보너스
             bonus += 5.0
             details['compound_conditions_met'].append('RSI_OVERSOLD_FOREIGN_BUY')
-            logger.debug(f"   (QuantScorer) 🎯 복합조건 충족: RSI과매도+외인순매수 → +5점")
+            logger.debug(f"   (QuantScorer) 🎯 복합조건 충족: RSI과매도({rsi_threshold}이하)+외인순매수 → +5점")
         
         details['bonus_applied'] = bonus
         details['is_rsi_oversold'] = is_rsi_oversold
@@ -733,11 +747,14 @@ class QuantScorer:
                 rsi = self._calculate_rsi(daily_prices_df, period=14)
             
             if rsi is not None:
-                # RSI 과매도 구간(30~40)에 높은 점수
-                if rsi <= 30:
+                # RSI 과매도 구간(Threshold 이하)에 높은 점수
+                rsi_oversold = self.config.get_float("BUY_RSI_OVERSOLD_THRESHOLD", 30.0)
+                
+                if rsi <= rsi_oversold:
                     rsi_score = 3
                 elif rsi <= 50:
-                    rsi_score = 3 - (rsi - 30) * 0.075
+                    # e.g., 30~50 구간: 3 ~ 1.5 선형 감소
+                    rsi_score = 3 - (rsi - rsi_oversold) * (1.5 / (50 - rsi_oversold))
                 elif rsi <= 70:
                     rsi_score = 1.5 - (rsi - 50) * 0.05
                 else:

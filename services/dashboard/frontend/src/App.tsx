@@ -7,6 +7,7 @@ import { ScoutPage } from '@/pages/Scout'
 import { SystemPage } from '@/pages/System'
 import { NewsPage } from '@/pages/News'
 import { AnalystPage } from '@/pages/Analyst'
+import FactorsPage from '@/pages/Factors'
 import { SettingsPage } from '@/pages/Settings'
 import { useAuthStore } from '@/store/authStore'
 
@@ -44,6 +45,7 @@ function App() {
           <Route path="system" element={<SystemPage />} />
           <Route path="news" element={<NewsPage />} />
           <Route path="analyst" element={<AnalystPage />} />
+          <Route path="logic" element={<FactorsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 
