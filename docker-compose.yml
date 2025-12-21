@@ -1,4 +1,4 @@
-name: my-prime-jennie
+name: carbon-silicons-council
 
 services:
   # ============================================================================
@@ -925,7 +925,6 @@ services:
     build:
       context: .
       dockerfile: services/ollama-gateway/Dockerfile
-    container_name: ollama-gateway
     profiles: [ "real" ]
     network_mode: host
     environment:
@@ -949,7 +948,6 @@ services:
     build:
       context: .
       dockerfile: services/ollama-gateway/Dockerfile
-    container_name: ollama-gateway-mock
     profiles: [ "mock" ]
     network_mode: host
     environment:
@@ -970,7 +968,6 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
     profiles: [ "gpu" ] # GPU가 있는 환경에서만 실행 (infra와 분리)
     deploy:
       resources:
