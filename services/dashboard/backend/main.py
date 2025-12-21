@@ -253,7 +253,7 @@ app.add_middleware(
 
 # 라우터 등록
 from routers import factors
-app.include_router(factors.router)
+app.include_router(factors.router) # Factor settings router
 
 # =============================================================================
 # 인증 API
