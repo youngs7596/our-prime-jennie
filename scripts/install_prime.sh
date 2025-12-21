@@ -5,14 +5,16 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}================================================================${NC}"
-echo -e "${GREEN}   Project Prime: Universal Installer (Ubuntu/WSL2)             ${NC}"
+echo -e "${GREEN}   🚀 Project Prime: 유니버셜 설치 스크립트 (Ubuntu/WSL2)     ${NC}"
 echo -e "${GREEN}================================================================${NC}"
+echo -e "${CYAN}📖 설치 가이드: docs/INSTALL_GUIDE.md${NC}"
 
 # 1. Prerequisites Check
-echo -e "\n${YELLOW}[1/5] Checking Prerequisites...${NC}"
+echo -e "\n${YELLOW}[1/6] 사전 조건 확인 중...${NC}"
 
 if [ "$EUID" -ne 0 ]; then 
   echo -e "${RED}Please run as root (sudo ./install_prime.sh)${NC}"
