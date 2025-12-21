@@ -196,58 +196,100 @@ def main():
     print(f"  - 설치 취소: Ctrl+C")
     print(f"  - {CYAN}재설치 방법: python3 scripts/generate_secrets.py{RESET}")
 
-    if os.path.exists(SECRETS_FILE):
-        print(f"\n{YELLOW}⚠️  {SECRETS_FILE} 파일이 이미 존재합니다.{RESET}")
-        choice = input("덮어쓰시겠습니까? (y/N): ")
-        if choice.lower() != 'y':
-            print("설치를 취소합니다.")
-            return
-
     template = load_template()
-    new_secrets = {}
+    existing_secrets = {}
+    missing_keys = []
+    update_mode = False  # True면 누락된 키만 입력받음
+
+    if os.path.exists(SECRETS_FILE):
+        try:
+            with open(SECRETS_FILE, "r") as f:
+                existing_secrets = json.load(f)
+        except:
+            existing_secrets = {}
+        
+        # 누락된 키 확인
+        missing_keys = [k for k in template.keys() if k not in existing_secrets]
+        
+        if missing_keys:
+            print(f"\n{YELLOW}⚠️  {SECRETS_FILE} 파일이 존재하지만, 다음 설정이 누락되었습니다:{RESET}")
+            for key in missing_keys:
+                info = FIELD_DESCRIPTIONS.get(key, {})
+                name = info.get("name", key)
+                print(f"  - {name}")
+            print()
+            choice = input("누락된 설정만 추가하시겠습니까? (Y/n): ")
+            if choice.lower() != 'n':
+                update_mode = True
+            else:
+                choice2 = input("전체 설정을 다시 구성하시겠습니까? (y/N): ")
+                if choice2.lower() != 'y':
+                    print("설치를 취소합니다.")
+                    return
+        else:
+            print(f"\n{GREEN}✓ {SECRETS_FILE} 파일이 이미 완전히 구성되어 있습니다.{RESET}")
+            choice = input("전체 설정을 다시 구성하시겠습니까? (y/N): ")
+            if choice.lower() != 'y':
+                print("설치를 취소합니다.")
+                return
+
+    # 업데이트 모드면 기존 값 유지, 아니면 새로 시작
+    if update_mode:
+        new_secrets = existing_secrets.copy()
+    else:
+        new_secrets = {}
+
+    # 헬퍼 함수: 해당 섹션에 입력받을 키가 있는지 확인
+    def has_missing_in_section(keys):
+        return any(k not in new_secrets and k in template for k in keys)
+    
+    def process_keys(keys):
+        for key in keys:
+            if key in template and key not in new_secrets:
+                new_secrets[key] = prompt_value(key, template[key])
 
     # 카테고리별 섹션 표시
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}📦 1단계: 데이터베이스 설정 (MariaDB){RESET}")
-    for key in ["mariadb-user", "mariadb-password", "mariadb-host", "mariadb-port", "mariadb-database"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    db_keys = ["mariadb-user", "mariadb-password", "mariadb-host", "mariadb-port", "mariadb-database"]
+    if has_missing_in_section(db_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}📦 1단계: 데이터베이스 설정 (MariaDB){RESET}")
+        process_keys(db_keys)
 
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}🔐 2단계: 대시보드 로그인 설정{RESET}")
-    for key in ["dashboard-username", "dashboard-password"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    dash_keys = ["dashboard-username", "dashboard-password"]
+    if has_missing_in_section(dash_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}🔐 2단계: 대시보드 로그인 설정{RESET}")
+        process_keys(dash_keys)
 
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}📈 3단계: 한국투자증권 API 설정 (KIS){RESET}")
-    print(f"  {YELLOW}모의투자 설정 (테스트용){RESET}")
-    for key in ["kis-v-app-key", "kis-v-app-secret", "kis-v-account-no"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
-    
-    print(f"\n  {YELLOW}실전투자 설정 (실제 거래용 - 선택사항){RESET}")
-    for key in ["kis-r-app-key", "kis-r-app-secret", "kis-r-account-no"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    kis_mock_keys = ["kis-v-app-key", "kis-v-app-secret", "kis-v-account-no"]
+    kis_real_keys = ["kis-r-app-key", "kis-r-app-secret", "kis-r-account-no"]
+    if has_missing_in_section(kis_mock_keys + kis_real_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}📈 3단계: 한국투자증권 API 설정 (KIS){RESET}")
+        if has_missing_in_section(kis_mock_keys):
+            print(f"  {YELLOW}모의투자 설정 (테스트용){RESET}")
+            process_keys(kis_mock_keys)
+        if has_missing_in_section(kis_real_keys):
+            print(f"\n  {YELLOW}실전투자 설정 (실제 거래용 - 선택사항){RESET}")
+            process_keys(kis_real_keys)
 
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}🤖 4단계: LLM API 설정{RESET}")
-    for key in ["gemini-api-key", "openai-api-key", "claude-api-key"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    llm_keys = ["gemini-api-key", "openai-api-key", "claude-api-key"]
+    if has_missing_in_section(llm_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}🤖 4단계: LLM API 설정{RESET}")
+        process_keys(llm_keys)
 
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}📱 5단계: 텔레그램 알림 설정 (선택사항){RESET}")
-    for key in ["telegram-bot-token", "telegram-chat-id"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    telegram_keys = ["telegram-bot-token", "telegram-chat-id"]
+    if has_missing_in_section(telegram_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}📱 5단계: 텔레그램 알림 설정 (선택사항){RESET}")
+        process_keys(telegram_keys)
 
-    print(f"\n{CYAN}{'─' * 60}{RESET}")
-    print(f"{CYAN}⚙️  6단계: 운영 설정{RESET}")
-    for key in ["SCOUT_UNIVERSE_SIZE", "ENABLE_NEWS_ANALYSIS"]:
-        if key in template:
-            new_secrets[key] = prompt_value(key, template[key])
+    ops_keys = ["SCOUT_UNIVERSE_SIZE", "ENABLE_NEWS_ANALYSIS"]
+    if has_missing_in_section(ops_keys):
+        print(f"\n{CYAN}{'─' * 60}{RESET}")
+        print(f"{CYAN}⚙️  6단계: 운영 설정{RESET}")
+        process_keys(ops_keys)
 
     # 파일 저장
     try:
