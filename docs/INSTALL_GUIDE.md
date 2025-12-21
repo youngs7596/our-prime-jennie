@@ -193,6 +193,14 @@ curl http://localhost:8090/api/health
 # http://localhost:3000
 ```
 
+### 기본 로그인 정보
+
+| 서비스 | ID | 비밀번호 | 비고 |
+|--------|-----|----------|------|
+| 대시보드 | secrets.json 설정값 | secrets.json 설정값 | `dashboard-username`, `dashboard-password` |
+| Grafana | admin | admin | 첫 로그인 시 비밀번호 변경 요청됨 |
+| RabbitMQ | guest | guest | http://localhost:15672 |
+
 ---
 
 ## 🔧 문제 해결
