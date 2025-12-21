@@ -1,8 +1,4 @@
-
-import axios from 'axios';
-import { getAuthToken } from '../auth';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8090/api';
+import { api } from '../lib/api';
 
 export interface Factor {
     key: string;
@@ -12,9 +8,6 @@ export interface Factor {
 }
 
 export const getFactors = async (): Promise<Factor[]> => {
-    const token = getAuthToken();
-    const response = await axios.get(`${API_BASE_URL}/settings/factors`, {
-        headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await api.get('/settings/factors');
     return response.data;
 };

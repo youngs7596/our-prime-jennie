@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import Layout from '../components/Layout';
+import { Layout } from '../components/layout/Layout';
 import { Factor, getFactors } from '../api/factors';
 
 const Factors: React.FC = () => {
