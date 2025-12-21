@@ -383,11 +383,85 @@ def bootstrap_schema():
 
 bootstrap_schema()
 
+
+DEFAULT_JOBS = [
+    {
+        "job_id": "scout-job",
+        "description": "AI Scout Job (30m interval)",
+        "queue_suffix": "jobs.scout",
+        "cron_expr": "*/30 * * * *",
+        "enabled": True,
+        "reschedule_mode": "scheduler",
+        "timeout_sec": 600,
+        "default_params": {}
+    },
+    {
+        "job_id": "news-crawler",
+        "description": "News Crawler (20m interval)",
+        "queue_suffix": "jobs.news-crawler",
+        "cron_expr": "*/20 * * * *",
+        "enabled": True,
+        "reschedule_mode": "scheduler",
+        "timeout_sec": 300,
+        "default_params": {}
+    },
+    {
+        "job_id": "price-monitor-pulse",
+        "description": "Price Monitor Pulse (Keep-Alive)",
+        "queue_suffix": "jobs.price-monitor",
+        "cron_expr": "*/5 9-15 * * 1-5",
+        "enabled": True,
+        "reschedule_mode": "scheduler",
+        "timeout_sec": 60,
+        "default_params": {"action": "pulse"}
+    }
+]
+
+
+def bootstrap_default_jobs():
+    """기본 Job이 없으면 자동으로 생성합니다."""
+    try:
+        with SessionLocal() as session:
+            for job_cfg in DEFAULT_JOBS:
+                job_id = job_cfg["job_id"]
+                existing_job = session.get(Job, job_id)
+                
+                # Scope가 다르면 다른 Job으로 취급되므로, 현재 Scope의 Job만 확인
+                if existing_job and existing_job.scope == SCHEDULER_SCOPE:
+                    continue
+                
+                logger.info(f"🆕 기본 Job 생성: {job_id}")
+                queue_name = f"{SCHEDULER_SCOPE}.{job_cfg['queue_suffix']}"
+                
+                job = Job(
+                    job_id=job_id,
+                    scope=SCHEDULER_SCOPE,
+                    description=job_cfg["description"],
+                    queue=queue_name,
+                    cron_expr=job_cfg["cron_expr"],
+                    enabled=job_cfg["enabled"],
+                    reschedule_mode=job_cfg["reschedule_mode"],
+                    timeout_sec=job_cfg["timeout_sec"],
+                    default_params=_json_dump(job_cfg["default_params"]),
+                    next_due_at=compute_next_due(job_cfg["cron_expr"])
+                )
+                session.add(job)
+            session.commit()
+            logger.info("✅ 기본 Job Bootstrap 완료")
+    except Exception as e:
+        logger.error(f"❌ 기본 Job Bootstrap 실패: {e}")
+
+
 app = FastAPI(title="CSC Scheduler Service", version="1.0.0")
 
 
 @app.on_event("startup")
 async def startup_event():
+    # 1. 스키마 확인 (이미 수행됨)
+    # 2. 기본 Job 등록
+    bootstrap_default_jobs()
+    
+    # 3. Scheduler 시작
     if not apscheduler.running:
         apscheduler.add_job(
             run_scheduler_cycle,
