@@ -215,7 +215,19 @@ Scout 파이프라인(Phase 1.8)에서 종목별 투자 주체(외국인/기관/
     - LLM 토론 시 근거 자료로 활용 ("외국인이 3일 연속 매집 중입니다.")
     - `MARKET_FLOW_SNAPSHOT` 테이블에 축적하여 향후 패턴 학습에 사용.
 
-### 6. Self-Healing Pipeline (자율 치유)
+### 6. Analyst Module (AI 성과 분석)
+
+**"AI의 실력을 검증한다"**
+
+매일 아침(7시), 전날까지의 AI 매매 의사결정(Hunter/Judge)의 실제 시장 성과(T+5 수익률, 승률)를 분석하여 리포트를 생성합니다.
+
+- **스크립트**: `scripts/analyze_ai_performance.py`
+- **주요 기능**:
+    - 시장 국면별(Bull/Bear) AI 승률 분석
+    - Hunter Score 구간별(S/A/B등급) 성과 검증
+    - "고득점인데 손실난 케이스" 피드백 루프 제공
+
+### 7. Self-Healing Pipeline (자율 치유)
 
 **"에러 발생 → 자동 진단 → PR 제안"**
 
@@ -296,6 +308,14 @@ Scout 파이프라인(Phase 1.8)에서 종목별 투자 주체(외국인/기관/
 | **loki** | 3400 | 로그 집계 |
 | **cloudflared** | - | Cloudflare Tunnel (외부 접근) |
 | **jenkins** | 8180 | CI/CD 서버 |
+
+### 자동화 작업 (Cron)
+
+| 작업 | 시간 | 설명 |
+|------|------|------|
+| **일일 AI 성과 분석** | 평일 07:00 | AI 의사결정 승률/수익률 분석 리포트 생성 (`analyze_ai_performance.py`) |
+| **일일 브리핑** | 평일 17:00 | 포트폴리오 현황 및 금일 거래 내역 텔레그램 발송 |
+| **주간 팩터 분석** | 금요일 22:00 | 주간 시장 팩터 유효성 검증 및 가중치 조정 (`weekly_factor_analysis_batch.py`) |
 
 ---
 
