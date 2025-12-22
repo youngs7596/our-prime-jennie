@@ -8,6 +8,11 @@
 - **Backend**: `/api/llm/config` 및 `/api/llm/stats` API 추가
 - **Configuration**: Scout/Crawler 운영 시간 복구, Judge 로컬 전환, 주간 팩터 분석 일정 변경(금 22시)
 
+### Hotfix & Infrastructure (Systemd/Scout)
+- **Scout Hotfix**: `StrategySelector` 속성 오류 (`STRAEGY_MOMENTUM`) 수정 (Legacy 상수 복구)
+- **Systemd**: `my-prime-jennie.service` 환경변수 구문 오류 (`Environment=""`) 수정
+- **Cron**: 주간 팩터 분석 및 일일 브리핑 스케줄 등록 완료
+
 ### Scout Hybrid Scoring 검증 및 Oracle 레거시 코드 제거
 - **Scout Hybrid Scoring 활성화**: `SCOUT_V5_ENABLED` 환경변수 추가로 하이브리드 스코어링 활성화
 - **SQLAlchemy 호환성 수정**: `quant_scorer.py`의 4개 함수에서 cursor → SQLAlchemy text() 변환

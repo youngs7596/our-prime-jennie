@@ -269,6 +269,10 @@ class StrategySelector:
     STRATEGY_BEAR_SNIPE_DIP = "BEAR_SNIPE_DIP"
     STRATEGY_BEAR_MOMENTUM_BREAKOUT = "BEAR_MOMENTUM_BREAKOUT"
     
+    # Legacy Strategies (Kept for compatibility with older scanner logic)
+    STRATEGY_MOMENTUM = "MOMENTUM"
+    STRATEGY_RELATIVE_STRENGTH = "RELATIVE_STRENGTH"
+    
     def __init__(self):
         self.detector = MarketRegimeDetector()
     
