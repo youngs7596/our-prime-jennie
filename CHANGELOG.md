@@ -1,5 +1,9 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-24
+
+- **Oracle 레거시 제거 검증**: Mock 모드 E2E 테스트 완료 - MariaDB/SQLAlchemy 연동, RabbitMQ 메시지 처리, HTTP API 처리 모두 정상 작동 확인 (사이드 이펙트 없음)
+
 ## 2025-12-23
 
 - **Oracle/OCI 레거시 전면 제거**: 28개 파일에서 Oracle DB 관련 코드 952줄 삭제, MariaDB/SQLAlchemy 단일 체계로 통일 (환경변수, 시크릿, DB 분기 로직, MERGE INTO/DUAL/SYSTIMESTAMP SQL 등)
