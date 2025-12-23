@@ -9,6 +9,7 @@
 - **Configuration**: Scout/Crawler 운영 시간 복구, Judge 로컬 전환, 주간 팩터 분석 일정 변경(금 22시)
 
 ### Hotfix & Infrastructure (Systemd/Scout)
+- **DB Logging Fix**: `buy-executor` 서비스의 `NameError` 및 DB 컬럼명 불일치 수정, 수동 복구 완료 (누락된 거래 기록 복원)
 - **Scout Hotfix**: `StrategySelector` 속성 오류 (`STRATEGY_MOMENTUM`) 수정 (Legacy 상수 복구), `scout-job`, `buy-scanner`, `sell-executor` 재배포 완료
 - **BuyExecutor Hotfix**: `executor.py` 내 미정의 변수(`db_conn`) 참조로 인한 `NameError` 수정
 - **Systemd**: `my-prime-jennie.service` 환경변수 구문 오류 (`Environment=""`) 수정
