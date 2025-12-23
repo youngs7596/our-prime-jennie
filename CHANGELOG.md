@@ -2,6 +2,13 @@
 
 ## 2025-12-23
 
+### Public Release (our-prime-jennie v1.0)
+- **GitHub 배포**: `our-prime-jennie` Public 저장소 생성 및 배포 완료 (https://github.com/youngs7596/our-prime-jennie)
+- **LLM 비용 최적화**: 기본 티어 설정 (FAST→Gemini Flash, REASONING→GPT-5-mini, THINKING→GPT-4o), 월간 예상 비용 문서화
+- **Installation Bug Fix**: `install_prime.sh`의 `secrets.json` 권한 문제 수정 (sudo 실행 시 소유권 변경 로직 추가)
+- **INSTALL_GUIDE 개선**: Step 순서 정정(5→6), WSL2 systemd 설정 안내 추가, Scout 실행 주기 명확화(30m trigger/4h analysis)
+- **프로젝트 치환**: `my-prime-jennie` → `our-prime-jennie` 전체 파일 일괄 변환 스크립트 실행
+
 ### Critical Fixes & Incident Resolution (Real Trading)
 - **Incident Resolution**: 백그라운드 Real Service 실행으로 인한 "유령 매수(Ghost Trades)"(현대차 73주 불일치) 원인 규명 및 DB 동기화 완료
 - **Critical Bug Fixes**: `buy-executor` DB Logging 실패(Stop Loss Default 누락) 및 중복 매도 알림(Sell Logic 누락) 수정

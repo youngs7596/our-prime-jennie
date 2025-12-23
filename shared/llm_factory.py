@@ -60,12 +60,17 @@ class LLMFactory:
         env_key = f"TIER_{tier.value}_PROVIDER"
         # FAST tier uses Cloud Gemini for speed (Ollama queue saturation issue)
         # THINKING tier uses OpenAI for deep reasoning (stable API)
+        # [Budget Strategy 2025]
+        # FAST -> Gemini Flash (Free Tier / Lowest Cost)
+        # REASONING -> OpenAI GPT-4o-mini (Best Value vs Performance)
+        # THINKING -> OpenAI GPT-4o (Standard Quality)
         if tier == LLMTier.FAST:
             default = "gemini"
         elif tier == LLMTier.THINKING:
-            default = "openai"  # GPT-5.2 for Daily Self-Evolution & Weekly Council
+            default = "openai" 
         else:
-            default = "ollama"
+            default = "openai" # REASONING Default: GPT-4o-mini
+            
         return os.getenv(env_key, default).lower()
 
     @staticmethod

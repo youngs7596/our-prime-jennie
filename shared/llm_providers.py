@@ -267,97 +267,103 @@ class OllamaLLMProvider(BaseLLMProvider):
             }
         }
 
-        try:
-            # [Debug] Log Request/Response for Qwen3 stability check
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Request Prompt (First 500 chars): {prompt[:500]}...")
-            
-            result = self._call_ollama_api("/api/generate", payload)
-            content = result.get("response", "")
-            
-            # [Debug] Log Raw Response
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Raw Response (len={len(content)}): {content[:500]}... [Truncated]")
-            if not content:
-                logger.warning("   ⚠️ [Ollama] Empty response content received!")
-            
-            # Debug 로깅
-            self._log_llm_interaction(
-                interaction_type="generate_json",
-                request_data={"prompt": prompt, "temperature": temperature},
-                response_data={"content": content, "parsed": None},  # parsed는 나중에 업데이트
-                model_name=target_model
-            )
-            
-            # [Defensive] Tag Removal
-            raw_content = content
-            content = self._clean_deepseek_tags(content)
-            
-            if not content.strip() and raw_content.strip():
-                # [Defensive] Model generated only thinking traces
-                error_msg = f"Model generated {len(raw_content)} chars of reasoning but no final JSON output."
-                logger.warning(f"⚠️ [Ollama] {error_msg}")
-                raise ValueError(error_msg)
-            
-            # [Defensive] JSON Parsing with basic cleanup
+        # [Defensive] Internal Retry for Empty/Malformed Content
+        # Sometimes Ollama returns empty string or cut-off JSON. 
+        # We retry locally before falling back to Cloud.
+        max_internal_retries = 3
+        
+        for attempt in range(max_internal_retries):
             try:
-                parsed = json.loads(content)
-            except json.JSONDecodeError:
-                # Try to find JSON block if mixed with text
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0]
-                elif "```" in content:
-                    content = content.split("```")[1].split("```")[0]
-                elif "{" in content:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    content = content[start:end]
+                # [Debug] Log Request/Response for Qwen3 stability check
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Request Prompt (First 500 chars): {prompt[:500]}...")
                 
-                if not content.strip():
-                     logger.error(f"❌ [Ollama] No JSON found. Raw Content:\n{raw_content}")
-                     raise ValueError(f"No JSON content found in output (len={len(raw_content)})")
-                     
-                parsed = json.loads(content)
-            
-            # [Defensive] Case-insensitive Key Normalization
-            # Qwen3 sometimes returns 'Score' instead of 'score'
-            if response_schema:
-                 normalized = {}
-                 required_keys = response_schema.get("required", [])
-                 # Create a mapping of lowercase key -> original key in parsed result
-                 parsed_keys_lower = {k.lower(): k for k in parsed.keys()}
-                 
-                 for req_key in required_keys:
-                     req_key_lower = req_key.lower()
-                     if req_key in parsed:
-                         normalized[req_key] = parsed[req_key]
-                     elif req_key_lower in parsed_keys_lower:
-                         # Found it with different case
-                         original_key = parsed_keys_lower[req_key_lower]
-                         normalized[req_key] = parsed[original_key]
-                         logger.warning(f"⚠️ [Ollama] Normalized key case: {original_key} -> {req_key}")
-                     else:
-                         # Key missing, keep what we have (or let it fail later)
-                         pass
-                 
-                 # Copy over other keys that weren't required (optional)
-                 for k, v in parsed.items():
-                     if k not in normalized and k.lower() not in parsed_keys_lower:
-                         normalized[k] = v
+                result = self._call_ollama_api("/api/generate", payload)
+                content = result.get("response", "")
+                
+                # [Debug] Log Raw Response
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Raw Response (len={len(content)}): {content[:500]}... [Truncated]")
+                
+                if not content:
+                    logger.warning(f"   ⚠️ [Ollama] Empty response content received! (Attempt {attempt+1}/{max_internal_retries})")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise ValueError("Empty response content from Ollama after retries")
+                
+                # Debug 로깅
+                self._log_llm_interaction(
+                    interaction_type="generate_json",
+                    request_data={"prompt": prompt, "temperature": temperature},
+                    response_data={"content": content, "parsed": None},
+                    model_name=target_model
+                )
+                
+                # [Defensive] Tag Removal
+                raw_content = content
+                content = self._clean_deepseek_tags(content)
+                
+                if not content.strip() and raw_content.strip():
+                    error_msg = f"Model generated {len(raw_content)} chars of reasoning but no final JSON output."
+                    logger.warning(f"⚠️ [Ollama] {error_msg}")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    raise ValueError(error_msg)
+                
+                # [Defensive] JSON Parsing with basic cleanup
+                parsed = None
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError:
+                    # Try to find JSON block if mixed with text
+                    if "```json" in content:
+                        content = content.split("```json")[1].split("```")[0]
+                    elif "```" in content:
+                        content = content.split("```")[1].split("```")[0]
+                    elif "{" in content:
+                        start = content.find("{")
+                        end = content.rfind("}") + 1
+                        content = content[start:end]
+                    
+                    if not content.strip():
+                         logger.error(f"❌ [Ollama] No JSON found. Raw Content:\n{raw_content}")
+                         if attempt < max_internal_retries - 1:
+                            time.sleep(1)
+                            continue
+                         raise ValueError(f"No JSON content found in output (len={len(raw_content)})")
                          
-                 # If we normalized anything, use it. 
-                 # But checks if we actually found required keys. 
-                 # If 'normalized' has the required keys, return it.
-                 # Otherwise return 'parsed' and let the caller handle missing keys 
-                 # (or maybe 'parsed' is just better).
-                 # Let's simple return 'normalized' merging with 'parsed' for safety.
-                 parsed.update(normalized) # Ensure required keys are present with correct casing
-            
-            return parsed
+                    parsed = json.loads(content)
                 
-        except Exception as e:
-            logger.error(f"❌ [Ollama] generate_json failed: {e}")
-            raise
+                # [Defensive] Case-insensitive Key Normalization
+                if response_schema:
+                     normalized = {}
+                     required_keys = response_schema.get("required", [])
+                     parsed_keys_lower = {k.lower(): k for k in parsed.keys()}
+                     
+                     for req_key in required_keys:
+                         req_key_lower = req_key.lower()
+                         if req_key in parsed:
+                             normalized[req_key] = parsed[req_key]
+                         elif req_key_lower in parsed_keys_lower:
+                             original_key = parsed_keys_lower[req_key_lower]
+                             normalized[req_key] = parsed[original_key]
+                             logger.warning(f"⚠️ [Ollama] Normalized key case: {original_key} -> {req_key}")
+                     
+                     # Merge normalized keys back into parsed
+                     parsed.update(normalized) # Ensure required keys are present
+                
+                return parsed
+                
+            except Exception as e:
+                if attempt < max_internal_retries - 1:
+                    logger.warning(f"⚠️ [Ollama] Retryable error during generation: {e}")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    logger.error(f"❌ [Ollama] generate_json failed after {max_internal_retries} attempts: {e}")
+                    raise
 
     def generate_chat(
         self,
@@ -390,44 +396,72 @@ class OllamaLLMProvider(BaseLLMProvider):
         if response_schema:
             pass # payload["format"] = "json" <-- [Fix] Removed
 
-        try:
-            # [Debug] Log Chat Request
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Chat Messages Check: {len(messages)} messages.")
-            
-            result = self._call_ollama_api("/api/chat", payload)
-            content = result.get("message", {}).get("content", "")
-            
-            # [Debug] Log JSON Response
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Chat Response: {content[:500]}... [Truncated]")
-            
-            # Debug 로깅
-            self._log_llm_interaction(
-                interaction_type="generate_chat",
-                request_data={"messages": messages, "temperature": temperature},
-                response_data={"content": content},
-                model_name=target_model
-            )
-            
-            # [Defensive] Tag Removal
-            content = self._clean_deepseek_tags(content)
+        max_internal_retries = 3
+        
+        for attempt in range(max_internal_retries):
+            try:
+                # [Debug] Log Chat Request
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Chat Messages Check: {len(messages)} messages.")
+                
+                result = self._call_ollama_api("/api/chat", payload)
+                content = result.get("message", {}).get("content", "")
+                
+                # [Debug] Log JSON Response
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Chat Response: {content[:500]}... [Truncated]")
+                
+                if not content:
+                    logger.warning(f"   ⚠️ [Ollama] Empty chat response received! (Attempt {attempt+1}/{max_internal_retries})")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise ValueError("Empty chat response from Ollama after retries")
 
-            if response_schema:
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                     if "{" in content:
-                        start = content.find("{")
-                        end = content.rfind("}") + 1
-                        content = content[start:end]
-                     return json.loads(content)
-            
-            return {"text": content}
+                # Debug 로깅
+                self._log_llm_interaction(
+                    interaction_type="generate_chat",
+                    request_data={"messages": messages, "temperature": temperature},
+                    response_data={"content": content},
+                    model_name=target_model
+                )
+                
+                # [Defensive] Tag Removal
+                content = self._clean_deepseek_tags(content)
 
-        except Exception as e:
-             logger.error(f"❌ [Ollama] generate_chat failed: {e}")
-             raise
+                if response_schema:
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError:
+                         # Try to find JSON block
+                         if "```json" in content:
+                            content = content.split("```json")[1].split("```")[0]
+                         elif "```" in content:
+                            content = content.split("```")[1].split("```")[0]
+                         elif "{" in content:
+                            start = content.find("{")
+                            end = content.rfind("}") + 1
+                            content = content[start:end]
+                            
+                         if not content.strip():
+                             logger.error(f"❌ [Ollama] No JSON found in chat. Raw Content:\n{content}")
+                             if attempt < max_internal_retries - 1:
+                                time.sleep(1)
+                                continue
+                             raise ValueError("No JSON content found in chat output")
+                             
+                         return json.loads(content)
+                
+                return {"text": content}
+
+            except Exception as e:
+                if attempt < max_internal_retries - 1:
+                    logger.warning(f"⚠️ [Ollama] Retryable error during chat generation: {e}")
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.error(f"❌ [Ollama] generate_chat failed after {max_internal_retries} attempts: {e}")
+                    raise
 
 
 class GeminiLLMProvider(BaseLLMProvider):
@@ -591,9 +625,11 @@ class OpenAILLMProvider(BaseLLMProvider):
              logger.warning("⚠️ OpenAI API Key not found in env or secrets.json") 
         
         self.client = self._openai_module(api_key=api_key)
-        # GPT-5.2 for THINKING tier (Daily Self-Evolution & Weekly Council)
-        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-5.2")
-        self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-5.2")
+        # [Budget Strategy 2025]
+        # Default (Reasoning Tier): gpt-5-mini (Latest Budget Model)
+        # Thinking (Judge Tier): gpt-4o (Previous Flagship - Balanced Cost/Perf)
+        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-5-mini")
+        self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
     
     def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):
         """

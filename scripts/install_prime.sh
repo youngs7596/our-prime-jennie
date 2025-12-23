@@ -264,6 +264,12 @@ if [ ! -f "secrets.json" ]; then
         echo -e "${RED}Error: Secrets generation failed or cancelled.${NC}"
         exit 1
     fi
+    
+    # [Fix] Change ownership of generated secrets.json to real user
+    if [ -n "$REAL_USER" ]; then
+        chown "${REAL_USER}:${REAL_USER}" secrets.json
+        chmod 600 secrets.json
+    fi
 else
     echo -e "${GREEN}✓ secrets.json found.${NC}"
 fi

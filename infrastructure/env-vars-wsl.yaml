@@ -97,13 +97,15 @@ MIN_LLM_SCORE: "60"
 
 # 14. Scout Job LLM 최적화 설정
 #  # [Scout] LLM 실행 간격 (분) -> 4시간으로 변경
-SCOUT_MIN_LLM_INTERVAL_MINUTES: "240"
-SCOUT_MAX_CANDIDATES_PHASE2: "5"     # LLM 호출 최소 간격 (1시간)
-SCOUT_LLM_CACHE_TTL_MINUTES: "240"          # LLM 캐시 유효기간 (4시간) - 시장 변화 반영
+SCOUT_MIN_LLM_INTERVAL_MINUTES: "240"    # LLM 호출 최소 간격 (4시간)
+SCOUT_MAX_CANDIDATES_PHASE2: "5"        # Phase 2 진입 종목 수 제한
+SCOUT_LLM_CACHE_TTL_MINUTES: "240"      # LLM 캐시 유효기간 (4시간) - 시장 변화 반영
 SCOUT_LLM_MAX_WORKERS: "4"                  # LLM 동시 호출 최대 수 (GPT-OSS:20B 속도 최적화)
 LOCAL_MODEL_REASONING: "qwen3:32b"        # [Hunter] Speed & Adherence
 LOCAL_MODEL_THINKING: "qwen3:32b"           # [Judge] Deep Reasoning
-TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving (Cloud gpt-5.2 -> Local qwen3)
+TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
+TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
+# TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)
