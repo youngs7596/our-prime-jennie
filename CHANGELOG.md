@@ -1,5 +1,13 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-23
+
+### Critical Fixes & Incident Resolution (Real Trading)
+- **Incident Resolution**: 백그라운드 Real Service 실행으로 인한 "유령 매수(Ghost Trades)"(현대차 73주 불일치) 원인 규명 및 DB 동기화 완료
+- **Critical Bug Fixes**: `buy-executor` DB Logging 실패(Stop Loss Default 누락) 및 중복 매도 알림(Sell Logic 누락) 수정
+- **Safety Feature**: `EXCLUDED_STOCKS` 환경변수 추가 및 삼성전자(005930) 자동매매 영구 제외 로직 구현 (`scout-job`)
+- **Verification**: Mock Docker 환경에서 전체 수정 사항 E2E 검증 완료
+
 ## 2025-12-21
 
 ### Dashboard & Rebranding (v1.3)

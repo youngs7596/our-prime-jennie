@@ -63,8 +63,13 @@ if DB_TYPE == "MARIADB":
     user_enc = quote_plus(MARIADB_USER)
     password_enc = quote_plus(MARIADB_PASSWORD)
     
-    SQLALCHEMY_DATABASE_URL = f"mysql+pymysql://{user_enc}:{password_enc}@{MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DBNAME}?charset=utf8mb4"
-    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+    SQLALCHEMY_DATABASE_URL = f"mysql+mysqlconnector://{user_enc}:{password_enc}@{MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DBNAME}?charset=utf8mb4"
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL, 
+        pool_pre_ping=True, 
+        pool_recycle=3600,
+        connect_args={"auth_plugin": "mysql_native_password", "use_pure": True}
+    )
     logger.info(f"🗄️ Scheduler DB: MariaDB ({MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DBNAME})")
 else:
     os.makedirs(os.path.dirname(SCHEDULER_DB_PATH), exist_ok=True)

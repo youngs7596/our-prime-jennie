@@ -61,7 +61,7 @@ SENTIMENT_COOLDOWN_SECONDS: "0.2"
 # 10. MariaDB 설정 (비밀번호는 secrets.json에서 로드)
 DB_TYPE: "MARIADB"
 MARIADB_HOST: "127.0.0.1"
-MARIADB_PORT: "3306"
+MARIADB_PORT: "3307"
 # MARIADB_USER, MARIADB_PASSWORD는 secrets.json의 mariadb-user, mariadb-password 사용
 MARIADB_DBNAME: "jennie_db"
 SQLALCHEMY_POOL_SIZE: "5"
@@ -87,3 +87,5 @@ ENABLE_SCOUT_JOB_WORKER: "true"
 
 # 13. 매수 기준 점수 (Mock 테스트용 - 낮은 기준)
 MIN_LLM_SCORE: "50"
+MARIADB_USER: "mock_tester"
+MARIADB_PASSWORD: "mock_pass"

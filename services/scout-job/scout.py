@@ -480,6 +480,15 @@ def main():
             
             logger.info(f"   ✅ 후보군 {len(candidate_stocks)}개 발굴 완료.")
             
+            # [Filter] 제외 종목 필터링 (v1.1)
+            excluded_stocks = [s.strip() for s in os.getenv("EXCLUDED_STOCKS", "").split(",") if s.strip()]
+            if excluded_stocks:
+                logger.info(f"   🚫 제외 종목 필터 적용: {excluded_stocks}")
+                for ex_code in excluded_stocks:
+                    if ex_code in candidate_stocks:
+                        del candidate_stocks[ex_code]
+                        logger.info(f"      - {ex_code} 제외됨 (사용자 설정)")
+            
             # [DEBUG] Truncate for Judge Phase Verification - Removed
             # candidate_stocks = dict(list(candidate_stocks.items())[:3])
 

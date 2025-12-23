@@ -437,8 +437,39 @@ def _execute_trade_and_log_sqlalchemy(
                     "price": price,
                     "total": total_amount,
                     "now": now,
-                    "stop_loss": initial_stop_loss_price
+                    "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0
                 })
+                
+        elif trade_type == 'SELL':
+            # 매도 처리 (Portfolio 업데이트)
+            pf_check = session.execute(text(f"""
+                SELECT ID, QUANTITY, AVERAGE_BUY_PRICE 
+                FROM {portfolio_table} 
+                WHERE STOCK_CODE = :code AND (STATUS = 'HOLDING' OR STATUS = 'PARTIAL')
+            """), {"code": stock_info['code']}).fetchone()
+            
+            if pf_check:
+                pf_id, curr_qty, avg_price = pf_check
+                
+                if curr_qty <= quantity:
+                    # 전량 매도
+                    session.execute(text(f"""
+                        UPDATE {portfolio_table} 
+                        SET STATUS = 'SOLD', SELL_STATE = 'SOLD', QUANTITY = 0, UPDATED_AT = :now
+                        WHERE ID = :id
+                    """), {"id": pf_id, "now": now})
+                else:
+                    # 부분 매도
+                    new_qty = curr_qty - quantity
+                    new_total_amt = new_qty * avg_price
+                    session.execute(text(f"""
+                        UPDATE {portfolio_table} 
+                        SET QUANTITY = :qty, TOTAL_BUY_AMOUNT = :total, 
+                            STATUS = 'PARTIAL', UPDATED_AT = :now 
+                        WHERE ID = :id
+                    """), {"qty": new_qty, "total": new_total_amt, "now": now, "id": pf_id})
+            else:
+                logger.warning(f"⚠️ 매도 처리 중 Portfolio 미발견: {stock_info['code']}")
                 
         return True
         
