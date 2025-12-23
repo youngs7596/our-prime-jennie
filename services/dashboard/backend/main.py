@@ -926,7 +926,7 @@ async def get_analyst_performance_api(payload: dict = Depends(verify_token)):
                         "avg_return": safe_serialize(valid_group.mean() * 100)
                     })
             
-            # 4. Recent Decisions (limit 20)
+            # 4. Recent Decisions (limit 20) - 다기간 수익률 포함 (퀀트 트레이딩용)
             recent = []
             # Sort by timestamp desc
             for _, row in df.sort_values(by='timestamp', ascending=False).head(20).iterrows():
@@ -937,7 +937,11 @@ async def get_analyst_performance_api(payload: dict = Depends(verify_token)):
                     "decision": row['decision'],
                     "hunter_score": safe_serialize(row['hunter_score']),
                     "market_regime": row['market_regime'],
-                    "return_5d": safe_serialize(row['return_5d'] * 100) if pd.notnull(row['return_5d']) else None
+                    "return_1d": safe_serialize(row['return_1d'] * 100) if pd.notnull(row.get('return_1d')) else None,
+                    "return_5d": safe_serialize(row['return_5d'] * 100) if pd.notnull(row.get('return_5d')) else None,
+                    "return_20d": safe_serialize(row['return_20d'] * 100) if pd.notnull(row.get('return_20d')) else None,
+                    "tags": row.get('tags', []),
+                    "score_history": row.get('score_history', [])
                 })
 
             return {

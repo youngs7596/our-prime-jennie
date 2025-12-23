@@ -199,15 +199,43 @@ class BuyScanner:
                     buy_candidates.sort(key=lambda x: x.get('factor_score', 0), reverse=True)
                     top_5_candidates = buy_candidates[:5]
                     
-                    logger.info(f"✅ 상위 5개 후보 선정 완료")
-                    for idx, candidate in enumerate(top_5_candidates, 1):
+                    # [Double Buy Prevention] Redis Lock Check
+                    final_candidates = []
+                    redis_client = database.get_redis_client()
+                    
+                    for candidate in top_5_candidates:
+                        stock_code = candidate['code']
+                        lock_key = f"buy_lock:{stock_code}"
+                        
+                        # 이미 락이 걸려있으면 스킵
+                        if redis_client.exists(lock_key):
+                            logger.warning(f"🚫 [{stock_code}] 중복 매수 방지 Lock 감지됨. 스캔 결과에서 제외.")
+                            continue
+                            
+                        # 락 설정 (5분간 유효 - 짧은 시간 내 중복 신호 방지)
+                        # 실제 매수가 체결되면 TradeLog 체크로 방어가 되겠지만,
+                        # 체결 전(Order Pending) 상태에서의 중복 방지를 위함.
+                        redis_client.setex(lock_key, 300, "locked")
+                        final_candidates.append(candidate)
+                    
+                    if not final_candidates:
+                        logger.info("모든 매수 후보가 중복 Lock으로 인해 제외되었습니다.")
+                        return {
+                            "candidates": [],
+                            "market_regime": current_regime,
+                            "scan_timestamp": datetime.now(timezone.utc).isoformat(),
+                            "strategy_preset": market_analysis.get('strategy_preset'),
+                        }
+
+                    logger.info(f"✅ 상위 {len(final_candidates)}개 후보 선정 완료 (중복 제외됨)")
+                    for idx, candidate in enumerate(final_candidates, 1):
                         logger.info(f"  {idx}. {candidate['name']}({candidate['code']}): {candidate['factor_score']:.2f}")
                     
                     scan_duration = time.time() - scan_start_time
                     logger.info(f"=== 스캔 완료 (소요: {scan_duration:.1f}초) ===")
                     
                     return {
-                        "candidates": [self._serialize_candidate(c) for c in top_5_candidates],
+                        "candidates": [self._serialize_candidate(c) for c in final_candidates],
                         "market_regime": current_regime,
                         "market_context": market_context_dict,
                         "scan_timestamp": datetime.now(timezone.utc).isoformat(),
