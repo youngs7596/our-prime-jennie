@@ -491,9 +491,9 @@ class BuyExecutor:
                 'reason': llm_reason
             }
             
-            database.execute_trade_and_log(
-                connection=session, # execute_trade_and_log가 session을 받도록 수정되었다고 가정
-                trade_type='BUY',  # DRY_RUN 여부는 key_metrics_dict에 저장 (TRADE_TYPE 컬럼 길이 제한 8자 준수)
+            result = database.execute_trade_and_log(
+                connection=session, 
+                trade_type='BUY',
                 stock_info=stock_info,
                 quantity=quantity,
                 price=price,
@@ -502,9 +502,12 @@ class BuyExecutor:
                 key_metrics_dict={
                     'factor_score': factor_score, 
                     'is_dry_run': dry_run,
-                    'risk_setting': risk_setting or {} # 리스크 설정 기록
+                    'risk_setting': risk_setting or {}
                 }
             )
+
+            if not result:
+                raise RuntimeError("Failed to execute trade transaction (DB error)")
             
             logger.info("✅ 거래 기록 완료 (Portfolio & TradeLog)")
             

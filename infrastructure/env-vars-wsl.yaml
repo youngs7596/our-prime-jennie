@@ -14,6 +14,9 @@ REAL_SECRET_ID_APP_KEY: "kis-r-app-key"
 REAL_SECRET_ID_APP_SECRET: "kis-r-app-secret"
 REAL_SECRET_ID_ACCOUNT_PREFIX: "kis-r-account-no"
 
+# 2.5 제외 종목 (콤마로 구분)
+EXCLUDED_STOCKS: "005930"
+
 # 3. KIS API Base URLs
 KIS_BASE_URL_MOCK: "https://openapivts.koreainvestment.com:29443"
 KIS_BASE_URL_REAL: "https://openapi.koreainvestment.com:9443"
