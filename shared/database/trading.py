@@ -351,6 +351,102 @@ def remove_from_portfolio(session, stock_code, quantity):
 # [Trade] 거래 실행 및 로깅
 # ============================================================================
 
+def _execute_trade_and_log_sqlalchemy(
+    session, trade_type, stock_info, quantity, price, llm_decision,
+    initial_stop_loss_price=None, strategy_signal: str = None,
+    key_metrics_dict: dict = None, market_context_dict: dict = None
+):
+    """
+    거래 실행 및 로깅 구현부 (SQLAlchemy Transaction 내에서 실행됨)
+    """
+    from sqlalchemy import text
+    
+    # 1. Trade Log 저장
+    try:
+        tradelog_table = _get_table_name("TradeLog")
+        portfolio_table = _get_table_name("Portfolio")
+        
+        now = datetime.now(timezone.utc)
+        
+        # 메타데이터 준비
+        key_metrics_json = json.dumps(key_metrics_dict) if key_metrics_dict else None
+        market_context_json = json.dumps(market_context_dict) if market_context_dict else None
+        
+        # Trade Log Insert
+        session.execute(text(f"""
+            INSERT INTO {tradelog_table} 
+            (STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, REASON, 
+             STRATEGY_SIGNAL, KEY_METRICS_JSON, MARKET_CONTEXT_JSON, TRADE_TIMESTAMP)
+            VALUES 
+            (:code, :type, :qty, :price, :reason, 
+             :strategy, :metrics, :context, :ts)
+        """), {
+            "code": stock_info['code'],
+            "type": trade_type,
+            "qty": quantity,
+            "price": price,
+            "reason": llm_decision.get('reason', ''),
+            "strategy": strategy_signal,
+            "metrics": key_metrics_json,
+            "context": market_context_json,
+            "ts": now
+        })
+        
+        # 2. Portfolio 업데이트 (매수인 경우)
+        if trade_type == 'BUY':
+            # 기존 보유 종목 확인
+            pf_check = session.execute(text(f"""
+                SELECT ID, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT 
+                FROM {portfolio_table} 
+                WHERE STOCK_CODE = :code AND STATUS = 'HOLDING'
+            """), {"code": stock_info['code']}).fetchone()
+            
+            total_amount = quantity * price
+            
+            if pf_check:
+                # 추가 매수 (평단가 수정)
+                pf_id, curr_qty, curr_avg, curr_total = pf_check
+                new_qty = curr_qty + quantity
+                new_total_amt = float(curr_total or 0) + total_amount
+                new_avg = new_total_amt / new_qty
+                
+                session.execute(text(f"""
+                    UPDATE {portfolio_table}
+                    SET QUANTITY = :qty, 
+                        AVERAGE_BUY_PRICE = :avg, 
+                        TOTAL_BUY_AMOUNT = :total,
+                        UPDATED_AT = :now
+                    WHERE ID = :id
+                """), {
+                    "qty": new_qty, "avg": new_avg, "total": new_total_amt, 
+                    "now": now, "id": pf_id
+                })
+            else:
+                # 신규 매수
+                session.execute(text(f"""
+                    INSERT INTO {portfolio_table}
+                    (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
+                     STATUS, CREATED_AT, UPDATED_AT, STOP_LOSS_PRICE)
+                    VALUES 
+                    (:code, :name, :qty, :price, :total, 
+                     'HOLDING', :now, :now, :stop_loss)
+                """), {
+                    "code": stock_info['code'],
+                    "name": stock_info['name'],
+                    "qty": quantity,
+                    "price": price,
+                    "total": total_amount,
+                    "now": now,
+                    "stop_loss": initial_stop_loss_price
+                })
+                
+        return True
+        
+    except Exception as e:
+        logger.error(f"❌ DB Transaction Failed: {e}", exc_info=True)
+        raise e
+
+
 def execute_trade_and_log(
     connection, trade_type, stock_info, quantity, price, llm_decision,
     initial_stop_loss_price=None,
