@@ -1,6 +1,7 @@
 # 🤖 AI Assistant Ground Rules
 
-> 이 파일은 Cursor, VS Code Copilot, Antigravity, Claude Code 등 어떤 AI 환경에서도 공통으로 따르기 위한 마스터 룰입니다.
+> ✅ **정본(Single Source of Truth)**: 루트 `rules.md`  
+> 이 파일은 “세션/핸드오프 절차”를 포함한 **레거시 마스터 룰**이며, 앞으로는 모든 LLM이 **`rules.md`를 먼저 읽고 그대로** 따르도록 합니다.
 
 ---
 
@@ -19,6 +20,11 @@
 ## 🚀 세션 시작 시 (Bootstrap)
 
 새로운 대화/에이전트 세션을 시작하면 **반드시 아래 순서**를 따릅니다:
+
+### 0. 정본 규칙 확인
+```
+루트 `rules.md`를 먼저 읽고 그대로 따릅니다.
+```
 
 ### 1. 이전 세션 파일 확인
 ```

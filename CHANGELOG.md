@@ -2,6 +2,9 @@
 
 ## 2025-12-23
 
+- **Oracle/OCI 레거시 전면 제거**: 28개 파일에서 Oracle DB 관련 코드 952줄 삭제, MariaDB/SQLAlchemy 단일 체계로 통일 (환경변수, 시크릿, DB 분기 로직, MERGE INTO/DUAL/SYSTIMESTAMP SQL 등)
+- **AI Analyst & Stability**: AI Analyst 대시보드 시각화 강화(태그, 스파크라인) 및 Buy Scanner 중복 매수 방지(Redis Lock) 구현
+
 ### Public Release (our-prime-jennie v1.0)
 - **GitHub 배포**: `our-prime-jennie` Public 저장소 생성 및 배포 완료 (https://github.com/youngs7596/our-prime-jennie)
 - **LLM 비용 최적화**: 기본 티어 설정 (FAST→Gemini Flash, REASONING→GPT-5-mini, THINKING→GPT-4o), 월간 예상 비용 문서화

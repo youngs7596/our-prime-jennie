@@ -112,9 +112,7 @@ GENERAL_RSS_FEEDS = [
 load_dotenv()
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-DB_SERVICE_NAME = os.getenv("OCI_DB_SERVICE_NAME")
-WALLET_DIR_NAME = os.getenv("OCI_WALLET_DIR_NAME", "wallet")
-WALLET_PATH = os.path.join(PROJECT_ROOT, WALLET_DIR_NAME)
+# Oracle/OCI 관련 설정은 더 이상 사용하지 않습니다. (MariaDB + SQLAlchemy 단일화)
 
 # 지연 초기화를 위한 전역 변수 (None으로 시작)
 embeddings = None

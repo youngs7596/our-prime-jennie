@@ -6,7 +6,7 @@
 scripts/collect_dart_filings.py
 
 DART(OpenDartReader) API를 사용해 최근 공시 메타데이터를 수집하여
-`STOCK_DISCLOSURES` 테이블에 저장합니다. (MariaDB/Oracle 겸용)
+`STOCK_DISCLOSURES` 테이블에 저장합니다. (MariaDB 단일 지원)
 """
 
 import argparse
@@ -44,45 +44,27 @@ REPORT_CODE_CATEGORY = {
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def ensure_table_exists(connection):
     cursor = connection.cursor()
     try:
-        if _is_mariadb():
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                    ID INT AUTO_INCREMENT PRIMARY KEY,
-                    RECEIPT_NO VARCHAR(20) UNIQUE,
-                    STOCK_CODE VARCHAR(20) NOT NULL,
-                    COMPANY_NAME VARCHAR(255),
-                    DISCLOSURE_DATE DATETIME,
-                    REPORT_CODE VARCHAR(10),
-                    CATEGORY VARCHAR(50),
-                    TITLE VARCHAR(1000),
-                    LINK VARCHAR(2000),
-                    SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """)
-        else:
-            try:
-                cursor.execute(f"SELECT 1 FROM {TABLE_NAME} WHERE ROWNUM=1")
-            except Exception:
-                cursor.execute(f"""
-                    CREATE TABLE {TABLE_NAME} (
-                        ID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                        RECEIPT_NO VARCHAR2(20) UNIQUE,
-                        STOCK_CODE VARCHAR2(20) NOT NULL,
-                        COMPANY_NAME VARCHAR2(255),
-                        DISCLOSURE_DATE TIMESTAMP,
-                        REPORT_CODE VARCHAR2(10),
-                        CATEGORY VARCHAR2(50),
-                        TITLE VARCHAR2(1000),
-                        LINK VARCHAR2(2000),
-                        SCRAPED_AT TIMESTAMP DEFAULT SYSTIMESTAMP
-                    )
-                """)
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+                ID INT AUTO_INCREMENT PRIMARY KEY,
+                RECEIPT_NO VARCHAR(20) UNIQUE,
+                STOCK_CODE VARCHAR(20) NOT NULL,
+                COMPANY_NAME VARCHAR(255),
+                DISCLOSURE_DATE DATETIME,
+                REPORT_CODE VARCHAR(10),
+                CATEGORY VARCHAR(50),
+                TITLE VARCHAR(1000),
+                LINK VARCHAR(2000),
+                SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
         connection.commit()
         logger.info(f"✅ 테이블 확인 완료: {TABLE_NAME}")
     except Exception as e:
@@ -93,23 +75,8 @@ def ensure_table_exists(connection):
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
 def load_stock_codes(limit: int = None) -> List[str]:
@@ -247,8 +214,7 @@ def main():
         return
 
     dart = OpenDartReader(api_key)  # OpenDartReader 모듈 자체가 클래스
-    db_config = get_db_config()
-    conn = database.get_db_connection(**db_config)
+    conn = database.get_db_connection()
     if not conn:
         logger.error("DB 연결 실패")
         return

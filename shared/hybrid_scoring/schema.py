@@ -9,25 +9,24 @@ Scout v1.0 Hybrid Scoring - DB 스키마 정의
 3. NEWS_FACTOR_STATS - 뉴스 카테고리별 영향도 통계
 4. DAILY_QUANT_SCORE - 일별 정량 점수 기록 (역추적용)
 
-Feature: Oracle MERGE INTO 호환성 추가
-- Oracle UPSERT (MERGE INTO) 호환성 추가
+Feature: MariaDB 기반 UPSERT 유틸리티
+- Oracle 분기/호환성은 제거되었습니다. (현재 Oracle DB 미사용)
 """
 
 import logging
-import os
 from typing import Tuple, List, Any
 
 logger = logging.getLogger(__name__)
 
 
 def _is_mariadb() -> bool:
-    """현재 DB 타입이 MariaDB인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    """현재 DB 타입이 MariaDB인지 확인 (단일화: 항상 True)"""
+    return True
 
 
 def is_oracle() -> bool:
-    """현재 DB 타입이 Oracle인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "ORACLE"
+    """레거시 호환용: Oracle 여부 (단일화: 항상 False)"""
+    return False
 
 
 # =============================================================================
@@ -58,12 +57,8 @@ def execute_upsert(cursor,
     if update_columns is None:
         update_columns = [c for c in columns if c not in unique_keys]
     
-    if is_oracle():
-        # Oracle: MERGE INTO
-        return _execute_oracle_merge(cursor, table_name, columns, values, unique_keys, update_columns)
-    else:
-        # MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
-        return _execute_mariadb_upsert(cursor, table_name, columns, values, update_columns)
+    # MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (단일화)
+    return _execute_mariadb_upsert(cursor, table_name, columns, values, update_columns)
 
 
 def _execute_mariadb_upsert(cursor,
@@ -84,47 +79,6 @@ def _execute_mariadb_upsert(cursor,
     """
     
     cursor.execute(sql, values)
-    return True
-
-
-def _execute_oracle_merge(cursor,
-                          table_name: str,
-                          columns: List[str],
-                          values: Tuple[Any, ...],
-                          unique_keys: List[str],
-                          update_columns: List[str]) -> bool:
-    """Oracle용 UPSERT (MERGE INTO)"""
-    # 값 딕셔너리 생성
-    col_val_map = dict(zip(columns, values))
-    
-    # ON 조건 (유니크 키 매칭)
-    on_clause = ' AND '.join([f"target.{k} = source.{k}" for k in unique_keys])
-    
-    # UPDATE SET 절
-    update_set = ', '.join([f"target.{c} = source.{c}" for c in update_columns])
-    
-    # INSERT 절
-    insert_cols = ', '.join(columns)
-    insert_vals = ', '.join([f"source.{c}" for c in columns])
-    
-    # SOURCE 서브쿼리 (듀얼 테이블 사용)
-    source_cols = ', '.join([f":v{i} AS {c}" for i, c in enumerate(columns)])
-    
-    sql = f"""
-        MERGE INTO {table_name} target
-        USING (SELECT {source_cols} FROM DUAL) source
-        ON ({on_clause})
-        WHEN MATCHED THEN
-            UPDATE SET {update_set}
-        WHEN NOT MATCHED THEN
-            INSERT ({insert_cols})
-            VALUES ({insert_vals})
-    """
-    
-    # Oracle 바인드 변수 생성
-    bind_vars = {f'v{i}': v for i, v in enumerate(values)}
-    
-    cursor.execute(sql, bind_vars)
     return True
 
 

@@ -10,7 +10,7 @@
 # - 소스:
 #   youngs75_jennie.kis.KISClient.market_data.get_stock_daily_prices
 # - 저장:
-#   OCI DB 테이블 STOCK_DAILY_PRICES_3Y (DDL 포함)
+#   MariaDB 테이블 STOCK_DAILY_PRICES_3Y (DDL 포함, Oracle/분기 제거)
 #
 
 import os
@@ -97,17 +97,17 @@ NUM_DAYS_TO_FETCH = 1100  # 약 3년
 KOSPI_CODE = "0001"
 
 DDL_STOCK_DAILY_PRICES_3Y = """
-CREATE TABLE STOCK_DAILY_PRICES_3Y (
-  STOCK_CODE        VARCHAR2(16) NOT NULL,
-  PRICE_DATE        DATE NOT NULL,
-  OPEN_PRICE        NUMBER,
-  HIGH_PRICE        NUMBER,
-  LOW_PRICE         NUMBER,
-  CLOSE_PRICE       NUMBER,
-  VOLUME            NUMBER,
-  CREATED_AT        TIMESTAMP DEFAULT SYSTIMESTAMP,
-  CONSTRAINT PK_STOCK_DAILY_PRICES_3Y PRIMARY KEY (STOCK_CODE, PRICE_DATE)
-)
+CREATE TABLE IF NOT EXISTS STOCK_DAILY_PRICES_3Y (
+  STOCK_CODE   VARCHAR(20) NOT NULL,
+  PRICE_DATE   DATE NOT NULL,
+  OPEN_PRICE   DECIMAL(15,2) NULL,
+  HIGH_PRICE   DECIMAL(15,2) NULL,
+  LOW_PRICE    DECIMAL(15,2) NULL,
+  CLOSE_PRICE  DECIMAL(15,2) NULL,
+  VOLUME       BIGINT NULL,
+  CREATED_AT   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (STOCK_CODE, PRICE_DATE)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
 
 def ensure_table_exists(connection):
@@ -116,26 +116,12 @@ def ensure_table_exists(connection):
     """
     try:
         cur = connection.cursor()
-        # 세션 병렬 DML 비활성화 (ORA-12838 회피)
-        try:
-            cur.execute("ALTER SESSION DISABLE PARALLEL DML")
-        except Exception:
-            pass
-        # 존재 여부 확인
-        cur.execute("""
-            SELECT COUNT(*) 
-            FROM user_tables 
-            WHERE table_name = 'STOCK_DAILY_PRICES_3Y'
-        """)
-        exists = cur.fetchone()[0] > 0
+        # MariaDB: 존재 여부 확인
+        cur.execute("SHOW TABLES LIKE 'stock_daily_prices_3y'")
+        exists = cur.fetchone() is not None
         if not exists:
             logger.info("테이블 'STOCK_DAILY_PRICES_3Y' 미존재. 생성 시도...")
             cur.execute(DDL_STOCK_DAILY_PRICES_3Y)
-            # 테이블 병렬 옵션 해제
-            try:
-                cur.execute("ALTER TABLE STOCK_DAILY_PRICES_3Y NOPARALLEL")
-            except Exception:
-                pass
             connection.commit()
             logger.info("✅ 'STOCK_DAILY_PRICES_3Y' 생성 완료.")
         else:
@@ -156,49 +142,35 @@ def upsert_daily_prices(connection, rows):
     """
     if not rows:
         return
-    sql_merge = """
-    MERGE /*+ NOPARALLEL(t) */ INTO STOCK_DAILY_PRICES_3Y t
-    USING (
-      SELECT TO_DATE(:p_date, 'YYYY-MM-DD') AS price_date,
-             :p_code AS stock_code,
-             :p_open AS open_price,
-             :p_high AS high_price,
-             :p_low  AS low_price,
-             :p_close AS close_price,
-             :p_volume AS volume
-      FROM DUAL
-    ) s
-    ON (t.STOCK_CODE = s.stock_code AND t.PRICE_DATE = s.price_date)
-    WHEN MATCHED THEN
-      UPDATE /*+ NOPARALLEL(t) */ SET t.OPEN_PRICE = s.open_price,
-                 t.HIGH_PRICE = s.high_price,
-                 t.LOW_PRICE = s.low_price,
-                 t.CLOSE_PRICE = s.close_price,
-                 t.VOLUME = s.volume
-    WHEN NOT MATCHED THEN
-      INSERT /*+ NOPARALLEL(t) */ (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
-      VALUES (s.stock_code, s.price_date, s.open_price, s.high_price, s.low_price, s.close_price, s.volume)
+    sql_upsert = """
+    INSERT INTO STOCK_DAILY_PRICES_3Y
+      (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
+    VALUES
+      (%s, %s, %s, %s, %s, %s, %s)
+    ON DUPLICATE KEY UPDATE
+      OPEN_PRICE = VALUES(OPEN_PRICE),
+      HIGH_PRICE = VALUES(HIGH_PRICE),
+      LOW_PRICE = VALUES(LOW_PRICE),
+      CLOSE_PRICE = VALUES(CLOSE_PRICE),
+      VOLUME = VALUES(VOLUME)
     """
     params = []
     for r in rows:
-        params.append({
-            "p_date": r["date"],
-            "p_code": r["code"],
-            "p_open": r.get("open"),
-            "p_high": r.get("high"),
-            "p_low": r.get("low"),
-            "p_close": r.get("close"),
-            "p_volume": r.get("volume", 0)
-        })
+        params.append(
+            (
+                r["code"],
+                r["date"],
+                r.get("open"),
+                r.get("high"),
+                r.get("low"),
+                r.get("close"),
+                r.get("volume", 0),
+            )
+        )
     cur = None
     try:
         cur = connection.cursor()
-        # 세션 병렬 DML 비활성화
-        try:
-            cur.execute("ALTER SESSION DISABLE PARALLEL DML")
-        except Exception:
-            pass
-        cur.executemany(sql_merge, params)
+        cur.executemany(sql_upsert, params)
         connection.commit()
         logger.info(f"✅ 저장 완료: {len(params)}건")
     except Exception as e:
@@ -371,18 +343,11 @@ def main():
     db_conn = None
     kis_api = None
     try:
-        # DB 연결
-        db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), os.getenv("GCP_PROJECT_ID"))
-        db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), os.getenv("GCP_PROJECT_ID"))
-        wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-        db_conn = database.get_db_connection(
-            db_user=db_user,
-            db_password=db_password,
-            db_service_name=os.getenv("OCI_DB_SERVICE_NAME"),
-            wallet_path=wallet_path
-        )
+        # DB 연결 (MariaDB + SQLAlchemy 단일화)
+        # - legacy Oracle/OCI 분기 제거: get_db_connection()은 인자를 받지 않습니다.
+        db_conn = database.get_db_connection()
         if not db_conn:
-            raise RuntimeError("OCI DB 연결 실패")
+            raise RuntimeError("DB 연결 실패")
         ensure_table_exists(db_conn)
 
         # KIS API

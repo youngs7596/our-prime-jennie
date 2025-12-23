@@ -8,7 +8,7 @@ scripts/tag_news_sentiment.py
 수집된 네이버 뉴스 메타데이터(STOCK_NEWS_SENTIMENT)를 대상으로
 간단한 룰 기반 감성 점수 및 카테고리를 부여합니다.
 
-- MariaDB/Oracle 하이브리드 지원
+- MariaDB 단일 지원 (Oracle/분기 제거)
 - 추후 LLM 태깅 파이프라인으로 확장 가능하도록 구조화
 """
 
@@ -57,27 +57,13 @@ NEGATIVE_KEYWORDS = [
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",  # 환경변수 기반
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
 def normalize_text(text: str) -> str:
@@ -217,8 +203,7 @@ def process_articles(connection, args):
 def main():
     load_dotenv()
     args = parse_args()
-    db_config = get_db_config()
-    conn = database.get_db_connection(**db_config)
+    conn = database.get_db_connection()
     if not conn:
         logger.error("DB 연결 실패")
         return
