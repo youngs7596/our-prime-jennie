@@ -143,8 +143,6 @@ def get_secret(secret_id, project_id=None, use_cache=True):
     # 2) 환경 변수 fallback
     # 로컬 테스트를 위한 환경 변수 매핑
     local_env_mapping = {
-        "oracle-db-user": "ORACLE_USER",
-        "oracle-db-password": "ORACLE_PASSWORD",
         "mock-app-key": "MOCK_APP_KEY",
         "mock-app-secret": "MOCK_APP_SECRET",
         "mock-account-prefix": "MOCK_ACCOUNT_NO",

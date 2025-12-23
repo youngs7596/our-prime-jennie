@@ -34,7 +34,6 @@ from .schema import (
     get_confidence_level,
     create_hybrid_scoring_tables,
     execute_upsert,
-    is_oracle,
 )
 from .factor_constants import (
     DEFAULT_LOOKBACK_YEARS,
@@ -377,9 +376,8 @@ class FactorAnalyzer:
         return results
     
     def _is_mariadb(self) -> bool:
-        """현재 DB 타입이 MariaDB인지 확인"""
-        import os
-        return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+        """단일화: MariaDB만 사용"""
+        return True
     
     def _get_historical_prices(self, 
                                stock_codes: List[str],
@@ -715,7 +713,7 @@ class FactorAnalyzer:
         """
         팩터 분석 결과를 FACTOR_METADATA에 저장
         
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         NaN/inf 값을 None으로 변환하여 MySQL 호환성 확보
         """
         try:
@@ -769,7 +767,7 @@ class FactorAnalyzer:
         """
         조건부 성과 결과를 FACTOR_PERFORMANCE에 저장
         
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         """
         try:
             from sqlalchemy import text
@@ -1295,7 +1293,7 @@ class FactorAnalyzer:
         NEWS_FACTOR_STATS 테이블에 뉴스 영향도 저장
         
         GPT 피드백: "NEWS_FACTOR_STATS 테이블을 채우기 위한 분석 로직" 구현
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         """
         try:
             from sqlalchemy import text

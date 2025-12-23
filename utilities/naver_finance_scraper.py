@@ -28,37 +28,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 재무제표 테이블 DDL (financial_data_collector.py와 동일)
+# 재무제표 테이블 DDL (MariaDB 단일화)
 DDL_FINANCIAL_DATA = """
-CREATE TABLE FINANCIAL_DATA (
-  STOCK_CODE        VARCHAR2(16) NOT NULL,
-  REPORT_DATE       DATE NOT NULL,
-  REPORT_TYPE       VARCHAR2(16) NOT NULL, -- 'QUARTERLY' / 'ANNUAL'
-  SALES            NUMBER,  -- 매출액
-  OPERATING_PROFIT  NUMBER,  -- 영업이익
-  NET_INCOME       NUMBER,  -- 당기순이익
-  TOTAL_ASSETS     NUMBER,  -- 자산총계
-  TOTAL_LIABILITIES NUMBER, -- 부채총계
-  TOTAL_EQUITY     NUMBER,  -- 자본총계
-  SHARES_OUTSTANDING NUMBER, -- 발행주식수 (EPS 계산용)
-  EPS              NUMBER,  -- 주당순이익 (계산값)
-  SALES_GROWTH     NUMBER,  -- 매출액 성장률 (%)
-  EPS_GROWTH       NUMBER,  -- EPS 성장률 (%)
-  CREATED_AT       TIMESTAMP DEFAULT SYSTIMESTAMP,
-  CONSTRAINT PK_FINANCIAL_DATA PRIMARY KEY (STOCK_CODE, REPORT_DATE, REPORT_TYPE)
-)
+CREATE TABLE IF NOT EXISTS FINANCIAL_DATA (
+  STOCK_CODE         VARCHAR(20) NOT NULL,
+  REPORT_DATE        DATE NOT NULL,
+  REPORT_TYPE        VARCHAR(16) NOT NULL, -- 'QUARTERLY' / 'ANNUAL'
+  SALES              BIGINT NULL,
+  OPERATING_PROFIT   BIGINT NULL,
+  NET_INCOME         BIGINT NULL,
+  TOTAL_ASSETS       BIGINT NULL,
+  TOTAL_LIABILITIES  BIGINT NULL,
+  TOTAL_EQUITY       BIGINT NULL,
+  SHARES_OUTSTANDING BIGINT NULL,
+  EPS                DECIMAL(15,4) NULL,
+  SALES_GROWTH       DECIMAL(15,6) NULL,
+  EPS_GROWTH         DECIMAL(15,6) NULL,
+  CREATED_AT         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UPDATED_AT         TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (STOCK_CODE, REPORT_DATE, REPORT_TYPE)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
 
 def ensure_financial_table(connection):
     """FINANCIAL_DATA 테이블 생성"""
+    cur = None
     try:
         cur = connection.cursor()
-        cur.execute("""
-            SELECT COUNT(*) 
-            FROM user_tables 
-            WHERE table_name = 'FINANCIAL_DATA'
-        """)
-        exists = cur.fetchone()[0] > 0
+        # MariaDB: SHOW TABLES로 확인
+        cur.execute("SHOW TABLES LIKE 'financial_data'")
+        exists = cur.fetchone() is not None
         if not exists:
             logger.info("테이블 'FINANCIAL_DATA' 미존재. 생성 시도...")
             cur.execute(DDL_FINANCIAL_DATA)
@@ -305,73 +304,58 @@ def upsert_financial_data(connection, financial_data: list):
     if not financial_data:
         return
     
-    sql_merge = """
-    MERGE INTO FINANCIAL_DATA t
-    USING (
-      SELECT TO_DATE(:p_date, 'YYYY-MM-DD') AS report_date,
-             :p_code AS stock_code,
-             :p_type AS report_type,
-             :p_sales AS sales,
-             :p_operating_profit AS operating_profit,
-             :p_net_income AS net_income,
-             :p_total_assets AS total_assets,
-             :p_total_liabilities AS total_liabilities,
-             :p_total_equity AS total_equity,
-             :p_shares AS shares_outstanding,
-             :p_eps AS eps,
-             :p_sales_growth AS sales_growth,
-             :p_eps_growth AS eps_growth
-      FROM DUAL
-    ) s
-    ON (t.STOCK_CODE = s.stock_code AND t.REPORT_DATE = s.report_date AND t.REPORT_TYPE = s.report_type)
-    WHEN MATCHED THEN
-      UPDATE SET t.SALES = s.sales,
-                 t.OPERATING_PROFIT = s.operating_profit,
-                 t.NET_INCOME = s.net_income,
-                 t.TOTAL_ASSETS = s.total_assets,
-                 t.TOTAL_LIABILITIES = s.total_liabilities,
-                 t.TOTAL_EQUITY = s.total_equity,
-                 t.SHARES_OUTSTANDING = s.shares_outstanding,
-                 t.EPS = s.eps,
-                 t.SALES_GROWTH = s.sales_growth,
-                 t.EPS_GROWTH = s.eps_growth
-    WHEN NOT MATCHED THEN
-      INSERT (STOCK_CODE, REPORT_DATE, REPORT_TYPE, SALES, OPERATING_PROFIT, NET_INCOME,
-              TOTAL_ASSETS, TOTAL_LIABILITIES, TOTAL_EQUITY, SHARES_OUTSTANDING,
-              EPS, SALES_GROWTH, EPS_GROWTH)
-      VALUES (s.stock_code, s.report_date, s.report_type, s.sales, s.operating_profit, s.net_income,
-              s.total_assets, s.total_liabilities, s.total_equity, s.shares_outstanding,
-              s.eps, s.sales_growth, s.eps_growth)
+    sql_upsert = """
+    INSERT INTO FINANCIAL_DATA (
+        STOCK_CODE, REPORT_DATE, REPORT_TYPE,
+        SALES, OPERATING_PROFIT, NET_INCOME,
+        TOTAL_ASSETS, TOTAL_LIABILITIES, TOTAL_EQUITY,
+        SHARES_OUTSTANDING, EPS, SALES_GROWTH, EPS_GROWTH
+    ) VALUES (
+        %s, %s, %s,
+        %s, %s, %s,
+        %s, %s, %s,
+        %s, %s, %s, %s
+    )
+    ON DUPLICATE KEY UPDATE
+        SALES = VALUES(SALES),
+        OPERATING_PROFIT = VALUES(OPERATING_PROFIT),
+        NET_INCOME = VALUES(NET_INCOME),
+        TOTAL_ASSETS = VALUES(TOTAL_ASSETS),
+        TOTAL_LIABILITIES = VALUES(TOTAL_LIABILITIES),
+        TOTAL_EQUITY = VALUES(TOTAL_EQUITY),
+        SHARES_OUTSTANDING = VALUES(SHARES_OUTSTANDING),
+        EPS = VALUES(EPS),
+        SALES_GROWTH = VALUES(SALES_GROWTH),
+        EPS_GROWTH = VALUES(EPS_GROWTH),
+        UPDATED_AT = CURRENT_TIMESTAMP
     """
     
-    params = []
+    rows = []
     for data in financial_data:
-        params.append({
-            "p_date": data['report_date'].strftime('%Y-%m-%d'),
-            "p_code": data['stock_code'],
-            "p_type": data['report_type'],
-            "p_sales": data.get('sales'),
-            "p_operating_profit": data.get('operating_profit'),
-            "p_net_income": data.get('net_income'),
-            "p_total_assets": data.get('total_assets'),
-            "p_total_liabilities": data.get('total_liabilities'),
-            "p_total_equity": data.get('total_equity'),
-            "p_shares": data.get('shares_outstanding'),
-            "p_eps": data.get('eps'),
-            "p_sales_growth": data.get('sales_growth'),
-            "p_eps_growth": data.get('eps_growth')
-        })
+        rows.append(
+            (
+                data["stock_code"],
+                data["report_date"],
+                data["report_type"],
+                data.get("sales"),
+                data.get("operating_profit"),
+                data.get("net_income"),
+                data.get("total_assets"),
+                data.get("total_liabilities"),
+                data.get("total_equity"),
+                data.get("shares_outstanding"),
+                data.get("eps"),
+                data.get("sales_growth"),
+                data.get("eps_growth"),
+            )
+        )
     
     cur = None
     try:
         cur = connection.cursor()
-        try:
-            cur.execute("ALTER SESSION DISABLE PARALLEL DML")
-        except Exception:
-            pass
-        cur.executemany(sql_merge, params)
+        cur.executemany(sql_upsert, rows)
         connection.commit()
-        logger.info(f"✅ 재무제표 데이터 저장 완료: {len(params)}건")
+        logger.info(f"✅ 재무제표 데이터 저장 완료: {len(rows)}건")
     except Exception as e:
         logger.error(f"❌ 재무제표 데이터 저장 실패: {e}", exc_info=True)
         if connection:
@@ -388,18 +372,11 @@ def main():
     
     db_conn = None
     try:
-        # DB 연결
-        db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), os.getenv("GCP_PROJECT_ID"))
-        db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), os.getenv("GCP_PROJECT_ID"))
-        wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-        db_conn = database.get_db_connection(
-            db_user=db_user,
-            db_password=db_password,
-            db_service_name=os.getenv("OCI_DB_SERVICE_NAME"),
-            wallet_path=wallet_path
-        )
+        # DB 연결 (MariaDB + SQLAlchemy 단일화)
+        # - legacy Oracle/OCI 분기 제거: get_db_connection()은 인자를 받지 않습니다.
+        db_conn = database.get_db_connection()
         if not db_conn:
-            raise RuntimeError("OCI DB 연결 실패")
+            raise RuntimeError("DB 연결 실패")
         
         ensure_financial_table(db_conn)
         

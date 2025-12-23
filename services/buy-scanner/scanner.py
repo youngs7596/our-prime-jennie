@@ -201,22 +201,27 @@ class BuyScanner:
                     
                     # [Double Buy Prevention] Redis Lock Check
                     final_candidates = []
-                    redis_client = database.get_redis_client()
+                    # NOTE: shared.database Facade는 get_redis_client()가 아니라
+                    # get_redis_connection()을 제공합니다. (decode_responses=True)
+                    redis_client = database.get_redis_connection()
+
+                    if not redis_client:
+                        logger.warning("⚠️ Redis 미연결: 중복 매수 방지 Lock을 생략합니다. (Ghost Trades 위험 증가)")
+                        final_candidates = top_5_candidates
+                    else:
                     
-                    for candidate in top_5_candidates:
-                        stock_code = candidate['code']
-                        lock_key = f"buy_lock:{stock_code}"
-                        
-                        # 이미 락이 걸려있으면 스킵
-                        if redis_client.exists(lock_key):
-                            logger.warning(f"🚫 [{stock_code}] 중복 매수 방지 Lock 감지됨. 스캔 결과에서 제외.")
-                            continue
+                        for candidate in top_5_candidates:
+                            stock_code = candidate['code']
+                            lock_key = f"buy_lock:{stock_code}"
                             
-                        # 락 설정 (5분간 유효 - 짧은 시간 내 중복 신호 방지)
-                        # 실제 매수가 체결되면 TradeLog 체크로 방어가 되겠지만,
-                        # 체결 전(Order Pending) 상태에서의 중복 방지를 위함.
-                        redis_client.setex(lock_key, 300, "locked")
-                        final_candidates.append(candidate)
+                            # SET NX EX: 원자적 락 획득 (exists→setex 레이스 방지)
+                            # 5분간 유효 - 체결 전(Order Pending) 상태에서의 중복 방지를 위함.
+                            acquired = redis_client.set(lock_key, "locked", ex=300, nx=True)
+                            if not acquired:
+                                logger.warning(f"🚫 [{stock_code}] 중복 매수 방지 Lock 감지됨. 스캔 결과에서 제외.")
+                                continue
+                            
+                            final_candidates.append(candidate)
                     
                     if not final_candidates:
                         logger.info("모든 매수 후보가 중복 Lock으로 인해 제외되었습니다.")

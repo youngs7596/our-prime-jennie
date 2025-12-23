@@ -307,7 +307,7 @@ export function AnalystPage() {
                                     <td className="px-4 py-4 text-right font-medium text-sm">
                                         {row.return_1d !== null && row.return_1d !== undefined ? (
                                             <span className={row.return_1d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
-                                                {row.return_1d > 0 ? '+' : ''}{(row.return_1d * 100).toFixed(1)}%
+                                                {row.return_1d > 0 ? '+' : ''}{row.return_1d.toFixed(1)}%
                                             </span>
                                         ) : (
                                             <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
@@ -316,7 +316,7 @@ export function AnalystPage() {
                                     <td className="px-4 py-4 text-right font-medium text-sm">
                                         {row.return_5d !== null && row.return_5d !== undefined ? (
                                             <span className={row.return_5d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
-                                                {row.return_5d > 0 ? '+' : ''}{(row.return_5d * 100).toFixed(1)}%
+                                                {row.return_5d > 0 ? '+' : ''}{row.return_5d.toFixed(1)}%
                                             </span>
                                         ) : (
                                             <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
@@ -325,7 +325,7 @@ export function AnalystPage() {
                                     <td className="px-4 py-4 text-right font-medium text-sm">
                                         {row.return_20d !== null && row.return_20d !== undefined ? (
                                             <span className={row.return_20d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
-                                                {row.return_20d > 0 ? '+' : ''}{(row.return_20d * 100).toFixed(1)}%
+                                                {row.return_20d > 0 ? '+' : ''}{row.return_20d.toFixed(1)}%
                                             </span>
                                         ) : (
                                             <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
