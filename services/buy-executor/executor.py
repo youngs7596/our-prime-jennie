@@ -235,7 +235,7 @@ class BuyExecutor:
                 logger.info(f"🚀 [Dynamic Limits] Strong Bull Market: Sector Limit -> 50%, Stock Limit -> 20%")
 
             is_approved, div_result = self._check_diversification(session,
-                selected_candidate, current_portfolio, available_cash, position_size, current_price, db_conn,
+                selected_candidate, current_portfolio, available_cash, position_size, current_price,
                 override_max_sector_pct=max_sector_pct, override_max_stock_pct=max_stock_pct
             )
             
@@ -267,7 +267,7 @@ class BuyExecutor:
                             
                             # 재검증 (혹시 모를 다른 규칙 위반 확인)
                             is_approved_retry, _ = self._check_diversification(session,
-                                selected_candidate, current_portfolio, available_cash, position_size, current_price, db_conn,
+                                selected_candidate, current_portfolio, available_cash, position_size, current_price,
                                 override_max_sector_pct=max_sector_pct, override_max_stock_pct=max_stock_pct
                             )
                             if not is_approved_retry:
@@ -298,7 +298,7 @@ class BuyExecutor:
                         
                         # 재검증
                         is_approved_retry, _ = self._check_diversification(session,
-                            selected_candidate, current_portfolio, available_cash, position_size, current_price, db_conn,
+                            selected_candidate, current_portfolio, available_cash, position_size, current_price,
                             override_max_sector_pct=max_sector_pct, override_max_stock_pct=max_stock_pct
                         )
                         if not is_approved_retry:

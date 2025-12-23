@@ -10,6 +10,7 @@
 
 ### Hotfix & Infrastructure (Systemd/Scout)
 - **Scout Hotfix**: `StrategySelector` 속성 오류 (`STRATEGY_MOMENTUM`) 수정 (Legacy 상수 복구), `scout-job`, `buy-scanner`, `sell-executor` 재배포 완료
+- **BuyExecutor Hotfix**: `executor.py` 내 미정의 변수(`db_conn`) 참조로 인한 `NameError` 수정
 - **Systemd**: `my-prime-jennie.service` 환경변수 구문 오류 (`Environment=""`) 수정
 - **Cron**: 주간 팩터 분석, 일일 브리핑, **일일 AI 성과 분석(Analyst)** 스케줄 등록 완료
 
