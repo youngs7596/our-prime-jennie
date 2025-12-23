@@ -7,6 +7,7 @@
 - **Critical Bug Fixes**: `buy-executor` DB Logging 실패(Stop Loss Default 누락) 및 중복 매도 알림(Sell Logic 누락) 수정
 - **Safety Feature**: `EXCLUDED_STOCKS` 환경변수 추가 및 삼성전자(005930) 자동매매 영구 제외 로직 구현 (`scout-job`)
 - **Verification**: Mock Docker 환경에서 전체 수정 사항 E2E 검증 완료
+- **Documentation**: `INSTALL_GUIDE.md` (Systemd/Logs/Links) 및 `install_prime.sh` (URL fix) 개선 완료
 
 ## 2025-12-21
 

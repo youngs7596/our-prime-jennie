@@ -100,6 +100,8 @@ sudo ./scripts/install_prime.sh
 | `telegram-bot-token` | 텔레그램 봇 토큰 | @BotFather → /newbot |
 | `telegram-chat-id` | 알림 받을 채팅방 ID | @userinfobot에게 메시지 전송 |
 
+> 🔗 **공식 가이드**: [텔레그램 봇 생성 및 토큰 발급 방법](https://core.telegram.org/bots/features#botfather)
+
 ### ⚙️ 6단계: 운영 설정
 
 | 항목 | 기본값 | 권장 설정 |
@@ -118,6 +120,8 @@ sudo ./scripts/install_prime.sh
 | `cloudflare-tunnel-token` | 터널 연결 토큰 | Cloudflare Zero Trust → Tunnels |
 
 > 💡 토큰이 없으면 cloudflared 컨테이너는 자동으로 비활성화됩니다.
+>
+> 🔗 **공식 가이드**: [Cloudflare Tunnel 생성 및 토큰 발급 방법](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/)
 
 ---
 
@@ -202,6 +206,31 @@ Scheduler 서비스가 시작되면 **기본 작업(Job)이 자동으로 등록*
 
 ---
 
+## 🕒 Step 6: 자동 실행 등록 (Systemd) - 권장
+
+서버 재부팅 시에도 봇이 자동으로 시작되도록 `systemd` 서비스를 등록합니다.
+
+```bash
+# 1. 서비스 파일 복사
+sudo cp infrastructure/my-prime-jennie.service /etc/systemd/system/
+
+# 2. 서비스 데몬 리로드
+sudo systemctl daemon-reload
+
+# 3. 부팅 시 자동 시작 활성화
+sudo systemctl enable my-prime-jennie
+
+# 4. 서비스 즉시 시작
+sudo systemctl start my-prime-jennie
+
+# 5. 상태 확인
+sudo systemctl status my-prime-jennie
+```
+
+> **참고**: Systemd 서비스는 `docker compose --profile real up -d`를 자동으로 수행합니다.
+
+---
+
 ## ✅ Step 5: 설치 확인
 
 ```bash
@@ -220,18 +249,24 @@ curl http://localhost:8090/api/health
 | Grafana | admin | admin | 첫 로그인 시 비밀번호 변경 요청됨 |
 | RabbitMQ | guest | guest | http://localhost:15672 |
 
-### 📊 서비스별 로그 모니터링 (Grafana Explore)
+### 📊 서비스별 로그 모니터링 (Grafana + Loki)
 
-| 서비스 | Grafana Explore 링크 |
-|--------|---------------------|
-| 🔍 Scout Job | [scout-job](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22scout-job%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 📰 News Crawler | [news-crawler](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22news-crawler%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 🛒 Buy Scanner | [buy-scanner](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22buy-scanner%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 💰 Buy Executor | [buy-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22buy-executor%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 📈 Price Monitor | [price-monitor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22price-monitor%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 💸 Sell Executor | [sell-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22sell-executor%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 🔌 KIS Gateway | [kis-gateway](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22kis-gateway%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
-| 📅 Scheduler | [scheduler-service](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22scheduler-service%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) |
+Grafana Explore(`http://localhost:3300/explore`)에서 Loki 데이터소스를 선택하고 **LogQL** 필터를 사용해 로그를 조회합니다.
+
+**기본 필터 문법:** `{service="서비스명"}`
+
+| 서비스 | Grafana 바로가기 (필터 적용됨) | 필터 문법 (LogQL) |
+|--------|---------------------|-------------------|
+| 🔍 Scout Job | [Logs: scout-job](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22scout-job%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="scout-job"}` |
+| 📰 News Crawler | [Logs: news-crawler](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22news-crawler%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="news-crawler"}` |
+| 🛒 Buy Scanner | [Logs: buy-scanner](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22buy-scanner%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="buy-scanner"}` |
+| 💰 Buy Executor | [Logs: buy-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22buy-executor%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="buy-executor"}` |
+| 💸 Sell Executor | [Logs: sell-executor](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22sell-executor%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="sell-executor"}` |
+| 🔌 KIS Gateway | [Logs: kis-gateway](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22kis-gateway%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="kis-gateway"}` |
+| 📅 Scheduler | [Logs: scheduler](http://localhost:3300/explore?schemaVersion=1&panes=%7B%22a%22%3A%7B%22datasource%22%3A%22loki%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22expr%22%3A%22%7Bservice%3D%5C%22scheduler-service%5C%22%7D%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D&orgId=1) | `{service="scheduler-service"}` |
+
+> 💡 **Tip**: 특정 에러만 보고 싶다면 `|= "error"` 또는 `|= "exception"`을 추가하세요.
+> 예: `{service="scout-job"} |= "error"`
 
 ---
 
