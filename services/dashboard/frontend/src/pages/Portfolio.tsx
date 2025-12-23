@@ -40,7 +40,7 @@ export function PortfolioPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState<'profit' | 'weight' | 'name'>('weight')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [selectedStock, setSelectedStock] = useState<{code: string, name: string} | null>(null)
+  const [selectedStock, setSelectedStock] = useState<{ code: string, name: string } | null>(null)
 
   const { data: positions, isLoading } = useQuery({
     queryKey: ['portfolio-positions'],
@@ -99,7 +99,7 @@ export function PortfolioPage() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">총 평가금액</p>
             <p className="text-2xl font-bold mt-1">
-              {formatCurrency(summary?.total_value || 0)}
+              {formatCurrency((summary?.total_value || 0) - (summary?.cash_balance || 0))}
             </p>
           </CardContent>
         </Card>
@@ -239,7 +239,7 @@ export function PortfolioPage() {
                             {position.stock_code}
                           </span>
                           <button
-                            onClick={() => setSelectedStock({code: position.stock_code, name: position.stock_name})}
+                            onClick={() => setSelectedStock({ code: position.stock_code, name: position.stock_name })}
                             className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded"
                             title="차트 보기"
                           >

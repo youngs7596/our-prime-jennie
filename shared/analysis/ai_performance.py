@@ -36,6 +36,42 @@ def fetch_price_history(session, stock_code, start_date, days=30):
     prices.columns = [c.lower() for c in prices.columns]
     return prices
 
+def extract_reasoning_tags(reason_text):
+    """Extract key tags from LLM reasoning text."""
+    if not reason_text or not isinstance(reason_text, str):
+        return []
+    
+    tags = []
+    keywords = {
+        '저평가': 'Undervalued',
+        '실적': 'Earnings',
+        '모멘텀': 'Momentum',
+        '수급': 'Market Flow',
+        '기술적': 'Technical',
+        '반등': 'Rebound',
+        '성장': 'Growth',
+        '배당': 'Dividend',
+        '리스크': 'Risk',
+        '고평가': 'Overvalued'
+    }
+    
+    for kw, tag in keywords.items():
+        if kw in reason_text:
+            tags.append(tag)
+            
+    return list(set(tags))[:3]  # Limit to 3 unique tags
+
+def fetch_score_history(session, stock_code, limit=5):
+    """Fetch recent Hunter scores for a stock."""
+    query = session.query(LLMDecisionLedger.hunter_score).filter(
+        LLMDecisionLedger.stock_code == stock_code,
+        LLMDecisionLedger.final_decision.in_(['BUY', 'SELL'])
+    ).order_by(LLMDecisionLedger.timestamp.desc()).limit(limit)
+    
+    # Return list of scores (oldest to newest for sparkline)
+    result = [r[0] for r in query.all()]
+    return result[::-1] if result else []
+
 def analyze_performance(session):
     """
     Main analysis logic.
@@ -61,11 +97,20 @@ def analyze_performance(session):
         prices = fetch_price_history(session, stock_code, decision_date.date())
         
         if prices.empty:
-            skipped_count += 1
-            continue
-            
-        entry_price = prices.iloc[0]['close_price']
+            # If no price data found (e.g., decision today, data not collected), 
+            # still include the decision but with None returns.
+            logger.debug(f"⚠️ No price data for {stock_code} on {decision_date.date()}. Returns will be None.")
+            entry_price = None
+        else:
+            entry_price = prices.iloc[0]['close_price']
         
+        # Extract tags
+        llm_reason = row.get('llm_reason') or row.get('reason')
+        tags = extract_reasoning_tags(llm_reason)
+
+        # distinct score history
+        score_history = fetch_score_history(session, stock_code)
+
         # Calculate returns for T+1, T+5, T+10, T+20
         performance = {
             'timestamp': decision_date,
@@ -77,27 +122,27 @@ def analyze_performance(session):
             'entry_price': entry_price,
             'return_1d': None,
             'return_5d': None,
-            'return_20d': None
+            'return_20d': None,
+            'tags': tags,
+            'score_history': score_history
         }
         
-        if len(prices) > 1:
-            price_1d = prices.iloc[1]['close_price']
-            ret_1d = (price_1d - entry_price) / entry_price
-            performance['return_1d'] = ret_1d if decision_type == 'BUY' else -ret_1d
-            
-        if len(prices) > 5:
-            price_5d = prices.iloc[5]['close_price']
-            ret_5d = (price_5d - entry_price) / entry_price
-            performance['return_5d'] = ret_5d if decision_type == 'BUY' else -ret_5d
+        if entry_price and entry_price > 0:
+            if len(prices) > 1:
+                price_1d = prices.iloc[1]['close_price']
+                ret_1d = (price_1d - entry_price) / entry_price
+                performance['return_1d'] = ret_1d if decision_type == 'BUY' else -ret_1d
+                
+            if len(prices) > 5:
+                price_5d = prices.iloc[5]['close_price']
+                ret_5d = (price_5d - entry_price) / entry_price
+                performance['return_5d'] = ret_5d if decision_type == 'BUY' else -ret_5d
 
-        if len(prices) > 20:
-            price_20d = prices.iloc[20]['close_price']
-            ret_20d = (price_20d - entry_price) / entry_price
-            performance['return_20d'] = ret_20d if decision_type == 'BUY' else -ret_20d
+            if len(prices) > 20:
+                price_20d = prices.iloc[20]['close_price']
+                ret_20d = (price_20d - entry_price) / entry_price
+                performance['return_20d'] = ret_20d if decision_type == 'BUY' else -ret_20d
             
         results.append(performance)
-        
-    if skipped_count > 0:
-        logger.warning(f"⚠️ Skipped {skipped_count} decisions due to missing price data (possibly recent decisions).")
         
     return pd.DataFrame(results)

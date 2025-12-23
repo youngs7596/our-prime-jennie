@@ -59,6 +59,30 @@ def fetch_current_prices_from_kis(stock_codes: List[str]) -> Dict[str, float]:
     
     return prices
 
+
+def fetch_cash_balance_from_kis() -> float:
+    """
+    KIS Gateway API를 통해 현금 잔고(주문가능금액)를 조회합니다.
+    
+    Returns:
+        float: 주문 가능 현금 (원)
+    """
+    import httpx
+    
+    kis_gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(f"{kis_gateway_url}/api/account/cash-balance", json={})
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    return float(result.get("data", 0.0))
+    except Exception as e:
+        logger.warning(f"KIS Gateway 현금 잔고 조회 실패: {e}")
+    
+    return 0.0
+
 LLM_METADATA_MARKER = "[LLM_METADATA]"
 
 
@@ -315,16 +339,14 @@ def get_portfolio_summary(session: Session, use_realtime: bool = True) -> dict:
     total_profit = total_value - total_invested
     profit_rate = (total_profit / total_invested * 100) if total_invested > 0 else 0
     
-    # CONFIG 테이블에서 현금 잔고 조회 시도
+    # KIS Gateway에서 실시간 현금 잔고 조회
     cash_balance = 0.0
-    try:
-        config = session.execute(
-            select(models.Config).where(models.Config.config_key == "CASH_BALANCE")
-        ).scalar_one_or_none()
-        if config:
-            cash_balance = float(config.config_value or 0)
-    except Exception:
-        pass
+    if use_realtime:
+        try:
+            cash_balance = fetch_cash_balance_from_kis()
+            logger.info(f"✅ 현금 잔고 조회 완료: {cash_balance:,.0f}원")
+        except Exception as e:
+            logger.warning(f"⚠️ 현금 잔고 조회 실패: {e}")
     
     return {
         "total_value": total_value + cash_balance,
