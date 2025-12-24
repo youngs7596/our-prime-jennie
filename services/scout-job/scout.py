@@ -633,10 +633,10 @@ def main():
                             stock_info, quant_scorer, session, kospi_prices
                         )
                     
-                    # Step 2: 정량 기반 1차 필터링 (하위 20% 탈락)
-                    logger.info(f"\n   [Step 2] 정량 기반 1차 필터링 (하위 20% 탈락)")
+                    # Step 2: 정량 기반 1차 필터링 (하위 60% 탈락 → 상위 40% 통과)
+                    logger.info(f"\n   [Step 2] 정량 기반 1차 필터링 (상위 40% 통과)")
                     quant_result_list = list(quant_results.values())
-                    filtered_results = quant_scorer.filter_candidates(quant_result_list, cutoff_ratio=0.2)
+                    filtered_results = quant_scorer.filter_candidates(quant_result_list, cutoff_ratio=0.6)
                     
                     filtered_codes = {r.stock_code for r in filtered_results}
                     logger.info(f"   ✅ 정량 필터 통과: {len(filtered_codes)}개 (평균 점수: {sum(r.total_score for r in filtered_results)/len(filtered_results):.1f}점)")
@@ -649,24 +649,25 @@ def main():
                         final_approved_list.append({'code': '0001', 'name': 'KOSPI', 'is_tradable': False})
                     
                     llm_decision_records: Dict[str, Dict] = {}
-                    # Ollama 사용 시 Concurrency 자동 조절 (GPU 부하 방지)
-                    default_workers = 4
+                    
+                    # 2025-12-24: Cloud vs Ollama 병렬 처리 차등 적용
+                    # Cloud (OpenAI, Gemini, Claude): 8개 병렬 (Rate Limit 내에서 문제없음)
+                    # Ollama (로컬): Hunter 4, Judge 1 (GPU 부하/안정성)
                     is_ollama_active = (
                         os.getenv("TIER_REASONING_PROVIDER", "ollama").lower() == "ollama" or 
-                        os.getenv("TIER_THINKING_PROVIDER", "ollama").lower() == "ollama" or
-                        os.getenv("TIER_FAST_PROVIDER", "gemini").lower() == "ollama"
+                        os.getenv("TIER_THINKING_PROVIDER", "ollama").lower() == "ollama"
                     )
                     
                     if is_ollama_active:
-                        default_workers = 2
-                        logger.info(f"   (Config) 🐢 Ollama Detected! Defaulting Concurrency to {default_workers} (Stability Mode)")
-
-                    llm_max_workers = max(1, _parse_int_env(os.getenv("SCOUT_LLM_MAX_WORKERS"), default_workers))
-                    
-                    # Ollama 32B Stability -> Enforce Sequential Processing
-                    if is_ollama_active:
-                        logger.warning(f"⚠️ [Config] Ollama Stability Enforced: Overriding worker count {llm_max_workers} -> 1")
-                        llm_max_workers = 1
+                        # Ollama 로컬 모드: 보수적 병렬 처리
+                        hunter_max_workers = _parse_int_env(os.getenv("SCOUT_HUNTER_MAX_WORKERS"), 4)
+                        judge_max_workers = _parse_int_env(os.getenv("SCOUT_JUDGE_MAX_WORKERS"), 1)
+                        logger.info(f"   (Config) 🐢 Ollama Mode - Hunter: {hunter_max_workers}, Judge: {judge_max_workers}")
+                    else:
+                        # Cloud 모드: 풀 병렬 처리
+                        hunter_max_workers = _parse_int_env(os.getenv("SCOUT_HUNTER_MAX_WORKERS"), 8)
+                        judge_max_workers = _parse_int_env(os.getenv("SCOUT_JUDGE_MAX_WORKERS"), 8)
+                        logger.info(f"   (Config) ☁️ Cloud Mode - Hunter: {hunter_max_workers}, Judge: {judge_max_workers}")
                     
                     # Phase 1: Hunter (통계 컨텍스트 포함)
                     phase1_results = []
@@ -722,7 +723,7 @@ def main():
                     # =============================================================
                     # Phase 1: Hunter LLM 호출 (Smart Skip 통과 종목만)
                     # =============================================================
-                    with ThreadPoolExecutor(max_workers=llm_max_workers) as executor:
+                    with ThreadPoolExecutor(max_workers=hunter_max_workers) as executor:
                         future_to_code = {}
                         for code in llm_candidates:
                             info = candidate_stocks[code]
@@ -762,7 +763,7 @@ def main():
                     if phase1_passed:
                         logger.info(f"\n   [Step 4] Debate + Judge (하이브리드 점수 결합)")
                         
-                        with ThreadPoolExecutor(max_workers=llm_max_workers) as executor:
+                        with ThreadPoolExecutor(max_workers=judge_max_workers) as executor:
                             future_to_code = {}
                             
                             # Archivist 사용 (위에서 초기화됨)

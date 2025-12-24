@@ -4,35 +4,46 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Stripe Dashboard 스타일 - 2025-12-24 */
+    
+    /* 배경: 딥 네이비 */
+    --background: 213 80% 15%;
+    --foreground: 0 0% 100%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    /* 카드: 화이트 + 섀도우 */
+    --card: 0 0% 100%;
+    --card-foreground: 213 30% 25%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    /* 팝오버 */
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 30% 25%;
 
-    --primary: 280 100% 70%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* 강조: Stripe 인디고 (#635BFF) */
+    --primary: 243 100% 68%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    /* 보조 */
+    --secondary: 213 20% 20%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    /* 뮤트 */
+    --muted: 213 20% 25%;
+    --muted-foreground: 213 15% 55%;
 
-    --accent: 174 100% 42%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* 액센트: 밝은 시안 */
+    --accent: 187 100% 75%;
+    --accent-foreground: 213 80% 15%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* 위험 */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 280 100% 70%;
+    /* 보더 */
+    --border: 213 20% 25%;
+    --input: 213 20% 25%;
+    --ring: 243 100% 68%;
 
-    --radius: 0.75rem;
+    --radius: 0.5rem;
   }
 }
 
@@ -49,35 +60,33 @@
 }
 
 @layer components {
-  /* Glass Effect */
+  /* Stripe Card Style */
   .glass {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+    @apply bg-white rounded-lg shadow-lg border border-gray-100;
   }
 
-  /* Gradient Text */
+  /* Gradient Text - Stripe Indigo */
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-jennie-pink via-jennie-purple to-jennie-blue;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-stripe-indigo to-stripe-cyan;
   }
 
-  /* Glow Effect */
+  /* Stripe Shadow Effects */
   .glow {
-    box-shadow: 0 0 20px rgba(155, 93, 229, 0.3),
-                0 0 40px rgba(155, 93, 229, 0.1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06);
   }
 
-  .glow-pink {
-    box-shadow: 0 0 20px rgba(255, 107, 157, 0.3),
-                0 0 40px rgba(255, 107, 157, 0.1);
+  .glow-primary {
+    box-shadow: 0 4px 14px 0 rgba(99, 91, 255, 0.39);
   }
 
-  .glow-blue {
-    box-shadow: 0 0 20px rgba(0, 245, 212, 0.3),
-                0 0 40px rgba(0, 245, 212, 0.1);
+  .glow-success {
+    box-shadow: 0 4px 14px 0 rgba(48, 209, 88, 0.3);
   }
 
-  /* Card Variants */
+  /* Card Variants - Stripe Style */
   .card-elevated {
-    @apply glass rounded-xl p-6 transition-all duration-300 hover:border-white/20;
+    @apply bg-white rounded-lg shadow-md border border-gray-100 p-6 transition-all duration-200 hover:shadow-lg;
   }
 
   /* Profit Colors */

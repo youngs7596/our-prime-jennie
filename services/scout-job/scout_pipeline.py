@@ -234,15 +234,64 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
     # 경쟁사 수혜 가산점 적용 (최대 +10점)
     if competitor_bonus > 0:
         hunter_score = min(100, hunter_score + competitor_bonus)
-        logger.info(f"   🎯 [경쟁사 수혜] {info['name']}({code}) +{competitor_bonus}점 가산 ({competitor_reason})")
+        # 로그는 아래 상세 로그에서 출력
     
     passed = hunter_score >= 60
     if hunter_score == 0: passed = False
     
+    # 상세 로그 생성
+    def _build_hunter_detail_log():
+        """Hunter 분석 상세 로그 생성 (옵션 B 스타일)"""
+        lines = []
+        
+        # 1. 정량 점수 분해
+        quant_breakdown = (
+            f"모멘텀:{quant_result.momentum_score:.1f}/25 | "
+            f"품질:{quant_result.quality_score:.1f}/20 | "
+            f"가치:{quant_result.value_score:.1f}/15 | "
+            f"기술:{quant_result.technical_score:.1f}/10 | "
+            f"뉴스:{quant_result.news_stat_score:.1f}/15 | "
+            f"수급:{quant_result.supply_demand_score:.1f}/15"
+        )
+        lines.append(f"   📊 정량점수 분해: {quant_breakdown}")
+        
+        # 2. 핵심 지표 (details에서 추출)
+        details = quant_result.details or {}
+        tech_details = details.get('technical', {})
+        value_details = details.get('value', {})
+        supply_details = details.get('supply_demand', {})
+        
+        rsi = tech_details.get('rsi')
+        per = value_details.get('per')
+        pbr = value_details.get('pbr')
+        foreign_ratio = supply_details.get('foreign_ratio')  # 거래량 대비 %
+        
+        indicators = []
+        if per is not None:
+            indicators.append(f"PER:{per:.1f}")
+        if pbr is not None:
+            indicators.append(f"PBR:{pbr:.2f}")
+        if rsi is not None:
+            indicators.append(f"RSI:{rsi:.0f}")
+        if foreign_ratio is not None:
+            sign = "+" if foreign_ratio > 0 else ""
+            indicators.append(f"외인순매수:{sign}{foreign_ratio:.1f}%")
+        
+        if indicators:
+            lines.append(f"   📈 핵심지표: {' | '.join(indicators)}")
+        
+        # 3. 경쟁사 수혜 (있는 경우)
+        if competitor_bonus > 0:
+            lines.append(f"   🎯 경쟁사 수혜: +{competitor_bonus}점 ({competitor_reason})")
+        
+        return "\n".join(lines)
+    
     if passed:
-        logger.info(f"   ✅ [Hunter 통과] {info['name']}({code}) - Quant:{quant_result.total_score:.0f} → Hunter:{hunter_score}점")
+        logger.info(f"   ✅ [Hunter 통과] {info['name']}({code}) - Hunter: {hunter_score}점 (Quant: {quant_result.total_score:.0f}점)")
+        logger.info(_build_hunter_detail_log())
     else:
-        logger.debug(f"   ❌ [Hunter 탈락] {info['name']}({code}) - Quant:{quant_result.total_score:.0f} → Hunter:{hunter_score}점")
+        logger.debug(f"   ❌ [Hunter 탈락] {info['name']}({code}) - Hunter: {hunter_score}점 (Quant: {quant_result.total_score:.0f}점)")
+        logger.debug(_build_hunter_detail_log())
         
         # [Priority 2] Shadow Radar Logging
         if archivist and hunter_score > 0: # 0점은 에러/데이터부족일 수 있으므로 제외할지 고민 -> 일단 0점도 기록하되 reason 확인
@@ -338,10 +387,31 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     else:
         final_grade = 'D'
     
+    # 상세 로그 생성
+    def _build_judge_detail_log():
+        """Judge 분석 상세 로그 생성 (옵션 B 스타일)"""
+        lines = []
+        
+        # 1. 점수 흐름
+        weight_info = "(60:40)" if score_diff < 30 else "(Safety Lock)"
+        lines.append(f"   📊 점수 흐름: Hunter:{hunter_score} → Quant:{quant_score:.0f} + LLM:{llm_score} = Hybrid:{hybrid_score:.1f} {weight_info}")
+        
+        # 2. Judge 판단 이유 (reason 축약 - 최대 60자)
+        reason_short = reason[:60] + "..." if len(reason) > 60 else reason
+        lines.append(f"   💬 Judge 판단: {reason_short}")
+        
+        # 3. 거래 가능 여부
+        tradable_emoji = "✅" if is_tradable else "❌"
+        lines.append(f"   ⚡ 거래 가능: {tradable_emoji} (75점 기준)")
+        
+        return "\n".join(lines)
+    
     if approved:
-        logger.info(f"   ✅ [Judge 승인] {info['name']}({code}) - Hybrid:{hybrid_score:.1f}점 ({final_grade})")
+        logger.info(f"   ✅ [Judge 승인] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급)")
+        logger.info(_build_judge_detail_log())
     else:
-        logger.info(f"   ❌ [Judge 거절] {info['name']}({code}) - Hybrid:{hybrid_score:.1f}점 ({final_grade})")
+        logger.info(f"   ❌ [Judge 거절] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급)")
+        logger.info(_build_judge_detail_log())
         
         # [Priority 2] Shadow Radar Logging (Judge Reject)
         if archivist:
