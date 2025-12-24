@@ -2,6 +2,10 @@
 
 ## 2025-12-24
 
+- **Scout 최적화**: 정량 필터링 강화 (상위 80% → 40% 통과), Hunter 처리량 약 50% 감소로 LLM 부담 경감
+- **gemma3:27b 통합**: 모든 LLM Tier (FAST/REASONING/THINKING)를 gemma3:27b로 통일 - 속도 2배 향상, 안정성 100%
+- **Hunter/Judge 로그 상세화**: 정량점수 분해, 핵심지표(PER/PBR/RSI), 경쟁사 수혜 로깅 추가
+- **대시보드 UI 개편**: Stripe 스타일 적용 (딥 네이비 배경, 인디고 액센트, 화이트 카드)
 - **Oracle 레거시 제거 검증**: Mock 모드 E2E 테스트 완료 - MariaDB/SQLAlchemy 연동, RabbitMQ 메시지 처리, HTTP API 처리 모두 정상 작동 확인 (사이드 이펙트 없음)
 
 ## 2025-12-23

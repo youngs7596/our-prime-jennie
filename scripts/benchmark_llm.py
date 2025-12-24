@@ -41,8 +41,8 @@ MODELS = [
     # "deepseek-r1:32b"
 ]
 
-WORKER_COUNTS = [2, 4]
-TOTAL_REQUESTS_PER_CASE = 16  # 30개 종목 테스트
+WORKER_COUNTS = [2, 4, 6]  # 강화된 스트레스 테스트
+TOTAL_REQUESTS_PER_CASE = 32  # 32개 종목 테스트 (실제 Scout Hunter 173개 대비 ~20%)
 
 # 30개의 더미 데이터 생성 (KV Cache 회피 및 리얼한 부하 테스트용)
 SECTORS = ["반도체", "이차전지", "자동차", "바이오", "인터넷", "게임", "통신", "금융"]
@@ -104,12 +104,13 @@ def build_prompt(stock):
 3. 최종적으로 '매수', '매도', '보유' 중 하나의 의견을 제시하고, 그 이유를 논리적으로 설명하세요.
 4. 반드시 JSON 형식으로만 응답해야 합니다.
 
-JSON Schema:
-{{
-    "score": "integer (0-100)",
-    "grade": "string (S/A/B/C/D)",
-    "reason": "string (detailed analysis)"
-}}
+[출력 형식 - 반드시 준수]
+{{"score": 75, "grade": "A", "reason": "북미 시장 점유율 확대로 3분기 실적 개선 기대, 다만 원자재 가격 상승 리스크 존재"}}
+
+⚠️ 중요 규칙:
+1. 위 예시처럼 **한 줄 JSON**으로만 응답하세요.
+2. reason 안에 줄바꿈(\n)을 넣지 마세요. 쉼표로 이어서 작성하세요.
+3. JSON 외에 다른 텍스트(설명, 마크다운)를 포함하지 마세요.
 """
 
 def run_single_request(model: str, task_id: int, stock: Dict) -> Dict:

@@ -8,10 +8,11 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      'rounded-xl border border-white/10 bg-card text-card-foreground backdrop-blur-xl',
-      'bg-gradient-to-br from-white/5 to-transparent',
-      'transition-all duration-300',
-      glow && 'glow',
+      // Stripe 스타일: 화이트 카드 + 섀도우
+      'rounded-lg border border-gray-100 bg-white text-gray-800',
+      'shadow-md',
+      'transition-all duration-200',
+      glow && 'shadow-lg shadow-stripe-indigo/20 border-stripe-indigo/30',
       className
     )}
     {...props}

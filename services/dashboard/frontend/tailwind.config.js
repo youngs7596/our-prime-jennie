@@ -48,18 +48,29 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Custom Jennie Theme Colors
+        // Stripe Dashboard Theme Colors
+        stripe: {
+          navy: "#0A2540",
+          indigo: "#635BFF",
+          cyan: "#80E9FF",
+          purple: "#7A73FF",
+          dark: "#0A2540",
+          darker: "#061527",
+          light: "#F6F9FC",
+          gray: "#8898AA",
+        },
+        // Legacy Jennie (하위 호환)
         jennie: {
-          pink: "#FF6B9D",
-          purple: "#9B5DE5",
-          blue: "#00F5D4",
+          pink: "#635BFF",
+          purple: "#635BFF",
+          blue: "#80E9FF",
           gold: "#FFD93D",
-          dark: "#0D1117",
-          darker: "#010409",
+          dark: "#0A2540",
+          darker: "#061527",
         },
         profit: {
-          positive: "#22C55E",
-          negative: "#EF4444",
+          positive: "#30D158",
+          negative: "#FF3B30",
         },
       },
       borderRadius: {
@@ -110,7 +121,10 @@ export default {
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "jennie-gradient": "linear-gradient(135deg, #FF6B9D 0%, #9B5DE5 50%, #00F5D4 100%)",
+        "stripe-gradient": "linear-gradient(135deg, #635BFF 0%, #80E9FF 100%)",
+        "stripe-dark": "linear-gradient(180deg, #0A2540 0%, #061527 100%)",
+        // Legacy
+        "jennie-gradient": "linear-gradient(135deg, #635BFF 0%, #7A73FF 50%, #80E9FF 100%)",
       },
     },
   },
