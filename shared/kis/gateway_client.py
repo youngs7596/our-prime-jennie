@@ -139,6 +139,27 @@ class KISGatewayClient:
             logger.error(f"❌ Snapshot 조회 실패: {stock_code}")
             return None
     
+    def check_market_open(self) -> bool:
+        """
+        오늘이 장 운영일(거래 가능일)인지 확인 (Gateway를 통해)
+        
+        Returns:
+            True: 장 운영일 (평일 & 비휴일)
+            False: 휴장일 (주말 또는 공휴일)
+        """
+        logger.debug(f"📅 [Gateway] Market Open Check 요청")
+        
+        # Endpoint 가칭: /api/market-data/check-market-open
+        response = self._request('GET', '/api/market-data/check-market-open')
+        
+        if response and response.get('success'):
+            is_open = response.get('data', {}).get('is_open', False)
+            logger.info(f"   (Gateway) Market Open: {is_open}")
+            return is_open
+        else:
+            logger.warning(f"⚠️ [Gateway] 휴장일 확인 실패 (기본값 False 반환)")
+            return False
+    
     def place_buy_order(self, stock_code: str, quantity: int, price: int = 0) -> Optional[str]:
         """
         매수 주문 (Gateway를 통해)

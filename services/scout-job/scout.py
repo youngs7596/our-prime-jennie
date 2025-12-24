@@ -344,12 +344,6 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
 def main():
     start_time = time.time()
     
-    # [Operating Hours Check]
-    from shared.utils import is_operating_hours
-    if not is_operating_hours():
-        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-        return
-
     logger.info("--- 🤖 'Scout Job' 실행 시작 ---")
     
     kis_api = None
@@ -377,6 +371,14 @@ def main():
             )
             if not kis_api.authenticate():
                 raise Exception("KIS API 인증에 실패했습니다.")
+        
+        # [Market Open Check] KIS API(또는 Gateway)를 통해 휴장일 여부 확인
+        logger.info("📅 [Check] 장 운영 여부(휴장일) 확인 중...")
+        if not kis_api.check_market_open():
+            logger.info("🛑 현재는 장 운영 시간이 아니거나 휴장일입니다. (Scout 종료)")
+            return
+        
+        logger.info("✅ 장이 열려있습니다. Scout 작업을 진행합니다.")
         
         brain = JennieBrain(
             project_id=os.getenv("GCP_PROJECT_ID", "local"),

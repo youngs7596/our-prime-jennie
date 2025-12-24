@@ -3,16 +3,20 @@ import { cn } from '@/lib/utils'
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { glow?: boolean }
->(({ className, glow, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement> & { glow?: boolean; neon?: 'purple' | 'cyan' | 'pink' }
+>(({ className, glow, neon, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      // Stripe 스타일: 화이트 카드 + 섀도우
-      'rounded-lg border border-gray-100 bg-white text-gray-800',
-      'shadow-md',
-      'transition-all duration-200',
-      glow && 'shadow-lg shadow-stripe-indigo/20 border-stripe-indigo/30',
+      // Raydium 스타일: 반투명 다크 카드 + 네온 글로우
+      'rounded-xl border border-white/5 bg-raydium-card/60 backdrop-blur-xl text-foreground',
+      'shadow-card-glow',
+      'transition-all duration-300',
+      glow && 'shadow-neon-purple border-raydium-purple/30',
+      neon === 'purple' && 'border-raydium-purple/40 shadow-neon-purple',
+      neon === 'cyan' && 'border-raydium-cyan/40 shadow-neon-cyan',
+      neon === 'pink' && 'border-raydium-pink/40 shadow-neon-pink',
+      'hover:border-raydium-purple/20 hover:bg-raydium-cardHover/60',
       className
     )}
     {...props}
@@ -39,7 +43,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-lg font-semibold leading-none tracking-tight',
+      'text-lg font-semibold leading-none tracking-tight text-white',
       className
     )}
     {...props}
@@ -80,4 +84,3 @@ const CardFooter = React.forwardRef<
 CardFooter.displayName = 'CardFooter'
 
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
-

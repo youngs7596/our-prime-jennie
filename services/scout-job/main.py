@@ -140,6 +140,11 @@ def start_scheduler_worker():
 
 
 def _bootstrap_scheduler_job():
+    # 환경 변수로 시작 시 자동 실행 여부 제어 (기본: 비활성화)
+    if os.getenv("ENABLE_STARTUP_ONESHOT", "false").lower() != "true":
+        logger.info("⏭️ Startup Oneshot 비활성화 (ENABLE_STARTUP_ONESHOT=false)")
+        return
+    
     if not scheduler_job_publisher:
         logger.warning("⚠️ Scheduler Job Publisher 없음. Bootstrap을 건너뜁니다.")
         return

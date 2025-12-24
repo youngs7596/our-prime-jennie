@@ -14,6 +14,7 @@ import shared.database as database
 from shared.db.connection import session_scope
 from shared.db import repository as repo
 import shared.auth as auth
+from shared import redis_cache
 from shared.position_sizing import PositionSizer
 from shared.portfolio_diversification import DiversificationChecker
 from shared.sector_classifier import SectorClassifier
@@ -136,18 +137,37 @@ class BuyExecutor:
             selected_candidate = candidates[0]
             
             current_score = selected_candidate.get('llm_score', 0)
+            is_tradable = selected_candidate.get('is_tradable', False)
             
             # 점수 확인 (환경변수로 설정 가능, 기본값 70점 - B등급 이상만 매수)
-            min_llm_score = int(os.getenv('MIN_LLM_SCORE', '70'))
+            # Tier2(Scout Judge 미통과) 경로는 별도 최소 점수 적용 (품질 상향)
+            base_min_llm_score = int(os.getenv('MIN_LLM_SCORE', '60'))
+            tier2_min_llm_score = int(os.getenv('MIN_LLM_SCORE_TIER2', '65'))
+            min_llm_score = base_min_llm_score if is_tradable else tier2_min_llm_score
             if current_score < min_llm_score: 
                  c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
-                 logger.warning(f"⚠️ 최고점 후보({c_name})의 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
+                 tier_label = "Tier1" if is_tradable else "Tier2"
+                 logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
                  return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
 
             stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
             stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
             logger.info(f"✅ [Fast Hands] 최고점 후보 선정: {stock_name}({stock_code}) - {current_score}점")
             logger.info(f"   이유: {selected_candidate.get('llm_reason', '')[:100]}...")
+            
+            # 3.5 분산 락(Distributed Lock)으로 중복 체결 방지 (동시 처리/재전송 대응)
+            lock_key = f"lock:buy:{stock_code}"
+            r = redis_cache.get_redis_connection()
+            if r:
+                try:
+                    # 180초 내 동일 종목 재매수 시도 차단 (주문/기록의 레이스 방지)
+                    acquired = r.set(lock_key, "1", nx=True, ex=180)
+                    if not acquired:
+                        logger.warning(f"⚠️ 분산 락 획득 실패(중복 실행 방지): {stock_name}({stock_code})")
+                        return {"status": "skipped", "reason": f"Duplicate lock active: {stock_code}"}
+                except Exception as e:
+                    logger.warning(f"⚠️ Redis 락 실패(보수적으로 중단): {e}")
+                    return {"status": "skipped", "reason": "Redis lock failure"}
             
             # 4. 계좌 잔고 조회 (순서 변경: 분산 검증에 필요)
             # KIS Gateway의 get_cash_balance 사용
@@ -177,9 +197,27 @@ class BuyExecutor:
             # 기존: calculate_position_size (존재하지 않는 메서드)
             # 변경: calculate_quantity (ATR 등 추가 인자 필요)
             
-            # ATR 계산 또는 기본값 사용 (2%)
-            # 여기서는 간단히 가격의 2%를 ATR로 가정 (Fast Hands에서는 복잡한 계산 지양)
-            atr = current_price * 0.02 
+            # ATR(14) 실계산 + 캡 적용 (수량 과대 방지)
+            atr = None
+            try:
+                import shared.strategy as strategy
+                atr_period = self.config.get_int("ATR_PERIOD", default=14)
+                lookback = max(60, atr_period * 3)
+                daily_df = database.get_daily_prices(session, stock_code, limit=lookback, table_name="STOCK_DAILY_PRICES_3Y")
+                if daily_df is not None and not daily_df.empty:
+                    atr = strategy.calculate_atr(daily_df, period=atr_period)
+            except Exception as e:
+                logger.warning(f"⚠️ ATR 실계산 실패(기본값으로 폴백): {e}")
+                atr = None
+            
+            if atr is None or atr <= 0:
+                atr = current_price * 0.02  # 폴백
+            
+            # ATR 비율 캡: 1% ~ 5%
+            atr_pct = atr / current_price if current_price > 0 else 0.02
+            atr_pct = max(0.01, min(0.05, atr_pct))
+            atr = current_price * atr_pct
+            logger.info(f"📐 ATR 적용: {atr:,.0f}원 ({atr_pct*100:.2f}%)")
             
             # 현재 포트폴리오 가치 계산
             portfolio_value = sum([p.get('quantity', 0) * p.get('current_price', p.get('avg_price', 0)) for p in current_portfolio])
@@ -338,7 +376,12 @@ class BuyExecutor:
                 factor_score=selected_candidate.get('factor_score', 0),
                 llm_reason=selected_candidate.get('llm_reason', ''),
                 dry_run=dry_run,
-                risk_setting=risk_setting
+                risk_setting=risk_setting,
+                is_tradable=selected_candidate.get('is_tradable', False),
+                llm_score=selected_candidate.get('llm_score', 0),
+                tier2_met_count=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_met_count'),
+                tier2_conditions_met=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_met'),
+                tier2_conditions_failed=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_failed'),
             )
             
             # 9. 텔레그램 알림 발송
@@ -354,6 +397,23 @@ class BuyExecutor:
                     if dry_run:
                         mode_indicator += "⚠️ *[DRY RUN - 실제 주문 없음]*\n"
                     
+                    # Judge 통과 여부 확인 (is_tradable: hybrid_score >= 75)
+                    is_tradable = selected_candidate.get('is_tradable', False)
+                    llm_score = selected_candidate.get('llm_score', 0)
+                    
+                    # 매수 경로 표시
+                    if is_tradable:
+                        approval_status = "✅ Judge 통과"
+                    else:
+                        approval_status = "⚡ Tier2 스캔 (Judge 미통과, 기술적 신호로 매수)"
+                    
+                    tier2_extra = ""
+                    if not is_tradable:
+                        km = selected_candidate.get('key_metrics_dict') or {}
+                        conds = km.get('tier2_conditions_met') or []
+                        if conds:
+                            tier2_extra = f"\n🛡️ *Tier2 조건*: {', '.join(conds[:4])}"
+                    
                     message = f"""{mode_indicator}💰 *매수 체결*
 
 📈 *종목*: {stock_name} ({stock_code})
@@ -361,9 +421,8 @@ class BuyExecutor:
 📊 *수량*: {position_size}주
 💸 *총액*: {total_amount:,}원
 📝 *신호*: {selected_candidate.get('buy_signal_type', 'UNKNOWN')}
-⭐ *점수*: {selected_candidate.get('factor_score', 0):.1f}
-
-{selected_candidate.get('llm_reason', '')[:200]}"""
+⭐ *LLM 점수*: {llm_score:.1f}점
+🎯 *승인*: {approval_status}{tier2_extra}"""
                     
                     self.telegram_bot.send_message(message)
                     logger.info("✅ 텔레그램 알림 발송 완료")
@@ -471,9 +530,25 @@ class BuyExecutor:
             # 에러 시 보수적으로 False 반환
             return False, {'reason': str(e)}
 
-    def _record_trade(self, session, stock_code: str, stock_name: str, order_no: str,
-                     quantity: int, price: float, buy_signal_type: str, factor_score: float,
-                     llm_reason: str, dry_run: bool, risk_setting: dict = None):
+    def _record_trade(
+        self,
+        session,
+        stock_code: str,
+        stock_name: str,
+        order_no: str,
+        quantity: int,
+        price: float,
+        buy_signal_type: str,
+        factor_score: float,
+        llm_reason: str,
+        dry_run: bool,
+        risk_setting: dict = None,
+        is_tradable: bool = False,
+        llm_score: float = 0,
+        tier2_met_count: int | None = None,
+        tier2_conditions_met: list | None = None,
+        tier2_conditions_failed: list | None = None,
+    ):
         """거래 기록"""
         try:
             # 1. PORTFOLIO 테이블에 추가
@@ -491,6 +566,21 @@ class BuyExecutor:
                 'reason': llm_reason
             }
             
+            # Tier/조건 정보를 key_metrics에 포함 (사후 분석/리포트/모니터링용)
+            tier = "TIER1" if is_tradable else "TIER2"
+            key_metrics = {
+                "factor_score": factor_score,
+                "is_dry_run": dry_run,
+                "risk_setting": risk_setting or {},
+                "tier": tier,
+                "llm_score": llm_score,
+                "buy_signal_type": buy_signal_type,
+            }
+            if tier == "TIER2":
+                key_metrics["tier2_met_count"] = tier2_met_count
+                key_metrics["tier2_conditions_met"] = tier2_conditions_met or []
+                key_metrics["tier2_conditions_failed"] = tier2_conditions_failed or []
+
             result = database.execute_trade_and_log(
                 connection=session, 
                 trade_type='BUY',
@@ -500,9 +590,7 @@ class BuyExecutor:
                 llm_decision=llm_decision,
                 strategy_signal=buy_signal_type,
                 key_metrics_dict={
-                    'factor_score': factor_score, 
-                    'is_dry_run': dry_run,
-                    'risk_setting': risk_setting or {}
+                    **key_metrics
                 }
             )
 

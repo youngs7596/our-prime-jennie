@@ -669,10 +669,16 @@ def get_trade_logs(session, date: str) -> List[Dict]:
     특정 날짜의 거래 내역 조회 (SQLAlchemy)
     Args:
         date (str): 'YYYYMMDD' or 'YYYY-MM-DD'
+    
+    Returns:
+        List[Dict]: 거래 내역 리스트
+            - stock_code, stock_name, action (BUY/SELL), quantity, price, amount
+            - profit_amount, reason, trade_time, strategy_signal
     """
-    # from .models import TradeLog  <-- Incorrect
     TradeLog = db_models.TradeLog
+    Portfolio = db_models.Portfolio
     from sqlalchemy import func
+    from sqlalchemy.orm import aliased
     
     try:
         if len(date) == 8:
@@ -683,29 +689,43 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         start_dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
         end_dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         
+        # 포트폴리오 테이블과 조인하여 종목명 조회
         rows = session.query(
             TradeLog.stock_code,
             TradeLog.trade_type,
             TradeLog.quantity,
             TradeLog.price,
+            TradeLog.reason,
+            TradeLog.strategy_signal,
             func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
-            TradeLog.trade_timestamp
-        ).filter(TradeLog.trade_timestamp >= start_dt, TradeLog.trade_timestamp <= end_dt)\
-         .order_by(TradeLog.trade_timestamp.asc()).all()
+            TradeLog.trade_timestamp,
+            Portfolio.stock_name  # 종목명
+        ).outerjoin(
+            Portfolio, TradeLog.stock_code == Portfolio.stock_code
+        ).filter(
+            TradeLog.trade_timestamp >= start_dt, 
+            TradeLog.trade_timestamp <= end_dt
+        ).order_by(TradeLog.trade_timestamp.asc()).all()
         
         trades = []
         for row in rows:
-            if isinstance(row, dict):
-                 trades.append(row)
-            else:
-                trades.append({
-                    "stock_code": row[0],
-                    "trade_type": row[1],
-                    "quantity": row[2],
-                    "price": row[3],
-                    "profit_amount": float(row[4]) if row[4] else 0.0,
-                    "trade_time": row[5]
-                })
+            quantity = int(row[2] or 0)
+            price = float(row[3] or 0)
+            
+            trades.append({
+                "stock_code": row[0],
+                "stock_name": row[8] or row[0],  # 종목명 없으면 코드 사용
+                "action": row[1],  # BUY/SELL (기존 trade_type → action으로 변환)
+                "quantity": quantity,
+                "price": price,
+                "amount": quantity * price,  # 거래금액 계산
+                "reason": row[4] or "",
+                "strategy_signal": row[5] or "",
+                "profit_amount": float(row[6]) if row[6] else 0.0,
+                "trade_time": row[7]
+            })
+        
+        logger.info(f"📋 거래 내역 조회: {date} - {len(trades)}건")
         return trades
         
     except Exception as e:

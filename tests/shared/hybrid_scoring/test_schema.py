@@ -136,45 +136,22 @@ class TestGetDefaultFactorWeights:
 
 
 # ============================================================================
-# Tests: is_oracle / _is_mariadb
+# Tests: is_oracle / _is_mariadb (MariaDB 단일화)
 # ============================================================================
 
 class TestDbTypeDetection:
-    """DB 타입 감지 함수 테스트"""
+    """DB 타입 감지 함수 테스트 (MariaDB 단일화)"""
     
-    def test_is_oracle_default(self, monkeypatch):
-        """기본값은 Oracle"""
-        from shared.hybrid_scoring.schema import is_oracle
+    def test_is_mariadb_always_true(self):
+        """_is_mariadb()는 항상 True (단일화)"""
+        from shared.hybrid_scoring.schema import _is_mariadb
         
-        monkeypatch.delenv('DB_TYPE', raising=False)
-        
-        assert is_oracle() is True
-    
-    def test_is_oracle_explicit(self, monkeypatch):
-        """명시적 Oracle 설정"""
-        from shared.hybrid_scoring.schema import is_oracle
-        
-        monkeypatch.setenv('DB_TYPE', 'ORACLE')
-        
-        assert is_oracle() is True
-    
-    def test_is_mariadb(self, monkeypatch):
-        """MariaDB 설정"""
-        from shared.hybrid_scoring.schema import is_oracle, _is_mariadb
-        
-        monkeypatch.setenv('DB_TYPE', 'MARIADB')
-        
-        assert is_oracle() is False
         assert _is_mariadb() is True
     
-    def test_case_insensitive(self, monkeypatch):
-        """대소문자 구분 안함"""
+    def test_is_oracle_always_false(self):
+        """is_oracle()은 항상 False (레거시 호환용)"""
         from shared.hybrid_scoring.schema import is_oracle
         
-        monkeypatch.setenv('DB_TYPE', 'oracle')
-        assert is_oracle() is True
-        
-        monkeypatch.setenv('DB_TYPE', 'mariadb')
         assert is_oracle() is False
 
 
@@ -208,30 +185,6 @@ class TestExecuteUpsert:
         # SQL에 ON DUPLICATE KEY UPDATE 포함 확인
         call_args = mock_cursor.execute.call_args[0][0]
         assert 'ON DUPLICATE KEY UPDATE' in call_args
-    
-    def test_oracle_upsert(self, monkeypatch):
-        """Oracle UPSERT (MERGE INTO)"""
-        from shared.hybrid_scoring.schema import execute_upsert
-        
-        monkeypatch.setenv('DB_TYPE', 'ORACLE')
-        
-        mock_cursor = MagicMock()
-        
-        result = execute_upsert(
-            cursor=mock_cursor,
-            table_name='TEST_TABLE',
-            columns=['ID', 'NAME', 'VALUE'],
-            values=(1, 'test', 100),
-            unique_keys=['ID'],
-            update_columns=['NAME', 'VALUE']
-        )
-        
-        assert result is True
-        mock_cursor.execute.assert_called_once()
-        
-        # SQL에 MERGE INTO 포함 확인
-        call_args = mock_cursor.execute.call_args[0][0]
-        assert 'MERGE INTO' in call_args
     
     def test_auto_update_columns(self, monkeypatch):
         """update_columns 자동 생성"""

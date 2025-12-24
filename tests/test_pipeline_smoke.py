@@ -1,3 +1,10 @@
+"""
+tests/test_pipeline_smoke.py - 파이프라인 스모크 테스트
+=====================================================
+
+전체 파이프라인(패킷 생성 → Council 실행)이 정상적으로 동작하는지 확인합니다.
+"""
+
 import pytest
 import subprocess
 import os
@@ -5,6 +12,7 @@ import json
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
+
 
 def run_command(cmd_list):
     result = subprocess.run(
@@ -18,47 +26,40 @@ def run_command(cmd_list):
         print(f"STDERR: {result.stderr}")
     return result
 
+
 def test_pipeline_smoke():
-    # 1. Build Daily Packet (Dummy)
+    """전체 파이프라인 스모크 테스트"""
+    # 1. Build Weekly Packet (Dummy)
     packet_out = PROJECT_ROOT / "smoke_packet.json"
     cmd_build = [
-        "./.venv/bin/python", 
-        "scripts/build_daily_packet.py", 
+        "./venv/bin/python", 
+        "scripts/build_weekly_packet.py", 
         "--dummy", 
         "--output", str(packet_out)
     ]
     res_build = run_command(cmd_build)
-    assert res_build.returncode == 0
-    assert packet_out.exists()
+    assert res_build.returncode == 0, f"패킷 생성 실패: {res_build.stderr}"
+    assert packet_out.exists(), "패킷 파일이 생성되지 않았습니다"
     
     with open(packet_out) as f:
         data = json.load(f)
-        assert "representative_cases" in data
+        assert "representative_cases" in data, "패킷에 representative_cases 키가 없습니다"
 
     # 2. Run Council (Mock)
     reviews_dir = PROJECT_ROOT / "smoke_reviews"
     cmd_council = [
-        "./.venv/bin/python",
-        "scripts/run_daily_council.py",
+        "./venv/bin/python",
+        "scripts/run_weekly_council.py",
         "--input", str(packet_out),
         "--output-dir", str(reviews_dir),
         "--mock"
     ]
     res_council = run_command(cmd_council)
-    assert res_council.returncode == 0
+    assert res_council.returncode == 0, f"Council 실행 실패: {res_council.stderr}"
     
-    # [v1.1] Output changed to 'junho_review.json' (Minji reads this)
+    # Output: 'junho_review.json' (Minji reads this)
     junho_review = reviews_dir / "junho_review.json"
-    assert junho_review.exists()
-    
-    # 3. Apply Patch (Dry-Run)
-    # We need a dummy patch to test, but the mock council output produces an empty patch list or mock patch.
-    # The mock output in run_daily_council.py produces "patch_mock_1" with *empty* patches list by default logic?
-    # Wait, my run_daily_council.py mock logic:
-    # patch_bundle = { "bundle_id": "patch_mock_1", ..., "patches": [] }
-    # So applying it will just say "No patches". That's a valid smoke test for "no crash".
-    
-
+    assert junho_review.exists(), "junho_review.json이 생성되지 않았습니다"
 
     # Cleanup
     if packet_out.exists():

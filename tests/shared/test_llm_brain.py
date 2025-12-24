@@ -112,6 +112,65 @@ def sample_portfolio_item():
 
 
 # ============================================================================
+# Tests: _calculate_grade
+# ============================================================================
+
+class TestCalculateGrade:
+    """등급 계산 함수 테스트"""
+    
+    def test_grade_s_80_and_above(self, mock_brain):
+        """80점 이상은 S등급"""
+        assert mock_brain._calculate_grade(80) == 'S'
+        assert mock_brain._calculate_grade(90) == 'S'
+        assert mock_brain._calculate_grade(100) == 'S'
+    
+    def test_grade_a_70_to_79(self, mock_brain):
+        """70-79점은 A등급"""
+        assert mock_brain._calculate_grade(70) == 'A'
+        assert mock_brain._calculate_grade(75) == 'A'
+        assert mock_brain._calculate_grade(79) == 'A'
+    
+    def test_grade_b_60_to_69(self, mock_brain):
+        """60-69점은 B등급"""
+        assert mock_brain._calculate_grade(60) == 'B'
+        assert mock_brain._calculate_grade(65) == 'B'
+        assert mock_brain._calculate_grade(69) == 'B'
+    
+    def test_grade_c_50_to_59(self, mock_brain):
+        """50-59점은 C등급"""
+        assert mock_brain._calculate_grade(50) == 'C'
+        assert mock_brain._calculate_grade(55) == 'C'
+        assert mock_brain._calculate_grade(59) == 'C'
+    
+    def test_grade_d_40_to_49(self, mock_brain):
+        """40-49점은 D등급"""
+        assert mock_brain._calculate_grade(40) == 'D'
+        assert mock_brain._calculate_grade(45) == 'D'
+        assert mock_brain._calculate_grade(49) == 'D'
+    
+    def test_grade_f_below_40(self, mock_brain):
+        """40점 미만은 F등급"""
+        assert mock_brain._calculate_grade(39) == 'F'
+        assert mock_brain._calculate_grade(20) == 'F'
+        assert mock_brain._calculate_grade(0) == 'F'
+    
+    def test_grade_with_string_number(self, mock_brain):
+        """문자열 숫자도 처리"""
+        assert mock_brain._calculate_grade("85") == 'S'
+        assert mock_brain._calculate_grade("65") == 'B'
+    
+    def test_grade_with_float(self, mock_brain):
+        """소수점도 처리"""
+        assert mock_brain._calculate_grade(79.9) == 'A'
+        assert mock_brain._calculate_grade(80.0) == 'S'
+    
+    def test_grade_with_invalid_input(self, mock_brain):
+        """유효하지 않은 입력은 D 반환"""
+        assert mock_brain._calculate_grade("invalid") == 'D'
+        assert mock_brain._calculate_grade(None) == 'D'
+
+
+# ============================================================================
 # Tests: get_jennies_decision
 # ============================================================================
 

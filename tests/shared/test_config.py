@@ -44,10 +44,11 @@ class TestConfigManagerInit:
         assert config_manager._db_cache == {}
     
     def test_init_has_defaults(self, config_manager):
-        """기본값 딕셔너리 존재"""
+        """기본값 딕셔너리 존재 (메타데이터 포함 구조)"""
         assert 'SCAN_INTERVAL_SEC' in config_manager._defaults
         assert 'BUY_RSI_OVERSOLD_THRESHOLD' in config_manager._defaults
-        assert 'MAX_HOLDING_STOCKS' in config_manager._defaults
+        # 새로운 구조: {"value": 값, "desc": "설명", "category": "카테고리"}
+        assert 'value' in config_manager._defaults['SCAN_INTERVAL_SEC']
 
 
 # ============================================================================
@@ -58,10 +59,11 @@ class TestConfigManagerGet:
     """ConfigManager.get() 메서드 테스트"""
     
     def test_get_from_defaults(self, config_manager):
-        """기본값에서 조회"""
+        """기본값에서 조회 (메타데이터 포함 구조)"""
         # _defaults에서 직접 기본값 확인
         assert 'SCAN_INTERVAL_SEC' in config_manager._defaults
-        assert config_manager._defaults['SCAN_INTERVAL_SEC'] == 600
+        # 새로운 구조: {"value": 값, "desc": "설명", "category": "카테고리"}
+        assert config_manager._defaults['SCAN_INTERVAL_SEC']['value'] == 600
     
     def test_get_with_default_parameter(self, config_manager):
         """default 파라미터 사용"""

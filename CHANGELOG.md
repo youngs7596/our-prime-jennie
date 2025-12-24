@@ -1,6 +1,8 @@
 # 📅 변경 이력 (Change Log)
 
-## 2025-12-24
+## 2025-12-25
+
+- **Scout Hotfix**: 휴장일(크리스마스 등) 인식 오류 수정 - 로컬 시간 체크 로직(`/utils.py`) 대신 증권사 Gateway API(`check_market_open`) 연동으로 정확도 확보
 
 - **Scout 최적화**: 정량 필터링 강화 (상위 80% → 40% 통과), Hunter 처리량 약 50% 감소로 LLM 부담 경감
 - **gemma3:27b 통합**: 모든 LLM Tier (FAST/REASONING/THINKING)를 gemma3:27b로 통일 - 속도 2배 향상, 안정성 100%

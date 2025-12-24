@@ -4,46 +4,46 @@
 
 @layer base {
   :root {
-    /* Stripe Dashboard 스타일 - 2025-12-24 */
+    /* Raydium Neon Theme - 2025-12-24 */
     
-    /* 배경: 딥 네이비 */
-    --background: 213 80% 15%;
-    --foreground: 0 0% 100%;
+    /* 배경: 딥 다크 */
+    --background: 230 20% 6%;
+    --foreground: 0 0% 95%;
 
-    /* 카드: 화이트 + 섀도우 */
-    --card: 0 0% 100%;
-    --card-foreground: 213 30% 25%;
+    /* 카드: 반투명 다크 */
+    --card: 225 25% 10%;
+    --card-foreground: 0 0% 95%;
 
     /* 팝오버 */
-    --popover: 0 0% 100%;
-    --popover-foreground: 213 30% 25%;
+    --popover: 225 25% 12%;
+    --popover-foreground: 0 0% 95%;
 
-    /* 강조: Stripe 인디고 (#635BFF) */
-    --primary: 243 100% 68%;
+    /* 강조: 네온 퍼플 (#7C3AED) */
+    --primary: 263 84% 58%;
     --primary-foreground: 0 0% 100%;
 
-    /* 보조 */
-    --secondary: 213 20% 20%;
+    /* 보조: 네온 시안 (#22D3EE) */
+    --secondary: 187 94% 53%;
     --secondary-foreground: 0 0% 100%;
 
     /* 뮤트 */
-    --muted: 213 20% 25%;
-    --muted-foreground: 213 15% 55%;
+    --muted: 225 20% 18%;
+    --muted-foreground: 225 10% 55%;
 
-    /* 액센트: 밝은 시안 */
-    --accent: 187 100% 75%;
-    --accent-foreground: 213 80% 15%;
+    /* 액센트: 네온 블루 */
+    --accent: 217 91% 60%;
+    --accent-foreground: 0 0% 100%;
 
     /* 위험 */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
     /* 보더 */
-    --border: 213 20% 25%;
-    --input: 213 20% 25%;
-    --ring: 243 100% 68%;
+    --border: 225 20% 18%;
+    --input: 225 20% 15%;
+    --ring: 263 84% 58%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 }
 
@@ -60,42 +60,69 @@
 }
 
 @layer components {
-  /* Stripe Card Style */
+  /* Raydium Glass Card */
   .glass {
-    @apply bg-white rounded-lg shadow-lg border border-gray-100;
+    @apply bg-raydium-card/80 backdrop-blur-xl rounded-xl border border-white/5;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
   }
 
-  /* Gradient Text - Stripe Indigo */
+  /* Neon Gradient Text */
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-stripe-indigo to-stripe-cyan;
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-raydium-purple via-raydium-blue to-raydium-cyan;
   }
 
-  /* Stripe Shadow Effects */
+  /* Neon Glow Effects */
   .glow {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-                0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3),
+                0 0 40px rgba(124, 58, 237, 0.1);
   }
 
   .glow-primary {
-    box-shadow: 0 4px 14px 0 rgba(99, 91, 255, 0.39);
+    box-shadow: 0 0 25px rgba(124, 58, 237, 0.5),
+                0 0 50px rgba(124, 58, 237, 0.25);
+  }
+
+  .glow-cyan {
+    box-shadow: 0 0 25px rgba(34, 211, 238, 0.5),
+                0 0 50px rgba(34, 211, 238, 0.25);
   }
 
   .glow-success {
-    box-shadow: 0 4px 14px 0 rgba(48, 209, 88, 0.3);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4),
+                0 0 40px rgba(16, 185, 129, 0.2);
   }
 
-  /* Card Variants - Stripe Style */
+  /* Card Variants - Raydium Style */
   .card-elevated {
-    @apply bg-white rounded-lg shadow-md border border-gray-100 p-6 transition-all duration-200 hover:shadow-lg;
+    @apply bg-raydium-card/60 backdrop-blur-xl rounded-xl border border-white/5 p-6;
+    @apply transition-all duration-300 hover:bg-raydium-cardHover/70 hover:border-raydium-purple/30;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .card-neon {
+    @apply bg-raydium-card/50 backdrop-blur-xl rounded-xl p-6;
+    @apply border border-raydium-purple/20 transition-all duration-300;
+    @apply hover:border-raydium-purple/50 hover:shadow-neon-purple;
+  }
+
+  /* Neon Border Animation */
+  .neon-border {
+    @apply border border-transparent rounded-xl;
+    background: linear-gradient(var(--background), var(--background)) padding-box,
+                linear-gradient(135deg, #7C3AED, #3B82F6, #22D3EE, #7C3AED) border-box;
+    background-size: 100% 100%, 300% 300%;
+    animation: gradient-shift 4s ease infinite;
   }
 
   /* Profit Colors */
   .profit-positive {
-    @apply text-profit-positive;
+    @apply text-emerald-400;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
   }
 
   .profit-negative {
-    @apply text-profit-negative;
+    @apply text-red-400;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
   }
 
   /* Shimmer Loading */
@@ -103,9 +130,9 @@
     @apply relative overflow-hidden;
     background: linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.05) 50%,
-      rgba(255, 255, 255, 0) 100%
+      rgba(124, 58, 237, 0) 0%,
+      rgba(124, 58, 237, 0.1) 50%,
+      rgba(124, 58, 237, 0) 100%
     );
     background-size: 200% 100%;
     animation: shimmer 2s linear infinite;
@@ -122,7 +149,7 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full hover:bg-white/20;
+    @apply bg-raydium-purple/30 rounded-full hover:bg-raydium-purple/50;
   }
 
   /* Number Display */
@@ -136,7 +163,9 @@
   }
 
   .status-active {
-    @apply bg-profit-positive animate-pulse;
+    @apply bg-emerald-400;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+    animation: neon-pulse 2s ease-in-out infinite;
   }
 
   .status-inactive {
@@ -144,7 +173,22 @@
   }
 
   .status-error {
-    @apply bg-profit-negative animate-pulse;
+    @apply bg-red-400;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+    animation: neon-pulse 1s ease-in-out infinite;
+  }
+
+  /* Neon Button */
+  .btn-neon {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-300;
+    @apply bg-raydium-purple/20 text-raydium-purpleLight border border-raydium-purple/50;
+    @apply hover:bg-raydium-purple/30 hover:border-raydium-purple hover:shadow-neon-purple;
+  }
+
+  .btn-neon-cyan {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-300;
+    @apply bg-raydium-cyan/20 text-raydium-cyanLight border border-raydium-cyan/50;
+    @apply hover:bg-raydium-cyan/30 hover:border-raydium-cyan hover:shadow-neon-cyan;
   }
 }
 
@@ -169,12 +213,49 @@
   }
 }
 
-/* Background Pattern */
+@keyframes neon-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+  41% {
+    opacity: 1;
+  }
+  42% {
+    opacity: 0.8;
+  }
+  43% {
+    opacity: 1;
+  }
+  45% {
+    opacity: 0.7;
+  }
+  46% {
+    opacity: 1;
+  }
+}
+
+/* Background Effects */
 .bg-grid-pattern {
   background-image: 
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-  background-size: 50px 50px;
+    linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.bg-glow-top {
+  position: relative;
+}
+
+.bg-glow-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80%;
+  height: 300px;
+  background: radial-gradient(ellipse at center top, rgba(124, 58, 237, 0.15) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 /* Noise Texture */
@@ -185,7 +266,6 @@
   width: 100%;
   height: 100%;
   pointer-events: none;
-  opacity: 0.015;
+  opacity: 0.02;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
-
