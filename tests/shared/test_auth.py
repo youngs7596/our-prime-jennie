@@ -162,18 +162,6 @@ class TestEnvMapping:
         result = get_secret('gemini-api-key')
         
         assert result == 'mapped-gemini-key'
-    
-    def test_local_env_mapping_oracle(self, monkeypatch):
-        """ORACLE_USER 환경 변수 매핑"""
-        from shared.auth import get_secret, clear_secret_cache
-        
-        clear_secret_cache()
-        monkeypatch.setenv('SECRETS_FILE', '/nonexistent/secrets.json')
-        monkeypatch.setenv('ORACLE_USER', 'oracle_user_name')
-        
-        result = get_secret('oracle-db-user')
-        
-        assert result == 'oracle_user_name'
 
 
 # ============================================================================

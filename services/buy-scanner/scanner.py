@@ -44,6 +44,12 @@ class BuyScanner:
     MOMENTUM_SIGNAL_THRESHOLD = 3.0
     RELATIVE_STRENGTH_THRESHOLD = 2.0
     
+    # Tier2 골든크로스 안전장치 상수
+    TIER2_VOLUME_MULTIPLIER = 1.2   # 거래량 20일 평균 대비 1.2배 이상
+    TIER2_RSI_MIN = 40              # RSI 40 이상 (과매도 탈출)
+    TIER2_RSI_MAX = 70              # RSI 70 이하 (과매수 아님)
+    TIER2_MIN_CONDITIONS = 3        # 최소 3개 조건 충족 필요 (Tier2 품질 상향)
+    
     def __init__(self, kis, config):
         """
         Args:
@@ -173,8 +179,8 @@ class BuyScanner:
                 # [Tiered Execution] 현금 비중 확인
                 try:
                     available_cash = self.kis.get_cash_balance()
-                    # 포트폴리오 가치 추정 (매수가 기준)
-                    portfolio_value = sum([p.get('quantity', 0) * p.get('buy_price', 0) for p in current_portfolio])
+                    # 포트폴리오 가치 추정 (매수가 기준) - 키 이름: avg_price (repository.py 반환값)
+                    portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in current_portfolio])
                     total_assets = available_cash + portfolio_value
                     
                     cash_ratio = available_cash / total_assets if total_assets > 0 else 0
@@ -437,6 +443,14 @@ class BuyScanner:
             if snapshot and snapshot.get('price'):
                 current_price = float(snapshot['price'])
                 
+                # 거래량 키 호환성: gateway/klient에 따라 다를 수 있어 안전하게 처리
+                snapshot_volume = (
+                    snapshot.get('volume')
+                    or snapshot.get('acc_vol')
+                    or snapshot.get('accumulated_volume')
+                    or snapshot.get('trade_volume')
+                )
+                
                 # [Fast Hands] 2. DataFrame에 현재가 반영 (In-Memory Update)
                 # daily_prices_df의 마지막 행이 오늘 날짜인지 확인
                 if not daily_prices_df.empty:
@@ -451,6 +465,12 @@ class BuyScanner:
                             daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('HIGH_PRICE')] = max(float(daily_prices_df['HIGH_PRICE'].iloc[-1]), float(snapshot['high']))
                         if snapshot.get('low'):
                             daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('LOW_PRICE')] = min(float(daily_prices_df['LOW_PRICE'].iloc[-1]), float(snapshot['low']))
+                        # 장중 거래량도 가능한 경우 반영 (Tier2 거래량 조건 품질 개선)
+                        if snapshot_volume is not None and 'VOLUME' in daily_prices_df.columns:
+                            try:
+                                daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('VOLUME')] = float(snapshot_volume)
+                            except Exception:
+                                pass
                     else:
                         # 오늘 데이터가 없으면 행 추가
                         import pandas as pd
@@ -460,7 +480,8 @@ class BuyScanner:
                             'CLOSE_PRICE': current_price,
                             'HIGH_PRICE': float(snapshot.get('high', current_price)),
                             'LOW_PRICE': float(snapshot.get('low', current_price)),
-                            'OPEN_PRICE': float(snapshot.get('open', current_price)) # OPEN_PRICE 컬럼이 있다면
+                            'OPEN_PRICE': float(snapshot.get('open', current_price)), # OPEN_PRICE 컬럼이 있다면
+                            'VOLUME': float(snapshot_volume) if snapshot_volume is not None else None,
                         }])
                         # 공통 컬럼만 선택하여 병합
                         common_cols = daily_prices_df.columns.intersection(new_row.columns)
@@ -506,8 +527,11 @@ class BuyScanner:
                 key_metrics_dict['bear_mode'] = True
                 key_metrics_dict['llm_strategy_type'] = strategy_hint
             else:
+                # is_tradable=False인 경우 Tier2 스캔 (복합 조건 필요)
+                is_tradable = stock_info.get('is_tradable', True)
                 buy_signal_type, key_metrics_dict = self._detect_signals(
-                    stock_code, daily_prices_df, last_close_price, rsi_value, current_regime, active_strategies, kospi_prices_df
+                    stock_code, daily_prices_df, last_close_price, rsi_value, 
+                    current_regime, active_strategies, kospi_prices_df, is_tradable
                 )
             
             if not buy_signal_type:
@@ -573,9 +597,13 @@ class BuyScanner:
             return None
     
     def _detect_signals(self, stock_code, daily_prices_df, last_close_price, rsi_value, 
-                       current_regime, active_strategies, kospi_prices_df) -> tuple:
+                       current_regime, active_strategies, kospi_prices_df, 
+                       is_tradable=True) -> tuple:
         """
         매수 신호 감지
+        
+        Args:
+            is_tradable: Scout Judge 통과 여부. False면 Tier2로 복합 조건 필요.
         
         Returns:
             (signal_type, key_metrics_dict) or (None, None)
@@ -631,10 +659,26 @@ class BuyScanner:
                 )
                 logger.debug(f"[{stock_code}] 골든 크로스 확인: {is_golden_cross}")
                 if is_golden_cross:
+                    # [Tier2 안전장치] Judge 미통과 종목은 복합 조건 필수
+                    if not is_tradable:
+                        tier2_result = self._check_tier2_conditions(
+                            stock_code, daily_prices_df, last_close_price, rsi_value, current_regime
+                        )
+                        if not tier2_result['passed']:
+                            logger.info(f"[{stock_code}] 🛡️ Tier2 안전장치 미충족 - 골든크로스 무시 "
+                                       f"(충족: {tier2_result['met_count']}/{self.TIER2_MIN_CONDITIONS}개)")
+                            continue  # 다음 전략으로 넘어감
+                        logger.info(f"[{stock_code}] ✅ Tier2 안전장치 통과! {tier2_result['conditions_met']}")
+                    
                     logger.debug(f"[{stock_code}] GOLDEN_CROSS 신호 감지.")
                     return 'GOLDEN_CROSS', {
                         "signal": "GOLDEN_CROSS_5_20",
-                        "strategy": "TREND_FOLLOWING"
+                        "strategy": "TREND_FOLLOWING",
+                        # Tier2 경로 여부 및 조건 상세 기록 (Executor/텔레그램/로그에서 가시성 확보)
+                        "tier2_bypass": not is_tradable,
+                        "tier2_met_count": tier2_result.get("met_count") if (not is_tradable and 'tier2_result' in locals()) else None,
+                        "tier2_conditions_met": tier2_result.get("conditions_met") if (not is_tradable and 'tier2_result' in locals()) else None,
+                        "tier2_conditions_failed": tier2_result.get("conditions_failed") if (not is_tradable and 'tier2_result' in locals()) else None,
                     }
             
             elif strategy_type == StrategySelector.STRATEGY_MOMENTUM:
@@ -661,6 +705,120 @@ class BuyScanner:
                         }
         
         return None, None
+    
+    def _check_tier2_conditions(self, stock_code, daily_prices_df, current_price, 
+                                rsi_value, current_regime) -> dict:
+        """
+        Tier2 (Judge 미통과) 골든크로스 매수를 위한 복합 안전장치 체크
+        
+        조건 (최소 2개 이상 충족 필요):
+        1. 거래량: 오늘 거래량 >= 20일 평균 * 1.2배
+        2. RSI: 40 <= RSI <= 70 (중립 구간)
+        3. 시장 국면: Bear가 아닐 것 (Neutral 이상)
+        4. 120일선 위: 현재가 >= 120일 이평선
+        
+        Returns:
+            {
+                'passed': bool,
+                'met_count': int,
+                'conditions_met': list[str],
+                'conditions_failed': list[str]
+            }
+        """
+        conditions_met = []
+        conditions_failed = []
+        
+        try:
+            # 1. 거래량 조건
+            if len(daily_prices_df) >= 20 and 'VOLUME' in daily_prices_df.columns:
+                current_volume = daily_prices_df['VOLUME'].iloc[-1]
+                avg_volume_20 = daily_prices_df['VOLUME'].tail(20).mean()
+                
+                # 장중 거래량은 부분 누적일 수 있어 '예상 종가 거래량'으로 보정 (보수적으로)
+                try:
+                    last_dt = daily_prices_df['PRICE_DATE'].iloc[-1]
+                    last_date_str = last_dt.strftime('%Y-%m-%d') if hasattr(last_dt, 'strftime') else str(last_dt)[:10]
+                    today_str = datetime.now().strftime('%Y-%m-%d')
+                    if last_date_str == today_str:
+                        from datetime import datetime as _dt
+                        import pytz
+                        kst = pytz.timezone("Asia/Seoul")
+                        now = _dt.now(kst)
+                        market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
+                        market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                        if market_open <= now <= market_close:
+                            elapsed = (now - market_open).total_seconds()
+                            total = (market_close - market_open).total_seconds()
+                            frac = max(0.25, min(1.0, elapsed / total))  # 너무 이른 시간 과대 보정 방지
+                            projected_volume = float(current_volume or 0) / frac
+                        else:
+                            projected_volume = float(current_volume or 0)
+                    else:
+                        projected_volume = float(current_volume or 0)
+                except Exception:
+                    projected_volume = float(current_volume or 0)
+
+                if avg_volume_20 > 0 and projected_volume >= avg_volume_20 * self.TIER2_VOLUME_MULTIPLIER:
+                    conditions_met.append(f"거래량 {projected_volume/avg_volume_20:.1f}x(보정)")
+                else:
+                    ratio = projected_volume / avg_volume_20 if avg_volume_20 > 0 else 0
+                    conditions_failed.append(f"거래량 {ratio:.1f}x < {self.TIER2_VOLUME_MULTIPLIER}x")
+            else:
+                conditions_failed.append("거래량 데이터 부족")
+            
+            # 2. RSI 조건 (중립 구간)
+            if rsi_value is not None:
+                if self.TIER2_RSI_MIN <= rsi_value <= self.TIER2_RSI_MAX:
+                    conditions_met.append(f"RSI {rsi_value:.1f} (중립)")
+                else:
+                    conditions_failed.append(f"RSI {rsi_value:.1f} (범위 외)")
+            else:
+                conditions_failed.append("RSI 계산 불가")
+            
+            # 3. 시장 국면 조건 (Bear 아닐 것)
+            if current_regime != MarketRegimeDetector.REGIME_BEAR:
+                conditions_met.append(f"시장국면 {current_regime}")
+            else:
+                conditions_failed.append(f"시장국면 BEAR")
+            
+            # 4. 120일선 위 조건 (장기 상승 추세)
+            if len(daily_prices_df) >= 120:
+                ma_120 = daily_prices_df['CLOSE_PRICE'].tail(120).mean()
+                if current_price >= ma_120:
+                    conditions_met.append(f"120일선 위 ({current_price/ma_120*100-100:+.1f}%)")
+                else:
+                    conditions_failed.append(f"120일선 아래 ({current_price/ma_120*100-100:.1f}%)")
+            else:
+                # 데이터 부족 시 60일선으로 대체
+                if len(daily_prices_df) >= 60:
+                    ma_60 = daily_prices_df['CLOSE_PRICE'].tail(60).mean()
+                    if current_price >= ma_60:
+                        conditions_met.append(f"60일선 위 ({current_price/ma_60*100-100:+.1f}%)")
+                    else:
+                        conditions_failed.append(f"60일선 아래 ({current_price/ma_60*100-100:.1f}%)")
+                else:
+                    conditions_failed.append("장기 이평선 데이터 부족")
+            
+            met_count = len(conditions_met)
+            passed = met_count >= self.TIER2_MIN_CONDITIONS
+            
+            logger.debug(f"[{stock_code}] Tier2 조건 체크: 충족 {met_count}개 - {conditions_met}, 미충족 - {conditions_failed}")
+            
+            return {
+                'passed': passed,
+                'met_count': met_count,
+                'conditions_met': conditions_met,
+                'conditions_failed': conditions_failed
+            }
+            
+        except Exception as e:
+            logger.error(f"[{stock_code}] Tier2 조건 체크 오류: {e}")
+            return {
+                'passed': False,
+                'met_count': 0,
+                'conditions_met': [],
+                'conditions_failed': [f"오류: {str(e)}"]
+            }
     
     def _calculate_factor_score(self, stock_code, stock_info, daily_prices_df, 
                                kospi_prices_df, current_regime) -> tuple:
@@ -728,5 +886,7 @@ class BuyScanner:
         # 최상위 레벨에도 편의상 추가
         serialized['llm_score'] = stock_info.get('llm_score', 0)
         serialized['llm_reason'] = stock_info.get('llm_reason', '')
+        # Judge 통과 여부 (is_tradable: hybrid_score >= 75)
+        serialized['is_tradable'] = stock_info.get('is_tradable', False)
         
         return serialized

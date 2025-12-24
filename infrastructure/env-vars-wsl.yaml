@@ -92,8 +92,11 @@ SCHEDULER_QUEUE_SCOUT_JOB: "real.jobs.scout"
 ENABLE_SCOUT_JOB_WORKER: "true"
 SCHEDULER_SCOUT_JOB_ID: "scout-daily"  # jobs 테이블의 job_id와 일치해야 함
 
-# 13. 매수 기준 점수 (B등급 이상 → 완화)
+# 13. 매수 기준 점수
+# - Tier1(Scout Judge 통과): 60점 이상
+# - Tier2(Scout Judge 미통과): 65점 이상 + 복합 조건(3/4) 통과
 MIN_LLM_SCORE: "60"
+MIN_LLM_SCORE_TIER2: "65"
 
 # 14. Scout Job LLM 최적화 설정
 #  # [Scout] LLM 실행 간격 (분) -> 4시간으로 변경
@@ -101,8 +104,8 @@ SCOUT_MIN_LLM_INTERVAL_MINUTES: "240"    # LLM 호출 최소 간격 (4시간)
 SCOUT_MAX_CANDIDATES_PHASE2: "5"        # Phase 2 진입 종목 수 제한
 SCOUT_LLM_CACHE_TTL_MINUTES: "240"      # LLM 캐시 유효기간 (4시간) - 시장 변화 반영
 SCOUT_LLM_MAX_WORKERS: "4"                  # LLM 동시 호출 최대 수 (GPT-OSS:20B 속도 최적화)
-LOCAL_MODEL_REASONING: "qwen3:32b"        # [Hunter] Speed & Adherence
-LOCAL_MODEL_THINKING: "qwen3:32b"           # [Judge] Deep Reasoning
+LOCAL_MODEL_REASONING: "gemma3:27b"        # [Hunter] Speed & Adherence (2024-12-24: qwen3 → gemma3로 변경)
+LOCAL_MODEL_THINKING: "gemma3:27b"           # [Judge] Deep Reasoning (2024-12-24: qwen3 → gemma3로 변경)
 TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
 TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
 # TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
