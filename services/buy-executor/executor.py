@@ -153,10 +153,10 @@ class BuyExecutor:
             else:
                 min_llm_score = tier2_min_llm_score
             if current_score < min_llm_score: 
-                 c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
+                c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
                 tier_label = trade_tier
-                 logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
-                 return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
+                logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
+                return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
 
             stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
             stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))

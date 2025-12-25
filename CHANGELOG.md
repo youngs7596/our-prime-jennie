@@ -9,6 +9,7 @@
 - **Hunter/Judge 로그 상세화**: 정량점수 분해, 핵심지표(PER/PBR/RSI), 경쟁사 수혜 로깅 추가
 - **대시보드 UI 개편**: Stripe 스타일 적용 (딥 네이비 배경, 인디고 액센트, 화이트 카드)
 - **Oracle 레거시 제거 검증**: Mock 모드 E2E 테스트 완료 - MariaDB/SQLAlchemy 연동, RabbitMQ 메시지 처리, HTTP API 처리 모두 정상 작동 확인 (사이드 이펙트 없음)
+- **Mock Mode Testing**: Buy Executor 시작 실패 버그(`IndentationError`) 수정 및 전체 매수/매도 시나리오(Scout→Executor) 검증 완료
 
 ## 2025-12-23
 
