@@ -577,6 +577,54 @@ def get_daily_prices():
         return jsonify({"error": str(e)}), 500
 
 
+
+@app.route('/api/market-data/check-market-open', methods=['GET'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def check_market_open():
+    """장 운영일 확인 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+    
+    try:
+        # KIS API 호출
+        logger.info(f"📅 [Gateway] Market Open Check 요청")
+        
+        # KISClient의 check_market_open 메서드는 내부적으로 캐싱이나 로직이 있을 수 있음
+        # 여기서는 단순히 호출하고 결과를 반환
+        is_open = call_kis_api_with_breaker(
+            kis_client.check_market_open
+        )
+        
+        # bool 반환됨
+        stats['successful_requests'] += 1
+        
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/check-market-open',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success'
+        })
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "is_open": is_open
+            },
+            "response_time": response_time
+        }), 200
+            
+    except CircuitBreakerError as e:
+        stats['failed_requests'] += 1
+        logger.error(f"🚨 Circuit Breaker OPEN: {e}")
+        return jsonify({"error": "Circuit Breaker OPEN - KIS API 일시적으로 사용 불가"}), 503
+        
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ Market Open Check 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/account/balance', methods=['POST'])
 @limiter.limit(GLOBAL_RATE_LIMIT)
 def get_account_balance():

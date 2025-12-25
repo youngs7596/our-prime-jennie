@@ -523,18 +523,36 @@ class GeminiLLMProvider(BaseLLMProvider):
             model_candidates.extend(fallback_models)
 
         last_error: Optional[Exception] = None
+        max_retries = 3
+
         for target_model in model_candidates:
-            try:
-                model = self._get_or_create_model(target_model, response_schema, temperature)
-                response = self._client.models.generate_content(
-                    model=model["model_name"],
-                    contents=prompt,
-                    config=model["generation_config"],
-                )
-                return json.loads(response.text)
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    model = self._get_or_create_model(target_model, response_schema, temperature)
+                    response = self._client.models.generate_content(
+                        model=model["model_name"],
+                        contents=prompt,
+                        config=model["generation_config"],
+                    )
+                    return json.loads(response.text)
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = (2 ** attempt) + 1  # 2, 3, 5 seconds...
+                            # If error message contains explicit retry delay, we could parse it, but simple backoff is often enough.
+                            # The log showed "Please retry in 30.3s", so we might need a longer wait if we parse it.
+                            # For now, let's just use a more aggressive backoff for 429.
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+                    
+                    # Not a 429 or retries exhausted
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM 호출 실패: {last_error}") from last_error
 
@@ -579,26 +597,39 @@ class GeminiLLMProvider(BaseLLMProvider):
             last_message = "Continue"
 
         last_error: Optional[Exception] = None
+        max_retries = 3
+
         for target_model in model_candidates:
-            try:
-                generation_config = {"temperature": temperature}
-                if response_schema:
-                    generation_config["response_mime_type"] = "application/json"
-                    generation_config["response_schema"] = response_schema
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    generation_config = {"temperature": temperature}
+                    if response_schema:
+                        generation_config["response_mime_type"] = "application/json"
+                        generation_config["response_schema"] = response_schema
 
-                response = self._client.models.generate_content(
-                    model=target_model,
-                    contents=gemini_history + [{"role": "user", "parts": [{"text": last_message}]}],
-                    config=generation_config,
-                )
+                    response = self._client.models.generate_content(
+                        model=target_model,
+                        contents=gemini_history + [{"role": "user", "parts": [{"text": last_message}]}],
+                        config=generation_config,
+                    )
 
-                text = response.text
-                if response_schema:
-                    return json.loads(text)
-                return {"text": text}
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+                    text = response.text
+                    if response_schema:
+                        return json.loads(text)
+                    return {"text": text}
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Chat Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM Chat 호출 실패: {last_error}") from last_error
 

@@ -637,8 +637,6 @@ services:
     environment:
       - PORT=8086
       - SECRETS_FILE=/app/config/secrets.json
-      - TIER_THINKING_PROVIDER=gemini
-      - LLM_MODEL_NAME=gemini-2.0-flash-exp
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
@@ -773,8 +771,6 @@ services:
       - USE_OLLAMA_GATEWAY=true
       - OLLAMA_GATEWAY_URL=http://localhost:11500
       - ENABLE_NEWS_ANALYSIS=true
-      - TIER_FAST_PROVIDER=openai
-      - OPENAI_MODEL_NAME=gpt-5-nano
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
