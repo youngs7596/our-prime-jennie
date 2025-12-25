@@ -2,6 +2,8 @@
 
 ## 2025-12-25
 
+- **Unit Test 추가**: SecretManager, Registry, Config API 테스트 44개 작성 (Coverage 34%)
+- **Coverage 설정**: `.coveragerc` 생성 - shared/services 측정, venv/frontend 제외
 - **Scout Hotfix**: 휴장일(크리스마스 등) 인식 오류 수정 - 로컬 시간 체크 로직(`/utils.py`) 대신 증권사 Gateway API(`check_market_open`) 연동으로 정확도 확보
 
 - **Scout 최적화**: 정량 필터링 강화 (상위 80% → 40% 통과), Hunter 처리량 약 50% 감소로 LLM 부담 경감
