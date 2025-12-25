@@ -2,6 +2,7 @@
 
 ## 2025-12-25
 
+- **피드백 시스템 스케줄 등록**: `update_analyst_feedback.py` crontab 등록 (평일 17:00), AI 성과 분석 시간 변경 (07:00→16:40)
 - **Project Recon 검증 & 버그 수정**: 정찰병 전략 구현 지시서 기준 검증 완료, RECON tier에서 `is_tradable=True` 누락 로직 수정 (`scout_pipeline.py`)
 - **Dashboard Frontend 빌드 수정**: 누락 컴포넌트(Dialog, Label, Badge) 추가, `react-hot-toast` 패키지 추가, Settings.tsx 타입 에러 수정
 - **Configuration Refactor**: `scout` & `news-crawler` 장 운영 시간 체크를 전역 설정(`env-vars-wsl.yaml`)으로 바이패스 가능하도록 개선 (Safety Override 포함)
