@@ -13,6 +13,9 @@
 - **대시보드 UI 개편**: Stripe 스타일 적용 (딥 네이비 배경, 인디고 액센트, 화이트 카드)
 - **Oracle 레거시 제거 검증**: Mock 모드 E2E 테스트 완료 - MariaDB/SQLAlchemy 연동, RabbitMQ 메시지 처리, HTTP API 처리 모두 정상 작동 확인 (사이드 이펙트 없음)
 - **Mock Mode Testing**: Buy Executor 시작 실패 버그(`IndentationError`) 수정 및 전체 매수/매도 시나리오(Scout→Executor) 검증 완료
+- **Portfolio Data Integrity Fix**: `portfolio` 테이블의 중복 보유 내역(현대차, SK스퀘어) 제거 및 `total_buy_amount` 재계산 로직 적용 (데이터 정합성 복구)
+- **Critical Bug Fix**: `buy-executor`가 `STOP_LOSS_PRICE`를 DB에 저장하지 않던 심각한 버그 수정 (기본 -5% 자동 설정) 및 기존 누락 데이터(미래에셋생명 등) 일괄 복구 완료
+- **Language Policy**: `rules.md`에 AI 답변 언어를 한국어로 강제하는 '최우선 원칙(Critical Rule)' 추가
 
 ## 2025-12-23
 

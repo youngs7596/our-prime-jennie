@@ -601,6 +601,17 @@ class BuyExecutor:
                 key_metrics["tier2_conditions_met"] = tier2_conditions_met or []
                 key_metrics["tier2_conditions_failed"] = tier2_conditions_failed or []
 
+            # Stop Loss 가격 계산
+            # risk_setting의 stop_loss_pct 사용 (기본값 -5.0%)
+            stop_loss_pct = (risk_setting or {}).get('stop_loss_pct')
+            if stop_loss_pct is None:
+                stop_loss_pct = -0.05 # Default 5%
+            
+            # 절대값이 아닌 음수 비율로 처리
+            if stop_loss_pct > 0: stop_loss_pct = -stop_loss_pct
+            
+            initial_stop_loss_price = price * (1 + stop_loss_pct)
+
             result = database.execute_trade_and_log(
                 connection=session, 
                 trade_type='BUY',
@@ -608,6 +619,7 @@ class BuyExecutor:
                 quantity=quantity,
                 price=price,
                 llm_decision=llm_decision,
+                initial_stop_loss_price=initial_stop_loss_price,
                 strategy_signal=buy_signal_type,
                 key_metrics_dict={
                     **key_metrics
