@@ -17,7 +17,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
@@ -187,7 +187,7 @@ def save_articles(connection, articles: List[Dict]):
                 article.get("press"),
                 article.get("headline"),
                 article.get("summary"),
-                datetime.utcnow(),
+                datetime.now(timezone.utc),
                 "NAVER",
                 article.get("category"),
                 article.get("sentiment_score", 50),

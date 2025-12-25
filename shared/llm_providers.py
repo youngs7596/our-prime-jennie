@@ -467,20 +467,25 @@ class OllamaLLMProvider(BaseLLMProvider):
 class GeminiLLMProvider(BaseLLMProvider):
     def __init__(self, project_id: str, gemini_api_key_secret: str, safety_settings):
         super().__init__(safety_settings)
-        import google.generativeai as genai
+        import google.genai as genai
         from . import auth
         
         api_key = auth.get_secret(gemini_api_key_secret, project_id)
         if not api_key:
             raise RuntimeError(f"GCP Secret '{gemini_api_key_secret}' 로드 실패")
 
-        genai.configure(api_key=api_key)
+        # google.genai는 Client/GenerativeModel에 직접 키를 전달하므로 전역 configure 불필요
         self._genai = genai
+        self._api_key = api_key
+        self._client = genai.Client(api_key=api_key)
         # Updated to Gemini 3 Pro for Self-Evolution tasks (Daily Feedback)
         # Note: As of Dec 2025, stable is 'gemini-3-pro-preview' in API
         self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview")
         self.flash_model = os.getenv("LLM_FLASH_MODEL_NAME", "gemini-2.5-flash")
         self._model_cache: Dict[tuple[str, float, str], Any] = {}
+
+    def _get_api_key(self) -> str:
+        return self._api_key
 
     @property
     def name(self) -> str:
@@ -498,11 +503,10 @@ class GeminiLLMProvider(BaseLLMProvider):
                 "response_mime_type": "application/json",
                 "response_schema": response_schema,
             }
-            self._model_cache[cache_key] = self._genai.GenerativeModel(
-                model_name=model_name,
-                generation_config=generation_config,
-                safety_settings=self.safety_settings,
-            )
+            self._model_cache[cache_key] = {
+                "model_name": model_name,
+                "generation_config": generation_config,
+            }
         return self._model_cache[cache_key]
 
     def generate_json(
@@ -522,7 +526,11 @@ class GeminiLLMProvider(BaseLLMProvider):
         for target_model in model_candidates:
             try:
                 model = self._get_or_create_model(target_model, response_schema, temperature)
-                response = model.generate_content(prompt, safety_settings=self.safety_settings)
+                response = self._client.models.generate_content(
+                    model=model["model_name"],
+                    contents=prompt,
+                    config=model["generation_config"],
+                )
                 return json.loads(response.text)
             except Exception as exc:
                 last_error = exc
@@ -578,17 +586,16 @@ class GeminiLLMProvider(BaseLLMProvider):
                     generation_config["response_mime_type"] = "application/json"
                     generation_config["response_schema"] = response_schema
 
-                model = self._genai.GenerativeModel(
-                    model_name=target_model,
-                    generation_config=generation_config,
-                    safety_settings=self.safety_settings,
+                response = self._client.models.generate_content(
+                    model=target_model,
+                    contents=gemini_history + [{"role": "user", "parts": [{"text": last_message}]}],
+                    config=generation_config,
                 )
-                chat = model.start_chat(history=gemini_history)
-                response = chat.send_message(last_message)
-                
+
+                text = response.text
                 if response_schema:
-                    return json.loads(response.text)
-                return {"text": response.text}
+                    return json.loads(text)
+                return {"text": text}
             except Exception as exc:
                 last_error = exc
                 logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")

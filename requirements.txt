@@ -74,11 +74,11 @@ anthropic>=0.30.0
 # LangChain & RAG
 # -------------------------------------------
 
-# LangChain Core
-langchain-core>=0.3.0
+# LangChain Core (google-genai 지원 최신)
+langchain-core==1.2.5
 
-# Gemini Embeddings
-langchain-google-genai>=2.0.0
+# Gemini Embeddings (google.genai 기반)
+langchain-google-genai==4.1.2
 
 # ChromaDB 연동
 langchain-chroma>=0.1.0

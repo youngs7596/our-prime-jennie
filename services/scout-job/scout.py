@@ -20,6 +20,7 @@ import re
 import threading
 import json
 import hashlib
+import warnings
 from typing import Dict, Tuple, List, Optional
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -54,6 +55,10 @@ from shared.archivist import Archivist
 
 import chromadb
 from langchain_chroma import Chroma
+
+# langchain_google_genai 내부 google.generativeai FutureWarning 무시
+warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # FinanceDataReader (KOSPI 200 Universe 조회용)
@@ -69,8 +74,8 @@ except ImportError:
 try:
     from utilities.backtest import Backtester
     logger.info("✅ Backtester 모듈 임포트 성공")
-except ImportError as e:
-    logger.warning(f"⚠️ Backtester 모듈 임포트 실패 (백테스트 기능 비활성화): {e}")
+except ImportError:
+    logger.info("ℹ️ Backtester 모듈 없음 - 백테스트 기능 비활성화")
     Backtester = None
 
 # Chroma 서버

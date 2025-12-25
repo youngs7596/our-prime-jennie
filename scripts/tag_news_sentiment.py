@@ -18,7 +18,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Tuple
 
 from dotenv import load_dotenv
@@ -160,7 +160,7 @@ def update_batch(cursor, rows: list):
 
 def process_articles(connection, args):
     cursor = connection.cursor()
-    cutoff = datetime.utcnow() - timedelta(days=args.days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=args.days)
     articles = fetch_articles(cursor, cutoff, args.limit)
     if not articles:
         logger.info("태깅할 뉴스가 없습니다.")

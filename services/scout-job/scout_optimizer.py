@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 try:
     from utilities.backtest import Backtester
     logger.info("✅ Backtester 모듈 임포트 성공")
-except ImportError as e:
-    logger.warning(f"⚠️ Backtester 모듈 임포트 실패 (백테스트 기능 비활성화): {e}")
+except ImportError:
+    logger.info("ℹ️ Backtester 모듈 없음 - 백테스트 기능 비활성화")
     Backtester = None
 
 
