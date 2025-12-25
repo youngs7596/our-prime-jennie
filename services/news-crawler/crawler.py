@@ -654,11 +654,13 @@ def run_collection_job():
     """
     logger.info(f"\n--- [RAG 수집 봇 v9.0] 작업 시작 ---")
     
-    # [Operating Hours Check]
-    from shared.utils import is_operating_hours
-    if not is_operating_hours():
-        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-        return
+    # [Operating Hours Check] — mock/test에서는 스킵 가능
+    disable_market_open_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+    if not disable_market_open_check:
+        from shared.utils import is_operating_hours
+        if not is_operating_hours():
+            logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
+            return
     
     # 서비스 초기화 (지연 초기화)
     try:

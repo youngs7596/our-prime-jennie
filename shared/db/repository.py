@@ -113,6 +113,9 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
 
     for row in rows:
         reason, metadata = _parse_llm_reason(row.llm_reason or "")
+        inferred_tier = "TIER1" if bool(row.is_tradable) else "BLOCKED"
+        # Project Recon v1.1: DB 컬럼 우선, 없으면 메타데이터/추론으로 폴백
+        trade_tier = getattr(row, "trade_tier", None) or metadata.get("trade_tier") or inferred_tier
         watchlist[row.stock_code] = {
             "name": row.stock_name,
             "is_tradable": bool(row.is_tradable),
@@ -122,6 +125,7 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
             "llm_score": float(row.llm_score) if row.llm_score is not None else 0,
             "llm_reason": reason,
             "llm_metadata": metadata,
+            "trade_tier": trade_tier,
             "llm_grade": metadata.get("llm_grade"),
             "bear_strategy": metadata.get("bear_strategy"),
         }

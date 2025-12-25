@@ -138,21 +138,29 @@ class BuyExecutor:
             
             current_score = selected_candidate.get('llm_score', 0)
             is_tradable = selected_candidate.get('is_tradable', False)
+            trade_tier = selected_candidate.get('trade_tier') or ("TIER1" if is_tradable else "TIER2")
             
             # 점수 확인 (환경변수로 설정 가능, 기본값 70점 - B등급 이상만 매수)
             # Tier2(Scout Judge 미통과) 경로는 별도 최소 점수 적용 (품질 상향)
-            base_min_llm_score = int(os.getenv('MIN_LLM_SCORE', '60'))
-            tier2_min_llm_score = int(os.getenv('MIN_LLM_SCORE_TIER2', '65'))
-            min_llm_score = base_min_llm_score if is_tradable else tier2_min_llm_score
+            base_min_llm_score = self.config.get_int('MIN_LLM_SCORE', default=60)
+            tier2_min_llm_score = self.config.get_int('MIN_LLM_SCORE_TIER2', default=65)
+            recon_min_llm_score = self.config.get_int('MIN_LLM_SCORE_RECON', default=tier2_min_llm_score)
+
+            if trade_tier == "TIER1":
+                min_llm_score = base_min_llm_score
+            elif trade_tier == "RECON":
+                min_llm_score = recon_min_llm_score
+            else:
+                min_llm_score = tier2_min_llm_score
             if current_score < min_llm_score: 
                  c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
-                 tier_label = "Tier1" if is_tradable else "Tier2"
+                tier_label = trade_tier
                  logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
                  return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
 
             stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
             stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
-            logger.info(f"✅ [Fast Hands] 최고점 후보 선정: {stock_name}({stock_code}) - {current_score}점")
+            logger.info(f"✅ [Fast Hands] 최고점 후보 선정: {stock_name}({stock_code}) - {current_score}점 (tier={trade_tier})")
             logger.info(f"   이유: {selected_candidate.get('llm_reason', '')[:100]}...")
             
             # 3.5 분산 락(Distributed Lock)으로 중복 체결 방지 (동시 처리/재전송 대응)
@@ -247,6 +255,14 @@ class BuyExecutor:
                 
                 # 동적 리스크 설정 적용 (비중 조절)
                 position_size_ratio = risk_setting.get('position_size_ratio', 1.0)
+
+                # [Project Recon] 정찰병(소액) 비중 적용 + 타이트 손절 설정(메타 기록용)
+                if trade_tier == "RECON":
+                    recon_mult = self.config.get_float("RECON_POSITION_MULT", default=0.3)
+                    position_size_ratio *= recon_mult
+                    # downstream(사후 분석/리포트/추후 sell-engine 확장)용으로 risk_setting에 남김
+                    recon_sl = self.config.get_float("RECON_STOP_LOSS_PCT", default=-0.025)
+                    risk_setting = {**(risk_setting or {}), "stop_loss_pct": recon_sl, "recon_mode": True}
                 
                 position_size = int(base_quantity * position_size_ratio)
                 
@@ -379,6 +395,7 @@ class BuyExecutor:
                 risk_setting=risk_setting,
                 is_tradable=selected_candidate.get('is_tradable', False),
                 llm_score=selected_candidate.get('llm_score', 0),
+                trade_tier=trade_tier,
                 tier2_met_count=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_met_count'),
                 tier2_conditions_met=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_met'),
                 tier2_conditions_failed=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_failed'),
@@ -390,7 +407,7 @@ class BuyExecutor:
                     total_amount = position_size * current_price
                     
                     # Mock/Real 모드 및 DRY_RUN 표시
-                    trading_mode = os.getenv('TRADING_MODE', 'REAL')
+                    trading_mode = self.config.get('TRADING_MODE', default='REAL')
                     mode_indicator = ""
                     if trading_mode == "MOCK":
                         mode_indicator = "🧪 *[MOCK 테스트]*\n"
@@ -402,13 +419,15 @@ class BuyExecutor:
                     llm_score = selected_candidate.get('llm_score', 0)
                     
                     # 매수 경로 표시
-                    if is_tradable:
-                        approval_status = "✅ Judge 통과"
+                    if trade_tier == "TIER1":
+                        approval_status = "✅ TIER1 (Judge 통과)"
+                    elif trade_tier == "RECON":
+                        approval_status = "🕵️ RECON (정찰병: 소액 진입)"
                     else:
-                        approval_status = "⚡ Tier2 스캔 (Judge 미통과, 기술적 신호로 매수)"
+                        approval_status = "⚡ TIER2 (Judge 미통과, 기술적 신호로 매수)"
                     
                     tier2_extra = ""
-                    if not is_tradable:
+                    if trade_tier != "TIER1":
                         km = selected_candidate.get('key_metrics_dict') or {}
                         conds = km.get('tier2_conditions_met') or []
                         if conds:
@@ -545,6 +564,7 @@ class BuyExecutor:
         risk_setting: dict = None,
         is_tradable: bool = False,
         llm_score: float = 0,
+        trade_tier: str | None = None,
         tier2_met_count: int | None = None,
         tier2_conditions_met: list | None = None,
         tier2_conditions_failed: list | None = None,
@@ -567,7 +587,7 @@ class BuyExecutor:
             }
             
             # Tier/조건 정보를 key_metrics에 포함 (사후 분석/리포트/모니터링용)
-            tier = "TIER1" if is_tradable else "TIER2"
+            tier = trade_tier or ("TIER1" if is_tradable else "TIER2")
             key_metrics = {
                 "factor_score": factor_score,
                 "is_dry_run": dry_run,

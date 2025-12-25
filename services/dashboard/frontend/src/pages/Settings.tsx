@@ -1,36 +1,95 @@
+import React from 'react'
 import { motion } from 'framer-motion'
-import {
-  Settings as SettingsIcon,
-  Bell,
-  Database,
-  Brain,
-  Shield,
-  Moon,
-  Sun,
-} from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
+import { Settings as SettingsIcon, Moon, Sun, Loader2, Pencil, AlertTriangle, Lock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/Dialog'
+import { Label } from '@/components/ui/Label'
+import { Badge } from '@/components/ui/Badge'
+import { configApi } from '@/lib/api'
 
 export function SettingsPage() {
+  const queryClient = useQueryClient()
+
+  const { data: configItems, isLoading } = useQuery({
+    queryKey: ['config-list'],
+    queryFn: configApi.list,
+  })
+
+  const [selectedKey, setSelectedKey] = React.useState<string | null>(null)
+  const [editValue, setEditValue] = React.useState<string>('')
+  const [editDesc, setEditDesc] = React.useState<string>('')
+  const [search, setSearch] = React.useState('')
+  const [categoryFilter, setCategoryFilter] = React.useState('ALL')
+
+  const updateMutation = useMutation({
+    mutationFn: ({ key, value, description }: { key: string; value: any; description?: string }) =>
+      configApi.update(key, value, description),
+    onSuccess: () => {
+      toast.success('저장되었습니다')
+      queryClient.invalidateQueries({ queryKey: ['config-list'] })
+      setSelectedKey(null)
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || '저장에 실패했습니다')
+    },
+  })
+
+  const openEdit = (item: any) => {
+    setSelectedKey(item.key)
+    setEditValue(String(item.value ?? ''))
+    setEditDesc('')
+  }
+
+  const saveEdit = () => {
+    if (!selectedKey) return
+    updateMutation.mutate({ key: selectedKey, value: editValue, description: editDesc || undefined })
+  }
+
+  const renderSource = (item: any) => {
+    if (item.sensitive) {
+      if (item.source === 'env') return <Badge variant="destructive">secret(env)</Badge>
+      if (item.source === 'secret') return <Badge variant="outline">secret(file)</Badge>
+      return <Badge variant="secondary">secret(unset)</Badge>
+    }
+    if (item.source === 'env') return <Badge variant="destructive">env</Badge>
+    if (item.source === 'db') return <Badge variant="default">db</Badge>
+    return <Badge variant="secondary">default</Badge>
+  }
+
+  const categories = React.useMemo(() => {
+    const set = new Set<string>()
+    configItems?.forEach((i: any) => set.add(i.category || 'General'))
+    return ['ALL', ...Array.from(set)]
+  }, [configItems])
+
+  const filteredItems = React.useMemo(() => {
+    return (configItems || []).filter((i: any) => {
+      const matchSearch =
+        i.key.toLowerCase().includes(search.toLowerCase()) ||
+        (i.desc || '').toLowerCase().includes(search.toLowerCase())
+      const matchCategory = categoryFilter === 'ALL' || i.category === categoryFilter
+      return matchSearch && matchCategory
+    })
+  }, [configItems, search, categoryFilter])
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-6 max-w-4xl"
+      className="space-y-6 max-w-5xl"
     >
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-display font-bold flex items-center gap-3">
           <SettingsIcon className="w-8 h-8 text-muted-foreground" />
           Settings
         </h1>
-        <p className="text-muted-foreground mt-1">
-          대시보드 및 트레이딩 설정을 관리합니다
-        </p>
+        <p className="text-muted-foreground mt-1">대시보드 및 트레이딩 설정을 관리합니다</p>
       </div>
 
-      {/* Theme */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -53,136 +112,136 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Notifications */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Bell className="w-5 h-5" />
-            알림 설정
+            <SettingsIcon className="w-5 h-5" />
+            시스템 설정 (env > db > default)
           </CardTitle>
-          <CardDescription>텔레그램 알림을 설정합니다</CardDescription>
+          <CardDescription>레지스트리 기반 설정을 조회/수정합니다. env로 설정된 키는 읽기 전용입니다.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-            <div>
-              <p className="font-medium">매수 알림</p>
-              <p className="text-sm text-muted-foreground">매수 체결 시 알림</p>
-            </div>
-            <Button variant="outline" size="sm">활성화됨</Button>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2 items-center">
+            <Input
+              placeholder="키/설명 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-sm"
+            />
+            <select
+              className="border border-border rounded-md px-2 py-1 text-sm bg-background"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-            <div>
-              <p className="font-medium">매도 알림</p>
-              <p className="text-sm text-muted-foreground">매도 체결 시 알림</p>
+
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              불러오는 중...
             </div>
-            <Button variant="outline" size="sm">활성화됨</Button>
-          </div>
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-            <div>
-              <p className="font-medium">일일 브리핑</p>
-              <p className="text-sm text-muted-foreground">매일 17:00 포트폴리오 요약</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border border-border/50 rounded-md">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Key</th>
+                    <th className="px-3 py-2 text-left">Value</th>
+                    <th className="px-3 py-2 text-left">Source</th>
+                    <th className="px-3 py-2 text-left">Default</th>
+                    <th className="px-3 py-2 text-left">Category</th>
+                    <th className="px-3 py-2 text-left">Desc</th>
+                    <th className="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map((item: any) => {
+                    const displayValue = item.sensitive
+                      ? item.source === 'default'
+                        ? '(unset)'
+                        : '***'
+                      : String(item.value)
+                    return (
+                      <tr key={item.key} className="border-t border-border/50">
+                        <td className="px-3 py-2 font-mono text-xs">{item.key}</td>
+                        <td className="px-3 py-2">{displayValue}</td>
+                        <td className="px-3 py-2">{renderSource(item)}</td>
+                        <td className="px-3 py-2 text-muted-foreground text-xs">{String(item.default ?? '')}</td>
+                        <td className="px-3 py-2">{item.category}</td>
+                        <td className="px-3 py-2 text-muted-foreground text-xs">{item.desc}</td>
+                        <td className="px-3 py-2">
+                          {item.sensitive ? (
+                            <Badge variant="outline" className="gap-1 text-xs">
+                              <Lock className="w-3 h-3" />
+                              secret
+                            </Badge>
+                          ) : item.source === 'env' ? (
+                            <Badge variant="outline" className="gap-1 text-xs">
+                              <AlertTriangle className="w-3 h-3" />
+                              env 고정
+                            </Badge>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => openEdit(item)}
+                            >
+                              <Pencil className="w-4 h-4" />
+                              편집
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-            <Button variant="outline" size="sm">활성화됨</Button>
-          </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* LLM Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="w-5 h-5" />
-            LLM 설정
-          </CardTitle>
-          <CardDescription>Scout-Debate-Judge 파이프라인 설정</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 rounded-lg bg-white/5">
-              <p className="text-sm text-muted-foreground">Phase 1 (Hunter)</p>
-              <p className="font-medium font-mono">gpt-oss:20b</p>
-              <p className="text-xs text-muted-foreground mt-1">Local Ollama</p>
-            </div>
-            <div className="p-3 rounded-lg bg-white/5">
-              <p className="text-sm text-muted-foreground">Phase 2 (Debate)</p>
-              <p className="font-medium font-mono">gpt-oss:20b</p>
-              <p className="text-xs text-muted-foreground mt-1">Local Ollama</p>
-            </div>
-            <div className="p-3 rounded-lg bg-white/5">
-              <p className="text-sm text-muted-foreground">Phase 3 (Judge)</p>
-              <p className="font-medium font-mono">gpt-oss:20b</p>
-              <p className="text-xs text-muted-foreground mt-1">Local Ollama</p>
-            </div>
-            <div className="p-3 rounded-lg bg-white/5">
-              <p className="text-sm text-muted-foreground">News Sentiment</p>
-              <p className="font-medium font-mono">gpt-5-nano</p>
-              <p className="text-xs text-muted-foreground mt-1">OpenAI (Fallback: Gemini 2.5 Flash)</p>
-            </div>
-          </div>
-          <div className="p-3 rounded-lg bg-white/5">
-            <p className="text-sm text-muted-foreground mb-2">Scout Job 실행 주기</p>
-            <p className="font-medium">1시간 (SCOUT_MIN_LLM_INTERVAL_MINUTES: 60)</p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Database */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            데이터베이스
-          </CardTitle>
-          <CardDescription>연결된 데이터베이스 정보</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
+      <Dialog open={!!selectedKey} onOpenChange={(open) => !open && setSelectedKey(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>설정 수정</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
             <div>
-              <p className="font-medium">MariaDB</p>
-              <p className="text-sm text-muted-foreground">Windows Host (WSL2 연결)</p>
+              <Label>Key</Label>
+              <Input value={selectedKey || ''} disabled className="bg-muted" />
             </div>
-            <span className="px-2 py-1 rounded-full text-xs bg-profit-positive/20 text-profit-positive">
-              연결됨
-            </span>
+            <div>
+              <Label>Value</Label>
+              <Input value={editValue} onChange={(e) => setEditValue(e.target.value)} />
+            </div>
+            <div>
+              <Label>설명 (선택)</Label>
+              <Input
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                placeholder="DB description 필드에 저장 (옵션)"
+              />
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Security */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5" />
-            보안
-          </CardTitle>
-          <CardDescription>계정 보안 설정</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">현재 비밀번호</label>
-            <Input type="password" placeholder="••••••••" disabled />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">새 비밀번호</label>
-            <Input type="password" placeholder="새 비밀번호 입력" disabled />
-          </div>
-          <Button disabled>비밀번호 변경 (준비 중)</Button>
-        </CardContent>
-      </Card>
-
-      {/* Version Info */}
-      <Card className="border-white/5">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <span>Dashboard Version</span>
-            <span className="font-mono">v2.0.0</span>
-          </div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground mt-2">
-            <span>Contributors</span>
-            <span>GPT-5.1-Codex, Gemini-3.0-Pro, Claude Opus 4.5</span>
-          </div>
-        </CardContent>
-      </Card>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSelectedKey(null)}>
+              취소
+            </Button>
+            <Button onClick={saveEdit} disabled={updateMutation.isPending}>
+              {updateMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

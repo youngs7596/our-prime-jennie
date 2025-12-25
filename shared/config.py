@@ -6,11 +6,11 @@ shared/config.py - my-prime-jennie 설정 관리 모듈
 이 모듈은 중앙화된 설정 관리를 담당합니다.
 
 설정값 우선순위:
---------------
+---------------
 1. 메모리 캐시 (런타임 변경값)
-2. DB CONFIG 테이블 (동적 설정)
-3. 환경 변수
-4. 기본값 (하드코딩)
+2. 환경 변수 (배포/런타임 오버라이드)
+3. DB CONFIG 테이블 (운영 튜닝)
+4. 기본값 (레지스트리/하드코딩)
 
 주요 설정 카테고리:
 -----------------
@@ -44,6 +44,7 @@ from typing import Any, Optional, Dict
 from functools import lru_cache
 
 from .db.connection import session_scope
+from shared.settings.registry import get_registry_defaults
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,9 @@ class ConfigManager:
     
     설정값 우선순위:
     1. 메모리 캐시 (런타임 변경값)
-    2. DB CONFIG 테이블 (동적 설정)
-    3. 환경 변수
-    4. 기본값 (하드코딩)
+    2. 환경 변수 (배포/런타임 오버라이드)
+    3. DB CONFIG 테이블 (동적 설정)
+    4. 기본값 (레지스트리/하드코딩)
     
     사용 예시:
         config = ConfigManager(db_conn=connection)
@@ -195,6 +196,18 @@ class ConfigManager:
                 "category": "Risk"
             },
         }
+
+        # 레지스트리 기본값 병합 (중앙 관리)
+        try:
+            registry_defaults = get_registry_defaults()
+            # registry 우선으로 덮어쓰되, 기존에 없는 키를 추가
+            merged = dict(self._defaults)
+            for k, v in registry_defaults.items():
+                merged[k] = v
+            self._defaults = merged
+            logger.debug(f"[Config] 레지스트리 기본값 병합 완료 ({len(registry_defaults)} keys)")
+        except Exception as e:
+            logger.warning(f"[Config] 레지스트리 기본값 로드 실패: {e}")
     
     def get(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
         """
@@ -218,7 +231,13 @@ class ConfigManager:
                 logger.debug(f"[Config] 메모리 캐시에서 '{key}' 조회: {value}")
                 return value
         
-        # 2. DB CONFIG 테이블 확인
+        # 2. 환경 변수 확인 (DB보다 우선)
+        env_value = os.getenv(key)
+        if env_value is not None:
+            logger.debug(f"[Config] 환경 변수에서 '{key}' 조회: {env_value}")
+            return self._convert_type(key, env_value)
+
+        # 3. DB CONFIG 테이블 확인
         # 컨텍스트 매니저가 Pool 또는 Stateless 연결을 자동으로 처리
         try:
             # DB 캐시 확인
@@ -238,13 +257,7 @@ class ConfigManager:
                     logger.debug(f"[Config] DB에서 '{key}' 조회: {db_value}")
                     return self._convert_type(key, db_value)
         except Exception as e:
-            logger.warning(f"[Config] DB에서 '{key}' 조회 실패 (환경변수/기본값으로 대체): {e}")
-        
-        # 3. 환경 변수 확인
-        env_value = os.getenv(key)
-        if env_value is not None:
-            logger.debug(f"[Config] 환경 변수에서 '{key}' 조회: {env_value}")
-            return self._convert_type(key, env_value)
+            logger.warning(f"[Config] DB에서 '{key}' 조회 실패 (기본값으로 대체): {e}")
         
         # 4. 기본값 반환
         if default is not None:

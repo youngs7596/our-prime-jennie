@@ -257,6 +257,15 @@ CREATE TABLE IF NOT EXISTS DAILY_QUANT_SCORE (
 CREATE INDEX IF NOT EXISTS IDX_DAILY_SCORE_DATE ON DAILY_QUANT_SCORE (SCORE_DATE);
 CREATE INDEX IF NOT EXISTS IDX_DAILY_SCORE_STOCK ON DAILY_QUANT_SCORE (STOCK_CODE);
 CREATE INDEX IF NOT EXISTS IDX_DAILY_SCORE_PASSED ON DAILY_QUANT_SCORE (IS_PASSED_FILTER);
+
+-- =============================================================================
+-- Project Recon v1.1: WATCHLIST 컬럼 확장
+-- =============================================================================
+-- NOTE:
+-- WATCHLIST 테이블 자체의 CREATE DDL은 이 파일의 범위 밖(레거시)이나,
+-- 서비스/스크립트에서 재현 가능하도록 컬럼 추가 DDL만 여기에 기록합니다.
+ALTER TABLE WATCHLIST
+    ADD COLUMN TRADE_TIER VARCHAR(16) NOT NULL DEFAULT 'BLOCKED';
 """
 
 

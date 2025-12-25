@@ -123,54 +123,72 @@ class BuyScanner:
                 # 하락장에서는 기본 중단, 단 설정에 따라 제한적 스캔 허용
                 if current_regime == MarketRegimeDetector.REGIME_BEAR:
                     if not allow_bear_trading:
-                        logger.warning("📉 하락장 감지! 매수 활동 중단 (ALLOW_BEAR_TRADING=false)")
-                        return {
-                            "candidates": [],
-                            "market_regime": current_regime,
-                            "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                        # [Project Recon] 하락장에서도 RECON tier(정찰병) 후보는 제한적으로 스캔
+                        recon_only = {}
+                        for code, info in watchlist.items():
+                            trade_tier = (
+                                info.get("trade_tier")
+                                or (info.get("llm_metadata") or {}).get("trade_tier")
+                                or ("TIER1" if info.get("is_tradable", True) else "BLOCKED")
+                            )
+                            if trade_tier == "RECON":
+                                recon_only[code] = info
+
+                        if not recon_only:
+                            logger.warning("📉 하락장 감지! 매수 활동 중단 (ALLOW_BEAR_TRADING=false, RECON 후보 없음)")
+                            return {
+                                "candidates": [],
+                                "market_regime": current_regime,
+                                "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+
+                        logger.warning(f"📉 하락장 감지! RECON 정찰 후보만 제한적으로 스캔: {len(recon_only)}개")
+                        watchlist = recon_only
+                        # BEAR 기본 전략이 []인 경우가 있어, 정찰은 추세 신호만 열어둠
+                        active_strategies = [StrategySelector.STRATEGY_TREND_FOLLOWING]
+                    else:
+                        filtered_watchlist = {}
+                        for code, info in watchlist.items():
+                            metadata = info.get('llm_metadata') or {}
+                            bear_strategy = metadata.get('bear_strategy')
+                            llm_grade = metadata.get('llm_grade') or info.get('llm_grade')
+                            if not bear_strategy or not llm_grade:
+                                continue
+                            strategy_meta = bear_strategy.get('market_regime_strategy', {})
+                            if (
+                                strategy_meta.get('decision') == 'TRADABLE'
+                                and strategy_meta.get('strategy_type') != 'DO_NOT_TRADE'
+                                and strategy_meta.get('confidence_score', 0) >= min_bear_confidence
+                                and llm_grade in ('S', 'A', 'B')
+                            ):
+                                enriched = info.copy()
+                                enriched['bear_strategy'] = bear_strategy
+                                enriched['llm_grade'] = llm_grade
+                                enriched['is_tradable'] = True
+                                filtered_watchlist[code] = enriched
+                        if not filtered_watchlist:
+                            logger.warning("📉 하락장 제한적 매수 조건을 충족하는 후보가 없습니다.")
+                            return {
+                                "candidates": [],
+                                "market_regime": current_regime,
+                                "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+                        watchlist = filtered_watchlist
+                        bear_context = {
+                            "position_ratio": self.config.get_float('BEAR_POSITION_RATIO', default=0.2),
+                            "stop_loss_atr_mult": self.config.get_float('BEAR_STOP_LOSS_ATR_MULT', default=2.0),
+                            "tp_pct": self.config.get_float('BEAR_FIRST_TP_PCT', default=0.03),
+                            "partial_ratio": self.config.get_float('BEAR_PARTIAL_CLOSE_RATIO', default=0.5),
+                            "volume_multiplier": self.config.get_float('BEAR_VOLUME_SPIKE_MULTIPLIER', default=1.5),
+                            "atr_period": 14,
+                            "bear_mode": True,
                         }
-                    filtered_watchlist = {}
-                    for code, info in watchlist.items():
-                        metadata = info.get('llm_metadata') or {}
-                        bear_strategy = metadata.get('bear_strategy')
-                        llm_grade = metadata.get('llm_grade') or info.get('llm_grade')
-                        if not bear_strategy or not llm_grade:
-                            continue
-                        strategy_meta = bear_strategy.get('market_regime_strategy', {})
-                        if (
-                            strategy_meta.get('decision') == 'TRADABLE'
-                            and strategy_meta.get('strategy_type') != 'DO_NOT_TRADE'
-                            and strategy_meta.get('confidence_score', 0) >= min_bear_confidence
-                            and llm_grade in ('S', 'A', 'B')
-                        ):
-                            enriched = info.copy()
-                            enriched['bear_strategy'] = bear_strategy
-                            enriched['llm_grade'] = llm_grade
-                            enriched['is_tradable'] = True
-                            filtered_watchlist[code] = enriched
-                    if not filtered_watchlist:
-                        logger.warning("📉 하락장 제한적 매수 조건을 충족하는 후보가 없습니다.")
-                        return {
-                            "candidates": [],
-                            "market_regime": current_regime,
-                            "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                        risk_setting = {
+                            "stop_loss_pct": -0.02,
+                            "target_profit_pct": 0.03,
+                            "position_size_ratio": bear_context["position_ratio"],
                         }
-                    watchlist = filtered_watchlist
-                    bear_context = {
-                        "position_ratio": self.config.get_float('BEAR_POSITION_RATIO', default=0.2),
-                        "stop_loss_atr_mult": self.config.get_float('BEAR_STOP_LOSS_ATR_MULT', default=2.0),
-                        "tp_pct": self.config.get_float('BEAR_FIRST_TP_PCT', default=0.03),
-                        "partial_ratio": self.config.get_float('BEAR_PARTIAL_CLOSE_RATIO', default=0.5),
-                        "volume_multiplier": self.config.get_float('BEAR_VOLUME_SPIKE_MULTIPLIER', default=1.5),
-                        "atr_period": 14,
-                        "bear_mode": True,
-                    }
-                    risk_setting = {
-                        "stop_loss_pct": -0.02,
-                        "target_profit_pct": 0.03,
-                        "position_size_ratio": bear_context["position_ratio"],
-                    }
-                    logger.info(f"📉 제한적 매수 허용: {len(watchlist)}개 후보 (LLM B등급 이상)")
+                        logger.info(f"📉 제한적 매수 허용: {len(watchlist)}개 후보 (LLM B등급 이상)")
                 
                 # 3. Portfolio 조회 (중복 방지)
                 current_portfolio = get_active_portfolio(session)
@@ -294,7 +312,7 @@ class BuyScanner:
                 raise Exception("KOSPI 과거 데이터 부족")
             
             # KOSPI 현재가 조회
-            trading_mode = os.getenv("TRADING_MODE", "MOCK")
+            trading_mode = self.config.get("TRADING_MODE", default="MOCK")
             if trading_mode == "MOCK":
                 kospi_current_price = float(kospi_prices_df['CLOSE_PRICE'].iloc[-1])
                 logger.info(f"MOCK 모드: KOSPI 현재가 = {kospi_current_price}")
@@ -369,13 +387,28 @@ class BuyScanner:
         filter_stats_lock = Lock()
         
         # 1. 거래 가능한 종목 필터링
-        # [Tiered Execution] tier2_enabled가 True면 is_tradable 여부 상관없이(False도 포함) 스캔
+        # [Tiered Execution] tier2_enabled가 True면 Judge 미통과 종목도 스캔(Tier2)
+        # [Project Recon] trade_tier=RECON 종목은 tier2_enabled 여부와 무관하게 스캔 대상으로 포함
         tradable_codes = []
         for stock_code, stock_info in watchlist.items():
-            is_tradable = stock_info.get('is_tradable', True) or tier2_enabled
+            trade_tier = (
+                stock_info.get("trade_tier")
+                or (stock_info.get("llm_metadata") or {}).get("trade_tier")
+                or ("TIER1" if stock_info.get("is_tradable", True) else "BLOCKED")
+            )
+
+            allowed = False
             if bear_context is not None:
-                is_tradable = stock_info.get('bear_strategy') is not None
-            if is_tradable and stock_code not in owned_codes:
+                # 기존 BEAR 경로: LLM bear_strategy가 있는 종목만
+                # Project Recon: RECON tier는 BEAR에서도 "정찰 후보"로 포함 가능
+                allowed = (stock_info.get('bear_strategy') is not None) or (trade_tier == "RECON")
+            else:
+                if trade_tier in ("TIER1", "RECON"):
+                    allowed = True
+                elif tier2_enabled:
+                    allowed = True
+
+            if allowed and stock_code not in owned_codes:
                 tradable_codes.append(stock_code)
         
         # 2. 최근 거래 종목 제외
@@ -528,11 +561,20 @@ class BuyScanner:
                 key_metrics_dict['llm_strategy_type'] = strategy_hint
             else:
                 # is_tradable=False인 경우 Tier2 스캔 (복합 조건 필요)
-                is_tradable = stock_info.get('is_tradable', True)
+                trade_tier = (
+                    stock_info.get("trade_tier")
+                    or (stock_info.get("llm_metadata") or {}).get("trade_tier")
+                    or ("TIER1" if stock_info.get("is_tradable", True) else "BLOCKED")
+                )
+                is_tradable = trade_tier == "TIER1"
                 buy_signal_type, key_metrics_dict = self._detect_signals(
                     stock_code, daily_prices_df, last_close_price, rsi_value, 
                     current_regime, active_strategies, kospi_prices_df, is_tradable
                 )
+                # Project Recon: key_metrics에 tier 정보를 남겨 Executor/텔레그램/로그에서 가시성 확보
+                if key_metrics_dict is None:
+                    key_metrics_dict = {}
+                key_metrics_dict["trade_tier"] = trade_tier
             
             if not buy_signal_type:
                 return None
@@ -589,7 +631,9 @@ class BuyScanner:
                 'key_metrics_dict': key_metrics_dict,
                 'factor_score': factor_score,
                 'factors': factors,
-                'current_price': float(last_close_price)
+                'current_price': float(last_close_price),
+                # Project Recon
+                'trade_tier': (key_metrics_dict or {}).get("trade_tier")
             }
             
         except Exception as e:
@@ -880,7 +924,13 @@ class BuyScanner:
             'eps_growth': stock_info.get('eps_growth'),
             'llm_score': stock_info.get('llm_score', 0),
             'llm_reason': stock_info.get('llm_reason', ''),
-            'bear_strategy': stock_info.get('bear_strategy')
+            'bear_strategy': stock_info.get('bear_strategy'),
+            # Project Recon
+            'trade_tier': (
+                stock_info.get('trade_tier')
+                or (stock_info.get('llm_metadata') or {}).get('trade_tier')
+                or serialized.get('trade_tier')
+            ),
         }
         
         # 최상위 레벨에도 편의상 추가
@@ -888,5 +938,7 @@ class BuyScanner:
         serialized['llm_reason'] = stock_info.get('llm_reason', '')
         # Judge 통과 여부 (is_tradable: hybrid_score >= 75)
         serialized['is_tradable'] = stock_info.get('is_tradable', False)
+        # Project Recon
+        serialized['trade_tier'] = serialized['stock_info'].get('trade_tier')
         
         return serialized

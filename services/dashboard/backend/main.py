@@ -255,9 +255,10 @@ app.add_middleware(
 
 # 라우터 등록
 # 라우터 등록
-from routers import factors, llm
+from routers import factors, llm, configs
 app.include_router(factors.router) # Factor settings router
 app.include_router(llm.router) # LLM settings & stats router
+app.include_router(configs.router) # Config registry/API router
 
 # =============================================================================
 # 인증 API

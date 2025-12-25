@@ -32,6 +32,7 @@ shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 """
 
 import logging
+import os
 import pandas as pd
 from typing import Dict, Optional, Tuple
 from shared import strategy
@@ -296,7 +297,13 @@ class StrategySelector:
                 self.STRATEGY_MEAN_REVERSION,
                 self.STRATEGY_TREND_FOLLOWING
             ],
-            MarketRegimeDetector.REGIME_BEAR: [] # 🅿️ (P-Parking)
+            # 🅿️ (P-Parking) 기본값은 거래 중단이지만,
+            # [Project Recon] 정찰병(RECON) 경로를 위해 제한적 추세 신호를 열어둘 수 있음.
+            MarketRegimeDetector.REGIME_BEAR: (
+                [self.STRATEGY_TREND_FOLLOWING]
+                if ConfigManager().get_bool("ENABLE_RECON_IN_BEAR", default=True)
+                else []
+            ),
         }
         
         strategies = strategy_map.get(regime, [self.STRATEGY_MEAN_REVERSION])

@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 import shared.database as database
+from shared.config import ConfigManager
 
 logger = logging.getLogger(__name__)
+_cfg = ConfigManager()
 
 
 def _utcnow() -> datetime:
@@ -22,8 +24,8 @@ def _utcnow() -> datetime:
 
 
 def is_hybrid_scoring_enabled() -> bool:
-    """Scout v1.0 하이브리드 스코어링 활성화 여부 확인 (SCOUT_V5_ENABLED 환경변수 - 하위호환)"""
-    return os.getenv("SCOUT_V5_ENABLED", "false").lower() == "true"
+    """Scout v1.0 하이브리드 스코어링 활성화 여부 확인 (SCOUT_V5_ENABLED)"""
+    return _cfg.get_bool("SCOUT_V5_ENABLED", default=False)
 
 
 def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_df=None):
@@ -120,14 +122,6 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
 
 # Smart Skip Filter - LLM 호출 사전 필터링
 
-# 설정값 (환경변수로 조절 가능) - 보수적 기준
-# "최대치를 받아도 커트라인(60점)을 못 넘을 종목만 스킵"
-SMART_SKIP_QUANT_MIN = float(os.getenv("SMART_SKIP_QUANT_MIN", "25"))  # 매우 낮은 정량 점수만
-SMART_SKIP_RSI_MAX = float(os.getenv("SMART_SKIP_RSI_MAX", "80"))  # 극단적 과매수만
-SMART_SKIP_SENTIMENT_MIN = float(os.getenv("SMART_SKIP_SENTIMENT_MIN", "-50"))  # 극심한 악재만
-SMART_SKIP_CACHED_HUNTER_MIN = float(os.getenv("SMART_SKIP_CACHED_HUNTER_MIN", "30"))  # 아주 낮은 이전 점수만
-
-
 def should_skip_hunter(quant_result, 
                        cached_hunter_score: Optional[float] = None,
                        news_sentiment: Optional[float] = None,
@@ -159,22 +153,27 @@ def should_skip_hunter(quant_result,
         return False, ""
     
     # 조건 1: Quant Score가 너무 낮음
-    if quant_result.total_score < SMART_SKIP_QUANT_MIN:
-        return True, f"Quant점수 낮음 ({quant_result.total_score:.1f}점 < {SMART_SKIP_QUANT_MIN})"
+    smart_skip_quant_min = _cfg.get_float("SMART_SKIP_QUANT_MIN", default=25)
+    smart_skip_rsi_max = _cfg.get_float("SMART_SKIP_RSI_MAX", default=80)
+    smart_skip_sentiment_min = _cfg.get_float("SMART_SKIP_SENTIMENT_MIN", default=-50)
+    smart_skip_cached_hunter_min = _cfg.get_float("SMART_SKIP_CACHED_HUNTER_MIN", default=30)
+
+    if quant_result.total_score < smart_skip_quant_min:
+        return True, f"Quant점수 낮음 ({quant_result.total_score:.1f}점 < {smart_skip_quant_min})"
     
     # 조건 2: RSI 과매수 (기술적 점수에서 RSI 추출)
     rsi = quant_result.details.get('rsi')
-    if rsi is not None and rsi > SMART_SKIP_RSI_MAX:
-        return True, f"RSI 과매수 ({rsi:.1f} > {SMART_SKIP_RSI_MAX})"
+    if rsi is not None and rsi > smart_skip_rsi_max:
+        return True, f"RSI 과매수 ({rsi:.1f} > {smart_skip_rsi_max})"
     
     # 조건 3: 강한 악재 뉴스
-    if news_sentiment is not None and news_sentiment < SMART_SKIP_SENTIMENT_MIN:
+    if news_sentiment is not None and news_sentiment < smart_skip_sentiment_min:
         return True, f"악재 뉴스 (감성점수 {news_sentiment})"
     
     # 조건 4: 이전 캐시에서 크게 탈락 (조건 변화 없을 때)
     # 단, 오늘 처음 보는 종목은 스킵하지 않음
-    if cached_hunter_score is not None and cached_hunter_score < SMART_SKIP_CACHED_HUNTER_MIN:
-        return True, f"이전 Hunter 낮음 ({cached_hunter_score:.0f}점 < {SMART_SKIP_CACHED_HUNTER_MIN})"
+    if cached_hunter_score is not None and cached_hunter_score < smart_skip_cached_hunter_min:
+        return True, f"이전 Hunter 낮음 ({cached_hunter_score:.0f}점 < {smart_skip_cached_hunter_min})"
     
     return False, ""
 
@@ -372,6 +371,42 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     
     is_tradable = hybrid_score >= 75
     approved = hybrid_score >= 50
+
+    # -------------------------------------------------------------------------
+    # [Project Recon] Trade Tier 산정
+    # - TIER1: Judge 통과 (is_tradable=True, hybrid >= 75)
+    # - RECON: hybrid 60~74 + "추세 신호" 존재 → 소액 정찰 진입 후보
+    # - BLOCKED: 그 외
+    #
+    # NOTE:
+    # - is_tradable의 의미(=Judge 통과)는 유지합니다.
+    # - trade_tier는 llm_metadata에 저장되어 buy-scanner/buy-executor에서 활용합니다.
+    # -------------------------------------------------------------------------
+    recon_signals: list[str] = []
+    try:
+        details = getattr(quant_result, "details", {}) or {}
+        tech_details = details.get("technical", {}) or {}
+
+        volume_ratio = tech_details.get("volume_ratio")
+        ma20_slope_5d = tech_details.get("ma20_slope_5d")
+
+        if tech_details.get("golden_cross_5_20"):
+            recon_signals.append("GOLDEN_CROSS_5_20")
+        recon_volume_min = _cfg.get_float("RECON_VOLUME_RATIO_MIN", default=1.5)
+        if isinstance(volume_ratio, (int, float)) and volume_ratio >= recon_volume_min:
+            recon_signals.append(f"VOLUME_TREND_{float(volume_ratio):.2f}x")
+        if isinstance(ma20_slope_5d, (int, float)) and float(ma20_slope_5d) > 0:
+            recon_signals.append("MA20_SLOPE_UP")
+
+        mom = getattr(quant_result, "momentum_score", None)
+        recon_mom_min = _cfg.get_float("RECON_MOMENTUM_MIN", default=20)
+        if mom is not None and float(mom) >= recon_mom_min:
+            recon_signals.append(f"MOMENTUM_{float(mom):.1f}/25")
+    except Exception:
+        recon_signals = []
+
+    is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)
+    trade_tier = "TIER1" if is_tradable else ("RECON" if is_recon else "BLOCKED")
     
     # [Market Regime] 하락장/횡보장은 기준을 낮추는 대신, 오히려 관망(No Trade)이 최선일 수 있음.
     # 사용자의 지적대로 "억지로 거래를 만드는 것"은 리스크를 키우므로 원복함.
@@ -438,6 +473,9 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         'hybrid_score': hybrid_score,
         'hunter_score': hunter_score,
         'condition_win_rate': quant_result.condition_win_rate,
+        # Project Recon
+        'trade_tier': trade_tier,
+        'recon_signals': recon_signals,
     }
     
     # 스냅샷에서 재무 데이터 추출
@@ -484,6 +522,7 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         'llm_reason': reason,
         'approved': approved,
         'llm_metadata': metadata,
+        'trade_tier': trade_tier,
         # 재무 데이터 추가
         'per': snapshot.get('per'),
         'pbr': snapshot.get('pbr'),
