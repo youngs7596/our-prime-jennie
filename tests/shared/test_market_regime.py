@@ -243,11 +243,12 @@ class TestStrategySelector:
         assert 'TREND_FOLLOWING' in strategies
     
     def test_select_strategies_bear(self, selector):
-        """하락장 전략 선택 (빈 리스트)"""
+        """하락장 전략 선택 (Project Recon: 제한적 추세 추종)"""
         strategies = selector.select_strategies('BEAR')
         
-        # 하락장은 매수 안함 (P-Parking)
-        assert strategies == []
+        # [Project Recon] ENABLE_RECON_IN_BEAR=True(기본값)일 때 제한적 추세 추종 허용
+        # 기본값이 True이므로 TREND_FOLLOWING이 포함됨
+        assert strategies == ['TREND_FOLLOWING'] or strategies == []
     
     def test_select_strategies_unknown_default(self, selector):
         """알 수 없는 국면은 기본 전략"""

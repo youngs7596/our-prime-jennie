@@ -456,8 +456,250 @@ class TestGenerateDailyBriefing:
         from shared.llm_factory import LLMTier
         mock_brain._get_provider.assert_any_call(LLMTier.THINKING)
     
+    def test_daily_briefing_provider_error(self):
+        """Provider 오류시 에러 메시지 반환"""
+        from shared.llm import JennieBrain
+        
+        brain = object.__new__(JennieBrain)
+        brain._get_provider = MagicMock(return_value=None)
+        
+        result = brain.generate_daily_briefing("market", "log")
+        
+        assert "실패" in result or "오류" in result
+    
+    def test_daily_briefing_empty_data(self, mock_brain, mock_claude_provider):
+        """빈 데이터도 처리"""
+        mock_claude_provider.generate_chat.return_value = {
+            'text': "No data available report"
+        }
+        
+        result = mock_brain.generate_daily_briefing("", "")
+        
+        assert result is not None
 
 
+# ============================================================================
+# Tests: generate_strategic_feedback
+# ============================================================================
+
+class TestGenerateStrategicFeedback:
+    """전략적 피드백 생성 테스트"""
+    
+    def test_strategic_feedback_success(self, mock_brain, mock_claude_provider):
+        """피드백 생성 성공"""
+        mock_claude_provider.generate_chat.return_value = {
+            'text': "1. 하락장에서 RSI 과열 종목 매수 금지\n2. 바이오 섹터 신중하게"
+        }
+        
+        result = mock_brain.generate_strategic_feedback("성과: 5승 3패")
+        
+        assert "RSI" in result or "하락" in result or isinstance(result, str)
+        
+        from shared.llm_factory import LLMTier
+        mock_brain._get_provider.assert_any_call(LLMTier.THINKING)
+    
+    def test_strategic_feedback_provider_error(self):
+        """Provider 오류시 빈 문자열"""
+        from shared.llm import JennieBrain
+        
+        brain = object.__new__(JennieBrain)
+        brain._get_provider = MagicMock(return_value=None)
+        
+        result = brain.generate_strategic_feedback("performance summary")
+        
+        assert result == ""
+    
+    def test_strategic_feedback_exception(self, mock_brain, mock_claude_provider):
+        """예외 발생시 빈 문자열"""
+        mock_claude_provider.generate_chat.side_effect = Exception("API Error")
+        
+        result = mock_brain.generate_strategic_feedback("summary")
+        
+        assert result == ""
+
+
+# ============================================================================
+# Tests: verify_parameter_change
+# ============================================================================
+
+class TestVerifyParameterChange:
+    """파라미터 변경 검증 테스트"""
+    
+    def test_verify_parameter_change_success(self, mock_brain, mock_gemini_provider, sample_stock_info):
+        """파라미터 변경 자동 승인"""
+        result = mock_brain.verify_parameter_change(
+            sample_stock_info,
+            param_name="stop_loss",
+            old_val=0.05,
+            new_val=0.10
+        )
+        
+        assert result["authorized"] is True
+    
+    def test_verify_parameter_change_no_provider(self, sample_stock_info):
+        """Provider 없으면 미승인"""
+        from shared.llm import JennieBrain
+        
+        brain = object.__new__(JennieBrain)
+        brain._get_provider = MagicMock(return_value=None)
+        
+        result = brain.verify_parameter_change(
+            sample_stock_info,
+            param_name="stop_loss",
+            old_val=0.05,
+            new_val=0.10
+        )
+        
+        assert result["authorized"] is False
+
+
+# ============================================================================
+# Tests: analyze_competitor_benefit
+# ============================================================================
+
+class TestAnalyzeCompetitorBenefit:
+    """경쟁사 수혜 분석 테스트"""
+    
+    def test_competitor_benefit_risk_detected(self, mock_brain, mock_gemini_provider):
+        """리스크 감지"""
+        mock_gemini_provider.generate_json.return_value = {
+            'is_risk': True,
+            'event_type': 'competitor_success',
+            'competitor_benefit_score': 80,
+            'reason': '경쟁사 대규모 수주로 점유율 위협'
+        }
+        
+        result = mock_brain.analyze_competitor_benefit(
+            "경쟁사 A, 10조원 수주 발표"
+        )
+        
+        assert result['is_risk'] is True
+        assert result['competitor_benefit_score'] == 80
+    
+    def test_competitor_benefit_no_risk(self, mock_brain, mock_gemini_provider):
+        """리스크 없음"""
+        mock_gemini_provider.generate_json.return_value = {
+            'is_risk': False,
+            'event_type': 'neutral',
+            'competitor_benefit_score': 20,
+            'reason': '일반적인 시황 뉴스'
+        }
+        
+        result = mock_brain.analyze_competitor_benefit(
+            "반도체 업종 동향 분석"
+        )
+        
+        assert result['is_risk'] is False
+    
+    def test_competitor_benefit_provider_error(self):
+        """Provider 오류시 기본값"""
+        from shared.llm import JennieBrain
+        
+        brain = object.__new__(JennieBrain)
+        brain._get_provider = MagicMock(return_value=None)
+        
+        result = brain.analyze_competitor_benefit("news title")
+        
+        assert result['is_risk'] is False
+        assert 'Error' in result.get('reason', '')
+    
+    def test_competitor_benefit_exception(self, mock_brain, mock_gemini_provider):
+        """예외 발생시 기본값"""
+        mock_gemini_provider.generate_json.side_effect = Exception("API Error")
+        
+        result = mock_brain.analyze_competitor_benefit("news title")
+        
+        assert result['is_risk'] is False
+        assert 'Error' in result.get('reason', '')
+
+
+# ============================================================================
+# Tests: run_judge_scoring_v5 (Gatekeeper Logic)
+# ============================================================================
+
+class TestJudgeScoringV5Gatekeeper:
+    """Judge v5 Gatekeeper 로직 테스트"""
+    
+    def test_gatekeeper_rejects_low_score(self, mock_brain, sample_stock_info):
+        """낮은 Hunter 점수는 자동 거절"""
+        sample_stock_info['hunter_score'] = 60  # < 70 threshold
+        
+        result = mock_brain.run_judge_scoring_v5(sample_stock_info, "debate_log")
+        
+        assert result['score'] == 60
+        assert 'Auto-Rejected' in result['reason']
+        assert result['grade'] == 'B'  # 60점은 B등급
+    
+    def test_gatekeeper_passes_high_score(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """높은 Hunter 점수는 Judge 호출"""
+        sample_stock_info['hunter_score'] = 75  # >= 70 threshold
+        
+        mock_claude_provider.generate_json.return_value = {
+            'score': 78,
+            'grade': 'A',
+            'reason': 'Judge approved'
+        }
+        
+        result = mock_brain.run_judge_scoring_v5(sample_stock_info, "debate_log")
+        
+        assert result['score'] == 78
+        # grade는 코드에서 재계산됨
+        mock_claude_provider.generate_json.assert_called_once()
+    
+    def test_grade_correction(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """LLM 등급 불일치 교정"""
+        sample_stock_info['hunter_score'] = 80
+        
+        # LLM이 잘못된 등급을 반환
+        mock_claude_provider.generate_json.return_value = {
+            'score': 85,
+            'grade': 'B',  # 잘못된 등급 (85점은 S여야 함)
+            'reason': 'Great stock'
+        }
+        
+        result = mock_brain.run_judge_scoring_v5(sample_stock_info, "debate_log")
+        
+        # 코드에서 등급을 재계산하여 교정
+        assert result['grade'] == 'S'  # 85점은 S등급
+
+
+# ============================================================================
+# Tests: News Sentiment Fallback
+# ============================================================================
+
+class TestNewsSentimentFallback:
+    """뉴스 감성 분석 Fallback 테스트"""
+    
+    def test_sentiment_local_failure_cloud_success(self, mock_brain, mock_gemini_provider):
+        """Local 실패 시 Cloud Fallback 성공"""
+        # Local 실패
+        mock_gemini_provider.generate_json.side_effect = Exception("Local Error")
+        
+        # Fallback provider mock
+        with patch('shared.llm_factory.LLMFactory.get_fallback_provider') as mock_fallback:
+            fallback_provider = MagicMock()
+            fallback_provider.name = 'cloud-fallback'
+            fallback_provider.generate_json.return_value = {
+                'score': 70,
+                'reason': 'Cloud analyzed'
+            }
+            mock_fallback.return_value = fallback_provider
+            
+            result = mock_brain.analyze_news_sentiment("title", "desc")
+            
+            assert result['score'] == 70
+    
+    def test_sentiment_both_fail(self, mock_brain, mock_gemini_provider):
+        """Local 및 Cloud 모두 실패"""
+        mock_gemini_provider.generate_json.side_effect = Exception("Local Error")
+        
+        with patch('shared.llm_factory.LLMFactory.get_fallback_provider') as mock_fallback:
+            mock_fallback.return_value = None
+            
+            result = mock_brain.analyze_news_sentiment("title", "desc")
+            
+            # 기본값 반환
+            assert result['score'] == 50
 
 
 

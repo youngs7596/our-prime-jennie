@@ -300,6 +300,296 @@ class TestRedisConnection:
         assert redis_cache._redis_client is None
 
 
+class TestTradingFlags:
+    """거래 플래그 테스트"""
+    
+    def test_set_and_get_trading_flag_pause(self, fake_redis):
+        """pause 플래그 설정 및 조회"""
+        from shared.redis_cache import set_trading_flag, get_trading_flag
+        
+        # When: pause 플래그 설정
+        result = set_trading_flag("pause", True, "점심시간 일시정지", redis_client=fake_redis)
+        
+        # Then: 성공하고 값이 저장됨
+        assert result is True
+        flag = get_trading_flag("pause", redis_client=fake_redis)
+        assert flag["value"] is True
+        assert "점심시간" in flag["reason"]
+        assert "set_at" in flag
+    
+    def test_set_and_get_trading_flag_stop(self, fake_redis):
+        """stop 플래그 설정 및 조회"""
+        from shared.redis_cache import set_trading_flag, get_trading_flag
+        
+        # When: stop 플래그 설정
+        result = set_trading_flag("stop", True, "시장 급락", redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        flag = get_trading_flag("stop", redis_client=fake_redis)
+        assert flag["value"] is True
+    
+    def test_set_and_get_trading_flag_dryrun(self, fake_redis):
+        """dryrun 플래그 설정 및 조회"""
+        from shared.redis_cache import set_trading_flag, get_trading_flag
+        
+        # When: dryrun 플래그 설정
+        result = set_trading_flag("dryrun", True, "테스트 모드", redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        flag = get_trading_flag("dryrun", redis_client=fake_redis)
+        assert flag["value"] is True
+    
+    def test_invalid_flag_name(self, fake_redis):
+        """잘못된 플래그 이름"""
+        from shared.redis_cache import set_trading_flag, get_trading_flag
+        
+        # When: 잘못된 플래그 이름
+        result = set_trading_flag("invalid", True, "테스트", redis_client=fake_redis)
+        
+        # Then: 실패
+        assert result is False
+        
+        # 조회도 기본값 반환
+        flag = get_trading_flag("invalid", redis_client=fake_redis)
+        assert flag["value"] is False
+    
+    def test_flag_not_set_returns_default(self, fake_redis):
+        """설정되지 않은 플래그 조회 시 기본값"""
+        from shared.redis_cache import get_trading_flag
+        
+        # When: 설정되지 않은 플래그 조회
+        flag = get_trading_flag("pause", redis_client=fake_redis)
+        
+        # Then: 기본값 반환
+        assert flag["value"] is False
+        assert flag["reason"] == ""
+    
+    def test_is_trading_paused(self, fake_redis):
+        """is_trading_paused 헬퍼 함수"""
+        from shared.redis_cache import set_trading_flag, is_trading_paused
+        
+        # Given: pause 설정 안됨
+        assert is_trading_paused(redis_client=fake_redis) is False
+        
+        # When: pause 설정
+        set_trading_flag("pause", True, "일시정지", redis_client=fake_redis)
+        
+        # Then: True 반환
+        assert is_trading_paused(redis_client=fake_redis) is True
+    
+    def test_is_trading_stopped(self, fake_redis):
+        """is_trading_stopped 헬퍼 함수"""
+        from shared.redis_cache import set_trading_flag, is_trading_stopped
+        
+        # Given: stop 설정 안됨
+        assert is_trading_stopped(redis_client=fake_redis) is False
+        
+        # When: stop 설정
+        set_trading_flag("stop", True, "거래중단", redis_client=fake_redis)
+        
+        # Then: True 반환
+        assert is_trading_stopped(redis_client=fake_redis) is True
+    
+    def test_is_dryrun_enabled(self, fake_redis):
+        """is_dryrun_enabled 헬퍼 함수"""
+        from shared.redis_cache import set_trading_flag, is_dryrun_enabled
+        
+        # Given: dryrun을 False로 명시적 설정
+        set_trading_flag("dryrun", False, "실거래 모드", redis_client=fake_redis)
+        assert is_dryrun_enabled(redis_client=fake_redis) is False
+        
+        # When: dryrun 설정
+        set_trading_flag("dryrun", True, "테스트", redis_client=fake_redis)
+        
+        # Then: True 반환
+        assert is_dryrun_enabled(redis_client=fake_redis) is True
+    
+    def test_get_all_trading_flags(self, fake_redis):
+        """모든 거래 플래그 조회"""
+        from shared.redis_cache import set_trading_flag, get_all_trading_flags
+        
+        # Given: 여러 플래그 설정
+        set_trading_flag("pause", True, "일시정지", redis_client=fake_redis)
+        set_trading_flag("stop", False, "", redis_client=fake_redis)
+        set_trading_flag("dryrun", True, "테스트", redis_client=fake_redis)
+        
+        # When: 전체 조회
+        all_flags = get_all_trading_flags(redis_client=fake_redis)
+        
+        # Then: 모든 플래그 반환
+        assert "pause" in all_flags
+        assert "stop" in all_flags
+        assert "dryrun" in all_flags
+        assert all_flags["pause"]["value"] is True
+        assert all_flags["dryrun"]["value"] is True
+
+
+class TestConfigValue:
+    """설정값 캐시 테스트 (특정 설정만 허용)"""
+    
+    def test_set_and_get_config_value_min_llm_score(self, fake_redis):
+        """min_llm_score 설정값 저장 및 조회"""
+        from shared.redis_cache import set_config_value, get_config_value
+        
+        # When: 허용된 설정값 저장
+        result = set_config_value("min_llm_score", 65, redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        value = get_config_value("min_llm_score", redis_client=fake_redis)
+        assert value == 65
+    
+    def test_set_and_get_config_value_max_buy_per_day(self, fake_redis):
+        """max_buy_per_day 설정값 저장 및 조회"""
+        from shared.redis_cache import set_config_value, get_config_value
+        
+        # When: 허용된 설정값 저장
+        result = set_config_value("max_buy_per_day", 5, redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        value = get_config_value("max_buy_per_day", redis_client=fake_redis)
+        assert value == 5
+    
+    def test_set_and_get_config_value_risk_level(self, fake_redis):
+        """risk_level 설정값 저장 및 조회"""
+        from shared.redis_cache import set_config_value, get_config_value
+        
+        # When: 허용된 설정값 저장
+        result = set_config_value("risk_level", "HIGH", redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        value = get_config_value("risk_level", redis_client=fake_redis)
+        assert value == "HIGH"
+    
+    def test_get_config_value_default(self, fake_redis):
+        """설정값 없을 때 기본값"""
+        from shared.redis_cache import get_config_value
+        
+        # When: 없는 설정 조회 (허용되지 않은 이름)
+        value = get_config_value("nonexistent", default_value=100, redis_client=fake_redis)
+        
+        # Then: 기본값 반환
+        assert value == 100
+    
+    def test_invalid_config_name_fails(self, fake_redis):
+        """허용되지 않은 설정 이름은 실패"""
+        from shared.redis_cache import set_config_value
+        
+        # When: 허용되지 않은 설정 이름
+        result = set_config_value("INVALID_CONFIG", 42, redis_client=fake_redis)
+        
+        # Then: 실패
+        assert result is False
+
+
+class TestNotificationMute:
+    """알림 음소거 테스트"""
+    
+    def test_set_notification_mute(self, fake_redis):
+        """알림 음소거 설정"""
+        from shared.redis_cache import set_notification_mute, is_notification_muted
+        from datetime import datetime, timezone
+        
+        # Given: 음소거 안됨
+        assert is_notification_muted(redis_client=fake_redis) is False
+        
+        # When: 음소거 설정 (30분 후 해제)
+        future_timestamp = int((datetime.now(timezone.utc).timestamp())) + 1800  # 30분 후
+        result = set_notification_mute(until_timestamp=future_timestamp, redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        assert is_notification_muted(redis_client=fake_redis) is True
+    
+    def test_clear_notification_mute(self, fake_redis):
+        """알림 음소거 해제"""
+        from shared.redis_cache import set_notification_mute, clear_notification_mute, is_notification_muted
+        from datetime import datetime, timezone
+        
+        # Given: 음소거 설정됨
+        future_timestamp = int((datetime.now(timezone.utc).timestamp())) + 3600  # 1시간 후
+        set_notification_mute(until_timestamp=future_timestamp, redis_client=fake_redis)
+        assert is_notification_muted(redis_client=fake_redis) is True
+        
+        # When: 음소거 해제
+        result = clear_notification_mute(redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        assert is_notification_muted(redis_client=fake_redis) is False
+    
+    def test_expired_mute_returns_false(self, fake_redis):
+        """만료된 음소거는 False 반환"""
+        from shared.redis_cache import is_notification_muted, NOTIFICATION_MUTE_KEY
+        import json
+        from datetime import datetime, timezone
+        
+        # Given: 이미 만료된 음소거 (과거 시간)
+        past_timestamp = int((datetime.now(timezone.utc).timestamp())) - 3600  # 1시간 전
+        data = {
+            "until": past_timestamp,
+            "set_at": datetime.now(timezone.utc).isoformat()
+        }
+        fake_redis.setex(NOTIFICATION_MUTE_KEY, 60, json.dumps(data))
+        
+        # When: 음소거 상태 확인
+        result = is_notification_muted(redis_client=fake_redis)
+        
+        # Then: False (만료됨)
+        assert result is False
+
+
+class TestPriceAlerts:
+    """가격 알림 테스트"""
+    
+    def test_set_price_alert(self, fake_redis):
+        """가격 알림 설정"""
+        from shared.redis_cache import set_price_alert, get_price_alerts
+        
+        # When: 가격 알림 설정
+        result = set_price_alert(
+            stock_code="005930",
+            target_price=80000,
+            alert_type="above",
+            redis_client=fake_redis
+        )
+        
+        # Then: 성공
+        assert result is True
+        alerts = get_price_alerts(redis_client=fake_redis)
+        assert "005930" in alerts
+        assert alerts["005930"]["target_price"] == 80000
+    
+    def test_delete_price_alert(self, fake_redis):
+        """가격 알림 삭제"""
+        from shared.redis_cache import set_price_alert, delete_price_alert, get_price_alerts
+        
+        # Given: 알림 설정됨
+        set_price_alert("005930", 80000, "above", redis_client=fake_redis)
+        
+        # When: 알림 삭제
+        result = delete_price_alert("005930", redis_client=fake_redis)
+        
+        # Then: 성공
+        assert result is True
+        alerts = get_price_alerts(redis_client=fake_redis)
+        assert "005930" not in alerts
+    
+    def test_get_price_alerts_empty(self, fake_redis):
+        """알림 없을 때 빈 딕셔너리"""
+        from shared.redis_cache import get_price_alerts
+        
+        # When: 알림 조회
+        alerts = get_price_alerts(redis_client=fake_redis)
+        
+        # Then: 빈 딕셔너리
+        assert alerts == {}
+
+
 class TestEdgeCases:
     """Edge Cases 테스트"""
     

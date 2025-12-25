@@ -36,6 +36,7 @@ import os
 import pandas as pd
 from typing import Dict, Optional, Tuple
 from shared import strategy
+from shared.config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
