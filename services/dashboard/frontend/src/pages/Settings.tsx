@@ -116,7 +116,7 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <SettingsIcon className="w-5 h-5" />
-            시스템 설정 (env > db > default)
+            시스템 설정 (env &gt; db &gt; default)
           </CardTitle>
           <CardDescription>레지스트리 기반 설정을 조회/수정합니다. env로 설정된 키는 읽기 전용입니다.</CardDescription>
         </CardHeader>
@@ -208,7 +208,7 @@ export function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedKey} onOpenChange={(open) => !open && setSelectedKey(null)}>
+      <Dialog open={!!selectedKey} onOpenChange={(open: boolean) => !open && setSelectedKey(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>설정 수정</DialogTitle>

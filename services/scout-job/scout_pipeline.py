@@ -406,7 +406,13 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         recon_signals = []
 
     is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)
-    trade_tier = "TIER1" if is_tradable else ("RECON" if is_recon else "BLOCKED")
+    
+    # [Project Recon] RECON tier도 거래 가능(is_tradable=True)으로 설정
+    # 단, trade_tier로 TIER1과 구분하여 buy-executor에서 비중/손절 차등 적용
+    if is_recon:
+        is_tradable = True
+    
+    trade_tier = "TIER1" if (hybrid_score >= 75) else ("RECON" if is_recon else "BLOCKED")
     
     # [Market Regime] 하락장/횡보장은 기준을 낮추는 대신, 오히려 관망(No Trade)이 최선일 수 있음.
     # 사용자의 지적대로 "억지로 거래를 만드는 것"은 리스크를 키우므로 원복함.
