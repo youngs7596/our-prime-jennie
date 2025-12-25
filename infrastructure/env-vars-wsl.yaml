@@ -108,7 +108,7 @@ LOCAL_MODEL_REASONING: "gemma3:27b"        # [Hunter] Speed & Adherence (2024-12
 LOCAL_MODEL_THINKING: "gemma3:27b"           # [Judge] Deep Reasoning (2024-12-24: qwen3 → gemma3로 변경)
 TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
 TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
-# TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
+TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)

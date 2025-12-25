@@ -377,17 +377,22 @@ def main():
             if not kis_api.authenticate():
                 raise Exception("KIS API 인증에 실패했습니다.")
         
-        # [Market Open Check] KIS API(또는 Gateway)를 통해 휴장일 여부 확인
-        # 테스트/Mock 모드에서는 스킵 가능
-        disable_market_open_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
-        if trading_mode.lower() == "mock" or disable_market_open_check:
-            logger.info("⏩ 장 운영 여부 체크를 건너뜁니다 (mock/test 모드).")
-        else:
-            logger.info("📅 [Check] 장 운영 여부(휴장일) 확인 중...")
-            if not kis_api.check_market_open():
-                logger.info("🛑 현재는 장 운영 시간이 아니거나 휴장일입니다. (Scout 종료)")
+        # [Check] 실행 시간 제한 (07:00 ~ 16:00)
+        import pytz
+        kst = pytz.timezone('Asia/Seoul')
+        now_kst = datetime.now(kst)
+        
+        # 테스트/Mock 모드이거나 강제 실행 설정이 아니면 시간 체크 수행
+        disable_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+        
+        if not disable_check and trading_mode.lower() != "mock":
+            if 7 <= now_kst.hour < 16:
+                logger.info(f"📅 [Check] 현재 시간({now_kst.strftime('%H:%M')})은 실행 허용 시간(07:00~16:00)입니다.")
+            else:
+                logger.info(f"🛑 [Check] 현재 시간({now_kst.strftime('%H:%M')})은 실행 허용 시간이 아닙니다. (Scout 종료)")
                 return
-            logger.info("✅ 장이 열려있습니다. Scout 작업을 진행합니다.")
+        else:
+            logger.info("⏩ 시간/장운영 체크를 건너뜁니다 (mock/test 모드 또는 DISABLE_MARKET_OPEN_CHECK=true).")
         
         brain = JennieBrain(
             project_id=os.getenv("GCP_PROJECT_ID", "local"),

@@ -375,7 +375,7 @@ def process_sentiment_analysis(documents):
 
     logger.info(f"  [Sentiment] 신규 문서 {len(documents)}개에 대한 감성 분석 시작 (병렬 처리)...")
 
-    MAX_WORKERS = 5 # OpenAI/Gemini Rate Limit 고려하여 5개 병렬로 제한
+    MAX_WORKERS = 3 # OpenAI/Gemini Rate Limit 고려하여 5개 병렬로 제한
 
     def _analyze_single_doc(doc):
         stock_code = doc.metadata.get("stock_code")
@@ -465,7 +465,7 @@ def process_competitor_benefit_analysis(documents):
     from shared.db.connection import get_session, session_scope # ensure import
     from shared.db.models import IndustryCompetitors, CompetitorBenefitEvents
     
-    MAX_WORKERS = 5
+    MAX_WORKERS = 3
     
     def _analyze_single_competitor_benefit(doc):
         # 문서 정보 추출

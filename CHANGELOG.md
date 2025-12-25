@@ -2,6 +2,9 @@
 
 ## 2025-12-26
 - **Infrastructure Fix**: MariaDB 컨테이너 포트 매핑 (3307:3306) 누락 수정으로 `scout-job` 등의 DB 접속 오류 해결
+- **LLM Config Centralization**: `env-vars-wsl.yaml`로 FAST/REASONING/THINKING 프로바이더 설정 일원화
+- **Gemini Stabilization**: Rate Limit (429) 대응을 위한 Exponential Backoff 재시도 로직 추가 및 `news-crawler` 동시성 최적화 (5→3)
+- **Scout Flexibility**: `scout-job` 실행 시간(07:00~16:00) 윈도우 방식으로 변경하여 휴장일/장전 시간대에도 실행 가능하도록 개선 (Safety Override)
 
 ## 2025-12-25
 - **LangChain/Gemini**: langchain-google-genai를 google.genai 기반 최신(4.1.2)으로 업데이트하고 Gemini LLM 경로를 신 SDK로 마이그레이션, 스모크 테스트 완료 (임베딩/챗)
