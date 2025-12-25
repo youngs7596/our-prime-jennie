@@ -36,9 +36,26 @@ def get_active_watchlist(connection) -> Dict[str, Dict]:
     watchlist = {}
     
     # SQLAlchemy Session인지 확인
+    def _parse_llm_reason(raw_reason: str):
+        marker = "[LLM_METADATA]"
+        metadata = {}
+        clean = raw_reason or ""
+        if raw_reason and marker in raw_reason:
+            base, metadata_raw = raw_reason.split(marker, 1)
+            clean = base.strip()
+            try:
+                metadata = json.loads(metadata_raw.strip())
+            except Exception:
+                metadata = {}
+        return clean, metadata
+
     if isinstance(connection, Session):
+        # TRADE_TIER 컬럼은 Project Recon v1.1 이후 존재합니다. (없으면 NULL)
         result = connection.execute(
-            text(f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON FROM {db_models.resolve_table_name('WATCHLIST')}")
+            text(
+                f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON, "
+                f"TRADE_TIER FROM {db_models.resolve_table_name('WATCHLIST')}"
+            )
         )
         rows = result.fetchall()
         for row in rows:
@@ -46,19 +63,29 @@ def get_active_watchlist(connection) -> Dict[str, Dict]:
             name = row[1]
             is_tradable = row[2]
             llm_score = row[3]
-            llm_reason = row[4]
+            llm_reason_raw = row[4]
+            trade_tier_db = row[5] if len(row) > 5 else None
+            llm_reason, llm_metadata = _parse_llm_reason(llm_reason_raw)
+            trade_tier = (
+                trade_tier_db
+                or llm_metadata.get("trade_tier")
+                or ("TIER1" if bool(is_tradable) else "BLOCKED")
+            )
             watchlist[code] = {
                 "code": code,
                 "name": name,
                 "is_tradable": is_tradable,
                 "llm_score": llm_score,
                 "llm_reason": llm_reason,
+                "llm_metadata": llm_metadata,
+                "trade_tier": trade_tier,
             }
     else:
         # Legacy: raw connection with cursor
         cursor = connection.cursor()
         cursor.execute(
-            f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON FROM {db_models.resolve_table_name('WATCHLIST')}"
+            f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON, TRADE_TIER "
+            f"FROM {db_models.resolve_table_name('WATCHLIST')}"
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -69,15 +96,31 @@ def get_active_watchlist(connection) -> Dict[str, Dict]:
                 name = row.get('STOCK_NAME') or row.get('stock_name')
                 is_tradable = row.get('IS_TRADABLE', True)
                 llm_score = row.get('LLM_SCORE', None)
-                llm_reason = row.get('LLM_REASON', None)
+                llm_reason_raw = row.get('LLM_REASON', None)
+                trade_tier_db = row.get('TRADE_TIER', None)
             else:
-                code, name, is_tradable, llm_score, llm_reason = row
+                # 컬럼 존재 여부에 따라 튜플 길이가 달라질 수 있어 안전하게 처리
+                code = row[0]
+                name = row[1]
+                is_tradable = row[2]
+                llm_score = row[3]
+                llm_reason_raw = row[4] if len(row) > 4 else None
+                trade_tier_db = row[5] if len(row) > 5 else None
+
+            llm_reason, llm_metadata = _parse_llm_reason(llm_reason_raw)
+            trade_tier = (
+                trade_tier_db
+                or llm_metadata.get("trade_tier")
+                or ("TIER1" if bool(is_tradable) else "BLOCKED")
+            )
             watchlist[code] = {
                 "code": code,
                 "name": name,
                 "is_tradable": is_tradable,
                 "llm_score": llm_score,
                 "llm_reason": llm_reason,
+                "llm_metadata": llm_metadata,
+                "trade_tier": trade_tier,
             }
     return watchlist
 
@@ -106,12 +149,13 @@ def save_to_watchlist(session, candidates: List[Dict]):
     sql_upsert = """
         INSERT INTO WATCHLIST (
             STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
-            LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+            TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
             PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             STOCK_NAME = VALUES(STOCK_NAME),
             IS_TRADABLE = VALUES(IS_TRADABLE),
+            TRADE_TIER = VALUES(TRADE_TIER),
             LLM_SCORE = VALUES(LLM_SCORE),
             LLM_REASON = VALUES(LLM_REASON),
             LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
@@ -132,6 +176,9 @@ def save_to_watchlist(session, candidates: List[Dict]):
         llm_score = c.get('llm_score', 0)
         llm_reason = c.get('llm_reason', '') or ''
         llm_metadata = c.get('llm_metadata')
+        trade_tier = c.get("trade_tier") or (llm_metadata or {}).get("trade_tier")
+        if not trade_tier:
+            trade_tier = "TIER1" if c.get("is_tradable", True) else "BLOCKED"
 
         if llm_metadata:
             try:
@@ -150,6 +197,7 @@ def save_to_watchlist(session, candidates: List[Dict]):
                 'name': c['name'],
                 'created_at': now,
                 'is_tradable': 1 if c.get('is_tradable', True) else 0,
+                'trade_tier': trade_tier,
                 'llm_score': llm_score,
                 'llm_reason': llm_reason,
                 'llm_updated_at': now,
@@ -160,12 +208,13 @@ def save_to_watchlist(session, candidates: List[Dict]):
             result = session.execute(text("""
                 INSERT INTO WATCHLIST (
                     STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
-                    LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+                    TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
                     PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
-                ) VALUES (:code, :name, :created_at, :is_tradable, :llm_score, :llm_reason, :llm_updated_at,
+                ) VALUES (:code, :name, :created_at, :is_tradable, :trade_tier, :llm_score, :llm_reason, :llm_updated_at,
                           :per, :pbr, :roe, :market_cap, :sales_growth, :eps_growth, :financial_updated_at)
                 ON DUPLICATE KEY UPDATE
                     STOCK_NAME = VALUES(STOCK_NAME), IS_TRADABLE = VALUES(IS_TRADABLE),
+                    TRADE_TIER = VALUES(TRADE_TIER),
                     LLM_SCORE = VALUES(LLM_SCORE), LLM_REASON = VALUES(LLM_REASON), LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
                     PER = VALUES(PER), PBR = VALUES(PBR), ROE = VALUES(ROE), MARKET_CAP = VALUES(MARKET_CAP),
                     SALES_GROWTH = VALUES(SALES_GROWTH), EPS_GROWTH = VALUES(EPS_GROWTH), FINANCIAL_UPDATED_AT = VALUES(FINANCIAL_UPDATED_AT)

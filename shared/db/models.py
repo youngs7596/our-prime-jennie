@@ -74,6 +74,8 @@ class WatchList(Base):
     llm_score = Column("LLM_SCORE", Float, default=0)
     llm_reason = Column("LLM_REASON", Text, nullable=True)
     llm_updated_at = Column("LLM_UPDATED_AT", DateTime, nullable=True)
+    # Project Recon v1.1
+    trade_tier = Column("TRADE_TIER", String(16), nullable=False, default="BLOCKED")
 
 
 class Portfolio(Base):
