@@ -1,6 +1,6 @@
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -31,7 +31,7 @@ def analyze_shadow_performance(session: Session, lookback_days: int = 5, regret_
     """
     logger.info(f"📡 [Shadow Radar] Analyzing rejections from last {lookback_days} days...")
     
-    cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     
     # 1. Fetch recent rejections
     rejections = session.query(ShadowRadarLog).filter(

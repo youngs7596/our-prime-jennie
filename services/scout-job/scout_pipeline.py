@@ -697,6 +697,7 @@ def fetch_kis_data_task(stock, kis_api):
     """KIS API로부터 종목 데이터 조회"""
     try:
         stock_code = stock['code']
+        trade_date = None
         
         if hasattr(kis_api, 'API_CALL_DELAY'):
             time.sleep(kis_api.API_CALL_DELAY)
@@ -713,6 +714,7 @@ def fetch_kis_data_task(stock, kis_api):
                     date_val = dp.get('price_date') if 'price_date' in dp.index else dp.get('date')
                     
                     if close_price is not None:
+                        trade_date = trade_date or date_val
                         daily_prices.append({
                             'p_date': date_val, 'p_code': stock_code,
                             'p_price': close_price, 'p_high': high_price, 'p_low': low_price
@@ -726,6 +728,7 @@ def fetch_kis_data_task(stock, kis_api):
                         date_val = dp.get('price_date') or dp.get('date')
                         
                         if close_price is not None:
+                            trade_date = trade_date or date_val
                             daily_prices.append({
                                 'p_date': date_val, 'p_code': stock_code,
                                 'p_price': close_price, 'p_high': high_price, 'p_low': low_price
@@ -737,8 +740,12 @@ def fetch_kis_data_task(stock, kis_api):
             if hasattr(kis_api, 'API_CALL_DELAY'):
                 time.sleep(kis_api.API_CALL_DELAY)
             if snapshot:
+                # trade_date가 없으면 오늘 날짜로 채움 (DDL 기본키 요구)
+                if trade_date is None:
+                    trade_date = datetime.now(timezone.utc).date()
                 fundamentals = {
-                    'code': stock_code,
+                    'stock_code': stock_code,
+                    'trade_date': trade_date,
                     'per': snapshot.get('per'),
                     'pbr': snapshot.get('pbr'),
                     'market_cap': snapshot.get('market_cap')

@@ -1,7 +1,7 @@
 
 import logging
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from shared.db.models import LLMDecisionLedger, StockDailyPrice
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ DEFAULT_LOOKBACK_DAYS = 20  # 20 trading days ~ 1 month
 
 def fetch_ai_decisions(session, lookback_days=DEFAULT_LOOKBACK_DAYS):
     """Fetch BUY/SELL decisions from the ledger within the lookback period."""
-    cutoff_date = datetime.utcnow() - timedelta(days=lookback_days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     
     query = session.query(LLMDecisionLedger).filter(
         LLMDecisionLedger.final_decision.in_(['BUY', 'SELL']),

@@ -2,10 +2,14 @@
 import os
 import sys
 import time
+import warnings
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import chromadb
 from langchain_chroma import Chroma
+# langchain_google_genai 내부 google.generativeai FutureWarning 무시
+warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 # Add project root to path

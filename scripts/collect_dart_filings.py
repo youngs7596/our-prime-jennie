@@ -13,7 +13,7 @@ import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 from dotenv import load_dotenv
@@ -158,7 +158,7 @@ def save_reports(connection, reports: List[Dict]):
             report["category"],
             report["title"],
             report["link"],
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
         )
         execute_upsert(
             cursor,

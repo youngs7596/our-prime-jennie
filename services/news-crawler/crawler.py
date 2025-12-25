@@ -18,6 +18,7 @@ import feedparser # type: ignore
 import logging
 import os 
 import calendar
+import warnings
 from dotenv import load_dotenv 
 from datetime import datetime, timedelta, timezone
 
@@ -75,6 +76,9 @@ except Exception as e:
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
+# langchain_google_genai 내부 google.generativeai FutureWarning 무시
+warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
