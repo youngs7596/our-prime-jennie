@@ -115,3 +115,5 @@ SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (
 SCOUT_UNIVERSE_SIZE: "200"
 ENABLE_NEWS_ANALYSIS: "true"
 SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화
+DISABLE_MARKET_OPEN_CHECK: "true" # [Config] 장 운영 시간 체크 비활성화 (기본값)
+

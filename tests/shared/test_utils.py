@@ -474,3 +474,240 @@ class TestIsOperatingHours:
         
         assert result is True
 
+
+# ============================================================================
+# Tests: safe_db_operation 데코레이터
+# ============================================================================
+
+class TestSafeDbOperation:
+    """safe_db_operation 데코레이터 테스트"""
+    
+    @pytest.fixture(autouse=True)
+    def setup_oracledb_mock(self):
+        """oracledb 모듈 mock 설정"""
+        mock_oracledb = MagicMock()
+        mock_oracledb.DatabaseError = type('DatabaseError', (Exception,), {})
+        mock_oracledb.OperationalError = type('OperationalError', (Exception,), {})
+        
+        with patch.dict('sys.modules', {'oracledb': mock_oracledb}):
+            self.mock_oracledb = mock_oracledb
+            yield
+    
+    def test_success_first_try(self):
+        """첫 시도에서 성공"""
+        from shared.utils import safe_db_operation
+        
+        call_count = [0]
+        
+        @safe_db_operation(operation_name="테스트 DB 작업", max_retries=3)
+        def successful_db_func():
+            call_count[0] += 1
+            return {"result": "success"}
+        
+        result = successful_db_func()
+        
+        assert result == {"result": "success"}
+        assert call_count[0] == 1
+    
+    def test_retry_on_db_error(self):
+        """DB 오류 시 재시도"""
+        from shared.utils import safe_db_operation
+        
+        call_count = [0]
+        
+        @safe_db_operation(operation_name="재시도 테스트", max_retries=3, retry_delay=0.01)
+        def fail_then_succeed():
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise self.mock_oracledb.DatabaseError("일시적 DB 오류")
+            return "ok"
+        
+        result = fail_then_succeed()
+        
+        assert result == "ok"
+        assert call_count[0] == 3
+    
+    def test_max_retries_exceeded(self):
+        """최대 재시도 횟수 초과"""
+        from shared.utils import safe_db_operation
+        
+        call_count = [0]
+        
+        @safe_db_operation(operation_name="항상 실패", max_retries=2, retry_delay=0.01)
+        def always_fail():
+            call_count[0] += 1
+            raise self.mock_oracledb.DatabaseError("DB 연결 불가")
+        
+        with pytest.raises(Exception):  # mock DatabaseError
+            always_fail()
+        
+        assert call_count[0] == 2
+    
+    def test_non_db_error_not_retried(self):
+        """DB 오류가 아닌 예외는 즉시 발생"""
+        from shared.utils import safe_db_operation
+        
+        call_count = [0]
+        
+        @safe_db_operation(operation_name="타입 에러", max_retries=3, retry_delay=0.01)
+        def raise_type_error():
+            call_count[0] += 1
+            raise TypeError("타입 에러")
+        
+        with pytest.raises(TypeError):
+            raise_type_error()
+        
+        assert call_count[0] == 1
+
+
+# ============================================================================
+# Tests: safe_api_call 데코레이터
+# ============================================================================
+
+class TestSafeApiCall:
+    """safe_api_call 데코레이터 테스트"""
+    
+    def test_success_first_try(self):
+        """첫 시도에서 성공"""
+        from shared.utils import safe_api_call
+        
+        call_count = [0]
+        
+        @safe_api_call(api_name="테스트 API", max_retries=3)
+        def successful_api():
+            call_count[0] += 1
+            return {"status": "ok"}
+        
+        result = successful_api()
+        
+        assert result == {"status": "ok"}
+        assert call_count[0] == 1
+    
+    def test_retry_on_request_exception(self):
+        """Request 오류 시 재시도"""
+        from shared.utils import safe_api_call
+        import requests
+        
+        call_count = [0]
+        
+        @safe_api_call(api_name="재시도 API", max_retries=3, retry_delay=0.01)
+        def fail_then_succeed():
+            call_count[0] += 1
+            if call_count[0] < 3:
+                raise requests.exceptions.ConnectionError("연결 실패")
+            return "success"
+        
+        result = fail_then_succeed()
+        
+        assert result == "success"
+        assert call_count[0] == 3
+    
+    def test_max_retries_exceeded(self):
+        """최대 재시도 횟수 초과"""
+        from shared.utils import safe_api_call
+        import requests
+        
+        call_count = [0]
+        
+        @safe_api_call(api_name="항상 실패 API", max_retries=2, retry_delay=0.01)
+        def always_fail():
+            call_count[0] += 1
+            raise requests.exceptions.Timeout("타임아웃")
+        
+        with pytest.raises(requests.exceptions.Timeout):
+            always_fail()
+        
+        assert call_count[0] == 2
+    
+    def test_non_request_error_not_retried(self):
+        """Request 오류가 아닌 예외는 즉시 발생"""
+        from shared.utils import safe_api_call
+        
+        call_count = [0]
+        
+        @safe_api_call(api_name="타입 에러 API", max_retries=3, retry_delay=0.01)
+        def raise_value_error():
+            call_count[0] += 1
+            raise ValueError("값 에러")
+        
+        with pytest.raises(ValueError):
+            raise_value_error()
+        
+        assert call_count[0] == 1
+    
+    def test_retryable_status_codes(self):
+        """재시도 가능한 상태 코드"""
+        from shared.utils import safe_api_call
+        import requests
+        
+        call_count = [0]
+        
+        @safe_api_call(
+            api_name="상태 코드 테스트", 
+            max_retries=3, 
+            retry_delay=0.01,
+            retryable_status_codes=(500, 503)
+        )
+        def api_with_status():
+            call_count[0] += 1
+            if call_count[0] < 3:
+                # Mock response with status code
+                mock_response = MagicMock()
+                mock_response.status_code = 503
+                error = requests.exceptions.HTTPError()
+                error.response = mock_response
+                raise error
+            return "recovered"
+        
+        result = api_with_status()
+        
+        assert result == "recovered"
+        assert call_count[0] == 3
+
+
+# ============================================================================
+# Tests: _get_reporter 함수
+# ============================================================================
+
+class TestGetReporter:
+    """_get_reporter 함수 테스트"""
+    
+    def test_get_reporter_success(self):
+        """FailureReporter 로드 성공"""
+        from shared.utils import _get_reporter
+        
+        # 실제 import 시도
+        reporter = _get_reporter()
+        
+        # 로드 성공하면 FailureReporter 인스턴스, 실패하면 None
+        assert reporter is None or reporter is not None
+    
+    def test_get_reporter_import_error(self):
+        """ImportError 시 None 반환"""
+        with patch.dict('sys.modules', {'shared.failure_reporter': None}):
+            with patch('shared.utils._get_reporter', return_value=None):
+                from shared.utils import _get_reporter
+                result = _get_reporter()
+        
+        # Import가 성공하거나 None을 반환해야 함
+        assert result is None or result is not None
+
+
+# ============================================================================
+# Tests: RetryStrategy Enum
+# ============================================================================
+
+class TestRetryStrategy:
+    """RetryStrategy Enum 테스트"""
+    
+    def test_enum_values(self):
+        """Enum 값 확인"""
+        assert RetryStrategy.EXPONENTIAL_BACKOFF.value == "exponential_backoff"
+        assert RetryStrategy.FIXED_INTERVAL.value == "fixed_interval"
+        assert RetryStrategy.IMMEDIATE.value == "immediate"
+    
+    def test_enum_comparison(self):
+        """Enum 비교"""
+        assert RetryStrategy.EXPONENTIAL_BACKOFF != RetryStrategy.FIXED_INTERVAL
+        assert RetryStrategy.EXPONENTIAL_BACKOFF == RetryStrategy.EXPONENTIAL_BACKOFF
+

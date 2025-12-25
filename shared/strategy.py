@@ -67,7 +67,10 @@ def calculate_moving_average(prices_list, period=20):
     주어진 가격 리스트로 이동평균(MA)을 계산합니다.
     (prices_list: [최신, ..., 과거] 순서)
     """
-    if prices_list is None or len(prices_list) < period:
+    if prices_list is None:
+        logger.debug(f"   (MA) 데이터가 None으로 계산 불가")
+        return None
+    if len(prices_list) < period:
         logger.debug(f"   (MA) {period}일치 데이터 부족 ({len(prices_list)}일)으로 계산 불가")
         return None
     if _RUST_BACKEND_ENABLED and _rust_moving_average:
@@ -138,7 +141,10 @@ def calculate_atr(daily_prices_df, period=14):
     '3단계 ATR 스탑'을 위한 ATR(Average True Range)을 계산합니다.
     (daily_prices_df: 날짜 오름차순 정렬)
     """
-    if daily_prices_df is None or len(daily_prices_df) < period:
+    if daily_prices_df is None:
+        logger.debug("   (ATR) 데이터가 None으로 계산 불가")
+        return None
+    if len(daily_prices_df) < period:
         logger.debug(f"   (ATR) {period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
         return None
         
