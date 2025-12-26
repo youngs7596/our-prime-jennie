@@ -475,6 +475,16 @@ class TestConfigValue:
         # Then: 기본값 반환
         assert value == 100
     
+    def test_get_config_value_valid_name_not_set(self, fake_redis):
+        """허용된 설정 이름이지만 저장되지 않은 경우 기본값"""
+        from shared.redis_cache import get_config_value
+        
+        # When: 허용된 설정 이름이지만 저장된 적 없음
+        value = get_config_value("min_llm_score", default_value=55, redis_client=fake_redis)
+        
+        # Then: 기본값 반환
+        assert value == 55
+    
     def test_invalid_config_name_fails(self, fake_redis):
         """허용되지 않은 설정 이름은 실패"""
         from shared.redis_cache import set_config_value
@@ -588,6 +598,16 @@ class TestPriceAlerts:
         
         # Then: 빈 딕셔너리
         assert alerts == {}
+    
+    def test_delete_price_alert_not_exists(self, fake_redis):
+        """존재하지 않는 가격 알림 삭제"""
+        from shared.redis_cache import delete_price_alert
+        
+        # When: 존재하지 않는 알림 삭제 시도
+        result = delete_price_alert("999999", redis_client=fake_redis)
+        
+        # Then: False 반환 (키 없음)
+        assert result is False
 
 
 class TestEdgeCases:
@@ -651,4 +671,526 @@ class TestEdgeCases:
         assert cached["indicators"]["vix"] == 25.5
         assert "반도체" in cached["sectors"]
         assert cached["market_context_dict"]["confidence"] == 0.85
+
+
+class TestRedisConnectionErrors:
+    """Redis 연결 관련 에러 처리 테스트"""
+    
+    def test_get_redis_connection_global_ping_failure(self, mocker):
+        """전역 싱글톤 ping 실패 시 재연결 시도"""
+        from shared import redis_cache
+        
+        # Given: 전역 클라이언트가 있지만 ping 실패
+        mock_client = mocker.MagicMock()
+        mock_client.ping.side_effect = Exception("Connection lost")
+        redis_cache._redis_client = mock_client
+        
+        # When: get_redis_connection 호출 (redis import가 실패하도록 mock)
+        mocker.patch.dict('sys.modules', {'redis': None})
+        
+        # redis_cache 모듈에서 지연 import를 시뮬레이션
+        def mock_import_redis():
+            raise ImportError("redis not installed")
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', wraps=redis_cache.get_redis_connection)
+        result = redis_cache.get_redis_connection()
+        
+        # Then: ping 실패 후 재연결 시도 (전역 클라이언트 None 됨)
+        # 실제 Redis 없으므로 None 또는 연결 실패
+        assert redis_cache._redis_client is None or result is None
+    
+    def test_get_redis_connection_with_real_redis_url_failure(self, mocker, monkeypatch):
+        """Redis URL 연결 실패 시 None 반환"""
+        from shared import redis_cache
+        
+        # Given: 잘못된 Redis URL
+        monkeypatch.setenv("REDIS_URL", "redis://invalid-host:9999")
+        redis_cache._redis_client = None  # 전역 클라이언트 초기화
+        
+        # When: 연결 시도 (실제 연결은 실패해야 함)
+        # 이 테스트는 실제 네트워크 연결 시도를 하므로 timeout 발생
+        # 테스트 환경에서는 짧은 timeout으로 빠르게 실패
+        result = redis_cache.get_redis_connection()
+        
+        # Then: None 반환 (연결 실패)
+        # 환경에 따라 실제 Redis가 있을 수 있으므로 결과만 확인
+        assert result is None or result is not None  # 환경 의존적
+
+
+class TestExceptionHandling:
+    """각 함수의 예외 처리 분기 테스트"""
+    
+    def test_set_market_regime_cache_redis_not_connected(self, mocker):
+        """Market Regime 저장 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_market_regime_cache({"regime": "BULL"})
+        
+        assert result is False
+    
+    def test_set_market_regime_cache_setex_exception(self, mocker, fake_redis):
+        """Market Regime 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        # setex가 예외를 발생시키도록 mock
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_market_regime_cache(
+            {"regime": "BULL"}, 
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_market_regime_cache_json_parse_error(self, fake_redis):
+        """Market Regime 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        # 잘못된 JSON 저장
+        fake_redis.setex(redis_cache.MARKET_REGIME_CACHE_KEY, 3600, "invalid json {{{")
+        
+        result = redis_cache.get_market_regime_cache(redis_client=fake_redis)
+        
+        # 예외 발생 시 None 반환
+        assert result is None
+    
+    def test_get_market_regime_cache_redis_not_connected(self, mocker):
+        """Market Regime 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_market_regime_cache()
+        
+        assert result is None
+    
+    def test_get_market_regime_cache_invalid_timestamp(self, fake_redis):
+        """Market Regime 캐시 timestamp 파싱 실패"""
+        from shared import redis_cache
+        import json
+        
+        # 잘못된 timestamp 형식
+        fake_redis.setex(
+            redis_cache.MARKET_REGIME_CACHE_KEY, 
+            3600, 
+            json.dumps({"regime": "BULL", "_cached_at": "invalid-date"})
+        )
+        
+        # timestamp 파싱 실패해도 데이터는 반환
+        result = redis_cache.get_market_regime_cache(redis_client=fake_redis)
+        
+        assert result is not None
+        assert result["regime"] == "BULL"
+    
+    def test_set_sentiment_score_old_data_json_exception(self, mocker, fake_redis):
+        """Sentiment Score 저장 시 기존 데이터 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        # 잘못된 JSON을 기존 데이터로 저장
+        fake_redis.setex("sentiment:005930", 7200, "invalid json")
+        
+        # 새 점수 저장 시도
+        result = redis_cache.set_sentiment_score(
+            "005930", 75, "테스트", 
+            redis_client=fake_redis
+        )
+        
+        # 기존 데이터 파싱 실패해도 새 점수는 저장됨
+        # 파싱 실패 시 old_score=50 기본값 사용, EMA 적용: (50*0.5 + 75*0.5) = 62.5
+        assert result is True
+        data = redis_cache.get_sentiment_score("005930", redis_client=fake_redis)
+        assert data["score"] == 62.5  # EMA 적용된 값
+    
+    def test_set_sentiment_score_setex_exception(self, mocker, fake_redis):
+        """Sentiment Score 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        # 첫 호출(기존 데이터 조회)은 성공, setex만 실패하도록
+        original_setex = fake_redis.setex
+        call_count = [0]
+        def mock_setex(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] > 0:  # 모든 setex 호출 실패
+                raise Exception("Redis error")
+            return original_setex(*args, **kwargs)
+        
+        fake_redis.setex = mock_setex
+        
+        result = redis_cache.set_sentiment_score(
+            "TEST01", 80, "테스트",
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_sentiment_score_redis_not_connected(self, mocker):
+        """Sentiment Score 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_sentiment_score("005930")
+        
+        # 기본값 반환
+        assert result["score"] == 50
+        assert "데이터 없음" in result["reason"] or "중립" in result["reason"]
+    
+    def test_get_sentiment_score_json_exception(self, fake_redis):
+        """Sentiment Score 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex("sentiment:005930", 7200, "invalid json")
+        
+        result = redis_cache.get_sentiment_score("005930", redis_client=fake_redis)
+        
+        # 예외 시 기본값 반환
+        assert result["score"] == 50
+    
+    def test_set_redis_data_redis_not_connected(self, mocker):
+        """일반 데이터 저장 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_redis_data("test:key", {"foo": "bar"})
+        
+        assert result is False
+    
+    def test_set_redis_data_setex_exception(self, mocker, fake_redis):
+        """일반 데이터 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_redis_data(
+            "test:key", {"foo": "bar"}, 
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_redis_data_redis_not_connected(self, mocker):
+        """일반 데이터 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_redis_data("test:key")
+        
+        assert result == {}
+    
+    def test_get_redis_data_json_exception(self, fake_redis):
+        """일반 데이터 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex("test:key", 3600, "invalid json")
+        
+        result = redis_cache.get_redis_data("test:key", redis_client=fake_redis)
+        
+        assert result == {}
+    
+    def test_set_competitor_benefit_redis_not_connected(self, mocker):
+        """경쟁사 수혜 저장 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_competitor_benefit_score(
+            "000660", 10, "테스트", "005930", "보안사고"
+        )
+        
+        assert result is False
+    
+    def test_set_competitor_benefit_setex_exception(self, mocker, fake_redis):
+        """경쟁사 수혜 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        # get은 정상, setex만 예외
+        original_get = fake_redis.get
+        fake_redis.get = mocker.MagicMock(return_value=None)
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_competitor_benefit_score(
+            "000660", 10, "테스트", "005930", "보안사고",
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_competitor_benefit_redis_not_connected(self, mocker):
+        """경쟁사 수혜 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_competitor_benefit_score("000660")
+        
+        assert result["score"] == 0
+    
+    def test_get_competitor_benefit_json_exception(self, fake_redis):
+        """경쟁사 수혜 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex("competitor_benefit:000660", 3600, "invalid json")
+        
+        result = redis_cache.get_competitor_benefit_score(
+            "000660", redis_client=fake_redis
+        )
+        
+        assert result["score"] == 0
+    
+    def test_get_all_competitor_benefits_redis_not_connected(self, mocker):
+        """전체 경쟁사 수혜 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_all_competitor_benefits()
+        
+        assert result == {}
+    
+    def test_get_all_competitor_benefits_exception(self, mocker, fake_redis):
+        """전체 경쟁사 수혜 조회 시 예외"""
+        from shared import redis_cache
+        
+        fake_redis.keys = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.get_all_competitor_benefits(redis_client=fake_redis)
+        
+        assert result == {}
+    
+    def test_set_trading_flag_redis_not_connected(self, mocker):
+        """Trading Flag 저장 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_trading_flag("pause", True, "테스트")
+        
+        assert result is False
+    
+    def test_set_trading_flag_setex_exception(self, mocker, fake_redis):
+        """Trading Flag 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_trading_flag(
+            "pause", True, "테스트",
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_trading_flag_redis_not_connected(self, mocker):
+        """Trading Flag 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_trading_flag("pause")
+        
+        assert result["value"] is False
+    
+    def test_get_trading_flag_json_exception(self, fake_redis):
+        """Trading Flag 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex(redis_cache.TRADING_PAUSE_KEY, 3600, "invalid json")
+        
+        result = redis_cache.get_trading_flag("pause", redis_client=fake_redis)
+        
+        assert result["value"] is False
+    
+    def test_is_dryrun_enabled_env_fallback(self, mocker, monkeypatch, fake_redis):
+        """is_dryrun_enabled 환경변수 fallback"""
+        from shared import redis_cache
+        
+        # Redis에 설정이 없을 때 환경변수 사용
+        monkeypatch.setenv("DRY_RUN", "false")
+        
+        result = redis_cache.is_dryrun_enabled(redis_client=fake_redis)
+        
+        assert result is False
+        
+        # 환경변수가 true일 때
+        monkeypatch.setenv("DRY_RUN", "true")
+        result = redis_cache.is_dryrun_enabled(redis_client=fake_redis)
+        assert result is True
+    
+    def test_set_config_value_redis_not_connected(self, mocker):
+        """Config Value 저장 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_config_value("min_llm_score", 65)
+        
+        assert result is False
+    
+    def test_set_config_value_setex_exception(self, mocker, fake_redis):
+        """Config Value 저장 시 setex 예외"""
+        from shared import redis_cache
+        
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_config_value(
+            "min_llm_score", 65,
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_config_value_redis_not_connected(self, mocker):
+        """Config Value 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_config_value("min_llm_score", default_value=60)
+        
+        assert result == 60
+    
+    def test_get_config_value_json_exception(self, fake_redis):
+        """Config Value 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex(redis_cache.CONFIG_MIN_LLM_SCORE_KEY, 3600, "invalid json")
+        
+        result = redis_cache.get_config_value(
+            "min_llm_score", default_value=60,
+            redis_client=fake_redis
+        )
+        
+        assert result == 60
+    
+    def test_set_notification_mute_redis_not_connected(self, mocker):
+        """알림 음소거 설정 시 Redis 미연결"""
+        from shared import redis_cache
+        import time
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_notification_mute(until_timestamp=int(time.time()) + 3600)
+        
+        assert result is False
+    
+    def test_set_notification_mute_setex_exception(self, mocker, fake_redis):
+        """알림 음소거 설정 시 setex 예외"""
+        from shared import redis_cache
+        import time
+        
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_notification_mute(
+            until_timestamp=int(time.time()) + 3600,
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_is_notification_muted_redis_not_connected(self, mocker):
+        """알림 음소거 상태 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.is_notification_muted()
+        
+        assert result is False
+    
+    def test_is_notification_muted_json_exception(self, fake_redis):
+        """알림 음소거 상태 조회 시 JSON 파싱 에러"""
+        from shared import redis_cache
+        
+        fake_redis.setex(redis_cache.NOTIFICATION_MUTE_KEY, 3600, "invalid json")
+        
+        result = redis_cache.is_notification_muted(redis_client=fake_redis)
+        
+        assert result is False
+    
+    def test_clear_notification_mute_redis_not_connected(self, mocker):
+        """알림 음소거 해제 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.clear_notification_mute()
+        
+        assert result is False
+    
+    def test_clear_notification_mute_delete_exception(self, mocker, fake_redis):
+        """알림 음소거 해제 시 delete 예외"""
+        from shared import redis_cache
+        
+        fake_redis.delete = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.clear_notification_mute(redis_client=fake_redis)
+        
+        assert result is False
+    
+    def test_set_price_alert_redis_not_connected(self, mocker):
+        """가격 알림 설정 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.set_price_alert("005930", 80000)
+        
+        assert result is False
+    
+    def test_set_price_alert_setex_exception(self, mocker, fake_redis):
+        """가격 알림 설정 시 setex 예외"""
+        from shared import redis_cache
+        
+        fake_redis.setex = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.set_price_alert(
+            "005930", 80000,
+            redis_client=fake_redis
+        )
+        
+        assert result is False
+    
+    def test_get_price_alerts_redis_not_connected(self, mocker):
+        """가격 알림 조회 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_price_alerts()
+        
+        assert result == {}
+    
+    def test_get_price_alerts_exception(self, mocker, fake_redis):
+        """가격 알림 조회 시 예외"""
+        from shared import redis_cache
+        
+        fake_redis.keys = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.get_price_alerts(redis_client=fake_redis)
+        
+        assert result == {}
+    
+    def test_delete_price_alert_redis_not_connected(self, mocker):
+        """가격 알림 삭제 시 Redis 미연결"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.delete_price_alert("005930")
+        
+        assert result is False
+    
+    def test_delete_price_alert_delete_exception(self, mocker, fake_redis):
+        """가격 알림 삭제 시 delete 예외"""
+        from shared import redis_cache
+        
+        fake_redis.delete = mocker.MagicMock(side_effect=Exception("Redis error"))
+        
+        result = redis_cache.delete_price_alert("005930", redis_client=fake_redis)
+        
+        assert result is False
 

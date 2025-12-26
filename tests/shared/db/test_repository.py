@@ -887,3 +887,165 @@ class TestDashboardV2Api:
         assert watchlist["TEST02"]["trade_tier"] == "BLOCKED"
         assert watchlist["TEST02"]["is_tradable"] is False
 
+
+# ============================================================================
+# Tests: Additional Coverage (미커버 라인)
+# ============================================================================
+
+class TestAdditionalCoverage:
+    """미커버 라인 추가 테스트"""
+    
+    def test_fetch_current_prices_single_stock_failure(self, monkeypatch):
+        """개별 종목 조회 실패 시 continue (라인 54-56)"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        # 첫 번째 종목은 성공, 두 번째 종목은 예외
+        call_count = [0]
+        def mock_post(url, json):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # 첫 번째 종목 성공
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.json.return_value = {
+                    "success": True,
+                    "data": {"stck_prpr": 70000}
+                }
+                return mock_resp
+            else:
+                # 두 번째 종목 예외
+                raise Exception("Individual stock fetch error")
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post = mock_post
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_current_prices_from_kis(["005930", "000660"])
+        
+        # 첫 번째 종목만 성공
+        assert "005930" in result
+        assert result["005930"] == 70000.0
+        assert "000660" not in result  # 두 번째 종목은 실패
+    
+    def test_get_portfolio_summary_realtime_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_summary 실시간 조회 예외 시 (라인 332-333)"""
+        from shared.db.repository import get_portfolio_summary
+        from unittest.mock import patch
+        
+        # fetch_current_prices_from_kis 예외 발생
+        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+                   side_effect=Exception("Network error")):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis', return_value=0.0):
+                result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
+        
+        # 예외 처리 후 평균가 사용하여 계산
+        assert result["total_invested"] == 14500000
+        assert result["positions_count"] == 2
+    
+    def test_get_portfolio_summary_cash_balance_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_summary 현금 잔고 조회 예외 시 (라인 352-353)"""
+        from shared.db.repository import get_portfolio_summary
+        from unittest.mock import patch
+        
+        mock_prices = {"005930": 77000.0, "000660": 165000.0}
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis', 
+                       side_effect=Exception("Cash balance error")):
+                result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
+        
+        # 현금 잔고 예외 시 0.0 사용
+        assert result["cash_balance"] == 0.0
+    
+    def test_get_portfolio_with_current_prices_realtime_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_with_current_prices 실시간 조회 예외 시 (라인 387-388)"""
+        from shared.db.repository import get_portfolio_with_current_prices
+        from unittest.mock import patch
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+                   side_effect=Exception("Network error")):
+            result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=True)
+        
+        # 예외 시 평균가 사용
+        assert len(result) == 2
+        samsung = next(r for r in result if r["stock_code"] == "005930")
+        assert samsung["current_price"] == samsung["avg_price"]
+    
+    def test_get_config_not_silent(self, session_with_config):
+        """get_config silent=False 경로 (라인 496)"""
+        from shared.db.repository import get_config
+        
+        # silent=False (기본값)로 존재하지 않는 키 조회
+        value = get_config(session_with_config, "NON_EXISTENT_KEY", silent=False)
+        
+        assert value is None
+    
+    def test_get_config_exception(self, db_session, mocker):
+        """get_config 예외 처리 (라인 498-500)"""
+        from shared.db.repository import get_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        value = get_config(db_session, "ANY_KEY")
+        
+        assert value is None
+    
+    def test_set_config_with_description(self, session_with_config):
+        """set_config description 업데이트 (라인 525)"""
+        from shared.db.repository import set_config
+        from shared.db.models import Config
+        
+        # 기존 설정 업데이트 with description
+        result = set_config(
+            session_with_config, 
+            "TRADING_MODE", 
+            "REAL", 
+            description="실거래 모드로 변경"
+        )
+        
+        assert result is True
+        
+        # description이 업데이트되었는지 확인
+        config = session_with_config.query(Config).filter(
+            Config.config_key == "TRADING_MODE"
+        ).first()
+        assert config.description == "실거래 모드로 변경"
+    
+    def test_set_config_exception(self, db_session, mocker):
+        """set_config 예외 처리 (라인 540-543)"""
+        from shared.db.repository import set_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        result = set_config(db_session, "ANY_KEY", "ANY_VALUE")
+        
+        assert result is False
+    
+    def test_set_config_long_value(self, db_session):
+        """set_config 긴 값 저장 (라인 538)"""
+        from shared.db.repository import set_config, get_config
+        
+        # 50자 초과 값
+        long_value = "A" * 60
+        
+        result = set_config(db_session, "LONG_KEY", long_value)
+        
+        assert result is True
+        assert get_config(db_session, "LONG_KEY") == long_value
+    
+    def test_delete_config_exception(self, db_session, mocker):
+        """delete_config 예외 처리 (라인 558-561)"""
+        from shared.db.repository import delete_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        result = delete_config(db_session, "ANY_KEY")
+        
+        assert result is False
+

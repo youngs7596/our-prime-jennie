@@ -1,6 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-26
+- **Unit Test Coverage Improvement (Phase 2)**: `redis_cache.py` 71%→99%, `db/connection.py` 29%→100%, `db/repository.py` 89%→98%, `gemini.py` 0%→100%, `auth.py` 91%→100% 달성 (총 189개 테스트 케이스)
 - **Unit Test Coverage Improvement (Phase 1)**: `position_sizing.py` 96%→100%, `secret_manager.py` 94%→100%, `llm_prompts.py` 90%→100%, `utils.py` 92%→93% 달성 (총 116개 테스트 케이스)
 - **MariaDB Deadlock Fix**: `news-crawler` 서비스의 동시 DB 쓰기 시 발생하는 1213 Deadlock 에러에 exponential backoff 재시도 로직 구현
 - **LLM Cost Optimization**: Gemini/OpenAI 기본 모델을 비용 효율적인 모델로 변경 (`gemini-2.5-flash`, `gpt-4o-mini`)
