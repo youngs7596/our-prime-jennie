@@ -1,6 +1,9 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-26
+- **LLM Cost Optimization**: Gemini/OpenAI 기본 모델을 비용 효율적인 모델로 변경 (`gemini-2.5-flash`, `gpt-4o-mini`)
+- **Config DB Priority**: 운영 튜닝 키 17개에 `db_priority=True` 플래그 추가, Dashboard 수정 시 DB 값 우선 적용
+- **Config Cleanup**: 미사용 환경변수 `INVESTMENT_AMOUNT`, `DAILY_BUY_LIMIT_AMOUNT` 삭제
 - **Infrastructure Fix**: MariaDB 컨테이너 포트 매핑 (3307:3306) 누락 수정으로 `scout-job` 등의 DB 접속 오류 해결
 - **LLM Config Centralization**: `env-vars-wsl.yaml`로 FAST/REASONING/THINKING 프로바이더 설정 일원화
 - **Gemini Stabilization**: Rate Limit (429) 대응을 위한 Exponential Backoff 재시도 로직 추가 및 `news-crawler` 동시성 최적화 (5→3)

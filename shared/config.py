@@ -62,7 +62,7 @@ class ConfigManager:
     사용 예시:
         config = ConfigManager(db_conn=connection)
         scan_interval = config.get('SCAN_INTERVAL_SEC', default=600)
-        daily_limit = config.get('DAILY_BUY_LIMIT_AMOUNT', default=10000000)
+        max_portfolio = config.get('MAX_PORTFOLIO_SIZE', default=10)
     """
     
     def __init__(self, db_conn=None, cache_ttl: int = 300):
@@ -211,7 +211,13 @@ class ConfigManager:
     
     def get(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
         """
-        설정값 조회 (우선순위: 메모리 캐시 > DB > 환경 변수 > 기본값)
+        설정값 조회
+        
+        우선순위 (db_priority=False 키):
+            메모리 캐시 > 환경 변수 > DB > 기본값
+        
+        우선순위 (db_priority=True 키, 운영 튜닝용):
+            메모리 캐시 > DB > 환경 변수 > 기본값
         
         Args:
             key: 설정 키
@@ -224,40 +230,41 @@ class ConfigManager:
         import time
         current_time = time.time()
         
-        # 1. 메모리 캐시 확인
+        # 1. 메모리 캐시 확인 (항상 최우선)
         if use_cache and key in self._memory_cache:
             value, timestamp = self._memory_cache[key]
             if current_time - timestamp < self.cache_ttl:
                 logger.debug(f"[Config] 메모리 캐시에서 '{key}' 조회: {value}")
                 return value
         
-        # 2. 환경 변수 확인 (DB보다 우선)
-        env_value = os.getenv(key)
-        if env_value is not None:
-            logger.debug(f"[Config] 환경 변수에서 '{key}' 조회: {env_value}")
-            return self._convert_type(key, env_value)
-
-        # 3. DB CONFIG 테이블 확인
-        # 컨텍스트 매니저가 Pool 또는 Stateless 연결을 자동으로 처리
-        try:
-            # DB 캐시 확인
-            if use_cache and key in self._db_cache:
-                value, timestamp = self._db_cache[key]
-                if current_time - timestamp < self.cache_ttl:
-                    logger.debug(f"[Config] DB 캐시에서 '{key}' 조회: {value}")
-                    return value
+        # db_priority 플래그 확인 (운영 튜닝 키인지)
+        is_db_priority = False
+        if key in self._defaults:
+            entry = self._defaults[key]
+            if isinstance(entry, dict) and entry.get("db_priority", False):
+                is_db_priority = True
+        
+        # 2. DB 우선 키: DB -> 환경변수 순서
+        if is_db_priority:
+            db_value = self._get_from_db(key, current_time, use_cache)
+            if db_value is not None:
+                return self._convert_type(key, db_value)
             
-            # DB 조회 (Pool 또는 Stateless 모드 자동 처리)
-            from . import database
-            with session_scope(readonly=True) as session:
-                db_value = database.get_config(session, key, silent=True)
-                if db_value is not None:
-                    # DB 캐시 업데이트
-                    self._db_cache[key] = (db_value, current_time)
-                    logger.debug(f"[Config] DB에서 '{key}' 조회: {db_value}")
-                    return self._convert_type(key, db_value)
-        except Exception as e:
-            logger.warning(f"[Config] DB에서 '{key}' 조회 실패 (기본값으로 대체): {e}")
+            # DB에 없으면 환경변수 확인
+            env_value = os.getenv(key)
+            if env_value is not None:
+                logger.debug(f"[Config] 환경 변수 fallback '{key}': {env_value}")
+                return self._convert_type(key, env_value)
+        else:
+            # 3. 일반 키: 환경변수 -> DB 순서 (기존 로직)
+            env_value = os.getenv(key)
+            if env_value is not None:
+                logger.debug(f"[Config] 환경 변수에서 '{key}' 조회: {env_value}")
+                return self._convert_type(key, env_value)
+            
+            db_value = self._get_from_db(key, current_time, use_cache)
+            if db_value is not None:
+                return self._convert_type(key, db_value)
         
         # 4. 기본값 반환
         if default is not None:
@@ -277,6 +284,29 @@ class ConfigManager:
             return default_value
         
         logger.warning(f"[Config] 설정값 '{key}'를 찾을 수 없습니다. None 반환.")
+        return None
+    
+    def _get_from_db(self, key: str, current_time: float, use_cache: bool) -> Optional[str]:
+        """DB에서 설정값 조회 (내부 헬퍼)"""
+        try:
+            # DB 캐시 확인
+            if use_cache and key in self._db_cache:
+                value, timestamp = self._db_cache[key]
+                if current_time - timestamp < self.cache_ttl:
+                    logger.debug(f"[Config] DB 캐시에서 '{key}' 조회: {value}")
+                    return value
+            
+            # DB 조회 (Pool 또는 Stateless 모드 자동 처리)
+            from . import database
+            with session_scope(readonly=True) as session:
+                db_value = database.get_config(session, key, silent=True)
+                if db_value is not None:
+                    # DB 캐시 업데이트
+                    self._db_cache[key] = (db_value, current_time)
+                    logger.debug(f"[Config] DB에서 '{key}' 조회: {db_value}")
+                    return db_value
+        except Exception as e:
+            logger.warning(f"[Config] DB에서 '{key}' 조회 실패: {e}")
         return None
     
     def set(self, key: str, value: Any, persist_to_db: bool = False) -> bool:
