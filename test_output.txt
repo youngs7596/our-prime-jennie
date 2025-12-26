@@ -1,0 +1,95 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/youngs75/projects/my-prime-jennie/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/youngs75/projects/my-prime-jennie
+plugins: langsmith-0.5.0, anyio-4.12.0, asyncio-1.3.0, mock-3.15.1, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 9 items
+
+tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_insufficient_data PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_successful_scoring PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_low_quant_score PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_high_rsi PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_competitor_benefit_override PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_pass PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_fail_and_shadow_log 
+DEBUG: result={'code': '005930', 'name': 'Samsung Electronics', 'info': {'name': 'Samsung Electronics', 'sentiment_score': 80, 'sector': 'Technology', 'reasons': ['Good fundamentals']}, 'snapshot': None, 'quant_result': <MagicMock id='137653105763648'>, 'hunter_score': 0, 'hunter_reason': '스냅샷 조회 실패', 'passed': False, 'competitor_bonus': 0}
+DEBUG: passed=False
+DEBUG: hunter_score=0
+DEBUG: call_count=0
+FAILED
+tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_approval PASSED
+tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_reject_safety_lock PASSED
+
+=================================== FAILURES ===================================
+____________ TestPhase1HunterV5Task.test_hunter_fail_and_shadow_log ____________
+
+self = <MagicMock name='mock.log_shadow_radar' id='137653105705568'>
+
+    def assert_called_once(self):
+        """assert that the mock was called only once.
+        """
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to have been called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'log_shadow_radar' to have been called once. Called 0 times.
+
+/usr/lib/python3.12/unittest/mock.py:923: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_scout_pipeline.TestPhase1HunterV5Task object at 0x7d31dc7525a0>
+mock_fmt_quant = <MagicMock name='format_quant_score_for_prompt' id='137653105767776'>
+mock_get_benefit = <MagicMock name='get_competitor_benefit_score' id='137653105760096'>
+sample_stock_info = {'code': '005930', 'info': {'name': 'Samsung Electronics', 'reasons': ['Good fundamentals'], 'sector': 'Technology', 'sentiment_score': 80}, 'snapshot': {'market_cap': 500000000, 'pbr': 1.2, 'per': 10.5}}
+mock_brain = <MagicMock id='137653105767728'>
+mock_archivist = <MagicMock id='137653105804304'>
+
+    @patch('shared.database.get_competitor_benefit_score')
+    @patch('shared.hybrid_scoring.format_quant_score_for_prompt')
+    def test_hunter_fail_and_shadow_log(self, mock_fmt_quant, mock_get_benefit,
+                                        sample_stock_info, mock_brain, mock_archivist):
+        """Test Hunter Phase failing and logging to Shadow Radar"""
+        mock_get_benefit.return_value = {'score': 0}
+        mock_fmt_quant.return_value = "Quant Context"
+    
+        # FIX: Set float values for all score attributes used in logging
+        quant_result = MagicMock()
+        quant_result.total_score = 60.0
+        quant_result.momentum_score = 15.0
+        quant_result.quality_score = 10.0
+        quant_result.value_score = 10.0
+        quant_result.technical_score = 5.0
+        quant_result.news_stat_score = 10.0
+        quant_result.supply_demand_score = 10.0
+        quant_result.details = {}
+    
+        snapshot_cache = {'005930': {}}
+    
+        # Mock Brain response (Low Score)
+        mock_brain.get_jennies_analysis_score_v5.return_value = {
+            'score': 40, 'reason': 'Weak'
+        }
+    
+        result = scout_pipeline.process_phase1_hunter_v5_task(
+            sample_stock_info, mock_brain, quant_result,
+            snapshot_cache, {}, mock_archivist
+        )
+    
+        print(f"\nDEBUG: result={result}")
+        print(f"DEBUG: passed={result.get('passed')}")
+        print(f"DEBUG: hunter_score={result.get('hunter_score')}")
+        print(f"DEBUG: call_count={mock_archivist.log_shadow_radar.call_count}")
+    
+        assert result['passed'] is False
+        # Verify Shadow Radar Logging called
+>       mock_archivist.log_shadow_radar.assert_called_once()
+E       AssertionError: Expected 'log_shadow_radar' to have been called once. Called 0 times.
+
+tests/services/scout-job/test_scout_pipeline.py:205: AssertionError
+=========================== short test summary info ============================
+FAILED tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_fail_and_shadow_log
+========================= 1 failed, 8 passed in 1.66s ==========================
