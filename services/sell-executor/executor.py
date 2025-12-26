@@ -98,8 +98,8 @@ class SellExecutor:
                     return {"status": "error", "reason": "Not in portfolio"}
                 
                 # 1.5 중복 주문 체크 (Idempotency)
-                # 최근 매도 주문 확인 (중복 실행 방지)
-                if repo.was_traded_recently(session, stock_code, hours=0.17): # 10분
+                # 최근 매도 주문 확인 (중복 실행 방지) - 10분 내 동일 매도 주문 확인
+                if repo.check_duplicate_order(session, stock_code, trade_type='SELL', time_window_minutes=10):
                     logger.warning(f"⚠️ 최근 매도 주문 이력 존재: {stock_name}({stock_code}) - 중복 실행 방지")
                     return {"status": "skipped", "reason": f"Duplicate sell order detected for {stock_code}"}
                 

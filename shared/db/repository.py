@@ -298,7 +298,29 @@ def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str
         .distinct()
     )
     rows = session.execute(query).scalars().all()
+    rows = session.execute(query).scalars().all()
     return set(rows)
+
+
+def check_duplicate_order(session: Session, stock_code: str, trade_type: str, time_window_minutes: int = 5) -> bool:
+    """
+    최근 N분 내 동일 종목/유형의 주문 여부 확인 (Idempotency Check)
+    """
+    # [Hybrid Fix] Python timedelta 사용
+    from datetime import datetime, timedelta, timezone
+    
+    threshold_dt = datetime.now(timezone.utc) - timedelta(minutes=time_window_minutes)
+    
+    exists_query = (
+        select(models.TradeLog.stock_code)
+        .where(models.TradeLog.stock_code == stock_code)
+        .where(models.TradeLog.trade_type == trade_type)
+        .where(models.TradeLog.trade_timestamp >= threshold_dt)
+        .limit(1)
+    )
+    result = session.execute(exists_query).first()
+    return result is not None
+
 
 
 # =============================================================================

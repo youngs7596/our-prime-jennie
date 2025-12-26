@@ -1,0 +1,1678 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/youngs75/projects/my-prime-jennie
+plugins: langsmith-0.5.0, anyio-4.12.0, asyncio-1.3.0, mock-3.15.1, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 859 items
+
+scripts/test_debate_issue.py ....                                        [  0%]
+scripts/test_hunter_ollama.py E                                          [  0%]
+scripts/test_judge_v2.py .                                               [  0%]
+scripts/test_llm_models.py ..                                            [  0%]
+tests/integration/test_e2e_pipeline.py .                                 [  1%]
+tests/services/buy-executor/test_buy_executor.py ..............          [  2%]
+tests/services/buy-scanner/test_scanner.py ...F..F....FF.F.              [  4%]
+tests/services/daily-briefing/test_reporter.py ....                      [  5%]
+tests/services/dashboard/test_configs_api.py ..........                  [  6%]
+tests/services/kis-gateway/test_gateway.py ...........                   [  7%]
+tests/services/news-crawler/test_crawler.py .....                        [  8%]
+tests/services/price-monitor/test_monitor.py .............               [  9%]
+tests/services/scout-job/test_scout.py ..F                               [  9%]
+tests/services/scout-job/test_scout_pipeline.py .........                [ 10%]
+tests/services/scout-job/test_scout_universe.py ...                      [ 11%]
+tests/services/sell-executor/test_sell_executor.py F.......FF...         [ 12%]
+tests/shared/db/test_connection.py .....................                 [ 15%]
+tests/shared/db/test_repository.py ..................................... [ 19%]
+......................                                                   [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py ..................FF [ 24%]
+........                                                                 [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py FF.F.............. [ 27%]
+....                                                                     [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py ...................... [ 30%]
+......                                                                   [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py .................       [ 33%]
+tests/shared/hybrid_scoring/test_schema.py ...................           [ 35%]
+tests/shared/test_auth.py ...................                            [ 37%]
+tests/shared/test_config.py ..........................                   [ 40%]
+tests/shared/test_database_core.py ...............                       [ 42%]
+tests/shared/test_factor_scoring.py ...............F..........           [ 45%]
+tests/shared/test_gemini.py ......                                       [ 46%]
+tests/shared/test_llm_brain.py ........................................  [ 50%]
+tests/shared/test_llm_factory.py ...FF..F.F.....                         [ 52%]
+tests/shared/test_llm_prompts.py .....................................   [ 56%]
+tests/shared/test_llm_providers.py ......................                [ 59%]
+tests/shared/test_market_regime.py FF...FFF.................             [ 62%]
+tests/shared/test_news_classifier.py .............                       [ 63%]
+tests/shared/test_notification.py ...................................... [ 68%]
+....                                                                     [ 68%]
+tests/shared/test_portfolio_diversification.py .................         [ 70%]
+tests/shared/test_position_sizing.py .................                   [ 72%]
+tests/shared/test_redis_cache.py ....................................... [ 77%]
+.............................................                            [ 82%]
+tests/shared/test_secret_manager.py ..................                   [ 84%]
+tests/shared/test_sector_classifier.py ..............................    [ 88%]
+tests/shared/test_settings_registry.py ................                  [ 89%]
+tests/shared/test_strategy.py ............F...F....F...................  [ 94%]
+tests/shared/test_utils.py .....................FFFFFFFF...............  [ 99%]
+tests/test_pipeline_smoke.py .                                           [ 99%]
+tests/test_prompt_feedback.py .                                          [100%]
+
+==================================== ERRORS ====================================
+_____________________ ERROR at setup of test_single_stock ______________________
+file /home/youngs75/projects/my-prime-jennie/scripts/test_hunter_ollama.py, line 82
+  def test_single_stock(provider, stock: Dict, test_id: int) -> Tuple[bool, float, Dict]:
+E       fixture 'provider' not found
+>       available fixtures: _class_scoped_runner, _function_scoped_runner, _module_scoped_runner, _package_scoped_runner, _session_scoped_runner, anyio_backend, anyio_backend_name, anyio_backend_options, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, capteesys, class_mocker, cov, doctest_namespace, event_loop_policy, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mocker, module_mocker, monkeypatch, no_cover, package_mocker, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, session_mocker, subtests, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/home/youngs75/projects/my-prime-jennie/scripts/test_hunter_ollama.py:82
+=================================== FAILURES ===================================
+_________________ TestBuyScanner.test_tier2_safety_check_pass __________________
+
+self = <test_scanner.TestBuyScanner object at 0x7fea2fa81fd0>
+scanner_instance = <scanner.BuyScanner object at 0x7fea25ac9b80>
+
+    def test_tier2_safety_check_pass(self, scanner_instance):
+        """Test Tier2 safety check passing"""
+        # Mock inputs
+>       daily_prices = pd.DataFrame({
+            'VOLUME': [100]*19 + [200], # Spillke in volume
+            'PRICE_DATE': [datetime.now()]*20
+        })
+
+tests/services/buy-scanner/test_scanner.py:122: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:782: in __init__
+    mgr = dict_to_mgr(data, index, columns, dtype=dtype, copy=copy, typ=manager)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:503: in dict_to_mgr
+    return arrays_to_mgr(arrays, columns, index, dtype=dtype, typ=typ, consolidate=copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:119: in arrays_to_mgr
+    arrays, refs = _homogenize(arrays, index, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:629: in _homogenize
+    val = sanitize_array(val, index, dtype=dtype, copy=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/construction.py:656: in sanitize_array
+    subarr = _sanitize_ndim(subarr, data, dtype, index, allow_2d=allow_2d)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = <MagicMock name='mock.DatetimeIndex()._data._ndarray' id='140643631093888'>
+data = [datetime.datetime(2025, 12, 26, 15, 57, 18, 580102), datetime.datetime(2025, 12, 26, 15, 57, 18, 580102), datetime.da...580102), datetime.datetime(2025, 12, 26, 15, 57, 18, 580102), datetime.datetime(2025, 12, 26, 15, 57, 18, 580102), ...]
+dtype = None, index = RangeIndex(start=0, stop=20, step=1)
+
+    def _sanitize_ndim(
+        result: ArrayLike,
+        data,
+        dtype: DtypeObj | None,
+        index: Index | None,
+        *,
+        allow_2d: bool = False,
+    ) -> ArrayLike:
+        """
+        Ensure we have a 1-dimensional result array.
+        """
+        if getattr(result, "ndim", 0) == 0:
+            raise ValueError("result should be arraylike with ndim > 0")
+    
+        if result.ndim == 1:
+            # the result that we want
+            result = _maybe_repeat(result, index)
+    
+>       elif result.ndim > 1:
+             ^^^^^^^^^^^^^^^
+E       TypeError: '>' not supported between instances of 'MagicMock' and 'int'
+
+venv/lib/python3.12/site-packages/pandas/core/construction.py:711: TypeError
+______________ TestBuyScanner.test_analyze_stock_realtime_update _______________
+
+self = <test_scanner.TestBuyScanner object at 0x7fea2fa82960>
+scanner_instance = <scanner.BuyScanner object at 0x7fea25920560>
+
+    def test_analyze_stock_realtime_update(self, scanner_instance):
+        """Test [Fast Hands] functionality: realtime price update (New Row)"""
+        # Setup yesterday's data
+        yesterday = datetime.now() - pd.Timedelta(days=1)
+        # Ensure correct columns exist
+>       daily_prices = pd.DataFrame({
+            'PRICE_DATE': [yesterday],
+            'CLOSE_PRICE': [100.0],
+            'HIGH_PRICE': [105.0],
+            'LOW_PRICE': [95.0],
+            'OPEN_PRICE': [98.0],
+            'VOLUME': [1000.0]
+        })
+
+tests/services/buy-scanner/test_scanner.py:221: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:782: in __init__
+    mgr = dict_to_mgr(data, index, columns, dtype=dtype, copy=copy, typ=manager)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:503: in dict_to_mgr
+    return arrays_to_mgr(arrays, columns, index, dtype=dtype, typ=typ, consolidate=copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:119: in arrays_to_mgr
+    arrays, refs = _homogenize(arrays, index, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:629: in _homogenize
+    val = sanitize_array(val, index, dtype=dtype, copy=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/construction.py:656: in sanitize_array
+    subarr = _sanitize_ndim(subarr, data, dtype, index, allow_2d=allow_2d)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = <MagicMock name='mock.DatetimeIndex()._data._ndarray' id='140643631093888'>
+data = [datetime.datetime(2025, 12, 25, 15, 57, 19, 20149)], dtype = None
+index = RangeIndex(start=0, stop=1, step=1)
+
+    def _sanitize_ndim(
+        result: ArrayLike,
+        data,
+        dtype: DtypeObj | None,
+        index: Index | None,
+        *,
+        allow_2d: bool = False,
+    ) -> ArrayLike:
+        """
+        Ensure we have a 1-dimensional result array.
+        """
+        if getattr(result, "ndim", 0) == 0:
+            raise ValueError("result should be arraylike with ndim > 0")
+    
+        if result.ndim == 1:
+            # the result that we want
+            result = _maybe_repeat(result, index)
+    
+>       elif result.ndim > 1:
+             ^^^^^^^^^^^^^^^
+E       TypeError: '>' not supported between instances of 'MagicMock' and 'int'
+
+venv/lib/python3.12/site-packages/pandas/core/construction.py:711: TypeError
+_______________ TestBuyScanner.test_analyze_stock_reverse_signal _______________
+
+self = <test_scanner.TestBuyScanner object at 0x7fea2fa817c0>
+scanner_instance = <scanner.BuyScanner object at 0x7fea25c046b0>
+
+    def test_analyze_stock_reverse_signal(self, scanner_instance):
+        """Test reverse signal penalty for specific news categories"""
+>       daily_prices = pd.DataFrame({
+            'CLOSE_PRICE': [100.0]*20,
+            'HIGH_PRICE': [105.0]*20,
+            'LOW_PRICE': [95.0]*20,
+            'OPEN_PRICE': [100.0]*20,
+            'VOLUME': [1000.0]*20,
+            'PRICE_DATE': [datetime.now()]*20
+        })
+
+tests/services/buy-scanner/test_scanner.py:326: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:782: in __init__
+    mgr = dict_to_mgr(data, index, columns, dtype=dtype, copy=copy, typ=manager)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:503: in dict_to_mgr
+    return arrays_to_mgr(arrays, columns, index, dtype=dtype, typ=typ, consolidate=copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:119: in arrays_to_mgr
+    arrays, refs = _homogenize(arrays, index, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:629: in _homogenize
+    val = sanitize_array(val, index, dtype=dtype, copy=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/construction.py:656: in sanitize_array
+    subarr = _sanitize_ndim(subarr, data, dtype, index, allow_2d=allow_2d)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = <MagicMock name='mock.DatetimeIndex()._data._ndarray' id='140643631093888'>
+data = [datetime.datetime(2025, 12, 26, 15, 57, 19, 156975), datetime.datetime(2025, 12, 26, 15, 57, 19, 156975), datetime.da...156975), datetime.datetime(2025, 12, 26, 15, 57, 19, 156975), datetime.datetime(2025, 12, 26, 15, 57, 19, 156975), ...]
+dtype = None, index = RangeIndex(start=0, stop=20, step=1)
+
+    def _sanitize_ndim(
+        result: ArrayLike,
+        data,
+        dtype: DtypeObj | None,
+        index: Index | None,
+        *,
+        allow_2d: bool = False,
+    ) -> ArrayLike:
+        """
+        Ensure we have a 1-dimensional result array.
+        """
+        if getattr(result, "ndim", 0) == 0:
+            raise ValueError("result should be arraylike with ndim > 0")
+    
+        if result.ndim == 1:
+            # the result that we want
+            result = _maybe_repeat(result, index)
+    
+>       elif result.ndim > 1:
+             ^^^^^^^^^^^^^^^
+E       TypeError: '>' not supported between instances of 'MagicMock' and 'int'
+
+venv/lib/python3.12/site-packages/pandas/core/construction.py:711: TypeError
+________ TestBuyScanner.test_analyze_stock_realtime_update_existing_row ________
+
+self = <test_scanner.TestBuyScanner object at 0x7fea2fa82f90>
+scanner_instance = <scanner.BuyScanner object at 0x7fea25b952e0>
+
+    def test_analyze_stock_realtime_update_existing_row(self, scanner_instance):
+        """Test [Fast Hands] updating existing today's row"""
+        today = datetime.now()
+>       daily_prices = pd.DataFrame({
+            'PRICE_DATE': [today],
+            'CLOSE_PRICE': [100.0],
+            'HIGH_PRICE': [105.0],
+            'LOW_PRICE': [95.0],
+            'VOLUME': [1000.0]
+        })
+
+tests/services/buy-scanner/test_scanner.py:356: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:782: in __init__
+    mgr = dict_to_mgr(data, index, columns, dtype=dtype, copy=copy, typ=manager)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:503: in dict_to_mgr
+    return arrays_to_mgr(arrays, columns, index, dtype=dtype, typ=typ, consolidate=copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:119: in arrays_to_mgr
+    arrays, refs = _homogenize(arrays, index, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:629: in _homogenize
+    val = sanitize_array(val, index, dtype=dtype, copy=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/construction.py:656: in sanitize_array
+    subarr = _sanitize_ndim(subarr, data, dtype, index, allow_2d=allow_2d)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = <MagicMock name='mock.DatetimeIndex()._data._ndarray' id='140643631093888'>
+data = [datetime.datetime(2025, 12, 26, 15, 57, 19, 281133)], dtype = None
+index = RangeIndex(start=0, stop=1, step=1)
+
+    def _sanitize_ndim(
+        result: ArrayLike,
+        data,
+        dtype: DtypeObj | None,
+        index: Index | None,
+        *,
+        allow_2d: bool = False,
+    ) -> ArrayLike:
+        """
+        Ensure we have a 1-dimensional result array.
+        """
+        if getattr(result, "ndim", 0) == 0:
+            raise ValueError("result should be arraylike with ndim > 0")
+    
+        if result.ndim == 1:
+            # the result that we want
+            result = _maybe_repeat(result, index)
+    
+>       elif result.ndim > 1:
+             ^^^^^^^^^^^^^^^
+E       TypeError: '>' not supported between instances of 'MagicMock' and 'int'
+
+venv/lib/python3.12/site-packages/pandas/core/construction.py:711: TypeError
+______________ TestBuyScanner.test_analyze_stock_bear_strategies _______________
+
+self = <test_scanner.TestBuyScanner object at 0x7fea2fa83650>
+scanner_instance = <scanner.BuyScanner object at 0x7fea25b7db80>
+
+    def test_analyze_stock_bear_strategies(self, scanner_instance):
+        """Test specific Bear strategies (Snipe Dip)"""
+        # Provide complete DataFrame to avoid KeyError in _analyze_stock (Fast Hands update logic)
+>       daily_prices = pd.DataFrame({
+            'CLOSE_PRICE': [100.0]*30,
+            'HIGH_PRICE': [105.0]*30,
+            'LOW_PRICE': [95.0]*30,
+            'OPEN_PRICE': [100.0]*30,
+            'VOLUME': [1000.0]*30,
+            'PRICE_DATE': [datetime.now()]*30
+        })
+
+tests/services/buy-scanner/test_scanner.py:426: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:782: in __init__
+    mgr = dict_to_mgr(data, index, columns, dtype=dtype, copy=copy, typ=manager)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:503: in dict_to_mgr
+    return arrays_to_mgr(arrays, columns, index, dtype=dtype, typ=typ, consolidate=copy)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:119: in arrays_to_mgr
+    arrays, refs = _homogenize(arrays, index, dtype)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/internals/construction.py:629: in _homogenize
+    val = sanitize_array(val, index, dtype=dtype, copy=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/construction.py:656: in sanitize_array
+    subarr = _sanitize_ndim(subarr, data, dtype, index, allow_2d=allow_2d)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+result = <MagicMock name='mock.DatetimeIndex()._data._ndarray' id='140643631093888'>
+data = [datetime.datetime(2025, 12, 26, 15, 57, 19, 410631), datetime.datetime(2025, 12, 26, 15, 57, 19, 410631), datetime.da...410631), datetime.datetime(2025, 12, 26, 15, 57, 19, 410631), datetime.datetime(2025, 12, 26, 15, 57, 19, 410631), ...]
+dtype = None, index = RangeIndex(start=0, stop=30, step=1)
+
+    def _sanitize_ndim(
+        result: ArrayLike,
+        data,
+        dtype: DtypeObj | None,
+        index: Index | None,
+        *,
+        allow_2d: bool = False,
+    ) -> ArrayLike:
+        """
+        Ensure we have a 1-dimensional result array.
+        """
+        if getattr(result, "ndim", 0) == 0:
+            raise ValueError("result should be arraylike with ndim > 0")
+    
+        if result.ndim == 1:
+            # the result that we want
+            result = _maybe_repeat(result, index)
+    
+>       elif result.ndim > 1:
+             ^^^^^^^^^^^^^^^
+E       TypeError: '>' not supported between instances of 'MagicMock' and 'int'
+
+venv/lib/python3.12/site-packages/pandas/core/construction.py:711: TypeError
+____________________ TestScoutMainFlow.test_scout_main_flow ____________________
+
+self = <test_scout.TestScoutMainFlow object at 0x7fea271dd610>
+mock_ensure_engine = <MagicMock name='ensure_engine_initialized' id='140643627944800'>
+mock_ensure_api_key = <MagicMock name='ensure_gemini_api_key' id='140643627715520'>
+mock_embeddings = <MagicMock name='GoogleGenerativeAIEmbeddings' id='140643627727472'>
+mock_chroma_cls = <MagicMock name='Chroma' id='140643628296304'>
+mock_http_client = <MagicMock name='HttpClient' id='140643628288432'>
+mock_enrich = <MagicMock name='enrich_candidates_with_market_data' id='140643628299136'>
+mock_prefetch = <MagicMock name='prefetch_all_data' id='140643628291504'>
+mock_process_judge = <MagicMock name='process_phase23_judge_v5_task' id='140643628293376'>
+mock_process_hunter = <MagicMock name='process_phase1_hunter_v5_task' id='140643630085232'>
+mock_process_quant = <MagicMock name='process_quant_scoring_task' id='140643630133040'>
+mock_get_momentum = <MagicMock name='get_momentum_stocks' id='140643655092032'>
+mock_get_hot = <MagicMock name='get_hot_sector_stocks' id='140643630126512'>
+mock_sector_analysis = <MagicMock name='analyze_sector_momentum' id='140643630130544'>
+mock_get_bluechips = <MagicMock name='get_dynamic_blue_chips' id='140643629929664'>
+mock_get_redis = <MagicMock name='_get_redis' id='140643629937200'>
+mock_update_status = <MagicMock name='update_pipeline_status' id='140643629933264'>
+mock_archivist_cls = <MagicMock name='Archivist' id='140643629925536'>
+mock_db = <MagicMock name='database' id='140643629938016'>
+mock_session_scope = <MagicMock name='session_scope' id='140643634317696'>
+mock_brain_cls = <MagicMock name='JennieBrain' id='140643630884880'>
+mock_kis_cls = <MagicMock name='KIS_API' id='140643635276608'>
+mock_load_dotenv = <MagicMock name='load_dotenv' id='140643630991648'>
+mock_getenv = <MagicMock name='getenv' id='140643631125216'>
+
+    @patch('services.scout_job_module.scout.os.getenv')
+    @patch('services.scout_job_module.scout.load_dotenv')
+    @patch('services.scout_job_module.scout.KIS_API') # Mock the class, not instance
+    @patch('services.scout_job_module.scout.JennieBrain')
+    @patch('services.scout_job_module.scout.session_scope')
+    @patch('services.scout_job_module.scout.database')
+    @patch('services.scout_job_module.scout.Archivist')
+    @patch('services.scout_job_module.scout.update_pipeline_status')
+    @patch('services.scout_job_module.scout._get_redis') # From scout_cache via scout
+    # Patch universe getters
+    @patch('services.scout_job_module.scout.get_dynamic_blue_chips')
+    @patch('services.scout_job_module.scout.analyze_sector_momentum')
+    @patch('services.scout_job_module.scout.get_hot_sector_stocks')
+    @patch('services.scout_job_module.scout.get_momentum_stocks')
+    # Patch pipeline tasks
+    @patch('services.scout_job_module.scout.process_quant_scoring_task')
+    @patch('services.scout_job_module.scout.process_phase1_hunter_v5_task')
+    @patch('services.scout_job_module.scout.process_phase23_judge_v5_task')
+    @patch('services.scout_job_module.scout.prefetch_all_data')
+    @patch('services.scout_job_module.scout.enrich_candidates_with_market_data')
+    @patch('services.scout_job_module.scout.chromadb.HttpClient')
+    @patch('services.scout_job_module.scout.Chroma')
+    @patch('services.scout_job_module.scout.GoogleGenerativeAIEmbeddings')
+    @patch('services.scout_job_module.scout.ensure_gemini_api_key')
+    @patch('services.scout_job_module.scout.BLUE_CHIP_STOCKS', [])
+    @patch('services.scout_job_module.scout.ensure_engine_initialized')
+    def test_scout_main_flow(self, mock_ensure_engine, mock_ensure_api_key, mock_embeddings, mock_chroma_cls, mock_http_client,
+                            mock_enrich, mock_prefetch,
+                            mock_process_judge, mock_process_hunter, mock_process_quant,
+                            mock_get_momentum, mock_get_hot, mock_sector_analysis, mock_get_bluechips,
+                            mock_get_redis, mock_update_status, mock_archivist_cls, mock_db,
+                            mock_session_scope, mock_brain_cls, mock_kis_cls, mock_load_dotenv, mock_getenv):
+        """
+        Test the full main() flow of scout.py with heavy mocking.
+        Verify that candidates are selected, filtered, and processed.
+        """
+        # --- 1. Environment & Config Mocks ---
+        def getenv_side_effect(key, default=None):
+            if key == "TRADING_MODE": return "MOCK"
+            if key == "DISABLE_MARKET_OPEN_CHECK": return "true"
+            if key == "SCOUT_V5_ENABLED": return "true"
+            if key == "SCOUT_UNIVERSE_SIZE": return "5"
+            if key == "USE_KIS_GATEWAY": return "false" # Force Legacy KIS API to use mock_kis_cls
+            return default
+        mock_getenv.side_effect = getenv_side_effect
+    
+        # --- 2. Component Mocks ---
+        mock_kis = mock_kis_cls.return_value
+        mock_kis.authenticate.return_value = True
+    
+        mock_brain = mock_brain_cls.return_value
+    
+        # Database Session
+        mock_session = MagicMock()
+        mock_session_scope.return_value.__enter__.return_value = mock_session
+    
+        # Mock database functions
+        mock_db.get_active_watchlist.return_value = {}
+        mock_db.get_daily_prices.return_value = MagicMock()
+        mock_db.get_competitor_benefit_score.return_value = {'score': 0, 'reason': ''}
+        mock_redis = MagicMock()
+        mock_get_redis.return_value = mock_redis
+        mock_redis.get.return_value = None
+    
+        # Archivist
+        mock_archivist = mock_archivist_cls.return_value
+    
+        # Chroma & Embeddings
+        mock_ensure_api_key.return_value = "fake_key"
+        mock_http_client.return_value = MagicMock()
+        mock_vectorstore = MagicMock()
+        mock_chroma_cls.return_value = mock_vectorstore
+    
+        # Disable RAG results to prevent extra candidates
+        mock_vectorstore.similarity_search.return_value = []
+    
+        # --- 3. Data Mocks (Universe) ---
+        # Universe 1: Dynamic Blue Chips
+        mock_get_bluechips.return_value = [
+            {'code': '005930', 'name': 'Samsung', 'sector': 'Tech'}
+        ]
+        # Universe 2: Hot Sectors
+        mock_sector_analysis.return_value = {}
+        mock_get_hot.return_value = []
+        # Universe 3: Momentum
+        mock_get_momentum.return_value = [
+             {'code': '000660', 'name': 'SK Hynix', 'momentum': 25.0}
+        ]
+        # DB Watchlist (for momentum exclusion if any, or usage)
+        mock_db.get_active_watchlist.return_value = {}
+        mock_db.get_daily_prices.return_value = MagicMock() # For KOSPI prices
+    
+        # --- 4. Pipeline Mocks ---
+        # Prefetch
+        mock_prefetch.return_value = (
+            {'005930': {'pbr': 1.0}, '000660': {'pbr': 1.2}}, # Snapshot cache
+            {'005930': 'News', '000660': 'News'}  # News cache
+        )
+    
+        # Quant Score Result Mock
+        quant_result_pass = MagicMock()
+        quant_result_pass.total_score = 80.0
+        quant_result_pass.stock_code = '005930'
+        quant_result_pass.details = {'rsi': 50}
+    
+        quant_result_pass_2 = MagicMock()
+        quant_result_pass_2.total_score = 75.0
+        quant_result_pass_2.stock_code = '000660'
+        quant_result_pass_2.details = {'rsi': 60}
+    
+        mock_process_quant.side_effect = [quant_result_pass, quant_result_pass_2]
+    
+        # Force filter_candidates to return both (mock implementation)
+        # Real QuantScorer is mocked inside main? No, it's imported inside main if V5 enabled.
+        # Check scout.py logic:
+        # from shared.hybrid_scoring import QuantScorer
+        # quant_scorer = QuantScorer(...)
+        # Since QuantScorer is imported inside main, I need to patch `shared.hybrid_scoring.QuantScorer` via `services.scout_job_module.scout`?
+        # No, `scout.py` does `from shared.hybrid_scoring import ...`.
+        # I need to patch `services.scout_job_module.scout.QuantScorer` if it was imported at module level,
+        # but it is imported inside `if is_hybrid_scoring_enabled():`.
+        # So I must patch `sys.modules` or use `patch.dict` or `patch` with where it is imported.
+        # Since I can't easily patch inside function scope imports, I will mock `QuantScorer` in `shared.hybrid_scoring`.
+    
+        with patch('shared.hybrid_scoring.QuantScorer') as mock_quant_scorer_cls:
+            mock_quant_scorer = mock_quant_scorer_cls.return_value
+            # configure filter_candidates to return all inputs to simulate passing
+            mock_quant_scorer.filter_candidates.side_effect = lambda candidates, **kwargs: candidates
+    
+            # Hunter Result Mock (Phase 1)
+            hunter_result_pass = {
+                'code': '005930', 'name': 'Samsung', 'hunter_score': 80, 'hunter_reason': 'Good', 'passed': True,
+                'info': {'name': 'Samsung'}, 'quant_result': quant_result_pass, 'decision_info': {}
+            }
+            hunter_result_fail = {
+                 'code': '000660', 'name': 'SK Hynix', 'hunter_score': 40, 'hunter_reason': 'Bad', 'passed': False,
+                 'info': {'name': 'SK Hynix'}, 'quant_result': quant_result_pass_2, 'decision_info': {}
+            }
+            # process_phase1_hunter_v5_task is called in ThreadPoolExecutor
+            mock_process_hunter.side_effect = [hunter_result_pass, hunter_result_fail]
+    
+            # Judge Result Mock (Phase 2)
+            judge_result_pass = {
+                'code': '005930', 'name': 'Samsung', 'approved': True, 'is_tradable': True,
+                'llm_score': 85, 'llm_reason': 'Great', 'trade_tier': 'TIER1', 'llm_metadata': {}
+            }
+            mock_process_judge.return_value = judge_result_pass
+    
+            # --- 5. Execution ---
+            scout.main()
+    
+            # --- 6. Verification ---
+            # Verify Universe construction
+>           assert mock_get_bluechips.called
+E           AssertionError: assert False
+E            +  where False = <MagicMock name='get_dynamic_blue_chips' id='140643629929664'>.called
+
+tests/services/scout-job/test_scout.py:242: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  shared.auth:auth.py:109 ⚠️ get_secret: secret_id가 제공되지 않았습니다.
+WARNING  shared.auth:auth.py:109 ⚠️ get_secret: secret_id가 제공되지 않았습니다.
+WARNING  shared.auth:auth.py:109 ⚠️ get_secret: secret_id가 제공되지 않았습니다.
+CRITICAL scout:scout.py:885 ❌ 'Scout Job' 실행 중 오류: tzinfo argument must be None or of a tzinfo subclass, not type 'MagicMock'
+Traceback (most recent call last):
+  File "/home/youngs75/projects/my-prime-jennie/services/scout-job/scout.py", line 383, in main
+    now_kst = datetime.now(kst)
+              ^^^^^^^^^^^^^^^^^
+TypeError: tzinfo argument must be None or of a tzinfo subclass, not type 'MagicMock'
+_________ TestSellExecutorBasicFlow.test_successful_sell_order_dry_run _________
+
+self = <test_sell_executor.TestSellExecutorBasicFlow object at 0x7fea271f9550>
+mock_kis = <MagicMock id='140643630127136'>
+mock_config = <test_sell_executor.MockConfig object at 0x7fea259c71d0>
+mock_telegram = <MagicMock id='140643630084608'>
+sample_holding = {'avg_price': 70000, 'buy_price': 70000, 'code': '005930', 'created_at': datetime.datetime(2025, 12, 21, 6, 57, 21, 974972, tzinfo=datetime.timezone.utc), ...}
+
+    def test_successful_sell_order_dry_run(self, mock_kis, mock_config, mock_telegram, sample_holding):
+        """성공적인 매도 주문 (DRY RUN)"""
+        import pandas as pd
+    
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.database') as mock_db:
+    
+            # Setup mocks
+            mock_portfolio.return_value = [sample_holding]
+            mock_traded.return_value = False
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = pd.DataFrame({
+                'CLOSE_PRICE': [75000]
+            })
+            mock_db.get_rag_context_with_validation.return_value = ("뉴스 없음", False, None)
+            mock_db.execute_trade_and_log.return_value = True
+    
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    
+            executor = load_executor_module()
+    
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config,
+                telegram_bot=mock_telegram
+            )
+    
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='익절 (목표가 도달)',
+                dry_run=True
+            )
+    
+>           assert result['status'] == 'success'
+E           AssertionError: assert 'skipped' == 'success'
+E             
+E             - success
+E             + skipped
+
+tests/services/sell-executor/test_sell_executor.py:147: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  sell_executor:executor.py:103 ⚠️ 최근 매도 주문 이력 존재: 삼성전자(005930) - 중복 실행 방지
+_____________ TestRealOrderExecution.test_real_order_calls_kis_api _____________
+
+self = <MagicMock name='mock.place_sell_order' id='140643628292992'>, args = ()
+kwargs = {'price': 0, 'quantity': 10, 'stock_code': '005930'}
+msg = "Expected 'place_sell_order' to be called once. Called 0 times."
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'place_sell_order' to be called once. Called 0 times.
+
+/usr/lib/python3.12/unittest/mock.py:955: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_sell_executor.TestRealOrderExecution object at 0x7fea271f9ca0>
+mock_kis = <MagicMock id='140643628301728'>
+mock_config = <test_sell_executor.MockConfig object at 0x7fea25787800>
+sample_holding = {'avg_price': 70000, 'buy_price': 70000, 'code': '005930', 'created_at': datetime.datetime(2025, 12, 21, 6, 57, 21, 996718, tzinfo=datetime.timezone.utc), ...}
+
+    def test_real_order_calls_kis_api(self, mock_kis, mock_config, sample_holding):
+        """실제 주문 시 KIS API 호출"""
+        import pandas as pd
+    
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.database') as mock_db, \
+             patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
+    
+            mock_portfolio.return_value = [sample_holding]
+            mock_traded.return_value = False
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_rag_context_with_validation.return_value = ("뉴스 없음", False, None)
+            mock_db.execute_trade_and_log.return_value = True
+    
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    
+            executor = load_executor_module()
+    
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+    
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='익절',
+                dry_run=False
+            )
+    
+            # 실제 주문 시 KIS API 호출 확인
+>           mock_kis.place_sell_order.assert_called_once_with(
+                stock_code='005930',
+                quantity=10,
+                price=0  # 시장가
+            )
+E           AssertionError: Expected 'place_sell_order' to be called once. Called 0 times.
+
+tests/services/sell-executor/test_sell_executor.py:320: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  sell_executor:executor.py:103 ⚠️ 최근 매도 주문 이력 존재: 삼성전자(005930) - 중복 실행 방지
+______________ TestRealOrderExecution.test_order_failure_handling ______________
+
+self = <test_sell_executor.TestRealOrderExecution object at 0x7fea271f9af0>
+mock_kis = <MagicMock id='140643629926880'>
+mock_config = <test_sell_executor.MockConfig object at 0x7fea259c72c0>
+sample_holding = {'avg_price': 70000, 'buy_price': 70000, 'code': '005930', 'created_at': datetime.datetime(2025, 12, 21, 6, 57, 22, 38301, tzinfo=datetime.timezone.utc), ...}
+
+    def test_order_failure_handling(self, mock_kis, mock_config, sample_holding):
+        """주문 실패 처리"""
+        import pandas as pd
+    
+        mock_kis.place_sell_order.return_value = None  # 주문 실패
+    
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.database') as mock_db, \
+             patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
+    
+            mock_portfolio.return_value = [sample_holding]
+            mock_traded.return_value = False
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_rag_context_with_validation.return_value = ("뉴스 없음", False, None)
+    
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    
+            executor = load_executor_module()
+    
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+    
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='익절',
+                dry_run=False
+            )
+    
+>           assert result['status'] == 'error'
+E           AssertionError: assert 'skipped' == 'error'
+E             
+E             - error
+E             + skipped
+
+tests/services/sell-executor/test_sell_executor.py:365: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  sell_executor:executor.py:103 ⚠️ 최근 매도 주문 이력 존재: 삼성전자(005930) - 중복 실행 방지
+_________________ TestCalculateIC.test_ic_positive_correlation _________________
+
+self = <hybrid_scoring.test_factor_analyzer.TestCalculateIC object at 0x7fea270a9520>
+analyzer = <shared.hybrid_scoring.factor_analyzer.FactorAnalyzer object at 0x7fea252c5340>
+
+    def test_ic_positive_correlation(self, analyzer):
+        """양의 상관관계 → IC > 0"""
+        # 팩터와 수익률이 같은 방향 (30개 이상 필요)
+        factor_values = pd.Series(list(range(1, 51)))
+        forward_returns = pd.Series([x * 0.01 for x in range(1, 51)])
+    
+        # calculate_ic는 (IC, IC_std, IR) 튜플 반환
+>       ic_mean, ic_std, ir = analyzer.calculate_ic(factor_values, forward_returns)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_analyzer.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+shared/hybrid_scoring/factor_analyzer.py:521: in calculate_ic
+    ic = valid['factor'].corr(valid['return'], method='spearman')
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/series.py:2991: in corr
+    return nanops.nancorr(
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:85: in _f
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1614: in nancorr
+    f = get_corr_func(method)
+        ^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1629: in get_corr_func
+    from scipy.stats import spearmanr
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """
+    SciPy: A scientific computing package for Python
+    ================================================
+    
+    Documentation is available in the docstrings and
+    online at https://docs.scipy.org/doc/scipy/
+    
+    Subpackages
+    -----------
+    ::
+    
+     cluster                      --- Vector Quantization / Kmeans
+     constants                    --- Physical and mathematical constants and units
+     datasets                     --- Dataset methods
+     differentiate                --- Finite difference differentiation tools
+     fft                          --- Discrete Fourier transforms
+     fftpack                      --- Legacy discrete Fourier transforms
+     integrate                    --- Integration routines
+     interpolate                  --- Interpolation Tools
+     io                           --- Data input and output
+     linalg                       --- Linear algebra routines
+     ndimage                      --- N-D image package
+     odr                          --- Orthogonal Distance Regression
+     optimize                     --- Optimization Tools
+     signal                       --- Signal Processing Tools
+     sparse                       --- Sparse Matrices
+     spatial                      --- Spatial data structures and algorithms
+     special                      --- Special functions
+     stats                        --- Statistical Functions
+    
+    Public API in the main SciPy namespace
+    --------------------------------------
+    ::
+    
+     __version__       --- SciPy version string
+     LowLevelCallable  --- Low-level callback function
+     show_config       --- Show scipy build configuration
+     test              --- Run scipy unittests
+    
+    """
+    
+    import importlib as _importlib
+    
+>   from numpy import __version__ as __numpy_version__
+E   ImportError: cannot import name '__version__' from '<unknown module name>' (unknown location)
+
+venv/lib/python3.12/site-packages/scipy/__init__.py:44: ImportError
+_________________ TestCalculateIC.test_ic_negative_correlation _________________
+
+self = <hybrid_scoring.test_factor_analyzer.TestCalculateIC object at 0x7fea270a8da0>
+analyzer = <shared.hybrid_scoring.factor_analyzer.FactorAnalyzer object at 0x7fea253e0710>
+
+    def test_ic_negative_correlation(self, analyzer):
+        """음의 상관관계 → IC < 0"""
+        factor_values = pd.Series(list(range(1, 51)))
+        forward_returns = pd.Series([0.5 - x * 0.01 for x in range(1, 51)])
+    
+>       ic_mean, ic_std, ir = analyzer.calculate_ic(factor_values, forward_returns)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_analyzer.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+shared/hybrid_scoring/factor_analyzer.py:521: in calculate_ic
+    ic = valid['factor'].corr(valid['return'], method='spearman')
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/series.py:2991: in corr
+    return nanops.nancorr(
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:85: in _f
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1614: in nancorr
+    f = get_corr_func(method)
+        ^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1629: in get_corr_func
+    from scipy.stats import spearmanr
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """
+    SciPy: A scientific computing package for Python
+    ================================================
+    
+    Documentation is available in the docstrings and
+    online at https://docs.scipy.org/doc/scipy/
+    
+    Subpackages
+    -----------
+    ::
+    
+     cluster                      --- Vector Quantization / Kmeans
+     constants                    --- Physical and mathematical constants and units
+     datasets                     --- Dataset methods
+     differentiate                --- Finite difference differentiation tools
+     fft                          --- Discrete Fourier transforms
+     fftpack                      --- Legacy discrete Fourier transforms
+     integrate                    --- Integration routines
+     interpolate                  --- Interpolation Tools
+     io                           --- Data input and output
+     linalg                       --- Linear algebra routines
+     ndimage                      --- N-D image package
+     odr                          --- Orthogonal Distance Regression
+     optimize                     --- Optimization Tools
+     signal                       --- Signal Processing Tools
+     sparse                       --- Sparse Matrices
+     spatial                      --- Spatial data structures and algorithms
+     special                      --- Special functions
+     stats                        --- Statistical Functions
+    
+    Public API in the main SciPy namespace
+    --------------------------------------
+    ::
+    
+     __version__       --- SciPy version string
+     LowLevelCallable  --- Low-level callback function
+     show_config       --- Show scipy build configuration
+     test              --- Run scipy unittests
+    
+    """
+    
+    import importlib as _importlib
+    
+>   from numpy import __version__ as __numpy_version__
+E   ImportError: cannot import name '__version__' from '<unknown module name>' (unknown location)
+
+venv/lib/python3.12/site-packages/scipy/__init__.py:44: ImportError
+_______________ TestHistoricalPrices.test_get_historical_prices ________________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7fea270aa7e0>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7fea253d3740>
+sample_stock_prices = None
+
+    def test_get_historical_prices(self, repo, sample_stock_prices):
+        """단일 종목 주가 조회"""
+        df = repo.get_historical_prices('005930', days=10)
+    
+        assert isinstance(df, pd.DataFrame)
+>       assert len(df) == 10
+E       assert 0 == 10
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests/shared/hybrid_scoring/test_factor_repository.py:149: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (10)
+____________ TestHistoricalPrices.test_get_historical_prices_sorted ____________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7fea270aa420>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7fea251324b0>
+sample_stock_prices = None
+
+    def test_get_historical_prices_sorted(self, repo, sample_stock_prices):
+        """날짜 오름차순 정렬"""
+        df = repo.get_historical_prices('005930', days=10)
+    
+        # 날짜가 오름차순이어야 함
+>       dates = df['PRICE_DATE'].tolist()
+                ^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_repository.py:158: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:4113: in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = RangeIndex(start=0, stop=0, step=1), key = 'PRICE_DATE'
+
+    @doc(Index.get_loc)
+    def get_loc(self, key) -> int:
+        if is_integer(key) or (is_float(key) and key.is_integer()):
+            new_key = int(key)
+            try:
+                return self._range.index(new_key)
+            except ValueError as err:
+                raise KeyError(key) from err
+        if isinstance(key, Hashable):
+>           raise KeyError(key)
+E           KeyError: 'PRICE_DATE'
+
+venv/lib/python3.12/site-packages/pandas/core/indexes/range.py:417: KeyError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (10)
+_____________ TestHistoricalPrices.test_get_historical_prices_bulk _____________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7fea270a8f50>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7fea250e91c0>
+in_memory_db = <sqlalchemy.orm.session.Session object at 0x7fea258fde80>
+
+    def test_get_historical_prices_bulk(self, repo, in_memory_db):
+        """여러 종목 일괄 조회"""
+        # 두 종목 데이터 추가
+        base_date = datetime.now()
+        for code in ['005930', '000660']:
+            for i in range(5):
+                in_memory_db.add(StockDailyPrice(
+                    stock_code=code,
+                    price_date=base_date - timedelta(days=i),
+                    close_price=70000,
+                    volume=1000000,
+                    high_price=71000,
+                    low_price=69000
+                ))
+        in_memory_db.commit()
+    
+        result = repo.get_historical_prices_bulk(['005930', '000660'], days=5)
+    
+        assert '005930' in result
+        assert '000660' in result
+>       assert len(result['005930']) == 5
+E       assert 0 == 5
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests/shared/hybrid_scoring/test_factor_repository.py:188: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (5)
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (000660): Length of values (0) does not match length of index (5)
+_______________ TestTechnicalScore.test_technical_score_oversold _______________
+
+self = <test_factor_scoring.TestTechnicalScore object at 0x7fea26f83e90>
+scorer = <shared.factor_scoring.FactorScorer object at 0x7fea25806270>
+
+    def test_technical_score_oversold(self, scorer):
+        """과매도 상태"""
+        # 급락 데이터 (RSI 낮음)
+        prices = [60000 - i * 500 for i in range(30)]
+        df = pd.DataFrame({
+            'CLOSE_PRICE': prices,
+            'VOLUME': [1000000] * 30
+        })
+    
+        score, factors = scorer.calculate_technical_score(df)
+    
+        # 과매도면 RSI 점수 높음
+>       assert factors.get('rsi_score', 0) >= 20
+E       AssertionError: assert 15 >= 20
+E        +  where 15 = <built-in method get of dict object at 0x7fea1ad85f80>('rsi_score', 0)
+E        +    where <built-in method get of dict object at 0x7fea1ad85f80> = {'bb_score': 15, 'rsi_score': 15, 'volume_score': 20}.get
+
+tests/shared/test_factor_scoring.py:241: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.strategy:strategy.py:111 ❌ (RSI) 지원하지 않는 데이터 타입: <class 'unittest.mock.MagicMock'>
+____________ TestLLMFactoryHelpers.test_get_env_provider_type_fast _____________
+
+self = <test_llm_factory.TestLLMFactoryHelpers object at 0x7fea26feeb40>
+
+    def test_get_env_provider_type_fast(self):
+        """FAST tier 기본값 - gemini"""
+        with patch.dict(os.environ, {}, clear=False):
+            provider_type = LLMFactory._get_env_provider_type(LLMTier.FAST)
+>           assert provider_type == "gemini"
+E           AssertionError: assert 'ollama' == 'gemini'
+E             
+E             - gemini
+E             + ollama
+
+tests/shared/test_llm_factory.py:47: AssertionError
+__________ TestLLMFactoryHelpers.test_get_env_provider_type_reasoning __________
+
+self = <test_llm_factory.TestLLMFactoryHelpers object at 0x7fea26feede0>
+
+    def test_get_env_provider_type_reasoning(self):
+        """REASONING tier 기본값 - openai"""
+        with patch.dict(os.environ, {}, clear=False):
+            provider_type = LLMFactory._get_env_provider_type(LLMTier.REASONING)
+>           assert provider_type == "openai"
+E           AssertionError: assert 'ollama' == 'openai'
+E             
+E             - openai
+E             + ollama
+
+tests/shared/test_llm_factory.py:53: AssertionError
+___________ TestLLMFactoryHelpers.test_get_local_model_name_defaults ___________
+
+self = <test_llm_factory.TestLLMFactoryHelpers object at 0x7fea26feef60>
+
+    def test_get_local_model_name_defaults(self):
+        """로컬 모델명 기본값 - gemma3:27b"""
+        with patch.dict(os.environ, {}, clear=False):
+>           assert LLMFactory._get_local_model_name(LLMTier.FAST) == "gemma3:27b"
+E           AssertionError: assert 'qwen2.5:3b' == 'gemma3:27b'
+E             
+E             - gemma3:27b
+E             + qwen2.5:3b
+
+tests/shared/test_llm_factory.py:74: AssertionError
+______________ TestLLMFactoryGetProvider.test_get_provider_ollama ______________
+
+self = <test_llm_factory.TestLLMFactoryGetProvider object at 0x7fea26fee990>
+mock_ollama = <MagicMock name='OllamaLLMProvider' id='140643631986112'>
+
+    @patch('shared.llm_providers.OllamaLLMProvider')
+    def test_get_provider_ollama(self, mock_ollama):
+        """Ollama provider 생성"""
+        mock_instance = MagicMock()
+        mock_ollama.return_value = mock_instance
+    
+        with patch.dict(os.environ, {"TIER_FAST_PROVIDER": "ollama"}):
+            provider = LLMFactory.get_provider(LLMTier.FAST)
+    
+            assert provider is mock_instance
+            mock_ollama.assert_called_once()
+            call_kwargs = mock_ollama.call_args.kwargs
+>           assert call_kwargs['model'] == "gemma3:27b"
+E           AssertionError: assert 'qwen2.5:3b' == 'gemma3:27b'
+E             
+E             - gemma3:27b
+E             + qwen2.5:3b
+
+tests/shared/test_llm_factory.py:100: AssertionError
+_______________ TestMarketRegimeDetector.test_detect_regime_bull _______________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7fea26e62180>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7fea25984710>
+bull_kospi_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_detect_regime_bull(self, detector, bull_kospi_df):
+        """상승장 감지"""
+        current_price = 2750  # MA20 대비 위
+    
+        regime, context = detector.detect_regime(bull_kospi_df, current_price, quiet=True)
+    
+>       assert regime in ['BULL', 'STRONG_BULL']
+E       AssertionError: assert 'SIDEWAYS' in ['BULL', 'STRONG_BULL']
+
+tests/shared/test_market_regime.py:93: AssertionError
+_______________ TestMarketRegimeDetector.test_detect_regime_bear _______________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7fea26e62450>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7fea25985850>
+bear_kospi_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_detect_regime_bear(self, detector, bear_kospi_df):
+        """하락장 감지"""
+        current_price = 2400  # MA20 대비 아래
+    
+        regime, context = detector.detect_regime(bear_kospi_df, current_price, quiet=True)
+    
+>       assert regime == 'BEAR'
+E       AssertionError: assert 'SIDEWAYS' == 'BEAR'
+E         
+E         - BEAR
+E         + SIDEWAYS
+
+tests/shared/test_market_regime.py:103: AssertionError
+_____ TestMarketRegimeDetector.test_detect_regime_uses_ma10_for_short_data _____
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7fea26e62540>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7fea25eb9010>
+
+    def test_detect_regime_uses_ma10_for_short_data(self, detector):
+        """10~19일 데이터는 MA10 사용"""
+        # 12일 데이터
+        prices = [2500 + i * 5 for i in range(12)]
+        short_df = pd.DataFrame({'CLOSE_PRICE': prices})
+    
+        regime, context = detector.detect_regime(short_df, 2560, quiet=True)
+    
+>       assert context.get('using_ma10', False) is True
+E       AssertionError: assert False is True
+E        +  where False = <built-in method get of dict object at 0x7fea1a3ec980>('using_ma10', False)
+E        +    where <built-in method get of dict object at 0x7fea1a3ec980> = {'error': '데이터 부족'}.get
+
+tests/shared/test_market_regime.py:140: AssertionError
+___________ TestMarketRegimeDetector.test_detect_regime_strong_bull ____________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7fea26e60ec0>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7fea25eb9c40>
+
+    def test_detect_regime_strong_bull(self, detector):
+        """급등장 감지"""
+        # 급등 데이터: 5일간 5% 이상 상승
+        base = 2500
+        prices = [base] * 15 + [base * 1.01, base * 1.02, base * 1.03, base * 1.04, base * 1.05]
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+    
+        current_price = base * 1.06  # MA 대비 높음
+    
+        regime, context = detector.detect_regime(df, current_price, quiet=True)
+    
+        # 급등장 또는 상승장
+>       assert regime in ['STRONG_BULL', 'BULL']
+E       AssertionError: assert 'SIDEWAYS' in ['STRONG_BULL', 'BULL']
+
+tests/shared/test_market_regime.py:154: AssertionError
+__________ TestMarketRegimeDetector.test_detect_regime_returns_scores __________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7fea26e60650>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7fea25b89130>
+sample_kospi_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_detect_regime_returns_scores(self, detector, sample_kospi_df):
+        """국면별 점수 반환"""
+        regime, context = detector.detect_regime(sample_kospi_df, 2600, quiet=True)
+    
+>       assert 'regime_scores' in context
+E       AssertionError: assert 'regime_scores' in {'error': '데이터 부족'}
+
+tests/shared/test_market_regime.py:160: AssertionError
+__________________________ TestRSI.test_rsi_dataframe __________________________
+
+self = <test_strategy.TestRSI object at 0x7fea26d8bb30>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_rsi_dataframe(self, daily_prices_df):
+        """DataFrame 입력"""
+        result = strategy.calculate_rsi(daily_prices_df, period=14)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:219: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.strategy:strategy.py:111 ❌ (RSI) 지원하지 않는 데이터 타입: <class 'unittest.mock.MagicMock'>
+____________________________ TestATR.test_atr_basic ____________________________
+
+self = <test_strategy.TestATR object at 0x7fea26db8860>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_atr_basic(self, daily_prices_df):
+        """기본 ATR 계산"""
+        result = strategy.calculate_atr(daily_prices_df, period=14)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:258: AssertionError
+___________________ TestBollingerBands.test_lower_band_basic ___________________
+
+self = <test_strategy.TestBollingerBands object at 0x7fea26db96d0>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='140643631866768'>
+
+    def test_lower_band_basic(self, daily_prices_df):
+        """하단 밴드 계산"""
+        result = strategy.calculate_bollinger_bands(daily_prices_df, period=20, std_dev=2)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:321: AssertionError
+______________ TestIsOperatingHours.test_weekday_operating_hours _______________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd3ce0>
+
+    def test_weekday_operating_hours(self):
+        """평일 운영 시간 내"""
+        import pytz
+    
+        # 월요일 10:00 KST
+        mock_dt = datetime(2025, 12, 22, 10, 0, 0)  # 월요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:367: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+___________ TestIsOperatingHours.test_weekday_before_operating_hours ___________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26c08320>
+
+    def test_weekday_before_operating_hours(self):
+        """평일 운영 시간 전"""
+        import pytz
+    
+        # 월요일 06:00 KST (운영 시간 전)
+        mock_dt = datetime(2025, 12, 22, 6, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:382: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+___________ TestIsOperatingHours.test_weekday_after_operating_hours ____________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26c08650>
+
+    def test_weekday_after_operating_hours(self):
+        """평일 운영 시간 후"""
+        import pytz
+    
+        # 월요일 18:00 KST (운영 시간 후)
+        mock_dt = datetime(2025, 12, 22, 18, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:397: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_______________ TestIsOperatingHours.test_weekend_returns_false ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd3fb0>
+
+    def test_weekend_returns_false(self):
+        """주말은 항상 False"""
+        import pytz
+    
+        # 토요일 10:00 KST
+        mock_dt = datetime(2025, 12, 27, 10, 0, 0)  # 토요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:412: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+________________ TestIsOperatingHours.test_sunday_returns_false ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd3aa0>
+
+    def test_sunday_returns_false(self):
+        """일요일은 항상 False"""
+        import pytz
+    
+        # 일요일 12:00 KST
+        mock_dt = datetime(2025, 12, 28, 12, 0, 0)  # 일요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:427: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_______________ TestIsOperatingHours.test_custom_operating_hours _______________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd3890>
+
+    def test_custom_operating_hours(self):
+        """사용자 정의 운영 시간"""
+        import pytz
+    
+        # 월요일 09:30 KST
+        mock_dt = datetime(2025, 12, 22, 9, 30, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+            # 09:00 - 15:30 운영 시간
+>           result = is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:443: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 9, start_minute = 0, end_hour = 15, end_minute = 30
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+________________ TestIsOperatingHours.test_edge_case_start_time ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd2fc0>
+
+    def test_edge_case_start_time(self):
+        """정확히 시작 시간"""
+        import pytz
+    
+        # 월요일 07:00 KST (정확히 시작 시간)
+        mock_dt = datetime(2025, 12, 22, 7, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:458: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_________________ TestIsOperatingHours.test_edge_case_end_time _________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7fea26dd29f0>
+
+    def test_edge_case_end_time(self):
+        """정확히 종료 시간"""
+        import pytz
+    
+        # 월요일 17:00 KST (정확히 종료 시간)
+        mock_dt = datetime(2025, 12, 22, 17, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime:
+            mock_datetime.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:473: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+=============================== warnings summary ===============================
+scripts/test_debate_issue.py::test_gateway_chat_direct
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/_pytest/python.py:170: PytestReturnNotNoneWarning: Test functions should return None, but scripts/test_debate_issue.py::test_gateway_chat_direct returned <class 'dict'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+scripts/test_debate_issue.py::test_debate_session_via_llm
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/_pytest/python.py:170: PytestReturnNotNoneWarning: Test functions should return None, but scripts/test_debate_issue.py::test_debate_session_via_llm returned <class 'str'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+scripts/test_llm_models.py::test_gpt_5_2_thinking
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/_pytest/python.py:170: PytestReturnNotNoneWarning: Test functions should return None, but scripts/test_llm_models.py::test_gpt_5_2_thinking returned <class 'bool'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+scripts/test_llm_models.py::test_gpt_5_2
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/_pytest/python.py:170: PytestReturnNotNoneWarning: Test functions should return None, but scripts/test_llm_models.py::test_gpt_5_2 returned <class 'bool'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:952: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================ tests coverage ================================
+_______________ coverage: platform linux, python 3.12.3-final-0 ________________
+
+Name                                             Stmts   Miss  Cover   Missing
+------------------------------------------------------------------------------
+debug_085620_history.py                             47     47     0%   2-84
+scripts/test_debate_issue.py                        98     30    69%   68, 72-74, 109-118, 165, 171-173, 189-218
+scripts/test_fetch_kis_data_task.py                 41     20    51%   23, 39-40, 43, 46, 50-56, 60-74
+scripts/test_hunter_ollama.py                      109     91    17%   71-74, 89-128, 133-152, 166-195, 209-258
+scripts/test_judge_v2.py                            59     16    73%   83, 92, 99-100, 111-130
+scripts/test_llm_models.py                          64     29    55%   54-59, 93-98, 102-129
+scripts/test_mock_buy.py                            61     43    30%   35-98, 102-135, 138-157
+scripts/test_scout_debug.py                         51     36    29%   22-55, 58-85
+services/buy-executor/executor.py                  303    130    57%   88, 96-98, 151-154, 156-159, 174-178, 192, 198-202, 216-219, 237-244, 261-265, 270-271, 276-277, 287-289, 301-364, 378-379, 406-449, 488-490, 494, 509-514, 547-550, 600-602, 630, 634-636
+services/buy-scanner/scanner.py                    450    215    52%   100-101, 116-117, 138-139, 150-191, 233-234, 283-285, 295-296, 301-304, 312, 320-323, 327-332, 373-376, 404, 408-409, 421, 455-456, 469-641, 667-668, 674-675, 686, 708-715, 751, 772-860, 901-903
+services/daily-briefing/reporter.py                263    120    54%   32-34, 56, 61-63, 70-71, 82-83, 125-127, 139-140, 145-146, 152-154, 184, 189, 215-217, 223-224, 228-239, 258-313, 333-344, 381-382, 399-404, 421-422, 428, 446, 462-467, 483-484, 489-518
+services/dashboard/backend/routers/__init__.py       0      0   100%
+services/dashboard/backend/routers/configs.py       91     30    67%   121-127, 145-171
+services/kis-gateway/main.py                       332    140    58%   85, 106-112, 147-179, 184-198, 203-233, 261, 303, 310, 318-319, 361, 381-383, 406-407, 419, 439-447, 465-466, 478, 498-506, 523-524, 539-542, 545, 548, 569-577, 617-625, 643, 661-669, 688, 706-714, 724, 754-759, 772-776
+services/news-crawler/crawler.py                   416    239    43%   29-30, 58-75, 136-178, 189-231, 239-252, 265-268, 283-284, 304-305, 329-330, 341-342, 354, 358, 374, 383, 396-398, 405-408, 417-418, 428-439, 449-453, 460-461, 476-630, 638-656, 662-672, 691-692, 697-699, 720-721, 733, 743-744
+services/price-monitor/monitor.py                  218     66    70%   67-76, 85-135, 148-149, 162-163, 184-186, 240-243, 262-263, 283, 302-304, 310, 316, 329-330
+services/scout-job/scout.py                        432    302    30%   44, 69-71, 76, 152-154, 176-178, 209, 244-245, 255-276, 293-340, 365-366, 378, 386-882
+services/scout-job/scout_cache.py                  211    166    21%   41-49, 53, 71-89, 96-104, 112, 116-117, 121-128, 132-133, 137-145, 149, 153-155, 159-160, 174-226, 233-275, 282-333, 352-369, 374-378, 383-386, 391-395, 411-442, 446-451, 455-458, 462-465, 469-482, 486, 505-506, 520-527
+services/scout-job/scout_pipeline.py               306    137    55%   28, 100-103, 170-178, 201, 217, 235, 270, 272, 274, 276-277, 280, 284, 308-309, 367-368, 394, 397, 399, 404-406, 413, 421, 425, 427, 470-471, 520-521, 551-623, 640-685, 698-757
+services/scout-job/scout_universe.py               175     72    59%   21-23, 124-187, 195-210, 232-235, 271, 280-281, 287, 304, 307-308, 327-328, 340, 344, 357, 376-378, 385-387
+services/scout_job_module.py                        22      0   100%
+services/sell-executor/executor.py                 132     48    64%   73-75, 85, 89, 110-115, 119-120, 133, 135, 152, 154, 157-158, 177-178, 187-188, 212-238, 256-258, 283-298
+shared/__init__.py                                   5      0   100%
+shared/archivist.py                                 81     66    19%   19, 26-62, 65-86, 92-113, 116-129, 135-156, 159-171
+shared/auth.py                                      80      0   100%
+shared/config.py                                   167     30    82%   209-210, 251, 256-257, 267, 280, 294-297, 305-307, 336-340, 351, 362, 373, 378, 403, 412, 422-427
+shared/database/__init__.py                          7      0   100%
+shared/database/commands.py                         58     49    16%   22-45, 52-83, 91-119, 126-167
+shared/database/core.py                             67      0   100%
+shared/database/get_trade_logs_snippet.py           19     19     0%   2-47
+shared/database/market.py                          176    154    12%   40-77, 85-122, 133-150, 161-187, 194-233, 254-282, 289-380, 392-428
+shared/database/optimization.py                     34     27    21%   23-57, 64-76, 83-117
+shared/database/rag.py                              35     20    43%   19-33, 47, 49-51, 64-75
+shared/database/trading.py                         303    243    20%   40-50, 54-74, 94-116, 132-228, 235-277, 284-306, 318-354, 361-404, 465-470, 520-529, 533-535, 555-560, 568-582, 587-614, 621-638, 645-659, 666-688, 695-714, 727-782
+shared/db/__init__.py                                4      0   100%
+shared/db/connection.py                             94      0   100%
+shared/db/factor_repository.py                     190     63    67%   94-97, 148-150, 176-178, 233-235, 284-286, 331, 335-337, 389-391, 463-466, 487-489, 536-545, 569-572, 597-599, 648-660, 687-690
+shared/db/models.py                                452      1    99%   51
+shared/db/repository.py                            247      4    98%   477-486
+shared/factor_scoring.py                           193     91    53%   53-68, 77-86, 94-114, 121-123, 200-211, 218-220, 281-283, 306-324, 339-351, 359-382, 389-391, 460-462
+shared/failure_reporter.py                          56      9    84%   56-57, 95-98, 124, 135, 146-147
+shared/financial_data_collector.py                 259    246     5%   26, 41-79, 93-117, 134-316, 330-422, 437-465
+shared/gemini.py                                    21      0   100%
+shared/hybrid_scoring/__init__.py                    7      0   100%
+shared/hybrid_scoring/competitor_analyzer.py       183    109    40%   140-141, 154-223, 235-258, 277-307, 319-342, 348-355, 373-381, 402-441, 453-514, 519-551, 566-569, 592-605
+shared/hybrid_scoring/factor_analyzer.py          1045    894    14%   129-130, 147-159, 173-214, 233-243, 251, 258-260, 285, 304-316, 319-320, 325-327, 353-376, 380, 402-429, 456-458, 462-464, 468-470, 487-489, 517-518, 524-538, 559-633, 654-688, 704-710, 719-764, 772-822, 838-884, 898-928, 939-967, 978-1006, 1020-1136, 1148-1219, 1225-1255, 1272-1289, 1298-1342, 1356-1458, 1463-1501, 1506-1541, 1545-1589, 1593-1631, 1635-1674, 1686-1798, 1823-2055, 2059-2075, 2105-2237, 2258-2259
+shared/hybrid_scoring/factor_constants.py            7      0   100%
+shared/hybrid_scoring/hybrid_scorer.py             185     26    86%   173-175, 197-200, 249-268, 277, 357, 363-364, 400, 459-460, 563-566
+shared/hybrid_scoring/quant_constants.py            14      0   100%
+shared/hybrid_scoring/quant_scorer.py              699    581    17%   141, 145, 220-243, 254-306, 312-357, 366-389, 405-439, 455-550, 565-626, 638-673, 695-828, 832-842, 866-906, 930-995, 1015-1113, 1150-1427, 1462-1502, 1511-1583, 1591-1627, 1645, 1672, 1687
+shared/hybrid_scoring/schema.py                     96     37    61%   388-415, 435-445, 453-455
+shared/incident_schema.py                           41      0   100%
+shared/kis/__init__.py                               1      0   100%
+shared/kis/auth.py                                 114     92    19%   22, 31-39, 49-58, 62-85, 91-172, 176-179
+shared/kis/client.py                                42     20    52%   32-52, 56-65, 69
+shared/kis/gateway_client.py                       119    101    15%   29-42, 46-69, 83-116, 129-140, 150-161, 175-189, 203-217, 230-247, 256-264, 273-281, 285, 289
+shared/kis/market_data.py                          207    193     7%   15, 19-69, 74-106, 110-153, 157-170, 184-293, 309-351, 366-367, 382-468
+shared/kis/request.py                               83     77     7%   18-124
+shared/kis/trading.py                              217    201     7%   16, 20-50, 54, 58, 70-207, 224-277, 283-330, 339-396, 406-450, 456-492
+shared/kis/websocket.py                            222    206     7%   18-33, 39-86, 92-179, 183-211, 215-216, 220-232, 235, 241-326
+shared/llm.py                                      223     40    82%   61-63, 92, 132-134, 146, 214, 221, 229-232, 252, 264-266, 277, 290-306, 328, 367-369, 456-459, 508
+shared/llm_constants.py                              7      0   100%
+shared/llm_factory.py                               71      0   100%
+shared/llm_prompts.py                              147      0   100%
+shared/llm_providers.py                            479    209    56%   99, 107, 122-139, 171, 184, 188, 199-205, 208-209, 236-246, 279, 286, 289-294, 309-314, 320-338, 350-353, 360-366, 397, 405, 412, 415-420, 434-454, 488, 542-550, 570, 583, 597, 608-609, 619, 621-634, 647-648, 663, 714, 743-747, 758-801, 808-822, 826, 839, 856, 858-866, 877-916
+shared/market_regime.py                            127     79    38%   73, 76-210
+shared/news_classifier.py                          103      4    96%   290-291, 329, 415
+shared/notification.py                              99      0   100%
+shared/portfolio_diversification.py                 38      0   100%
+shared/position_sizing.py                           71      0   100%
+shared/rabbitmq.py                                 162    162     0%   42-307
+shared/redis_cache.py                              367      1    99%   70
+shared/scheduler_client.py                          21     21     0%   1-35
+shared/scheduler_runtime.py                         38     38     0%   1-88
+shared/secret_manager.py                            48      0   100%
+shared/sector_classifier.py                         42      0   100%
+shared/settings/registry.py                          3      0   100%
+shared/strategies/__init__.py                        4      4     0%   13-45
+shared/strategies/competitor_backtest.py           229    229     0%   26-587
+shared/strategies/pair_trading.py                  153    153     0%   39-468
+shared/strategy.py                                 235    135    43%   22-24, 77-82, 100-103, 117-121, 151-179, 193-207, 221-239, 252-270, 280-287, 305-321, 337-359, 374-390, 407-409, 422-424
+shared/strategy_presets.py                          52     12    77%   76-77, 82-84, 95-96, 102, 109, 127-128, 138
+shared/utils.py                                    167     17    90%   25-26, 128-136, 199-200, 257-258, 345-351
+shared/version.py                                    5      5     0%   5-11
+strategy/__init__.py                                 0      0   100%
+strategy/bear_strategies.py                         64     56    12%   18-53, 64-100, 104-112
+------------------------------------------------------------------------------
+TOTAL                                            12666   6701    47%
+=========================== short test summary info ============================
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_tier2_safety_check_pass
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_reverse_signal
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update_existing_row
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_bear_strategies
+FAILED tests/services/scout-job/test_scout.py::TestScoutMainFlow::test_scout_main_flow
+FAILED tests/services/sell-executor/test_sell_executor.py::TestSellExecutorBasicFlow::test_successful_sell_order_dry_run
+FAILED tests/services/sell-executor/test_sell_executor.py::TestRealOrderExecution::test_real_order_calls_kis_api
+FAILED tests/services/sell-executor/test_sell_executor.py::TestRealOrderExecution::test_order_failure_handling
+FAILED tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_positive_correlation
+FAILED tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_negative_correlation
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_sorted
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_bulk
+FAILED tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_oversold
+FAILED tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_fast
+FAILED tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_reasoning
+FAILED tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_local_model_name_defaults
+FAILED tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_ollama
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bull
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bear
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_uses_ma10_for_short_data
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_strong_bull
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_returns_scores
+FAILED tests/shared/test_strategy.py::TestRSI::test_rsi_dataframe - assert No...
+FAILED tests/shared/test_strategy.py::TestATR::test_atr_basic - assert None i...
+FAILED tests/shared/test_strategy.py::TestBollingerBands::test_lower_band_basic
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_before_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_after_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekend_returns_false
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_sunday_returns_false
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_custom_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_start_time
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_end_time
+ERROR scripts/test_hunter_ollama.py::test_single_stock
+======== 35 failed, 823 passed, 9 warnings, 1 error in 89.24s (0:01:29) ========

@@ -24,3 +24,10 @@ spec_scout = importlib.util.spec_from_file_location("scout", scout_path)
 scout = importlib.util.module_from_spec(spec_scout)
 sys.modules["scout"] = scout
 spec_scout.loader.exec_module(scout)
+
+# Import scout_universe
+universe_path = os.path.join(scout_job_dir, 'scout_universe.py')
+spec_universe = importlib.util.spec_from_file_location("scout_universe", universe_path)
+scout_universe = importlib.util.module_from_spec(spec_universe)
+sys.modules["scout_universe"] = scout_universe
+spec_universe.loader.exec_module(scout_universe)
