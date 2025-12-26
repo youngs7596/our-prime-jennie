@@ -205,10 +205,62 @@ ruff check .
 
 ---
 
-## 구현 검증 원칙
+## 구현 검증 원칙 (배포 전 품질 게이트)
 
-- 구현 후에는 **로그/실행 결과로 실제 동작 확인**을 우선합니다.
-- 정상 동작이 확인된 경우에만 완료 보고합니다.
+> ⚠️ **핵심 원칙**: 기능 개발, 코드 리팩토링 등 형상에 변경이 생기면 **Unit Test + Integration Test를 포함한 사전 검증**을 충분히 거친 후 안정적인 버전을 배포합니다.
+> 
+> 배경: 배포 후 오류 발견 → 다시 디버깅하는 반복을 줄이기 위함입니다.
+
+### 필수 검증 단계 (배포 전 체크리스트)
+
+1. **문법 검증 (Syntax Check)**
+   ```bash
+   # 변경된 Python 파일 문법 확인
+   python -m py_compile [변경된_파일.py]
+   ```
+
+2. **Unit Test + Integration Test 실행 (필수)**
+   ```bash
+   # 변경된 모듈 관련 Unit Test
+   pytest tests/shared/[관련_테스트].py -v
+   
+   # 전체 shared 모듈 Unit Test
+   pytest tests/shared/ -v --tb=short
+   
+   # 서비스 코드 변경 시 해당 서비스 테스트
+   pytest tests/services/[서비스명]/ -v
+   
+   # Integration Test (서비스 간 연동 확인)
+   pytest tests/integration/ -v --tb=short
+   ```
+
+3. **커버리지 확인 (권장)**
+   ```bash
+   pytest tests/shared/ --cov=shared --cov-report=term-missing
+   ```
+
+4. **로그/실행 결과 확인**
+   - 구현 후에는 **로그/실행 결과로 실제 동작 확인**을 우선합니다.
+   - 정상 동작이 확인된 경우에만 완료 보고합니다.
+
+### 변경 유형별 검증 범위
+
+| 변경 유형 | 필수 검증 | 권장 검증 |
+|-----------|-----------|-----------|
+| **새 기능 추가** | Unit Test 작성 + 실행 | Integration Test + 관련 모듈 전체 |
+| **버그 수정** | 재현 테스트 → 수정 → 통과 확인 | 회귀 테스트 추가 |
+| **리팩토링** | Unit Test + Integration Test 전체 통과 | 커버리지 유지/향상 확인 |
+| **의존성 변경** | 전체 테스트 실행 (Unit + Integration) | E2E/Smoke 테스트 |
+
+### 배포 승인 기준
+
+- [ ] 관련 Unit Test + Integration Test **전체 통과** (0 failures)
+- [ ] 새 기능의 경우 **테스트 코드 포함**
+- [ ] 린트 에러 없음 (`ruff check .`)
+- [ ] 로그/실행 결과로 동작 확인 완료
+
+> 💡 **알림**: 테스트 없이 배포하거나, 테스트 실패 상태로 배포를 진행하지 않습니다.
+> 테스트가 어려운 경우, 최소한 `py_compile` + 수동 검증 로그를 확보합니다.
 
 ---
 
