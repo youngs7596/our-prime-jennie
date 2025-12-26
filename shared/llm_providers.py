@@ -478,9 +478,9 @@ class GeminiLLMProvider(BaseLLMProvider):
         self._genai = genai
         self._api_key = api_key
         self._client = genai.Client(api_key=api_key)
-        # Updated to Gemini 3 Pro for Self-Evolution tasks (Daily Feedback)
-        # Note: As of Dec 2025, stable is 'gemini-3-pro-preview' in API
-        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview")
+        # Updated to Gemini 2.5 Flash for Cost Efficiency (User Request)
+        # Note: 'gemini-3-pro' is too expensive for default usage.
+        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
         self.flash_model = os.getenv("LLM_FLASH_MODEL_NAME", "gemini-2.5-flash")
         self._model_cache: Dict[tuple[str, float, str], Any] = {}
 
@@ -664,9 +664,9 @@ class OpenAILLMProvider(BaseLLMProvider):
         
         self.client = self._openai_module(api_key=api_key)
         # [Budget Strategy 2025]
-        # Default (Reasoning Tier): gpt-5-mini (Latest Budget Model)
-        # Thinking (Judge Tier): gpt-4o (Previous Flagship - Balanced Cost/Perf)
-        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-5-mini")
+        # Default (Reasoning Tier): gpt-4o-mini (Cost Efficiency)
+        # Thinking (Judge Tier): gpt-4o (Balanced Cost/Perf)
+        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
         self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
     
     def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):

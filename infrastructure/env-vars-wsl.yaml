@@ -26,9 +26,7 @@ SECRET_ID_GEMINI_API_KEY: "gemini-api-key"
 SECRET_ID_OPENAI_API_KEY: "openai-api-key"
 SECRET_ID_CLAUDE_API_KEY: "claude-api-key"
 
-# 5. 투자 및 토큰 설정
-INVESTMENT_AMOUNT: "1000000"
-DAILY_BUY_LIMIT_AMOUNT: "1000000"
+# 5. 토큰 설정
 KIS_TOKEN_FILE_PATH: "/tmp/kis_token.json"
 KIS_ACCOUNT_SUFFIX: "01"
 
@@ -109,6 +107,7 @@ LOCAL_MODEL_THINKING: "gemma3:27b"           # [Judge] Deep Reasoning (2024-12-2
 TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
 TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
 TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
+LLM_FLASH_MODEL_NAME: "gemini-2.5-flash"  # [Config] Explicitly set Flash model for high-volume tasks
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)
