@@ -49,12 +49,13 @@ class TestGeminiLLMProvider:
     """Gemini LLM Provider 테스트"""
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    def test_init_success(self, mock_configure, mock_get_secret, mock_safety_settings):
+    @patch('google.genai.Client')
+    def test_init_success(self, mock_client_class, mock_get_secret, mock_safety_settings):
         """초기화 성공"""
         from shared.llm_providers import GeminiLLMProvider
         
         mock_get_secret.return_value = 'fake-gemini-api-key'
+        mock_client_class.return_value = MagicMock()
         
         provider = GeminiLLMProvider(
             project_id='test-project',
@@ -64,7 +65,7 @@ class TestGeminiLLMProvider:
         
         assert provider is not None
         assert provider.name == 'gemini'
-        mock_configure.assert_called_once_with(api_key='fake-gemini-api-key')
+        mock_client_class.assert_called_once_with(api_key='fake-gemini-api-key')
     
     @patch('shared.auth.get_secret')
     def test_init_missing_api_key(self, mock_get_secret, mock_safety_settings):
@@ -83,9 +84,8 @@ class TestGeminiLLMProvider:
         assert 'Secret' in str(exc_info.value) or '로드 실패' in str(exc_info.value)
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    @patch('google.generativeai.GenerativeModel')
-    def test_generate_json_success(self, mock_model_class, mock_configure, mock_get_secret, 
+    @patch('google.genai.Client')
+    def test_generate_json_success(self, mock_client_class, mock_get_secret, 
                                     mock_safety_settings, sample_response_schema):
         """generate_json 성공"""
         from shared.llm_providers import GeminiLLMProvider
@@ -96,9 +96,10 @@ class TestGeminiLLMProvider:
         mock_response = MagicMock()
         mock_response.text = json.dumps({'score': 75, 'grade': 'B', 'reason': 'Good stock'})
         
-        mock_model_instance = MagicMock()
-        mock_model_instance.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model_instance
+        # Mock client.models.generate_content
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
         
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
         result = provider.generate_json(
@@ -111,16 +112,15 @@ class TestGeminiLLMProvider:
         assert result['grade'] == 'B'
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    @patch('google.generativeai.GenerativeModel')
-    def test_generate_json_fallback(self, mock_model_class, mock_configure, mock_get_secret,
+    @patch('google.genai.Client')
+    def test_generate_json_fallback(self, mock_client_class, mock_get_secret,
                                      mock_safety_settings, sample_response_schema):
         """첫 번째 모델 실패 시 폴백 모델로 재시도"""
         from shared.llm_providers import GeminiLLMProvider
         
         mock_get_secret.return_value = 'fake-api-key'
         
-        # 첫 번째 호출은 실패, 두 번째는 성공
+        # 첫 번째 호출은 실패 (429 아닌 에러), 두 번째 모델은 성공
         call_count = [0]
         
         def side_effect(*args, **kwargs):
@@ -131,9 +131,9 @@ class TestGeminiLLMProvider:
             mock_response.text = json.dumps({'score': 60, 'grade': 'C', 'reason': 'Fallback'})
             return mock_response
         
-        mock_model_instance = MagicMock()
-        mock_model_instance.generate_content.side_effect = side_effect
-        mock_model_class.return_value = mock_model_instance
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = side_effect
+        mock_client_class.return_value = mock_client
         
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
         result = provider.generate_json(
@@ -146,18 +146,17 @@ class TestGeminiLLMProvider:
         assert result['reason'] == 'Fallback'
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    @patch('google.generativeai.GenerativeModel')
-    def test_generate_json_all_fail(self, mock_model_class, mock_configure, mock_get_secret,
+    @patch('google.genai.Client')
+    def test_generate_json_all_fail(self, mock_client_class, mock_get_secret,
                                      mock_safety_settings, sample_response_schema):
         """모든 모델 실패 시 RuntimeError"""
         from shared.llm_providers import GeminiLLMProvider
         
         mock_get_secret.return_value = 'fake-api-key'
         
-        mock_model_instance = MagicMock()
-        mock_model_instance.generate_content.side_effect = Exception("API Error")
-        mock_model_class.return_value = mock_model_instance
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("API Error")
+        mock_client_class.return_value = mock_client
         
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
         
@@ -347,7 +346,153 @@ class TestClaudeLLMProvider:
         assert result['grade'] == 'S'
 
 
+# ============================================================================
+# Tests: OllamaLLMProvider
+# ============================================================================
 
+class TestOllamaLLMProvider:
+    """Ollama LLM Provider 테스트"""
+    
+    @pytest.fixture
+    def mock_state_manager(self):
+        """State Manager fixture"""
+        manager = MagicMock()
+        manager.get_current_model.return_value = 'qwen3:32b'
+        return manager
+    
+    def test_init_success(self, mock_state_manager, monkeypatch):
+        """초기화 성공"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('OLLAMA_HOST', 'http://localhost:11434')
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        provider = OllamaLLMProvider(
+            model='qwen3:32b',
+            state_manager=mock_state_manager,
+            is_fast_tier=False,
+            is_thinking_tier=False
+        )
+        
+        assert provider.model == 'qwen3:32b'
+        assert provider.timeout == 600
+        assert provider.max_retries == 3
+        assert provider.use_gateway is False
+    
+    def test_init_fast_tier(self, mock_state_manager, monkeypatch):
+        """Fast tier 초기화"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        provider = OllamaLLMProvider(
+            model='qwen3:32b',
+            state_manager=mock_state_manager,
+            is_fast_tier=True
+        )
+        
+        assert provider.timeout == 60
+    
+    def test_init_gateway_mode(self, mock_state_manager, monkeypatch):
+        """Gateway 모드 활성화"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'true')
+        monkeypatch.setenv('OLLAMA_GATEWAY_URL', 'http://gateway:11500')
+        
+        provider = OllamaLLMProvider(
+            model='qwen3:32b',
+            state_manager=mock_state_manager
+        )
+        
+        assert provider.use_gateway is True
+        assert provider.gateway_url == 'http://gateway:11500'
+    
+    def test_clean_deepseek_tags(self, mock_state_manager, monkeypatch):
+        """DeepSeek <think> 태그 제거"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
+        
+        text_with_think = '<think>This is reasoning...</think>{"score": 80}'
+        result = provider._clean_deepseek_tags(text_with_think)
+        
+        assert result == '{"score": 80}'
+    
+    def test_ensure_model_loaded_different_model(self, mock_state_manager, monkeypatch):
+        """다른 모델로 전환 시 상태 업데이트"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        mock_state_manager.get_current_model.return_value = 'llama3:8b'
+        
+        provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
+        provider._ensure_model_loaded()
+        
+        mock_state_manager.set_current_model.assert_called_once_with('qwen3:32b')
+    
+    @patch('requests.post')
+    def test_generate_json_success(self, mock_post, mock_state_manager, monkeypatch, sample_response_schema):
+        """generate_json 성공"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'response': '{"score": 75, "grade": "B", "reason": "Good"}'
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+        
+        provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
+        result = provider.generate_json("Analyze this stock", sample_response_schema)
+        
+        assert result['score'] == 75
+        assert result['grade'] == 'B'
+    
+    @patch('requests.post')
+    def test_generate_json_with_think_tags(self, mock_post, mock_state_manager, monkeypatch, sample_response_schema):
+        """think 태그 포함 응답 처리"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'response': '<think>Analyzing...</think>{"score": 80, "grade": "A", "reason": "Excellent"}'
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+        
+        provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
+        result = provider.generate_json("Test", sample_response_schema)
+        
+        assert result['score'] == 80
+    
+    @patch('requests.post')
+    def test_generate_chat_success(self, mock_post, mock_state_manager, monkeypatch):
+        """generate_chat 성공"""
+        from shared.llm_providers import OllamaLLMProvider
+        
+        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
+        
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            'message': {'content': 'This is a great stock to buy.'}
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+        
+        provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
+        history = [{'role': 'user', 'content': 'Analyze Samsung stock'}]
+        
+        result = provider.generate_chat(history)
+        
+        assert 'text' in result
+        assert result['text'] == 'This is a great stock to buy.'
 
 
 # ============================================================================
@@ -358,12 +503,13 @@ class TestProviderProperties:
     """Provider 속성 테스트"""
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    def test_gemini_flash_model_name(self, mock_configure, mock_get_secret, mock_safety_settings, monkeypatch):
+    @patch('google.genai.Client')
+    def test_gemini_flash_model_name(self, mock_client_class, mock_get_secret, mock_safety_settings, monkeypatch):
         """Gemini flash 모델명 확인"""
         from shared.llm_providers import GeminiLLMProvider
         
         mock_get_secret.return_value = 'fake-api-key'
+        mock_client_class.return_value = MagicMock()
         monkeypatch.setenv('LLM_FLASH_MODEL_NAME', 'gemini-custom-flash')
         
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
@@ -371,12 +517,13 @@ class TestProviderProperties:
         assert provider.flash_model_name() == 'gemini-custom-flash'
     
     @patch('shared.auth.get_secret')
-    @patch('google.generativeai.configure')
-    def test_gemini_default_model_from_env(self, mock_configure, mock_get_secret, mock_safety_settings, monkeypatch):
+    @patch('google.genai.Client')
+    def test_gemini_default_model_from_env(self, mock_client_class, mock_get_secret, mock_safety_settings, monkeypatch):
         """환경변수에서 기본 모델명 로드"""
         from shared.llm_providers import GeminiLLMProvider
         
         mock_get_secret.return_value = 'fake-api-key'
+        mock_client_class.return_value = MagicMock()
         monkeypatch.setenv('LLM_MODEL_NAME', 'gemini-custom-pro')
         
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
