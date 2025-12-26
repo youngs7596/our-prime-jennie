@@ -526,7 +526,8 @@ def run_hybrid_scoring_pipeline(
         )
         quant_results.append(result)
     
-    logger.info(f"   ✅ 정량 점수 계산 완료 (평균: {sum(r.total_score for r in quant_results)/len(quant_results):.1f}점)")
+    avg_score = sum(r.total_score for r in quant_results) / len(quant_results) if quant_results else 0.0
+    logger.info(f"   ✅ 정량 점수 계산 완료 (평균: {avg_score:.1f}점)")
     
     # Step 2: 정량 기반 1차 필터링
     logger.info(f"\n   [Step 2/4] 정량 기반 1차 필터링 (하위 {filter_cutoff*100:.0f}% 탈락)")

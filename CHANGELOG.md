@@ -1,6 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-26
+- **Unit Test Coverage Improvement (Phase 4 & 5)**: `hybrid_scorer.py` 46%→86%, `news_classifier.py` 34%→96% 달성 (Shared 모듈 전체 안정화 완료)
 - **Unit Test Coverage Improvement (Phase 3)**: `llm_providers.py` 25%→43%, OllamaLLMProvider 테스트 8개 추가 (총 22개 테스트 케이스)
 - **Unit Test Coverage Improvement (Phase 2)**: `redis_cache.py` 71%→99%, `db/connection.py` 29%→100%, `db/repository.py` 89%→98%, `gemini.py` 0%→100%, `auth.py` 91%→100% 달성 (총 189개 테스트 케이스)
 - **Unit Test Coverage Improvement (Phase 1)**: `position_sizing.py` 96%→100%, `secret_manager.py` 94%→100%, `llm_prompts.py` 90%→100%, `utils.py` 92%→93% 달성 (총 116개 테스트 케이스)
