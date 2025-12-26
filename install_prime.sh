@@ -36,6 +36,74 @@ else
     HAS_GPU=false
 fi
 
+# ============================================================================
+# PRE-FLIGHT CHECKS (Phase 11: Deployment Verification)
+# ============================================================================
+echo -e "\n${YELLOW}[PRE-FLIGHT] Running deployment readiness checks...${NC}"
+
+PREFLIGHT_ERRORS=0
+
+# Check 1: Validate secrets.json (if exists)
+if [ -f "secrets.json" ]; then
+    if python3 -c "import json; json.load(open('secrets.json'))" 2>/dev/null; then
+        echo -e "${GREEN}✓ secrets.json: Valid JSON${NC}"
+    else
+        echo -e "${RED}✗ secrets.json: Invalid JSON format${NC}"
+        PREFLIGHT_ERRORS=$((PREFLIGHT_ERRORS + 1))
+    fi
+fi
+
+# Check 2: Validate docker-compose.yml syntax
+if [ -f "docker-compose.yml" ]; then
+    if docker compose config --quiet 2>/dev/null; then
+        echo -e "${GREEN}✓ docker-compose.yml: Valid syntax${NC}"
+    else
+        echo -e "${RED}✗ docker-compose.yml: Syntax error detected${NC}"
+        PREFLIGHT_ERRORS=$((PREFLIGHT_ERRORS + 1))
+    fi
+fi
+
+# Check 3: Check required ports availability
+REQUIRED_PORTS=(3000 3306 5672 6379 8000)
+for PORT in "${REQUIRED_PORTS[@]}"; do
+    if ! netstat -tuln 2>/dev/null | grep -q ":$PORT " && ! ss -tuln 2>/dev/null | grep -q ":$PORT "; then
+        echo -e "${GREEN}✓ Port $PORT: Available${NC}"
+    else
+        echo -e "${YELLOW}! Port $PORT: Already in use (may conflict)${NC}"
+    fi
+done
+
+# Check 4: Disk space (minimum 10GB free)
+FREE_SPACE_GB=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+if [ "$FREE_SPACE_GB" -ge 10 ]; then
+    echo -e "${GREEN}✓ Disk space: ${FREE_SPACE_GB}GB available${NC}"
+else
+    echo -e "${RED}✗ Disk space: Only ${FREE_SPACE_GB}GB available (need 10GB+)${NC}"
+    PREFLIGHT_ERRORS=$((PREFLIGHT_ERRORS + 1))
+fi
+
+# Check 5: Memory (minimum 4GB)
+TOTAL_MEM_GB=$(free -g | awk '/^Mem:/{print $2}')
+if [ "$TOTAL_MEM_GB" -ge 4 ]; then
+    echo -e "${GREEN}✓ Memory: ${TOTAL_MEM_GB}GB total${NC}"
+else
+    echo -e "${YELLOW}! Memory: Only ${TOTAL_MEM_GB}GB (recommended 4GB+)${NC}"
+fi
+
+# Summary
+if [ $PREFLIGHT_ERRORS -gt 0 ]; then
+    echo -e "\n${RED}⚠️  Pre-flight check found $PREFLIGHT_ERRORS critical issue(s).${NC}"
+    echo -e "${YELLOW}   Fix the issues above before proceeding.${NC}"
+    read -p "Continue anyway? (y/N): " CONTINUE
+    if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Installation aborted.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ All pre-flight checks passed!${NC}"
+fi
+# ============================================================================
+
 # 2. System Packages
 echo -e "\n${YELLOW}[2/5] Installing System Packages...${NC}"
 apt-get update

@@ -121,7 +121,7 @@ class TestBuyScanner:
         # Mock inputs
         daily_prices = pd.DataFrame({
             'VOLUME': [100]*19 + [200], # Spillke in volume
-            'PRICE_DATE': [datetime.now()]*20
+            'PRICE_DATE': pd.date_range(end='2025-01-01', periods=20, freq='D')
         })
         current_price = 100
         rsi = 50 # 40~70
@@ -133,7 +133,7 @@ class TestBuyScanner:
         prices_long = pd.DataFrame({
             'VOLUME': [100]*119 + [200],
             'CLOSE_PRICE': [90]*120,
-            'PRICE_DATE': [datetime.now()]*120
+            'PRICE_DATE': pd.date_range(end='2025-01-01', periods=120, freq='D')
         })
         # Current price 100 > MA120 (90)
         
@@ -216,7 +216,7 @@ class TestBuyScanner:
     def test_analyze_stock_realtime_update(self, scanner_instance):
         """Test [Fast Hands] functionality: realtime price update (New Row)"""
         # Setup yesterday's data
-        yesterday = datetime.now() - pd.Timedelta(days=1)
+        yesterday = pd.Timestamp('2024-12-31')
         # Ensure correct columns exist
         daily_prices = pd.DataFrame({
             'PRICE_DATE': [yesterday], 
@@ -329,7 +329,7 @@ class TestBuyScanner:
             'LOW_PRICE': [95.0]*20,
             'OPEN_PRICE': [100.0]*20,
             'VOLUME': [1000.0]*20,
-            'PRICE_DATE': [datetime.now()]*20
+            'PRICE_DATE': pd.date_range(end='2025-01-01', periods=20, freq='D')
         })
         
         scanner_instance.kis.get_stock_snapshot.return_value = None
@@ -352,9 +352,10 @@ class TestBuyScanner:
 
     def test_analyze_stock_realtime_update_existing_row(self, scanner_instance):
         """Test [Fast Hands] updating existing today's row"""
-        today = datetime.now()
+        # Use a fixed timestamp that we control
+        fixed_today = pd.Timestamp('2025-01-01')
         daily_prices = pd.DataFrame({
-            'PRICE_DATE': [today], 
+            'PRICE_DATE': [fixed_today], 
             'CLOSE_PRICE': [100.0],
             'HIGH_PRICE': [105.0],
             'LOW_PRICE': [95.0],
@@ -373,18 +374,25 @@ class TestBuyScanner:
         mock_detect = MagicMock(return_value=('GOLDEN_CROSS', {}))
         scanner_instance._detect_signals = mock_detect
         
-        with patch("scanner.database.get_sentiment_score", return_value={'score': 50}):
-             scanner_instance._analyze_stock(
+        # Patch datetime.now() to return the same date as our test data
+        with patch("scanner.database.get_sentiment_score", return_value={'score': 50}), \
+             patch("scanner.datetime") as mock_datetime:
+            # Make datetime.now() return our fixed date
+            mock_datetime.now.return_value = fixed_today.to_pydatetime()
+            # Preserve other datetime behavior
+            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            
+            scanner_instance._analyze_stock(
                 "005930", {}, daily_prices, 
                 MarketRegimeDetector.REGIME_BULL, [], None
-             )
+            )
              
-             args, _ = mock_detect.call_args
-             passed_df = args[1]
-             # Should still be 1 row, updated
-             assert len(passed_df) == 1
-             assert passed_df.iloc[-1]['CLOSE_PRICE'] == 110.0
-             assert passed_df.iloc[-1]['VOLUME'] == 2000.0
+            args, _ = mock_detect.call_args
+            passed_df = args[1]
+            # Should still be 1 row, updated
+            assert len(passed_df) == 1
+            assert passed_df.iloc[-1]['CLOSE_PRICE'] == 110.0
+            assert passed_df.iloc[-1]['VOLUME'] == 2000.0
 
     def test_scan_buy_opportunities_bear_market(self, scanner_instance):
         """Test scanning behavior in Bear Market (Restricted)"""
@@ -429,7 +437,7 @@ class TestBuyScanner:
             'LOW_PRICE': [95.0]*30,
             'OPEN_PRICE': [100.0]*30,
             'VOLUME': [1000.0]*30,
-            'PRICE_DATE': [datetime.now()]*30
+            'PRICE_DATE': pd.date_range(end='2025-01-01', periods=30, freq='D')
         })
         current_price = 100.0
         
