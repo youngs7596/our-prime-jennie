@@ -4,6 +4,6 @@
 2) 세션 시작 시에는 `.ai/RULES.md`를 읽고, `.ai/sessions/`에서 가장 최근 `session-*.md`를 읽는다.
 3) 위험 작업(삭제, DB 마이그레이션, 시크릿/.env 수정, 10개+ 파일 대규모 리팩토링)은 반드시 사용자 승인 후 진행한다.
 4) 대화/코드 주석은 한국어를 기본으로 한다.
+5) **배포 전 품질 게이트**: 기능 개발/리팩토링 후에는 반드시 Unit Test + Integration Test를 실행하고, 전체 통과 확인 후 배포한다.
 
 참고: 상세 절차(Resume/Handoff/Junho council-patch)는 `rules.md`에 정리되어 있다.
-
