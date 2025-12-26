@@ -23,6 +23,9 @@ import importlib.util
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
 sys.path.insert(0, PROJECT_ROOT)
 
+# Fix: Ensure shared.database is imported before patching
+import shared.database
+
 
 def load_executor_module():
     """하이픈이 있는 디렉토리에서 executor 모듈 로드"""
