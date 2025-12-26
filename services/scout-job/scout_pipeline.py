@@ -13,6 +13,8 @@ from typing import Dict, Optional
 
 import shared.database as database
 from shared.config import ConfigManager
+from shared.fact_checker import get_fact_checker
+from shared.monitoring_alerts import get_monitoring_alerts
 
 logger = logging.getLogger(__name__)
 _cfg = ConfigManager()
@@ -229,6 +231,27 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
     # 정량 컨텍스트 포함 Hunter 호출
     hunter_result = brain.get_jennies_analysis_score_v5(decision_info, quant_context, feedback_context)
     hunter_score = hunter_result.get('score', 0)
+    hunter_reason = hunter_result.get('reason', '')
+    
+    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증
+    try:
+        fact_result = get_fact_checker().check(
+            original_news=news_from_chroma,
+            llm_analysis=hunter_reason,
+            stock_name=info['name']
+        )
+        if fact_result.has_hallucination:
+            logger.warning(f"   👻 [Fact-Check] 환각 탐지: {info['name']}({code}) - 신뢰도: {fact_result.confidence:.0%}")
+            logger.warning(f"      경고: {fact_result.warnings[:2]}")
+            # 환각 탐지 시 Telegram 알림 (환경변수로 on/off 가능)
+            if _cfg.get_bool('FACT_CHECK_ALERT_ENABLED', default=False):
+                get_monitoring_alerts().notify_hallucination_detected(
+                    stock_name=info['name'],
+                    confidence=fact_result.confidence,
+                    warnings=fact_result.warnings
+                )
+    except Exception as e:
+        logger.debug(f"   ⚠️ [Fact-Check] 검증 오류 ({code}): {e}")
     
     # 경쟁사 수혜 가산점 적용 (최대 +10점)
     if competitor_bonus > 0:

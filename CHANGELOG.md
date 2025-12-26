@@ -1,6 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-26
+- **Feature Integration**: Fact-Checker, Circuit Breaker 알림을 Scout/KIS Gateway 서비스에 연동 완료
 - **Quality & Feature Improvements**: Fact-Checker(LLM 환각 탐지), Circuit Breaker(KIS API 장애 대응), Monitoring Alerts(Telegram 알림) 구현 및 E2E 통합 테스트 / 운영 가이드 문서화 완료 (총 136+ tests passed)
 - **Unit Test Coverage Improvement (Phase 4 & 5)**: `hybrid_scorer.py` 46%→86%, `news_classifier.py` 34%→96% 달성 (Shared 모듈 전체 안정화 완료)
 - **Unit Test Coverage Improvement (Services)**: `services/scout-job`, `buy-executor`, `sell-executor` 테스트 커버리지 확보 및 검증 완료

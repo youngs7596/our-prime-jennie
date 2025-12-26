@@ -52,6 +52,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import shared.auth as auth
 from shared.kis.client import KISClient
 import shared.database as database
+from shared.monitoring_alerts import get_monitoring_alerts
 
 # 로깅 설정
 logging.basicConfig(
@@ -106,10 +107,34 @@ class GatewayCircuitBreakerListener(CircuitBreakerListener):
         if new.name == 'open':
             logger.error(f"🚨 Circuit Breaker OPEN! (연속 {breaker.fail_counter}회 실패)")
             stats['circuit_breaker_trips'] += 1
+            # 🔔 Telegram 알림
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='OPEN',
+                    failure_count=breaker.fail_counter,
+                    next_retry=float(breaker._reset_timeout)
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
         elif new.name == 'closed':
             logger.info(f"✅ Circuit Breaker CLOSED (복구 완료)")
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='CLOSED'
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
         elif new.name == 'half_open':
             logger.info(f"⚠️ Circuit Breaker HALF-OPEN (테스트 요청 시도)")
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='HALF_OPEN'
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
 
 # 500 에러 감지를 위한 예외 처리 필요
 # requests.exceptions.HTTPError 등을 감지하도록 설정
