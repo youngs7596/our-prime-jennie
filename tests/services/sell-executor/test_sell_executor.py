@@ -112,6 +112,7 @@ class TestSellExecutorBasicFlow:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db:
             
             # Setup mocks
@@ -154,6 +155,7 @@ class TestSellExecutorBasicFlow:
         """보유하지 않은 종목 매도 시도"""
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db:
             
             mock_portfolio.return_value = []  # 빈 포트폴리오
@@ -288,6 +290,7 @@ class TestRealOrderExecution:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
             
@@ -335,6 +338,7 @@ class TestRealOrderExecution:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
             
@@ -376,6 +380,7 @@ class TestTelegramNotification:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db:
             
             mock_portfolio.return_value = [sample_holding]
@@ -460,6 +465,7 @@ class TestMockModePrice:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'MOCK'}):
             

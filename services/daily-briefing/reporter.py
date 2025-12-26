@@ -128,7 +128,8 @@ class DailyReporter:
         
         # 4. Watchlist 현황
         try:
-            watchlist = database.get_watchlist_all(session)
+            watchlist_data = database.get_active_watchlist(session)
+            watchlist = list(watchlist_data.values())
             watchlist_summary = [{
                 'name': w.get('name', 'N/A'),
                 'code': w.get('code', 'N/A'),
