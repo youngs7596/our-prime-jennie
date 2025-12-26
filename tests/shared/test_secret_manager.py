@@ -188,23 +188,30 @@ class TestSecretManagerLoadSecrets:
         # 캐시가 저장되었는지 확인
         assert mgr._cache is not None
 
-    def test_load_returns_empty_when_both_paths_missing(self, tmp_path):
+    def test_load_returns_empty_when_both_paths_missing(self, tmp_path, monkeypatch):
         """지정 경로와 대체 경로 모두 없을 때 빈 dict 반환"""
-        # 임시 디렉토리에서 SecretManager 생성하여 대체 경로도 무효화
-        fake_secrets_path = tmp_path / "nonexistent" / "secrets.json"
-
-        # shared 모듈 경로를 mock해서 대체 경로가 존재하지 않게 함
-        with patch('shared.secret_manager.Path') as MockPath:
-            # 원래 Path 동작 유지하면서 __file__ 경로만 조작
-            from pathlib import Path as RealPath
-            MockPath.side_effect = RealPath
-            MockPath.return_value.exists.return_value = False
-
-            # 직접 인스턴스 생성 후 _cache 상태로 확인
-            mgr = SecretManager(secrets_path=str(fake_secrets_path))
-            # secrets.json이 존재하는 경우 dict 반환, 아닌 경우 빈 dict
+        # 두 경로 모두 존재하지 않도록 설정
+        nonexistent_path = "/absolutely/nonexistent/secret/file.json"
+        
+        # __file__ 경로를 tmp_path로 mock하여 대체 경로도 존재하지 않게 함
+        import shared.secret_manager as sm_module
+        original_file = sm_module.__file__
+        
+        try:
+            # 임시 경로로 __file__ 변경 (대체 경로가 존재하지 않도록)
+            sm_module.__file__ = str(tmp_path / "fake_module.py")
+            
+            mgr = SecretManager(secrets_path=nonexistent_path)
+            # _cache를 None으로 리셋
+            mgr._cache = None
+            
             result = mgr._load_secrets()
-            assert isinstance(result, dict)
+            
+            # 파일이 없으면 빈 dict 반환
+            assert result == {}
+            assert mgr._cache == {}
+        finally:
+            sm_module.__file__ = original_file
 
     def test_load_handles_invalid_json(self):
         """잘못된 JSON 파일 처리"""

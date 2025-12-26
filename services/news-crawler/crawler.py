@@ -417,13 +417,26 @@ def process_sentiment_analysis(documents):
         except Exception as e:
             logger.warning(f"⚠️ [Sentiment] Redis 저장 실패 (Skip): {e}")
         
-        # 3. DB 저장 (기록용)
-        try:
-            with session_scope() as session:
-                database.save_news_sentiment(session, stock_code, news_title, score, reason, news_link, published_at)
-        except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] DB 저장 실패 (Skip): {e}")
-            return 0
+        # 3. DB 저장 (기록용) - Deadlock 발생 시 재시도
+        import random
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with session_scope() as session:
+                    database.save_news_sentiment(session, stock_code, news_title, score, reason, news_link, published_at)
+                break  # 성공 시 루프 탈출
+            except Exception as e:
+                error_str = str(e)
+                is_deadlock = "1213" in error_str or "Deadlock" in error_str
+                
+                if is_deadlock and attempt < max_retries - 1:
+                    wait_time = random.uniform(0.1, 0.5) * (attempt + 1)
+                    logger.info(f"🔄 [Sentiment] Deadlock 감지, {wait_time:.2f}초 후 재시도 ({attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.warning(f"⚠️ [Sentiment] DB 저장 실패 (Skip): {e}")
+                    return 0
             
         return 1
 
@@ -495,92 +508,104 @@ def process_competitor_benefit_analysis(documents):
         
         logger.info(f"  🔴 [악재 감지/LLM] {stock_code} - {event_type}: {news_title[:50]}... (Score: {benefit_score})")
 
-        # 3. DB 로직 (Thread-Safe하게 내부에서 세션 생성)
-        try:
-            with session_scope() as session:
-                # 해당 종목의 섹터 확인
-                affected_stock = session.query(IndustryCompetitors).filter(
-                    IndustryCompetitors.stock_code == stock_code
-                ).first()
-                
-                if not affected_stock:
-                    return 0
-                
-                sector_code = affected_stock.sector_code
-                sector_name = affected_stock.sector_name
-                affected_name = affected_stock.stock_name
-                
-                # 동일 섹터 경쟁사 조회
-                competitors = session.query(IndustryCompetitors).filter(
-                    IndustryCompetitors.sector_code == sector_code,
-                    IndustryCompetitors.stock_code != stock_code,
-                    IndustryCompetitors.is_active == 1
-                ).all()
-                
-                if not competitors:
-                    return 0
-                
-                # 이벤트 생성
-                duration_days = 7
-                if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK']:
-                    duration_days = 30
-                expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
-                
-                for competitor in competitors:
-                    # 중복 조회
-                    existing = session.query(CompetitorBenefitEvents).filter(
-                        CompetitorBenefitEvents.affected_stock_code == stock_code,
-                        CompetitorBenefitEvents.beneficiary_stock_code == competitor.stock_code,
-                        CompetitorBenefitEvents.event_type == event_type,
-                        CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
+        # 3. DB 로직 (Thread-Safe하게 내부에서 세션 생성) - Deadlock 재시도
+        import random
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with session_scope() as session:
+                    # 해당 종목의 섹터 확인
+                    affected_stock = session.query(IndustryCompetitors).filter(
+                        IndustryCompetitors.stock_code == stock_code
                     ).first()
                     
-                    if existing:
-                        continue
+                    if not affected_stock:
+                        return 0
                     
-                    # 새로운 이벤트 추가
-                    benefit_event = CompetitorBenefitEvents(
-                        affected_stock_code=stock_code,
-                        affected_stock_name=affected_name,
-                        event_type=event_type,
-                        event_title=news_title[:1000],
-                        event_severity=-10,
-                        source_url=news_link,
-                        beneficiary_stock_code=competitor.stock_code,
-                        beneficiary_stock_name=competitor.stock_name,
-                        benefit_score=benefit_score,
-                        sector_code=sector_code,
-                        sector_name=sector_name,
-                        status='ACTIVE',
-                        expires_at=expires_at
-                    )
-                    session.add(benefit_event)
-                    events_created += 1
+                    sector_code = affected_stock.sector_code
+                    sector_name = affected_stock.sector_name
+                    affected_name = affected_stock.stock_name
                     
-                    # Redis 저장 (Loop 안에서 호출하되, 에러나도 진행)
-                    try:
-                        database.set_competitor_benefit_score(
-                            stock_code=competitor.stock_code,
-                            score=benefit_score,
-                            reason=f"경쟁사 {affected_name}의 {event_type} 악재로 인한 수혜 (LLM Analysis)",
-                            affected_stock=stock_code,
+                    # 동일 섹터 경쟁사 조회
+                    competitors = session.query(IndustryCompetitors).filter(
+                        IndustryCompetitors.sector_code == sector_code,
+                        IndustryCompetitors.stock_code != stock_code,
+                        IndustryCompetitors.is_active == 1
+                    ).all()
+                    
+                    if not competitors:
+                        return 0
+                    
+                    # 이벤트 생성
+                    duration_days = 7
+                    if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK']:
+                        duration_days = 30
+                    expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
+                    
+                    for competitor in competitors:
+                        # 중복 조회
+                        existing = session.query(CompetitorBenefitEvents).filter(
+                            CompetitorBenefitEvents.affected_stock_code == stock_code,
+                            CompetitorBenefitEvents.beneficiary_stock_code == competitor.stock_code,
+                            CompetitorBenefitEvents.event_type == event_type,
+                            CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
+                        ).first()
+                        
+                        if existing:
+                            continue
+                        
+                        # 새로운 이벤트 추가
+                        benefit_event = CompetitorBenefitEvents(
+                            affected_stock_code=stock_code,
+                            affected_stock_name=affected_name,
                             event_type=event_type,
-                            ttl=duration_days * 86400
+                            event_title=news_title[:1000],
+                            event_severity=-10,
+                            source_url=news_link,
+                            beneficiary_stock_code=competitor.stock_code,
+                            beneficiary_stock_name=competitor.stock_name,
+                            benefit_score=benefit_score,
+                            sector_code=sector_code,
+                            sector_name=sector_name,
+                            status='ACTIVE',
+                            expires_at=expires_at
                         )
-                    except Exception as e:
-                        logger.warning(f"⚠️ [경쟁사 수혜] Redis 저장 실패: {e}")
+                        session.add(benefit_event)
+                        events_created += 1
+                        
+                        # Redis 저장 (Loop 안에서 호출하되, 에러나도 진행)
+                        try:
+                            database.set_competitor_benefit_score(
+                                stock_code=competitor.stock_code,
+                                score=benefit_score,
+                                reason=f"경쟁사 {affected_name}의 {event_type} 악재로 인한 수혜 (LLM Analysis)",
+                                affected_stock=stock_code,
+                                event_type=event_type,
+                                ttl=duration_days * 86400
+                            )
+                        except Exception as e:
+                            logger.warning(f"⚠️ [경쟁사 수혜] Redis 저장 실패: {e}")
 
-                    logger.info(
-                        f"  ✅ [수혜 등록] {competitor.stock_name}({competitor.stock_code}) "
-                        f"+{benefit_score}점 ← {affected_name} {event_type}"
-                    )
+                        logger.info(
+                            f"  ✅ [수혜 등록] {competitor.stock_name}({competitor.stock_code}) "
+                            f"+{benefit_score}점 ← {affected_name} {event_type}"
+                        )
+                    
+                    # session_scope exit -> commit
+                    return events_created
+                    
+            except Exception as e:
+                error_str = str(e)
+                is_deadlock = "1213" in error_str or "Deadlock" in error_str
                 
-                # session_scope exit -> commit
-                return events_created
-                
-        except Exception as e:
-            logger.error(f"❌ [경쟁사 수혜] DB 처리 중 오류: {e}")
-            return 0
+                if is_deadlock and attempt < max_retries - 1:
+                    wait_time = random.uniform(0.1, 0.5) * (attempt + 1)
+                    logger.info(f"🔄 [경쟁사 수혜] Deadlock 감지, {wait_time:.2f}초 후 재시도 ({attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"❌ [경쟁사 수혜] DB 처리 중 오류: {e}")
+                    return 0
 
     total_events_created = 0
     futures = []

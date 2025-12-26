@@ -1,6 +1,8 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-26
+- **Unit Test Coverage Improvement (Phase 1)**: `position_sizing.py` 96%→100%, `secret_manager.py` 94%→100%, `llm_prompts.py` 90%→100%, `utils.py` 92%→93% 달성 (총 116개 테스트 케이스)
+- **MariaDB Deadlock Fix**: `news-crawler` 서비스의 동시 DB 쓰기 시 발생하는 1213 Deadlock 에러에 exponential backoff 재시도 로직 구현
 - **LLM Cost Optimization**: Gemini/OpenAI 기본 모델을 비용 효율적인 모델로 변경 (`gemini-2.5-flash`, `gpt-4o-mini`)
 - **Config DB Priority**: 운영 튜닝 키 17개에 `db_priority=True` 플래그 추가, Dashboard 수정 시 DB 값 우선 적용
 - **Config Cleanup**: 미사용 환경변수 `INVESTMENT_AMOUNT`, `DAILY_BUY_LIMIT_AMOUNT` 삭제
