@@ -29,7 +29,7 @@ pipeline {
                 sh '''
                     pip install --quiet -r requirements.txt
                     pip install --quiet pytest pytest-cov
-                    pytest tests/ -v --tb=short --junitxml=test-results.xml || true
+                    pytest tests/ -v --tb=short --junitxml=test-results.xml
                 '''
             }
             post {
@@ -52,7 +52,7 @@ pipeline {
                 sh '''
                     pip install --quiet -r requirements.txt
                     pip install --quiet pytest pytest-cov
-                    pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml || true
+                    pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml
                 '''
             }
             post {
