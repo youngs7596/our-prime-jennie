@@ -7,6 +7,10 @@ pipeline {
         COMPOSE_PROJECT_NAME = 'my-prime-jennie'
     }
 
+    options {
+        disableConcurrentBuilds()
+    }
+
     stages {
         stage('Checkout') {
             steps {
