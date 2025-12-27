@@ -471,16 +471,19 @@ class FactorAnalyzer:
     
     def _calc_rsi_oversold(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
         """RSI 과매도 팩터 (30 이하면 높은 값)"""
-        close = df['CLOSE_PRICE']
+        close = pd.to_numeric(df['CLOSE_PRICE'], errors="coerce").dropna()
+        if len(close) < period + 1:
+            return pd.Series(dtype=float)
         delta = close.diff()
-        gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        
-        rs = gain / loss
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+        rs = avg_gain / avg_loss.replace(0, pd.NA)
         rsi = 100 - (100 / (1 + rs))
         
-        # RSI가 낮을수록 좋으므로 (100 - RSI) 반환
-        return 100 - rsi
+        # RSI가 낮을수록 좋으므로 (100 - RSI) 반환, NaN은 0으로 보정
+        return (100 - rsi).fillna(0)
     
     def _calc_foreign_buy(self, df: pd.DataFrame, foreign_data: pd.Series = None) -> pd.Series:
         """외국인 순매수 팩터"""

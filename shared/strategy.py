@@ -83,7 +83,9 @@ def calculate_moving_average(prices_list, period=20):
             except Exception as rust_err:  # pragma: no cover - diagnostics only
                 logger.debug("⚠️ Rust MA 계산 실패, Python 로직으로 폴백: %s", rust_err)
     recent_prices = prices_list[:period]
-    series = pd.Series(recent_prices)
+    series = _to_numeric_series(recent_prices, reverse=False)
+    if series is None or len(series) < period:
+        return None
     return series.mean()
 
 # --- (수정: calculate_rsi) ---
@@ -100,15 +102,19 @@ def calculate_rsi(data, period=14):
         if 'CLOSE_PRICE' not in data.columns or len(data) < period + 1:
             logger.debug(f"   (RSI) DataFrame 데이터 부족 ({len(data)}일) 또는 'CLOSE_PRICE' 컬럼 없음")
             return None
-        series = data['CLOSE_PRICE']
+        series = _to_numeric_series(data['CLOSE_PRICE'], reverse=False)
     elif isinstance(data, list):
         if len(data) < period + 1:
             logger.debug(f"   (RSI) List 데이터 부족 ({len(data)}일)으로 계산 불가")
             return None
         prices_reversed = data[::-1] # [과거, ..., 최신] 순으로 변경
-        series = pd.Series(prices_reversed)
+        series = _to_numeric_series(prices_reversed, reverse=False)
     else:
         logger.error(f"❌ (RSI) 지원하지 않는 데이터 타입: {type(data)}")
+        return None
+
+    if series is None or len(series) < period + 1:
+        logger.debug("   (RSI) 유효 데이터 부족으로 계산 불가")
         return None
 
     # 2. RSI 계산 로직 (공통)
@@ -164,6 +170,13 @@ def calculate_atr(daily_prices_df, period=14):
                     return rust_value
 
         df = daily_prices_df.copy()
+        df['CLOSE_PRICE'] = _to_numeric_series(df['CLOSE_PRICE'])
+        df['HIGH_PRICE'] = _to_numeric_series(df['HIGH_PRICE'])
+        df['LOW_PRICE'] = _to_numeric_series(df['LOW_PRICE'])
+        df = df.dropna(subset=['CLOSE_PRICE', 'HIGH_PRICE', 'LOW_PRICE'])
+        if len(df) < period:
+            logger.debug(f"   (ATR) 유효 데이터 부족 ({len(df)}일)")
+            return None
         df['prev_close'] = df['CLOSE_PRICE'].shift(1)
         df['tr1'] = df['HIGH_PRICE'] - df['LOW_PRICE']
         df['tr2'] = abs(df['HIGH_PRICE'] - df['prev_close'])
@@ -191,7 +204,10 @@ def calculate_bollinger_bands(daily_prices_df, period=20, std_dev=2):
         return None
     
     try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < period:
+            logger.debug(f"   (BB) 유효 데이터 부족 ({len(series) if series is not None else 0}일)")
+            return None
         rolling_mean = series.rolling(window=period).mean()
         rolling_std = series.rolling(window=period).std()
         
@@ -217,6 +233,24 @@ def check_golden_cross(daily_prices_df, short_period=5, long_period=20):
     if len(daily_prices_df) < long_period:
         logger.debug(f"   (MA) {long_period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
         return False
+
+
+# -----------------------------------------------------------------
+# 헬퍼: 숫자 변환 + NA 제거
+# -----------------------------------------------------------------
+def _to_numeric_series(values, reverse=False):
+    """
+    값 시퀀스를 float 변환 후 NA 제거하여 pd.Series 반환.
+    reverse=True이면 순서 뒤집음.
+    """
+    try:
+        series = pd.Series(values[::-1] if reverse else values)
+        series = pd.to_numeric(series, errors="coerce")
+        series = series.dropna()
+        return series
+    except Exception as e:
+        logger.error(f"❌ (_to_numeric_series) 변환 실패: {e}")
+        return None
         
     try:
         series = daily_prices_df['CLOSE_PRICE']
