@@ -37,6 +37,8 @@ pipeline {
                     junit allowEmptyResults: true, testResults: 'test-results.xml'
                 }
             }
+        }
+
         stage('Integration Test') {
             agent {
                 docker {
