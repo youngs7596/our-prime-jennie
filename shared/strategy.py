@@ -7,6 +7,7 @@ import math
 import os
 
 import pandas as pd
+import numpy as np
 
 # "youngs75_jennie.strategy" 이름으로 로거 생성
 logger = logging.getLogger(__name__) 
@@ -86,7 +87,8 @@ def calculate_moving_average(prices_list, period=20):
     series = _to_numeric_series(recent_prices, reverse=False)
     if series is None or len(series) < period:
         return None
-    return series.mean()
+    arr = series.to_numpy(dtype=float, copy=False)
+    return float(np.mean(arr))
 
 # --- (수정: calculate_rsi) ---
 def calculate_rsi(data, period=14):
@@ -98,45 +100,50 @@ def calculate_rsi(data, period=14):
     series = None
     
     # 1. 입력 데이터 타입에 따라 pd.Series로 변환
+    arr = None
     if isinstance(data, pd.DataFrame):
         if 'CLOSE_PRICE' not in data.columns or len(data) < period + 1:
             logger.debug(f"   (RSI) DataFrame 데이터 부족 ({len(data)}일) 또는 'CLOSE_PRICE' 컬럼 없음")
             return None
-        series = _to_numeric_series(data['CLOSE_PRICE'], reverse=False)
+        arr = pd.to_numeric(data['CLOSE_PRICE'], errors="coerce").to_numpy(dtype=float)
     elif isinstance(data, list):
         if len(data) < period + 1:
             logger.debug(f"   (RSI) List 데이터 부족 ({len(data)}일)으로 계산 불가")
             return None
-        prices_reversed = data[::-1] # [과거, ..., 최신] 순으로 변경
-        series = _to_numeric_series(prices_reversed, reverse=False)
+        prices_reversed = data[::-1]  # [과거, ..., 최신]
+        arr = np.asarray(prices_reversed, dtype=float)
     else:
         logger.error(f"❌ (RSI) 지원하지 않는 데이터 타입: {type(data)}")
         return None
 
-    if series is None or len(series) < period + 1:
+    arr = arr[~np.isnan(arr)]
+    if arr.size < period + 1:
         logger.debug("   (RSI) 유효 데이터 부족으로 계산 불가")
         return None
 
-    # 2. RSI 계산 로직 (공통)
     try:
         if _RUST_BACKEND_ENABLED and _rust_rsi:
-            rust_ready = _prepare_sequence(series.tolist())
+            rust_ready = _prepare_sequence(arr.tolist())
             if rust_ready and len(rust_ready) >= period + 1:
                 rust_value = _rust_rsi(rust_ready, period)
                 if rust_value is not None:
                     return rust_value
-        delta = series.diff(1).dropna()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
-        avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
-        
-        if avg_loss.iloc[-1] == 0: 
-            return 100.0 if avg_gain.iloc[-1] > 0 else 50.0 
-            
+
+        delta = np.diff(arr)
+        gains = np.where(delta > 0, delta, 0.0)
+        losses = np.where(delta < 0, -delta, 0.0)
+
+        gain_series = pd.Series(gains)
+        loss_series = pd.Series(losses)
+        avg_gain = gain_series.ewm(com=period - 1, min_periods=period).mean().iloc[-1]
+        avg_loss = loss_series.ewm(com=period - 1, min_periods=period).mean().iloc[-1]
+
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
-        return rsi.iloc[-1]
+        return float(rsi)
     except Exception as e:
         logger.error(f"❌ (RSI) RSI 계산 중 오류 발생: {e}", exc_info=True)
         return None
@@ -233,27 +240,8 @@ def check_golden_cross(daily_prices_df, short_period=5, long_period=20):
     if len(daily_prices_df) < long_period:
         logger.debug(f"   (MA) {long_period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
         return False
-
-
-# -----------------------------------------------------------------
-# 헬퍼: 숫자 변환 + NA 제거
-# -----------------------------------------------------------------
-def _to_numeric_series(values, reverse=False):
-    """
-    값 시퀀스를 float 변환 후 NA 제거하여 pd.Series 반환.
-    reverse=True이면 순서 뒤집음.
-    """
     try:
-        series = pd.Series(values[::-1] if reverse else values)
-        series = pd.to_numeric(series, errors="coerce")
-        series = series.dropna()
-        return series
-    except Exception as e:
-        logger.error(f"❌ (_to_numeric_series) 변환 실패: {e}")
-        return None
-        
-    try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = pd.to_numeric(daily_prices_df['CLOSE_PRICE'], errors="coerce").dropna()
         short_ma = series.rolling(window=short_period).mean()
         long_ma = series.rolling(window=long_period).mean()
         
@@ -284,7 +272,7 @@ def check_death_cross(daily_prices_df, short_period=5, long_period=20):
         return False
         
     try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = pd.to_numeric(daily_prices_df['CLOSE_PRICE'], errors="coerce").dropna()
         short_ma = series.rolling(window=short_period).mean()
         long_ma = series.rolling(window=long_period).mean()
         
@@ -298,10 +286,26 @@ def check_death_cross(daily_prices_df, short_period=5, long_period=20):
         if yesterday_short_ma >= yesterday_long_ma and today_short_ma < today_long_ma:
             return True
         return False
-        
     except Exception as e:
         logger.error(f"❌ (MA) 데드 크로스 계산 중 오류 발생: {e}", exc_info=True)
         return False
+
+# -----------------------------------------------------------------
+# 헬퍼: 숫자 변환 + NA 제거
+# -----------------------------------------------------------------
+def _to_numeric_series(values, reverse=False):
+    """
+    값 시퀀스를 float 변환 후 NA 제거하여 pd.Series 반환.
+    reverse=True이면 순서 뒤집음.
+    """
+    try:
+        series = pd.Series(values[::-1] if reverse else values)
+        series = pd.to_numeric(series, errors="coerce")
+        series = series.dropna()
+        return series
+    except Exception as e:
+        logger.error(f"❌ (_to_numeric_series) 변환 실패: {e}")
+        return None
 
 # -----------------------------------------------------------
 # '수익 실현' 신호 (RSI 과열)

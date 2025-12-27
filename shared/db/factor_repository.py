@@ -58,7 +58,16 @@ class FactorRepository:
         try:
             if not rows:
                 return pd.DataFrame()
-            data = [tuple(r) for r in rows]
+            data = []
+            for r in rows:
+                try:
+                    # SQLAlchemy Row/RowMapping 대응
+                    record = {}
+                    for col, key in zip(columns, r.keys() if hasattr(r, "keys") else range(len(columns))):
+                        record[col] = r[key] if hasattr(r, "__getitem__") else getattr(r, key, None)
+                    data.append(record)
+                except Exception:
+                    data.append({col: None for col in columns})
             return pd.DataFrame(data, columns=columns)
         except Exception as e:
             logger.error(f"❌ [FactorRepo] DataFrame 변환 실패: {e}")

@@ -331,7 +331,7 @@ def handle_errors(
 
 
 import pytz
-from datetime import datetime
+import datetime as std_datetime
 
 def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0, now=None) -> bool:
     """
@@ -341,13 +341,13 @@ def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0, 
     try:
         current = now
         if current is None:
-            current = datetime.now(kst)
+            current = std_datetime.datetime.now(kst)
         else:
             if callable(current):
                 current = current()
-            if not isinstance(current, datetime) and hasattr(current, "now"):
+            if not isinstance(current, std_datetime.datetime) and hasattr(current, "now"):
                 current = current.now()
-            if not isinstance(current, datetime):
+            if not isinstance(current, std_datetime.datetime):
                 logger.warning(f"⚠️ is_operating_hours: now 인자가 datetime이 아닙니다. ({type(current)})")
                 return False
             if current.tzinfo is None:

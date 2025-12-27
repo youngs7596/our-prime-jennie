@@ -4,14 +4,8 @@ tests/shared/test_database_core.py
 Database Core 유틸리티 테스트 - Helpers, Connection, Config
 """
 import os
-import sys
 import pytest
 from unittest.mock import patch, MagicMock
-
-# [CRITICAL] Mocking external heavy dependencies to avoid import errors during test collection
-# shared.database 패키지 로딩 시 market.py 등이 pandas/numpy를 임포트하려 하여 에러 발생
-sys.modules["numpy"] = MagicMock()
-sys.modules["pandas"] = MagicMock()
 
 # 모듈 경로에 유의하며 import
 from shared.database import core

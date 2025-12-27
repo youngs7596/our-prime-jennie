@@ -364,13 +364,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        # Mock datetime.now to return the localized datetime
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            # Set up the mock to return our test datetime when .now() is called
-            mock_datetime_module.now.return_value = mock_dt
-            # Preserve the real datetime class for other operations
-            mock_datetime_module.side_effect = lambda *args, **kw: real_datetime(*args, **kw) if args else mock_datetime_module
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is True
     
@@ -384,9 +378,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is False
     
@@ -400,9 +392,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is False
     
@@ -416,9 +406,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is False
     
@@ -432,9 +420,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is False
     
@@ -448,10 +434,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            # 09:00 - 15:30 운영 시간
-            result = shared.utils.is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
+        result = shared.utils.is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30, now=mock_dt)
         
         assert result is True
     
@@ -465,9 +448,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is True
     
@@ -481,9 +462,7 @@ class TestIsOperatingHours:
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime_module:
-            mock_datetime_module.now.return_value = mock_dt
-            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
+        result = shared.utils.is_operating_hours(start_hour=7, end_hour=17, now=mock_dt)
         
         assert result is True
 
