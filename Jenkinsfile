@@ -37,16 +37,37 @@ pipeline {
                     junit allowEmptyResults: true, testResults: 'test-results.xml'
                 }
             }
+        stage('Integration Test') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    args '-v $PWD:/app -w /app'
+                    reuseNode true
+                }
+            }
+            steps {
+                echo '🔗 Running Integration Tests...'
+                sh '''
+                    pip install --quiet -r requirements.txt
+                    pip install --quiet pytest pytest-cov
+                    pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml || true
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: 'integration-test-results.xml'
+                }
+            }
         }
 
         // ====================================================
-        // main 브랜치에서만 실행: Docker Build & Deploy
+        // development 브랜치에서만 실행: Docker Build & Deploy
         // ====================================================
         stage('Docker Build') {
             when {
                 anyOf {
-                    branch 'main'
-                    expression { env.GIT_BRANCH?.contains('main') }
+                    branch 'development'
+                    expression { env.GIT_BRANCH?.contains('development') }
                 }
             }
             steps {
@@ -60,12 +81,12 @@ pipeline {
         stage('Deploy') {
             when {
                 anyOf {
-                    branch 'main'
-                    expression { env.GIT_BRANCH?.contains('main') }
+                    branch 'development'
+                    expression { env.GIT_BRANCH?.contains('development') }
                 }
             }
             steps {
-                echo '🚀 Deploying to production...'
+                echo '🚀 Deploying to development environment...'
 
                 withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
@@ -73,8 +94,8 @@ pipeline {
                         
                         cd /home/youngs75/projects/my-prime-jennie
 
-                        # 1. 최신 코드 강제 동기화
-                        git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git main
+                        # 1. 최신 코드 강제 동기화 (development 브랜치)
+                        git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
                         git reset --hard FETCH_HEAD
                         git clean -fd
                         

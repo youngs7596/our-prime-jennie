@@ -912,7 +912,7 @@ services:
       - app=jenkins
       - stack=my-prime-jennie
     healthcheck:
-      test: [ "CMD-SHELL", "wget --spider -q http://localhost:8080/login || exit 1" ]
+      test: [ "CMD-SHELL", "curl -f -s http://localhost:8080/login || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
