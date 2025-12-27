@@ -104,7 +104,10 @@ class TestLLMFactoryGetProvider:
         mock_instance = MagicMock()
         mock_ollama.return_value = mock_instance
         
-        with patch.dict(os.environ, {"TIER_FAST_PROVIDER": "ollama"}):
+        with patch.dict(os.environ, {
+            "TIER_FAST_PROVIDER": "ollama",
+            "LOCAL_MODEL_FAST": "gemma3:27b"  # Override Jenkins env
+        }):
             provider = LLMFactory.get_provider(LLMTier.FAST)
             
             assert provider is mock_instance
