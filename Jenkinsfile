@@ -31,8 +31,14 @@ pipeline {
             steps {
                 echo '🧪 Running Unit Tests...'
                 sh '''
-                    pip install --quiet -r requirements.txt
-                    pip install --quiet pytest pytest-cov
+                    # Clear pip cache to ensure fresh install
+                    rm -rf ~/.cache/pip
+                    # Force reinstall with correct versions
+                    pip install --no-cache-dir --force-reinstall 'numpy>=1.24.0,<2.0.0' 'pandas>=1.4.0,<2.2.0' 'scipy>=1.10.0,<2.0.0'
+                    pip install --no-cache-dir -r requirements.txt
+                    pip install --no-cache-dir pytest pytest-cov
+                    # Verify numpy version
+                    python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
                     pytest tests/ -v --tb=short --junitxml=test-results.xml
                 '''
             }
