@@ -9,10 +9,10 @@ import pytest
 import time
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+import shared.utils
 from shared.utils import (
     RetryStrategy, RetryableError, NonRetryableError,
-    retry_with_backoff, log_execution_time, handle_errors,
-    is_operating_hours
+    retry_with_backoff, log_execution_time, handle_errors
 )
 
 
@@ -20,6 +20,7 @@ from shared.utils import (
 # Tests: retry_with_backoff 데코레이터
 # ============================================================================
 
+@pytest.mark.unit
 class TestRetryWithBackoff:
     """retry_with_backoff 데코레이터 테스트"""
     
@@ -369,7 +370,7 @@ class TestIsOperatingHours:
             mock_datetime_module.now.return_value = mock_dt
             # Preserve the real datetime class for other operations
             mock_datetime_module.side_effect = lambda *args, **kw: real_datetime(*args, **kw) if args else mock_datetime_module
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
     
@@ -385,7 +386,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
     
@@ -401,7 +402,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
     
@@ -417,7 +418,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
     
@@ -433,7 +434,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
     
@@ -450,7 +451,7 @@ class TestIsOperatingHours:
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
             # 09:00 - 15:30 운영 시간
-            result = is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
+            result = shared.utils.is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
         
         assert result is True
     
@@ -466,7 +467,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
     
@@ -482,7 +483,7 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime_module:
             mock_datetime_module.now.return_value = mock_dt
-            result = is_operating_hours(start_hour=7, end_hour=17)
+            result = shared.utils.is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
 

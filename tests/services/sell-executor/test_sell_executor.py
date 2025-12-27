@@ -26,15 +26,18 @@ sys.path.insert(0, PROJECT_ROOT)
 # Fix: Ensure shared.database is imported before patching
 import shared.database
 
-
-def load_executor_module():
-    """하이픈이 있는 디렉토리에서 executor 모듈 로드"""
+@pytest.fixture
+def executor_module():
+    """Load executor module safely and clean up"""
     module_path = os.path.join(PROJECT_ROOT, 'services', 'sell-executor', 'executor.py')
     spec = importlib.util.spec_from_file_location("sell_executor", module_path)
     module = importlib.util.module_from_spec(spec)
-    sys.modules['sell_executor'] = module
-    spec.loader.exec_module(module)
-    return module
+    
+    with patch.dict(sys.modules, {'sell_executor': module}):
+        spec.loader.exec_module(module)
+        yield module, sys.modules['sell_executor']
+
+# def load_executor_module(): ... REMOVED
 
 
 class MockConfig:
@@ -105,7 +108,7 @@ def sample_holding():
 class TestSellExecutorBasicFlow:
     """execute_sell_order 기본 흐름 테스트"""
     
-    def test_successful_sell_order_dry_run(self, mock_kis, mock_config, mock_telegram, sample_holding):
+    def test_successful_sell_order_dry_run(self, executor_module, mock_kis, mock_config, mock_telegram, sample_holding):
         """성공적인 매도 주문 (DRY RUN)"""
         import pandas as pd
         
@@ -129,7 +132,8 @@ class TestSellExecutorBasicFlow:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -151,7 +155,7 @@ class TestSellExecutorBasicFlow:
             # 수익률 확인 (75000 - 70000) / 70000 * 100 = 7.14%
             assert result['profit_pct'] > 0
     
-    def test_stock_not_in_portfolio(self, mock_kis, mock_config, mock_telegram):
+    def test_stock_not_in_portfolio(self, executor_module, mock_kis, mock_config, mock_telegram):
         """보유하지 않은 종목 매도 시도"""
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
@@ -165,7 +169,8 @@ class TestSellExecutorBasicFlow:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -183,12 +188,12 @@ class TestSellExecutorBasicFlow:
             
             assert result['status'] == 'error'
             assert 'Not in portfolio' in result['reason']
-
-
+    
+    
 class TestIdempotency:
     """Idempotency (중복 실행 방지) 테스트"""
     
-    def test_duplicate_sell_blocked(self, mock_kis, mock_config, sample_holding):
+    def test_duplicate_sell_blocked(self, executor_module, mock_kis, mock_config, sample_holding):
         """최근 매도 주문이 있을 때 중복 실행 차단"""
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
@@ -203,7 +208,8 @@ class TestIdempotency:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -283,7 +289,7 @@ class TestHoldingDaysCalculation:
 class TestRealOrderExecution:
     """실제 주문 실행 테스트"""
     
-    def test_real_order_calls_kis_api(self, mock_kis, mock_config, sample_holding):
+    def test_real_order_calls_kis_api(self, executor_module, mock_kis, mock_config, sample_holding):
         """실제 주문 시 KIS API 호출"""
         import pandas as pd
         
@@ -304,7 +310,8 @@ class TestRealOrderExecution:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -329,7 +336,7 @@ class TestRealOrderExecution:
             if result['status'] == 'success':
                 assert result['order_no'] == 'SELL_ORDER_123456'
     
-    def test_order_failure_handling(self, mock_kis, mock_config, sample_holding):
+    def test_order_failure_handling(self, executor_module, mock_kis, mock_config, sample_holding):
         """주문 실패 처리"""
         import pandas as pd
         
@@ -351,7 +358,8 @@ class TestRealOrderExecution:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -373,7 +381,7 @@ class TestRealOrderExecution:
 class TestTelegramNotification:
     """텔레그램 알림 테스트"""
     
-    def test_telegram_notification_sent_on_success(self, mock_kis, mock_config, mock_telegram, sample_holding):
+    def test_telegram_notification_sent_on_success(self, executor_module, mock_kis, mock_config, mock_telegram, sample_holding):
         """성공 시 텔레그램 알림 발송"""
         import pandas as pd
         
@@ -396,7 +404,8 @@ class TestTelegramNotification:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,
@@ -423,6 +432,9 @@ class TestKeyMetricsRecording:
     def test_key_metrics_structure(self, sample_holding):
         """key_metrics_dict 구조 검증"""
         current_price = 75000
+        # ... logic unchanged ...
+        # No load_executor_module needed here based on previous code
+        
         buy_price = sample_holding['avg_price']
         quantity = 10
         profit_pct = ((current_price - buy_price) / buy_price) * 100
@@ -441,16 +453,14 @@ class TestKeyMetricsRecording:
             "rag_last_updated": None,
             "risk_setting": {}
         }
-        
-        # 필수 키 확인
+        # assertions...
         required_keys = [
             'sell_reason', 'current_price', 'buy_price', 
             'profit_pct', 'profit_amount', 'holding_days'
         ]
         for key in required_keys:
             assert key in key_metrics_dict
-        
-        # 값 타입 확인
+            
         assert isinstance(key_metrics_dict['current_price'], float)
         assert isinstance(key_metrics_dict['profit_pct'], float)
 
@@ -458,7 +468,7 @@ class TestKeyMetricsRecording:
 class TestMockModePrice:
     """Mock 모드 가격 조회 테스트"""
     
-    def test_mock_mode_uses_db_price(self, mock_kis, mock_config, sample_holding):
+    def test_mock_mode_uses_db_price(self, executor_module, mock_kis, mock_config, sample_holding):
         """Mock 모드에서 DB 가격 사용"""
         import pandas as pd
         
@@ -483,7 +493,8 @@ class TestMockModePrice:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            executor = executor_module[0]
+            executor.database = mock_db
             
             sell_exec = executor.SellExecutor(
                 kis=mock_kis,

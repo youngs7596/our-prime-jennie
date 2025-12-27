@@ -1,0 +1,1803 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/youngs75/projects/my-prime-jennie/venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/youngs75/projects/my-prime-jennie
+plugins: langsmith-0.5.0, anyio-4.12.0, asyncio-1.3.0, mock-3.15.1, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 890 items
+
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow PASSED [  0%]
+tests/integration/test_scheduler_integration.py::TestSchedulerIntegration::test_job_config_crud_via_config_table PASSED [  0%]
+tests/integration/test_scheduler_integration.py::TestSchedulerIntegration::test_job_trigger_publishes_to_rabbitmq PASSED [  0%]
+tests/integration/test_scheduler_integration.py::TestSchedulerIntegration::test_scout_to_db_flow_simulation PASSED [  0%]
+tests/integration/test_scheduler_integration.py::TestSchedulerIntegration::test_optimization_history_logging PASSED [  0%]
+tests/services/buy-executor/test_buy_executor.py::TestBuyExecutorSignalProcessing::test_no_candidates_returns_skipped PASSED [  0%]
+tests/services/buy-executor/test_buy_executor.py::TestBuyExecutorSignalProcessing::test_safety_check_blocks_execution PASSED [  0%]
+tests/services/buy-executor/test_buy_executor.py::TestSafetyConstraints::test_daily_buy_limit_exceeded PASSED [  0%]
+tests/services/buy-executor/test_buy_executor.py::TestSafetyConstraints::test_portfolio_size_limit_exceeded PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestSafetyConstraints::test_safety_check_passes PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestDiversificationCheck::test_sector_concentration_rejected PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestDiversificationCheck::test_diversification_passes PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestLLMScoreValidation::test_tier1_minimum_score PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestLLMScoreValidation::test_tier2_minimum_score PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestPositionSizing::test_position_sizer_integration PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestPositionSizing::test_position_sizer_zero_balance PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestDryRunMode::test_dry_run_no_actual_order PASSED [  1%]
+tests/services/buy-executor/test_buy_executor.py::TestIdempotency::test_duplicate_order_blocked PASSED [  2%]
+tests/services/buy-executor/test_buy_executor.py::TestIdempotency::test_already_held_stock_filtered PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_golden_cross PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_rsi_oversold PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_stocks_parallel_flow PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_tier2_safety_check_pass PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_market_regime_success PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_buy_opportunities_full_flow PASSED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update FAILED [  2%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_momentum PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_relative_strength PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_calculate_factor_score PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_serialize_candidate PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_reverse_signal PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update_existing_row PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_buy_opportunities_bear_market PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_bear_strategies PASSED [  3%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_redis_lock_failure PASSED [  3%]
+tests/services/daily-briefing/test_reporter.py::TestDailyReporter::test_init PASSED [  4%]
+tests/services/daily-briefing/test_reporter.py::TestDailyReporter::test_create_and_send_report_llm PASSED [  4%]
+tests/services/daily-briefing/test_reporter.py::TestDailyReporter::test_collect_report_data PASSED [  4%]
+tests/services/daily-briefing/test_reporter.py::TestDailyReporter::test_sync_portfolio_logic PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceSensitiveKeys::test_sensitive_key_masked_when_in_env PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceSensitiveKeys::test_sensitive_key_masked_when_in_secrets_file PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceSensitiveKeys::test_sensitive_key_shows_unset_when_missing PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceNonSensitiveKeys::test_non_sensitive_key_from_env PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceNonSensitiveKeys::test_non_sensitive_key_from_db PASSED [  4%]
+tests/services/dashboard/test_configs_api.py::TestDetectSourceNonSensitiveKeys::test_non_sensitive_key_default_value PASSED [  5%]
+tests/services/dashboard/test_configs_api.py::TestConfigUpdateRequest::test_update_sensitive_key_rejected PASSED [  5%]
+tests/services/dashboard/test_configs_api.py::TestConfigUpdateRequest::test_update_unknown_key_rejected PASSED [  5%]
+tests/services/dashboard/test_configs_api.py::TestConfigItem::test_config_item_fields PASSED [  5%]
+tests/services/dashboard/test_configs_api.py::TestConfigItem::test_config_item_sensitive_field PASSED [  5%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_health PASSED [  5%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_issue_token PASSED [  5%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_get_snapshot_proxied PASSED [  5%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_snapshot_missing_code PASSED [  5%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_buy_order_proxy PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_circuit_breaker_error PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_sell_order_proxy PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_get_account_balance PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_get_cash_balance PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_check_market_open PASSED [  6%]
+tests/services/kis-gateway/test_gateway.py::TestKISGateway::test_get_daily_prices PASSED [  6%]
+tests/services/news-crawler/test_crawler.py::TestCrawler::test_crawl_news_for_stock_success PASSED [  6%]
+tests/services/news-crawler/test_crawler.py::TestCrawler::test_crawl_news_skips_old_news PASSED [  6%]
+tests/services/news-crawler/test_crawler.py::TestCrawler::test_filter_new_documents PASSED [  7%]
+tests/services/news-crawler/test_crawler.py::TestCrawler::test_process_sentiment_analysis PASSED [  7%]
+tests/services/news-crawler/test_crawler.py::TestCrawler::test_run_collection_job_flow PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_stop_loss PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_target_profit PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_atr_stop PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_publish_sell_order PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_process_price_alerts PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_monitor_with_polling_loop PASSED [  7%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_on_websocket_price_update PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_rsi_overbought PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_death_cross PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_check_sell_signal_max_holding_days PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_start_monitoring_market_check PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_stop_monitoring PASSED [  8%]
+tests/services/price-monitor/test_monitor.py::TestPriceMonitor::test_start_monitoring_fallback_time_check PASSED [  8%]
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_health_check PASSED [  8%]
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_create_and_list_jobs PASSED [  8%]
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_manual_trigger PASSED [  9%]
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_job_update PASSED [  9%]
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_scheduler_cycle PASSED [  9%]
+tests/services/scout-job/test_scout.py::TestScoutHelpers::test_prefetch_all_data PASSED [  9%]
+tests/services/scout-job/test_scout.py::TestScoutHelpers::test_enrich_candidates_with_market_data PASSED [  9%]
+tests/services/scout-job/test_scout.py::TestScoutMainFlow::test_scout_main_flow PASSED [  9%]
+tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_insufficient_data PASSED [  9%]
+tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_successful_scoring PASSED [  9%]
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_low_quant_score PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_high_rsi PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_competitor_benefit_override PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_pass PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_fail_and_shadow_log PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_approval PASSED [ 10%]
+tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_reject_safety_lock PASSED [ 10%]
+tests/services/scout-job/test_scout_universe.py::TestScoutUniverse::test_get_dynamic_blue_chips_fdr PASSED [ 10%]
+tests/services/scout-job/test_scout_universe.py::TestScoutUniverse::test_get_dynamic_blue_chips_fallback PASSED [ 10%]
+tests/services/scout-job/test_scout_universe.py::TestScoutUniverse::test_get_momentum_stocks PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestSellExecutorBasicFlow::test_successful_sell_order_dry_run FAILED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestSellExecutorBasicFlow::test_stock_not_in_portfolio PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestIdempotency::test_duplicate_sell_blocked PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestProfitCalculation::test_profit_calculation_positive PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestProfitCalculation::test_profit_calculation_negative PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestProfitCalculation::test_profit_calculation_zero PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestHoldingDaysCalculation::test_holding_days_calculation PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestHoldingDaysCalculation::test_holding_days_same_day PASSED [ 11%]
+tests/services/sell-executor/test_sell_executor.py::TestRealOrderExecution::test_real_order_calls_kis_api PASSED [ 12%]
+tests/services/sell-executor/test_sell_executor.py::TestRealOrderExecution::test_order_failure_handling PASSED [ 12%]
+tests/services/sell-executor/test_sell_executor.py::TestTelegramNotification::test_telegram_notification_sent_on_success PASSED [ 12%]
+tests/services/sell-executor/test_sell_executor.py::TestKeyMetricsRecording::test_key_metrics_structure PASSED [ 12%]
+tests/services/sell-executor/test_sell_executor.py::TestMockModePrice::test_mock_mode_uses_db_price PASSED [ 12%]
+tests/shared/db/test_connection.py::TestBuildConnectionUrl::test_build_url_from_env_vars PASSED [ 12%]
+tests/shared/db/test_connection.py::TestBuildConnectionUrl::test_build_url_password_encoding PASSED [ 12%]
+tests/shared/db/test_connection.py::TestBuildConnectionUrl::test_build_url_missing_credentials_raises PASSED [ 12%]
+tests/shared/db/test_connection.py::TestGetDbType::test_get_db_type_returns_mariadb PASSED [ 12%]
+tests/shared/db/test_connection.py::TestInitEngine::test_init_engine_returns_existing_engine PASSED [ 13%]
+tests/shared/db/test_connection.py::TestInitEngine::test_init_engine_with_pool_settings PASSED [ 13%]
+tests/shared/db/test_connection.py::TestInitEngine::test_init_engine_sqlalchemy_error PASSED [ 13%]
+tests/shared/db/test_connection.py::TestEnsureEngineInitialized::test_ensure_returns_existing_engine PASSED [ 13%]
+tests/shared/db/test_connection.py::TestEnsureEngineInitialized::test_ensure_initializes_new_engine PASSED [ 13%]
+tests/shared/db/test_connection.py::TestEnsureEngineInitialized::test_ensure_returns_none_on_error PASSED [ 13%]
+tests/shared/db/test_connection.py::TestIsEngineInitialized::test_returns_false_when_not_initialized PASSED [ 13%]
+tests/shared/db/test_connection.py::TestIsEngineInitialized::test_returns_true_when_initialized PASSED [ 13%]
+tests/shared/db/test_connection.py::TestGetEngine::test_raises_when_not_initialized PASSED [ 13%]
+tests/shared/db/test_connection.py::TestGetEngine::test_returns_engine_when_initialized PASSED [ 14%]
+tests/shared/db/test_connection.py::TestGetSession::test_raises_when_factory_not_initialized PASSED [ 14%]
+tests/shared/db/test_connection.py::TestGetSession::test_returns_session_when_initialized PASSED [ 14%]
+tests/shared/db/test_connection.py::TestSessionScope::test_session_scope_commit_on_success PASSED [ 14%]
+tests/shared/db/test_connection.py::TestSessionScope::test_session_scope_rollback_on_readonly PASSED [ 14%]
+tests/shared/db/test_connection.py::TestSessionScope::test_session_scope_rollback_on_exception PASSED [ 14%]
+tests/shared/db/test_connection.py::TestDisposeEngine::test_dispose_cleans_up_all PASSED [ 14%]
+tests/shared/db/test_connection.py::TestDisposeEngine::test_dispose_handles_none_values PASSED [ 14%]
+tests/shared/db/test_repository.py::TestParseLlmReason::test_parse_reason_with_metadata PASSED [ 14%]
+tests/shared/db/test_repository.py::TestParseLlmReason::test_parse_reason_without_metadata PASSED [ 15%]
+tests/shared/db/test_repository.py::TestParseLlmReason::test_parse_reason_none PASSED [ 15%]
+tests/shared/db/test_repository.py::TestParseLlmReason::test_parse_reason_empty_string PASSED [ 15%]
+tests/shared/db/test_repository.py::TestParseLlmReason::test_parse_reason_invalid_json PASSED [ 15%]
+tests/shared/db/test_repository.py::TestWatchList::test_get_active_watchlist PASSED [ 15%]
+tests/shared/db/test_repository.py::TestWatchList::test_get_active_watchlist_with_metadata PASSED [ 15%]
+tests/shared/db/test_repository.py::TestWatchList::test_get_active_watchlist_null_reason PASSED [ 15%]
+tests/shared/db/test_repository.py::TestWatchList::test_get_active_watchlist_empty PASSED [ 15%]
+tests/shared/db/test_repository.py::TestWatchList::test_get_watchlist_all PASSED [ 15%]
+tests/shared/db/test_repository.py::TestPortfolio::test_get_active_portfolio PASSED [ 16%]
+tests/shared/db/test_repository.py::TestPortfolio::test_get_active_portfolio_fields PASSED [ 16%]
+tests/shared/db/test_repository.py::TestPortfolio::test_get_active_portfolio_empty PASSED [ 16%]
+tests/shared/db/test_repository.py::TestPortfolio::test_get_portfolio_summary_empty PASSED [ 16%]
+tests/shared/db/test_repository.py::TestPortfolio::test_get_portfolio_summary_with_data PASSED [ 16%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_today_total_buy_amount PASSED [ 16%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_today_buy_count PASSED [ 16%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_trade_logs_today PASSED [ 16%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_trade_logs_specific_date PASSED [ 16%]
+tests/shared/db/test_repository.py::TestTradeLog::test_was_traded_recently_true PASSED [ 17%]
+tests/shared/db/test_repository.py::TestTradeLog::test_was_traded_recently_false PASSED [ 17%]
+tests/shared/db/test_repository.py::TestTradeLog::test_was_traded_recently_longer_window PASSED [ 17%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_recently_traded_stocks_batch PASSED [ 17%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_recently_traded_stocks_batch_empty_input PASSED [ 17%]
+tests/shared/db/test_repository.py::TestTradeLog::test_get_recent_trades PASSED [ 17%]
+tests/shared/db/test_repository.py::TestConfig::test_get_config_existing PASSED [ 17%]
+tests/shared/db/test_repository.py::TestConfig::test_get_config_not_found PASSED [ 17%]
+tests/shared/db/test_repository.py::TestConfig::test_get_config_json_value PASSED [ 17%]
+tests/shared/db/test_repository.py::TestConfig::test_set_config_new PASSED [ 18%]
+tests/shared/db/test_repository.py::TestConfig::test_set_config_update PASSED [ 18%]
+tests/shared/db/test_repository.py::TestConfig::test_delete_config_existing PASSED [ 18%]
+tests/shared/db/test_repository.py::TestConfig::test_delete_config_not_found PASSED [ 18%]
+tests/shared/db/test_repository.py::TestEdgeCases::test_portfolio_with_null_values PASSED [ 18%]
+tests/shared/db/test_repository.py::TestEdgeCases::test_trade_log_with_invalid_json PASSED [ 18%]
+tests/shared/db/test_repository.py::TestEdgeCases::test_watchlist_numeric_fields PASSED [ 18%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_current_prices_empty_list PASSED [ 18%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_current_prices_success PASSED [ 18%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_current_prices_with_alternative_fields PASSED [ 19%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_current_prices_api_failure PASSED [ 19%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_current_prices_network_error PASSED [ 19%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_cash_balance_success PASSED [ 19%]
+tests/shared/db/test_repository.py::TestKisGatewayApi::test_fetch_cash_balance_failure PASSED [ 19%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_get_portfolio_with_current_prices_empty PASSED [ 19%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_get_portfolio_with_current_prices_no_realtime PASSED [ 19%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_get_portfolio_with_current_prices_with_realtime PASSED [ 19%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_get_portfolio_summary_with_realtime PASSED [ 20%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_get_scheduler_jobs_success PASSED [ 20%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_watchlist_with_trade_tier_metadata PASSED [ 20%]
+tests/shared/db/test_repository.py::TestDashboardV2Api::test_watchlist_trade_tier_inferred PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_fetch_current_prices_single_stock_failure PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_get_portfolio_summary_realtime_exception PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_get_portfolio_summary_cash_balance_exception PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_get_portfolio_with_current_prices_realtime_exception PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_get_config_not_silent PASSED [ 20%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_get_config_exception PASSED [ 21%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_set_config_with_description PASSED [ 21%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_set_config_exception PASSED [ 21%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_set_config_long_value PASSED [ 21%]
+tests/shared/db/test_repository.py::TestAdditionalCoverage::test_delete_config_exception PASSED [ 21%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorAnalyzerInit::test_init_with_repository PASSED [ 21%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorAnalyzerInit::test_init_without_connection PASSED [ 21%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorAnalyzerInit::test_repository_property PASSED [ 21%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestClassifyStockGroup::test_large_cap PASSED [ 21%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestClassifyStockGroup::test_mid_cap PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestClassifyStockGroup::test_small_cap PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestClassifyStockGroup::test_not_found PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestClassifyStockGroup::test_cache PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGetStockSector::test_from_db PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGetStockSector::test_from_mapping PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGetStockSector::test_not_found PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGetHistoricalPrices::test_get_prices_via_repository PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGetHistoricalPrices::test_get_prices_dataframe_structure PASSED [ 22%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorCalculations::test_calc_momentum_6m PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorCalculations::test_calc_momentum_1m PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestFactorCalculations::test_calc_rsi_oversold PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateForwardReturns::test_forward_returns_5d PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateForwardReturns::test_forward_returns_nan_at_end PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_positive_correlation FAILED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_negative_correlation FAILED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_insufficient_data PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestGroupStocksBySector::test_group_by_sector PASSED [ 23%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestSaveFactorMetadata::test_save_via_repository PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestEdgeCases::test_empty_stock_list PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestEdgeCases::test_invalid_factor_key PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestEdgeCases::test_insufficient_data PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestDataClasses::test_factor_analysis_result PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_analyzer.py::TestDataClasses::test_condition_performance PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices FAILED [ 24%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_sorted FAILED [ 24%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_not_found PASSED [ 24%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_bulk FAILED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestStockMaster::test_get_market_cap PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestStockMaster::test_get_market_cap_not_found PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestStockMaster::test_get_stock_sector PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestStockMaster::test_get_stock_sector_not_found PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFinancialData::test_get_financial_data PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFinancialData::test_get_financial_data_values PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFinancialData::test_get_financial_data_not_found PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestSupplyDemandData::test_get_supply_demand_data PASSED [ 25%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestSupplyDemandData::test_get_supply_demand_data_empty PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestNewsSentimentHistory::test_get_news_sentiment_history PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestDisclosures::test_get_disclosures PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFactorMetadata::test_save_factor_metadata_insert PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFactorMetadata::test_save_factor_metadata_update PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFactorPerformance::test_save_factor_performance PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestFactorPerformance::test_confidence_level_auto_calculation PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestNewsFactorStats::test_save_news_factor_stats PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestEdgeCases::test_empty_stock_codes PASSED [ 26%]
+tests/shared/hybrid_scoring/test_factor_repository.py::TestEdgeCases::test_special_characters_in_name PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestHybridScoreResult::test_create_result PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestHybridScoreResult::test_to_watchlist_entry PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestHybridScorerInit::test_init_bull_market PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestHybridScorerInit::test_init_bear_market PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestHybridScorerInit::test_init_default_regime PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestCalculateHybridScore::test_basic_calculation PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestCalculateHybridScore::test_default_weights PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestCalculateHybridScore::test_grade_assignment PASSED [ 27%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestCalculateHybridScore::test_safety_lock_large_gap PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestCalculateHybridScore::test_condition_info_preserved PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestMinimumQualityThreshold::test_below_minimum_threshold PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestMarketRegimeWeights::test_bull_market_weights PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestMarketRegimeWeights::test_bear_market_weights PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestFormatQuantScoreForPrompt::test_format_basic PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestFormatQuantScoreForPrompt::test_format_includes_factors PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestFormatQuantScoreForPrompt::test_format_includes_win_rate PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestBatchProcessing::test_batch_calculation_empty PASSED [ 28%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestBatchProcessing::test_batch_calculation_success PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestBatchProcessing::test_batch_calculation_partial_llm PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestSelectCandidates::test_select_top_basic PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestSelectCandidates::test_select_empty PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestSummaryReport::test_generate_report_format PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestSummaryReport::test_generate_report_empty PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestRunHybridScoringPipeline::test_pipeline_exists PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestRunHybridScoringPipeline::test_pipeline_full_flow PASSED [ 29%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestRunHybridScoringPipeline::test_pipeline_quant_failure PASSED [ 30%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestRunHybridScoringPipeline::test_pipeline_no_survivors PASSED [ 30%]
+tests/shared/hybrid_scoring/test_hybrid_scorer.py::TestSafetyLockDetails::test_safety_lock_logging PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestQuantScoreResult::test_create_result PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestQuantScoreResult::test_dataclass_fields PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestQuantScorerInit::test_init_short_term PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestQuantScorerInit::test_init_long_term PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestQuantScorerInit::test_init_default_strategy PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestFactorCalculations::test_calc_rsi PASSED [ 30%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestFactorCalculations::test_calc_quality_score PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestFactorCalculations::test_factor_weights_loaded PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestConditionMatching::test_condition_win_rate_struct PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestConditionMatching::test_compound_conditions PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestCalculateTotalScore::test_calculate_total_quant_score_exists PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestStrategyWeights::test_factor_weights_dict PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestStrategyWeights::test_default_factor_weights PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestScoreNormalization::test_score_range PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestFormatForPrompt::test_format_function_exists PASSED [ 31%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestEdgeCases::test_invalid_result_flags PASSED [ 32%]
+tests/shared/hybrid_scoring/test_quant_scorer.py::TestEdgeCases::test_sector_field PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceLevel::test_high_confidence PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceLevel::test_mid_confidence PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceLevel::test_low_confidence PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceWeight::test_full_weight PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceWeight::test_high_weight PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceWeight::test_medium_weight PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceWeight::test_low_weight PASSED [ 32%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetConfidenceWeight::test_zero_weight PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetDefaultFactorWeights::test_returns_dict PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetDefaultFactorWeights::test_core_factors_exist PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetDefaultFactorWeights::test_weights_sum_approximately_one PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestGetDefaultFactorWeights::test_roe_highest_weight PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestDbTypeDetection::test_is_mariadb_always_true PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestDbTypeDetection::test_is_oracle_always_false PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestExecuteUpsert::test_mariadb_upsert PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestExecuteUpsert::test_auto_update_columns PASSED [ 33%]
+tests/shared/hybrid_scoring/test_schema.py::TestCreateHybridScoringTables::test_mariadb_tables PASSED [ 34%]
+tests/shared/hybrid_scoring/test_schema.py::TestCreateHybridScoringTables::test_oracle_tables PASSED [ 34%]
+tests/shared/hybrid_scoring/test_schema.py::TestCreateHybridScoringTables::test_handles_existing_tables PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_from_json_file PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_with_underscore_conversion PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_from_env_variable PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_not_found PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_caching PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_no_cache PASSED [ 34%]
+tests/shared/test_auth.py::TestGetSecret::test_get_secret_with_project_id PASSED [ 35%]
+tests/shared/test_auth.py::TestEnvMapping::test_local_env_mapping_gemini PASSED [ 35%]
+tests/shared/test_auth.py::TestLoadLocalSecrets::test_load_valid_json PASSED [ 35%]
+tests/shared/test_auth.py::TestLoadLocalSecrets::test_load_invalid_json PASSED [ 35%]
+tests/shared/test_auth.py::TestLoadLocalSecrets::test_load_nonexistent_file PASSED [ 35%]
+tests/shared/test_auth.py::TestLoadLocalSecrets::test_caching_local_secrets PASSED [ 35%]
+tests/shared/test_auth.py::TestClearSecretCache::test_clears_all_caches PASSED [ 35%]
+tests/shared/test_auth.py::TestEdgeCases::test_secret_value_with_whitespace PASSED [ 35%]
+tests/shared/test_auth.py::TestEdgeCases::test_json_with_non_string_values PASSED [ 35%]
+tests/shared/test_auth.py::TestAdditionalCoverage::test_load_secrets_docker_path_fallback PASSED [ 36%]
+tests/shared/test_auth.py::TestAdditionalCoverage::test_load_secrets_non_dict_json PASSED [ 36%]
+tests/shared/test_auth.py::TestAdditionalCoverage::test_get_secret_empty_secret_id PASSED [ 36%]
+tests/shared/test_auth.py::TestAdditionalCoverage::test_get_secret_none_secret_id PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_initial_state_closed PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_failure_threshold_triggers_open PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_open_to_half_open_after_timeout PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_half_open_success_to_closed PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_half_open_failure_to_open PASSED [ 36%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_protect_decorator_success PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_protect_decorator_failure PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_protect_decorator_circuit_open PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_exponential_backoff PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_reset PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreaker::test_get_status PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreakerSingleton::test_singleton_instance PASSED [ 37%]
+tests/shared/test_circuit_breaker.py::TestCircuitBreakerSingleton::test_config_values PASSED [ 37%]
+tests/shared/test_config.py::TestConfigManagerInit::test_init_default PASSED [ 37%]
+tests/shared/test_config.py::TestConfigManagerInit::test_init_has_defaults PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_get_from_defaults PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_get_with_default_parameter PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_get_from_env_variable PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_get_from_memory_cache PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_memory_cache_expired PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerGet::test_get_returns_none_for_unknown_key PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerSet::test_set_in_memory_cache PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerSet::test_set_persist_to_db PASSED [ 38%]
+tests/shared/test_config.py::TestConfigManagerSet::test_set_persist_to_db_fails_gracefully PASSED [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_int PASSED       [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_int_invalid PASSED [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_float PASSED     [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_float_invalid PASSED [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_bool_true_values PASSED [ 39%]
+tests/shared/test_config.py::TestTypedGetters::test_get_bool_false_values PASSED [ 39%]
+tests/shared/test_config.py::TestCacheManagement::test_clear_cache_specific_key PASSED [ 39%]
+tests/shared/test_config.py::TestCacheManagement::test_clear_cache_all PASSED [ 40%]
+tests/shared/test_config.py::TestTypeConversion::test_convert_to_int_based_on_default PASSED [ 40%]
+tests/shared/test_config.py::TestTypeConversion::test_convert_to_float_based_on_default PASSED [ 40%]
+tests/shared/test_config.py::TestTypeConversion::test_convert_to_bool_based_on_default PASSED [ 40%]
+tests/shared/test_config.py::TestTypeConversion::test_no_conversion_if_no_default PASSED [ 40%]
+tests/shared/test_config.py::TestGlobalConfig::test_get_global_config_singleton PASSED [ 40%]
+tests/shared/test_config.py::TestGlobalConfig::test_reset_global_config PASSED [ 40%]
+tests/shared/test_config.py::TestGetAll::test_get_all_returns_defaults PASSED [ 40%]
+tests/shared/test_database_core.py::TestDatabaseHelpers::test_is_mariadb PASSED [ 40%]
+tests/shared/test_database_core.py::TestDatabaseHelpers::test_get_param_placeholder PASSED [ 41%]
+tests/shared/test_database_core.py::TestDatabaseHelpers::test_get_table_name_mock PASSED [ 41%]
+tests/shared/test_database_core.py::TestDatabaseHelpers::test_get_table_name_real PASSED [ 41%]
+tests/shared/test_database_core.py::TestConnectionPool::test_init_connection_pool PASSED [ 41%]
+tests/shared/test_database_core.py::TestConnectionPool::test_close_pool PASSED [ 41%]
+tests/shared/test_database_core.py::TestConnectionPool::test_get_db_connection_init PASSED [ 41%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_get_config PASSED [ 41%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_get_all_config PASSED [ 41%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_set_config PASSED [ 41%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_get_config_exception PASSED [ 42%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_get_all_config_exception PASSED [ 42%]
+tests/shared/test_database_core.py::TestConfigFunctions::test_set_config_exception PASSED [ 42%]
+tests/shared/test_database_core.py::TestAdditionalUtils::test_is_sqlalchemy_ready PASSED [ 42%]
+tests/shared/test_database_core.py::TestAdditionalUtils::test_is_pool_initialized PASSED [ 42%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_empty_input PASSED [ 42%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_numbers_match PASSED [ 42%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_numbers_hallucination PASSED [ 42%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_dates_match PASSED [ 42%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_keywords_hallucination PASSED [ 43%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_check_valid_analysis PASSED [ 43%]
+tests/shared/test_fact_checker.py::TestFactChecker::test_singleton_instance PASSED [ 43%]
+tests/shared/test_fact_checker.py::TestFactCheckResult::test_has_hallucination_low_confidence PASSED [ 43%]
+tests/shared/test_fact_checker.py::TestFactCheckResult::test_has_hallucination_invalid PASSED [ 43%]
+tests/shared/test_fact_checker.py::TestFactCheckResult::test_no_hallucination PASSED [ 43%]
+tests/shared/test_factor_scoring.py::TestMomentumScore::test_momentum_score_with_full_data PASSED [ 43%]
+tests/shared/test_factor_scoring.py::TestMomentumScore::test_momentum_score_range PASSED [ 43%]
+tests/shared/test_factor_scoring.py::TestMomentumScore::test_momentum_score_insufficient_data PASSED [ 43%]
+tests/shared/test_factor_scoring.py::TestMomentumScore::test_momentum_score_no_kospi PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestQualityScore::test_quality_score_with_full_data PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestQualityScore::test_quality_score_high_roe PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestQualityScore::test_quality_score_negative_roe PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestQualityScore::test_quality_score_none_values PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestValueScore::test_value_score_low_valuations PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestValueScore::test_value_score_high_valuations PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestValueScore::test_value_score_moderate_valuations PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestValueScore::test_value_score_negative_per PASSED [ 44%]
+tests/shared/test_factor_scoring.py::TestValueScore::test_value_score_none_values PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_with_volume PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_no_volume PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_oversold FAILED [ 45%]
+tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_insufficient_data PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_strong_bull PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_bear PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_default PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_perfect PASSED [ 45%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_zero PASSED [ 46%]
+tests/shared/test_factor_scoring.py::TestFinalScore::test_final_score_contribution_breakdown PASSED [ 46%]
+tests/shared/test_factor_scoring.py::TestEdgeCases::test_extreme_roe PASSED [ 46%]
+tests/shared/test_factor_scoring.py::TestEdgeCases::test_zero_pbr PASSED [ 46%]
+tests/shared/test_factor_scoring.py::TestEdgeCases::test_empty_dataframe PASSED [ 46%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_returns_cached_key PASSED [ 46%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_returns_env_var_key PASSED [ 46%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_loads_from_secrets PASSED [ 46%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_raises_when_secret_not_found PASSED [ 46%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_uses_custom_secret_id PASSED [ 47%]
+tests/shared/test_gemini.py::TestEnsureGeminiApiKey::test_caches_key_after_load PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_s_80_and_above PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_a_70_to_79 PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_b_60_to_69 PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_c_50_to_59 PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_d_40_to_49 PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_f_below_40 PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_with_string_number PASSED [ 47%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_with_float PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestCalculateGrade::test_grade_with_invalid_input PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestGetJenniesDecision::test_buy_mr_decision_approve PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestGetJenniesDecision::test_buy_mr_decision_reject PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestGetJenniesDecision::test_buy_trend_decision PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestGetJenniesDecision::test_sell_decision PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestGetJenniesDecision::test_unknown_trade_type PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestAnalyzeNewsSentiment::test_sentiment_positive_news PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestAnalyzeNewsSentiment::test_sentiment_negative_news PASSED [ 48%]
+tests/shared/test_llm_brain.py::TestAnalyzeNewsSentiment::test_sentiment_neutral_news PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestJennieBrainInit::test_init_basic PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestRunDebateSession::test_debate_session_success PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestRunDebateSession::test_debate_session_provider_error PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestRunJudgeScoring::test_judge_scoring_success PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestRunJudgeScoring::test_judge_scoring_v5_fallback PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestV5HybridScoring::test_analysis_score_v5_fast PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestGenerateDailyBriefing::test_daily_briefing_success PASSED [ 49%]
+tests/shared/test_llm_brain.py::TestGenerateDailyBriefing::test_daily_briefing_provider_error PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestGenerateDailyBriefing::test_daily_briefing_empty_data PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestGenerateStrategicFeedback::test_strategic_feedback_success PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestGenerateStrategicFeedback::test_strategic_feedback_provider_error PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestGenerateStrategicFeedback::test_strategic_feedback_exception PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestVerifyParameterChange::test_verify_parameter_change_success PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestVerifyParameterChange::test_verify_parameter_change_no_provider PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestAnalyzeCompetitorBenefit::test_competitor_benefit_risk_detected PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestAnalyzeCompetitorBenefit::test_competitor_benefit_no_risk PASSED [ 50%]
+tests/shared/test_llm_brain.py::TestAnalyzeCompetitorBenefit::test_competitor_benefit_provider_error PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestAnalyzeCompetitorBenefit::test_competitor_benefit_exception PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestJudgeScoringV5Gatekeeper::test_gatekeeper_rejects_low_score PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestJudgeScoringV5Gatekeeper::test_gatekeeper_passes_high_score PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestJudgeScoringV5Gatekeeper::test_grade_correction PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestNewsSentimentFallback::test_sentiment_local_failure_cloud_success PASSED [ 51%]
+tests/shared/test_llm_brain.py::TestNewsSentimentFallback::test_sentiment_both_fail PASSED [ 51%]
+tests/shared/test_llm_factory.py::TestModelStateManager::test_singleton_pattern PASSED [ 51%]
+tests/shared/test_llm_factory.py::TestModelStateManager::test_set_and_get_current_model PASSED [ 51%]
+tests/shared/test_llm_factory.py::TestModelStateManager::test_is_model_loaded PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_fast PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_reasoning PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_thinking PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_env_provider_type_from_env PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_local_model_name_defaults PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryHelpers::test_get_local_model_name_from_env PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_ollama PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_openai PASSED [ 52%]
+tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_claude PASSED [ 53%]
+tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_gemini PASSED [ 53%]
+tests/shared/test_llm_factory.py::TestLLMFactoryGetProvider::test_get_provider_unknown PASSED [ 53%]
+tests/shared/test_llm_factory.py::TestLLMFactoryFallback::test_get_fallback_provider PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptMeanReversion::test_build_buy_prompt_bb_lower PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptMeanReversion::test_build_buy_prompt_rsi_oversold PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptMeanReversion::test_build_buy_prompt_unknown_signal PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptMeanReversion::test_build_buy_prompt_includes_rag_context PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptGoldenCross::test_build_buy_prompt_golden_cross PASSED [ 53%]
+tests/shared/test_llm_prompts.py::TestBuyPromptGoldenCross::test_build_buy_prompt_momentum PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestBuyPromptGoldenCross::test_build_buy_prompt_relative_strength PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestBuyPromptGoldenCross::test_build_buy_prompt_resistance_breakout PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestSellPrompt::test_build_sell_prompt PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestAddWatchlistPrompt::test_build_add_watchlist_prompt PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestBuyPromptRanking::test_build_buy_prompt_ranking PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestBuyPromptRanking::test_build_buy_prompt_ranking_single_candidate PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestAnalysisPrompt::test_build_analysis_prompt PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestAnalysisPrompt::test_build_analysis_prompt_no_news PASSED [ 54%]
+tests/shared/test_llm_prompts.py::TestHunterPromptV5::test_build_hunter_prompt_v5_with_quant_context PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestHunterPromptV5::test_build_hunter_prompt_v5_without_quant_context PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestHunterPromptV5::test_build_hunter_prompt_v5_with_feedback_context PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestParameterVerificationPrompt::test_build_parameter_verification_prompt PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestFormatHelpers::test_format_market_cap_trillion PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestFormatHelpers::test_format_per_negative PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestFormatHelpers::test_format_market_cap_billion PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestFormatHelpers::test_format_market_cap_won PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestBuyPromptRankingWithFeedback::test_build_buy_prompt_ranking_with_feedback PASSED [ 55%]
+tests/shared/test_llm_prompts.py::TestEdgeCases::test_empty_stock_info PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestEdgeCases::test_very_long_rag_context PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestEdgeCases::test_special_characters_in_name PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestNewsSentimentPrompt::test_build_news_sentiment_prompt PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestDebatePrompt::test_build_debate_prompt_bullish PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestDebatePrompt::test_build_debate_prompt_bearish PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestDebatePrompt::test_build_debate_prompt_no_keywords PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestJudgePrompt::test_build_judge_prompt PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestJudgePromptV5::test_build_judge_prompt_v5_with_quant PASSED [ 56%]
+tests/shared/test_llm_prompts.py::TestJudgePromptV5::test_build_judge_prompt_v5_without_quant PASSED [ 57%]
+tests/shared/test_llm_prompts.py::TestJudgePromptV5::test_build_judge_prompt_v5_with_feedback PASSED [ 57%]
+tests/shared/test_llm_prompts.py::TestContextAnalysisPrompt::test_build_context_analysis_prompt PASSED [ 57%]
+tests/shared/test_llm_prompts.py::TestContextAnalysisPrompt::test_build_context_analysis_prompt_no_fundamentals PASSED [ 57%]
+tests/shared/test_llm_prompts.py::TestCompetitorBenefitPrompt::test_build_competitor_benefit_prompt PASSED [ 57%]
+tests/shared/test_llm_providers.py::TestGeminiLLMProvider::test_init_success PASSED [ 57%]
+tests/shared/test_llm_providers.py::TestGeminiLLMProvider::test_init_missing_api_key PASSED [ 57%]
+tests/shared/test_llm_providers.py::TestGeminiLLMProvider::test_generate_json_success PASSED [ 57%]
+tests/shared/test_llm_providers.py::TestGeminiLLMProvider::test_generate_json_fallback PASSED [ 57%]
+tests/shared/test_llm_providers.py::TestGeminiLLMProvider::test_generate_json_all_fail PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOpenAILLMProvider::test_init_success PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOpenAILLMProvider::test_is_reasoning_model PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOpenAILLMProvider::test_generate_json_success PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOpenAILLMProvider::test_generate_json_reasoning_model_no_temperature PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestClaudeLLMProvider::test_init_success PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestClaudeLLMProvider::test_generate_json_success PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestClaudeLLMProvider::test_generate_json_with_markdown PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_init_success PASSED [ 58%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_init_fast_tier PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_init_gateway_mode PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_clean_deepseek_tags PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_ensure_model_loaded_different_model PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_generate_json_success PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_generate_json_with_think_tags PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestOllamaLLMProvider::test_generate_chat_success PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestProviderProperties::test_gemini_flash_model_name PASSED [ 59%]
+tests/shared/test_llm_providers.py::TestProviderProperties::test_gemini_default_model_from_env PASSED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bull FAILED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bear FAILED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_sideways PASSED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_insufficient_data PASSED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_empty_df PASSED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_uses_ma10_for_short_data FAILED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_strong_bull FAILED [ 60%]
+tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_returns_scores FAILED [ 60%]
+tests/shared/test_market_regime.py::TestDynamicRiskSetting::test_strong_bull_settings PASSED [ 61%]
+tests/shared/test_market_regime.py::TestDynamicRiskSetting::test_bull_settings PASSED [ 61%]
+tests/shared/test_market_regime.py::TestDynamicRiskSetting::test_sideways_settings PASSED [ 61%]
+tests/shared/test_market_regime.py::TestDynamicRiskSetting::test_bear_settings PASSED [ 61%]
+tests/shared/test_market_regime.py::TestDynamicRiskSetting::test_unknown_regime_default PASSED [ 61%]
+tests/shared/test_market_regime.py::TestStrategySelector::test_select_strategies_strong_bull PASSED [ 61%]
+tests/shared/test_market_regime.py::TestStrategySelector::test_select_strategies_bull PASSED [ 61%]
+tests/shared/test_market_regime.py::TestStrategySelector::test_select_strategies_sideways PASSED [ 61%]
+tests/shared/test_market_regime.py::TestStrategySelector::test_select_strategies_bear PASSED [ 61%]
+tests/shared/test_market_regime.py::TestStrategySelector::test_select_strategies_unknown_default PASSED [ 62%]
+tests/shared/test_market_regime.py::TestMapLlmStrategy::test_map_snipe_dip PASSED [ 62%]
+tests/shared/test_market_regime.py::TestMapLlmStrategy::test_map_momentum_breakout PASSED [ 62%]
+tests/shared/test_market_regime.py::TestMapLlmStrategy::test_map_unknown_strategy PASSED [ 62%]
+tests/shared/test_market_regime.py::TestEdgeCases::test_extreme_price_movement PASSED [ 62%]
+tests/shared/test_market_regime.py::TestEdgeCases::test_constant_prices PASSED [ 62%]
+tests/shared/test_market_regime.py::TestEdgeCases::test_regime_cache PASSED [ 62%]
+tests/shared/test_market_regime.py::TestEdgeCases::test_strategy_constants PASSED [ 62%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_notify_circuit_breaker_open PASSED [ 62%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_notify_circuit_breaker_closed PASSED [ 63%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_notify_hallucination_detected PASSED [ 63%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_notify_system_error PASSED [ 63%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_notify_without_telegram PASSED [ 63%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlerts::test_telegram_failure_handling PASSED [ 63%]
+tests/shared/test_monitoring_alerts.py::TestMonitoringAlertsSingleton::test_init_monitoring_alerts PASSED [ 63%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_positive PASSED [ 63%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_negative_security PASSED [ 63%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_mixed_keywords PASSED [ 63%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_no_match PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_empty_string PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_classify_batch PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_is_negative_event PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_is_competitor_benefit_event PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_extract_negative_events PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_singleton_get_classifier PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_legacy_functions PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_lists_helpers PASSED [ 64%]
+tests/shared/test_news_classifier.py::TestNewsClassifier::test_format_logging PASSED [ 65%]
+tests/shared/test_notification.py::TestTelegramBotInit::test_init_with_credentials PASSED [ 65%]
+tests/shared/test_notification.py::TestTelegramBotInit::test_init_from_env PASSED [ 65%]
+tests/shared/test_notification.py::TestTelegramBotInit::test_init_no_credentials PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_success PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_with_special_chars PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_api_error PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_network_error PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_no_credentials PASSED [ 65%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_no_token PASSED [ 66%]
+tests/shared/test_notification.py::TestSendMessage::test_send_message_no_chat_id PASSED [ 66%]
+tests/shared/test_notification.py::TestMessageFormat::test_markdown_parse_mode PASSED [ 66%]
+tests/shared/test_notification.py::TestMessageFormat::test_chat_id_in_payload PASSED [ 66%]
+tests/shared/test_notification.py::TestTimeout::test_request_timeout PASSED [ 66%]
+tests/shared/test_notification.py::TestLogging::test_success_logging PASSED [ 66%]
+tests/shared/test_notification.py::TestLogging::test_failure_logging PASSED [ 66%]
+tests/shared/test_notification.py::TestLogging::test_no_credentials_warning PASSED [ 66%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_valid_command PASSED [ 66%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_command_no_args PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_command_with_bot_mention PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_unsupported_command PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_no_slash PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_empty_string PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_none PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_only_slash PASSED [ 67%]
+tests/shared/test_notification.py::TestParseCommand::test_parse_all_supported_commands PASSED [ 67%]
+tests/shared/test_notification.py::TestIsAuthorized::test_authorized_default_chat_id PASSED [ 67%]
+tests/shared/test_notification.py::TestIsAuthorized::test_authorized_with_explicit_list PASSED [ 68%]
+tests/shared/test_notification.py::TestIsAuthorized::test_authorized_from_env PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_success PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_empty PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_api_error PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_network_error PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_timeout PASSED [ 68%]
+tests/shared/test_notification.py::TestGetUpdates::test_get_updates_no_token PASSED [ 68%]
+tests/shared/test_notification.py::TestGetPendingCommands::test_get_pending_commands_authorized PASSED [ 68%]
+tests/shared/test_notification.py::TestGetPendingCommands::test_get_pending_commands_unauthorized PASSED [ 69%]
+tests/shared/test_notification.py::TestGetPendingCommands::test_get_pending_commands_non_command_message PASSED [ 69%]
+tests/shared/test_notification.py::TestReply::test_reply_success PASSED  [ 69%]
+tests/shared/test_notification.py::TestReply::test_reply_failure PASSED  [ 69%]
+tests/shared/test_notification.py::TestEdgeCases::test_send_message_to_custom_chat_id PASSED [ 69%]
+tests/shared/test_notification.py::TestEdgeCases::test_allowed_chat_ids_string_conversion PASSED [ 69%]
+tests/shared/test_notification.py::TestEdgeCases::test_get_updates_updates_last_update_id PASSED [ 69%]
+tests/shared/test_portfolio_diversification.py::TestBasicDiversification::test_empty_portfolio_passes PASSED [ 69%]
+tests/shared/test_portfolio_diversification.py::TestBasicDiversification::test_small_position_passes PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestBasicDiversification::test_zero_total_assets_passes PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestSectorConcentration::test_sector_limit_exceeded PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestSectorConcentration::test_sector_limit_at_boundary PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestSectorConcentration::test_different_sector_passes PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestStockConcentration::test_stock_limit_exceeded PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestStockConcentration::test_stock_limit_at_boundary PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestOverrideParameters::test_override_max_sector_pct PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestOverrideParameters::test_override_max_stock_pct PASSED [ 70%]
+tests/shared/test_portfolio_diversification.py::TestSectorExposureCalculation::test_sector_exposure_returned PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestSectorExposureCalculation::test_multiple_sectors_calculated PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestCurrentSectorExposure::test_current_sector_exposure_calculated PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestExceptionHandling::test_exception_returns_approved PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestEdgeCases::test_very_small_position PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestEdgeCases::test_large_existing_portfolio PASSED [ 71%]
+tests/shared/test_portfolio_diversification.py::TestEdgeCases::test_current_price_fallback_to_avg_price PASSED [ 71%]
+tests/shared/test_position_sizing.py::TestBasicCalculation::test_calculate_quantity_basic PASSED [ 71%]
+tests/shared/test_position_sizing.py::TestBasicCalculation::test_calculate_quantity_with_portfolio PASSED [ 71%]
+tests/shared/test_position_sizing.py::TestBasicCalculation::test_quantity_increases_with_balance PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestAtrBasedCalculation::test_high_volatility_reduces_quantity PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestAtrBasedCalculation::test_invalid_atr_uses_default PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestConstraints::test_min_quantity_constraint PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestConstraints::test_max_quantity_constraint PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestConstraints::test_max_position_value_constraint PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestConstraints::test_cash_keep_constraint PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestSmartSkip::test_smart_skip_triggered PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestEdgeCases::test_zero_balance PASSED [ 72%]
+tests/shared/test_position_sizing.py::TestEdgeCases::test_negative_balance PASSED [ 73%]
+tests/shared/test_position_sizing.py::TestEdgeCases::test_very_expensive_stock PASSED [ 73%]
+tests/shared/test_position_sizing.py::TestEdgeCases::test_exception_handling PASSED [ 73%]
+tests/shared/test_position_sizing.py::TestRefreshFromConfig::test_refresh_updates_values PASSED [ 73%]
+tests/shared/test_position_sizing.py::TestResultStructure::test_result_contains_all_fields PASSED [ 73%]
+tests/shared/test_position_sizing.py::TestResultStructure::test_zero_result_structure PASSED [ 73%]
+tests/shared/test_redis_cache.py::TestSentimentScore::test_set_sentiment_score_new_stock PASSED [ 73%]
+tests/shared/test_redis_cache.py::TestSentimentScore::test_set_sentiment_score_ema_applied PASSED [ 73%]
+tests/shared/test_redis_cache.py::TestSentimentScore::test_get_sentiment_score_not_found PASSED [ 73%]
+tests/shared/test_redis_cache.py::TestSentimentScore::test_get_sentiment_score_with_data PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestSentimentScore::test_set_sentiment_score_without_redis PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestMarketRegimeCache::test_set_and_get_market_regime PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestMarketRegimeCache::test_get_market_regime_cache_expired PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestMarketRegimeCache::test_get_market_regime_cache_not_expired PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestMarketRegimeCache::test_set_market_regime_cache_empty_payload PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestCompetitorBenefitScore::test_set_competitor_benefit_score PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestCompetitorBenefitScore::test_set_competitor_benefit_score_keep_higher PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestCompetitorBenefitScore::test_get_competitor_benefit_score_not_found PASSED [ 74%]
+tests/shared/test_redis_cache.py::TestCompetitorBenefitScore::test_get_all_competitor_benefits PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestGenericRedisData::test_set_and_get_redis_data PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestGenericRedisData::test_get_redis_data_not_found PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestRedisConnection::test_get_redis_connection_with_injected_client PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestRedisConnection::test_reset_redis_connection PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_set_and_get_trading_flag_pause PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_set_and_get_trading_flag_stop PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_set_and_get_trading_flag_dryrun PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_invalid_flag_name PASSED [ 75%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_flag_not_set_returns_default PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_is_trading_paused PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_is_trading_stopped PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_is_dryrun_enabled PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestTradingFlags::test_get_all_trading_flags PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_set_and_get_config_value_min_llm_score PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_set_and_get_config_value_max_buy_per_day PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_set_and_get_config_value_risk_level PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_get_config_value_default PASSED [ 76%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_get_config_value_valid_name_not_set PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestConfigValue::test_invalid_config_name_fails PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestNotificationMute::test_set_notification_mute PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestNotificationMute::test_clear_notification_mute PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestNotificationMute::test_expired_mute_returns_false PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestPriceAlerts::test_set_price_alert PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestPriceAlerts::test_delete_price_alert PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestPriceAlerts::test_get_price_alerts_empty PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestPriceAlerts::test_delete_price_alert_not_exists PASSED [ 77%]
+tests/shared/test_redis_cache.py::TestEdgeCases::test_sentiment_score_with_special_characters PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestEdgeCases::test_sentiment_score_boundary_values PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestEdgeCases::test_market_regime_with_complex_data PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestRedisConnectionErrors::test_get_redis_connection_global_ping_failure PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestRedisConnectionErrors::test_get_redis_connection_with_real_redis_url_failure PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_market_regime_cache_redis_not_connected PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_market_regime_cache_setex_exception PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_market_regime_cache_json_parse_error PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_market_regime_cache_redis_not_connected PASSED [ 78%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_market_regime_cache_invalid_timestamp PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_sentiment_score_old_data_json_exception PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_sentiment_score_setex_exception PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_sentiment_score_redis_not_connected PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_sentiment_score_json_exception PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_redis_data_redis_not_connected PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_redis_data_setex_exception PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_redis_data_redis_not_connected PASSED [ 79%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_redis_data_json_exception PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_competitor_benefit_redis_not_connected PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_competitor_benefit_setex_exception PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_competitor_benefit_redis_not_connected PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_competitor_benefit_json_exception PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_all_competitor_benefits_redis_not_connected PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_all_competitor_benefits_exception PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_trading_flag_redis_not_connected PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_trading_flag_setex_exception PASSED [ 80%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_trading_flag_redis_not_connected PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_trading_flag_json_exception PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_is_dryrun_enabled_env_fallback PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_config_value_redis_not_connected PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_config_value_setex_exception PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_config_value_redis_not_connected PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_config_value_json_exception PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_notification_mute_redis_not_connected PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_notification_mute_setex_exception PASSED [ 81%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_is_notification_muted_redis_not_connected PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_is_notification_muted_json_exception PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_clear_notification_mute_redis_not_connected PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_clear_notification_mute_delete_exception PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_price_alert_redis_not_connected PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_set_price_alert_setex_exception PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_price_alerts_redis_not_connected PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_get_price_alerts_exception PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_delete_price_alert_redis_not_connected PASSED [ 82%]
+tests/shared/test_redis_cache.py::TestExceptionHandling::test_delete_price_alert_delete_exception PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_from_env_priority PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_from_secrets_json PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_returns_default_when_not_found PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_handles_empty_key PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_alt_key_underscore_to_hyphen PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerGet::test_get_alt_key_hyphen_to_underscore PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerExists::test_exists_true_from_env PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerExists::test_exists_true_from_file PASSED [ 83%]
+tests/shared/test_secret_manager.py::TestSecretManagerExists::test_exists_false_when_missing PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_caches_result PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_handles_missing_file_with_fallback PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_returns_empty_when_both_paths_missing PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_handles_invalid_json PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_handles_non_dict_json PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerLoadSecrets::test_load_converts_values_to_strings PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerInit::test_default_secrets_path PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerInit::test_custom_secrets_path_from_env PASSED [ 84%]
+tests/shared/test_secret_manager.py::TestSecretManagerInit::test_custom_secrets_path_from_init PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_samsung_electronics PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_sk_hynix PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_hyundai_motor PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_kia PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_lg_chem PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_kb_financial PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_samsung_biologics PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_posco PASSED [ 85%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_korean_air PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_samsung_construction PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_unknown_stock PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_partial_match PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestInferSectorFromName::test_infer_naver PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestGetSectorNoDb::test_get_sector_from_name PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestGetSectorNoDb::test_get_sector_caching PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestGetSectorNoDb::test_get_sector_different_stocks PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestGetSectorWithDb::test_get_sector_from_db PASSED [ 86%]
+tests/shared/test_sector_classifier.py::TestGetSectorWithDb::test_get_sector_db_returns_etc PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestGetSectorWithDb::test_get_sector_db_error_fallback PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestGetSectorWithDb::test_get_sector_db_returns_none PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestNormalizeSector::test_normalize_electronics PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestNormalizeSector::test_normalize_automobile PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestNormalizeSector::test_normalize_bank PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestNormalizeSector::test_normalize_medicine PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestNormalizeSector::test_normalize_unknown PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestSectorKeywords::test_sector_keywords_exist PASSED [ 87%]
+tests/shared/test_sector_classifier.py::TestSectorKeywords::test_all_sectors_defined PASSED [ 88%]
+tests/shared/test_sector_classifier.py::TestEdgeCases::test_empty_stock_name PASSED [ 88%]
+tests/shared/test_sector_classifier.py::TestEdgeCases::test_special_characters_in_name PASSED [ 88%]
+tests/shared/test_sector_classifier.py::TestEdgeCases::test_cache_persistence PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistryStructure::test_registry_is_dict PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistryStructure::test_each_entry_has_required_fields PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistryStructure::test_each_entry_has_category PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistryStructure::test_type_field_is_valid PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistrySensitiveField::test_secrets_category_has_sensitive_true PASSED [ 88%]
+tests/shared/test_settings_registry.py::TestRegistrySensitiveField::test_non_secrets_category_has_no_sensitive_or_false PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistrySensitiveField::test_expected_secret_keys_exist PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistryCategories::test_llm_category_exists PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistryCategories::test_risk_category_exists PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistryCategories::test_secrets_category_exists PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestGetRegistryDefaults::test_returns_registry_dict PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestGetRegistryDefaults::test_contains_all_keys PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistryDefaultValues::test_int_type_has_int_value PASSED [ 89%]
+tests/shared/test_settings_registry.py::TestRegistryDefaultValues::test_float_type_has_float_value PASSED [ 90%]
+tests/shared/test_settings_registry.py::TestRegistryDefaultValues::test_bool_type_has_bool_value PASSED [ 90%]
+tests/shared/test_settings_registry.py::TestRegistryDefaultValues::test_str_type_has_str_value PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_positive_return PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_negative_return PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_zero_return PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_insufficient_data PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_none_input PASSED [ 90%]
+tests/shared/test_strategy.py::TestCumulativeReturn::test_zero_base_price PASSED [ 90%]
+tests/shared/test_strategy.py::TestMovingAverage::test_simple_ma PASSED  [ 91%]
+tests/shared/test_strategy.py::TestMovingAverage::test_ma_20 PASSED      [ 91%]
+tests/shared/test_strategy.py::TestMovingAverage::test_insufficient_data PASSED [ 91%]
+tests/shared/test_strategy.py::TestMovingAverage::test_none_input PASSED [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_rsi_uptrend PASSED          [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_rsi_downtrend PASSED        [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_rsi_dataframe FAILED        [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_rsi_range PASSED            [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_insufficient_data PASSED    [ 91%]
+tests/shared/test_strategy.py::TestRSI::test_constant_prices_rsi PASSED  [ 92%]
+tests/shared/test_strategy.py::TestATR::test_atr_basic FAILED            [ 92%]
+tests/shared/test_strategy.py::TestATR::test_atr_value_range PASSED      [ 92%]
+tests/shared/test_strategy.py::TestATR::test_insufficient_data PASSED    [ 92%]
+tests/shared/test_strategy.py::TestATR::test_none_input PASSED           [ 92%]
+tests/shared/test_strategy.py::TestATR::test_volatile_market_higher_atr PASSED [ 92%]
+tests/shared/test_strategy.py::TestBollingerBands::test_lower_band_basic FAILED [ 92%]
+tests/shared/test_strategy.py::TestBollingerBands::test_insufficient_data PASSED [ 92%]
+tests/shared/test_strategy.py::TestBollingerBands::test_std_dev_effect PASSED [ 92%]
+tests/shared/test_strategy.py::TestGoldenCross::test_golden_cross_detected PASSED [ 93%]
+tests/shared/test_strategy.py::TestGoldenCross::test_no_golden_cross_downtrend PASSED [ 93%]
+tests/shared/test_strategy.py::TestGoldenCross::test_insufficient_data PASSED [ 93%]
+tests/shared/test_strategy.py::TestGoldenCross::test_sideways_market PASSED [ 93%]
+tests/shared/test_strategy.py::TestDeathCross::test_death_cross_detected PASSED [ 93%]
+tests/shared/test_strategy.py::TestDeathCross::test_no_death_cross_uptrend PASSED [ 93%]
+tests/shared/test_strategy.py::TestDeathCross::test_insufficient_data PASSED [ 93%]
+tests/shared/test_strategy.py::TestEdgeCases::test_empty_dataframe PASSED [ 93%]
+tests/shared/test_strategy.py::TestEdgeCases::test_single_value PASSED   [ 93%]
+tests/shared/test_strategy.py::TestEdgeCases::test_nan_values_in_data PASSED [ 94%]
+tests/shared/test_strategy.py::TestEdgeCases::test_negative_prices PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_none_input PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_empty_list PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_normal_list PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_reverse_option PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_nan_in_list PASSED [ 94%]
+tests/shared/test_strategy.py::TestPrepareSequence::test_string_values PASSED [ 94%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_success_first_try PASSED [ 94%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_retry_on_exception PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_max_attempts_exceeded PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_non_retryable_error PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_fixed_interval_strategy PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_immediate_strategy PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_on_retry_callback PASSED [ 95%]
+tests/shared/test_utils.py::TestRetryWithBackoff::test_specific_exception_types PASSED [ 95%]
+tests/shared/test_utils.py::TestLogExecutionTime::test_logs_execution_time PASSED [ 95%]
+tests/shared/test_utils.py::TestLogExecutionTime::test_uses_function_name_if_no_operation_name PASSED [ 95%]
+tests/shared/test_utils.py::TestLogExecutionTime::test_logs_error_on_exception PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_returns_result_on_success PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_returns_default_on_error PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_returns_none_default PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_logs_error PASSED     [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_no_log_when_disabled PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_reraise_when_enabled PASSED [ 96%]
+tests/shared/test_utils.py::TestHandleErrors::test_preserves_function_metadata PASSED [ 96%]
+tests/shared/test_utils.py::TestCustomExceptions::test_retryable_error PASSED [ 96%]
+tests/shared/test_utils.py::TestCustomExceptions::test_non_retryable_error PASSED [ 97%]
+tests/shared/test_utils.py::TestDecoratorComposition::test_retry_with_log_and_error_handling PASSED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_operating_hours FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_before_operating_hours FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_after_operating_hours FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_weekend_returns_false FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_sunday_returns_false FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_custom_operating_hours FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_start_time FAILED [ 97%]
+tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_end_time FAILED [ 98%]
+tests/shared/test_utils.py::TestSafeDbOperation::test_success_first_try PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeDbOperation::test_retry_on_db_error PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeDbOperation::test_max_retries_exceeded PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeDbOperation::test_non_db_error_not_retried PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeApiCall::test_success_first_try PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeApiCall::test_retry_on_request_exception PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeApiCall::test_max_retries_exceeded PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeApiCall::test_non_request_error_not_retried PASSED [ 98%]
+tests/shared/test_utils.py::TestSafeApiCall::test_retryable_status_codes PASSED [ 99%]
+tests/shared/test_utils.py::TestGetReporter::test_get_reporter_success PASSED [ 99%]
+tests/shared/test_utils.py::TestGetReporter::test_get_reporter_import_error PASSED [ 99%]
+tests/shared/test_utils.py::TestRetryCallbackError::test_callback_exception_is_caught PASSED [ 99%]
+tests/shared/test_utils.py::TestRetryLoopExhaustion::test_loop_exhaustion_raises_last_exception PASSED [ 99%]
+tests/shared/test_utils.py::TestRetryStrategy::test_enum_values PASSED   [ 99%]
+tests/shared/test_utils.py::TestRetryStrategy::test_enum_comparison PASSED [ 99%]
+tests/test_pipeline_smoke.py::test_pipeline_smoke PASSED                 [ 99%]
+tests/test_prompt_feedback.py::test_feedback_injection PASSED            [100%]
+
+=================================== FAILURES ===================================
+______________ TestBuyScanner.test_analyze_stock_realtime_update _______________
+
+self = <test_scanner.TestBuyScanner object at 0x7f173866b080>
+scanner_instance = <scanner.BuyScanner object at 0x7f1723dab470>
+
+    def test_analyze_stock_realtime_update(self, scanner_instance):
+        """Test [Fast Hands] functionality: realtime price update (New Row)"""
+        # Setup yesterday's data - use pd.date_range to avoid MagicMock issues
+        daily_prices = pd.DataFrame({
+            'PRICE_DATE': pd.date_range(end='2024-12-31', periods=1),
+            'CLOSE_PRICE': [100.0],
+            'HIGH_PRICE': [105.0],
+            'LOW_PRICE': [95.0],
+            'OPEN_PRICE': [98.0],
+            'VOLUME': [1000.0]
+        })
+    
+        # Mock KIS snapshot with today's price (higher)
+        scanner_instance.kis.get_stock_snapshot.return_value = {
+            'price': 110, # New price
+            'high': 112,
+            'low': 99,
+            'volume': 2000
+        }
+    
+        scanner_instance.config.get_int.return_value = 1 # Small requirement
+    
+        # Mock scoring
+        scanner_instance._calculate_factor_score = MagicMock(return_value=(80, {}))
+    
+        # Mock signal detection to rely on updated price
+        # We'll check if daily_prices_df passed to _detect_signals has the new row
+        mock_detect = MagicMock(return_value=('GOLDEN_CROSS', {}))
+        scanner_instance._detect_signals = mock_detect
+    
+        # Mock database Sentiment
+        with patch("scanner.database.get_sentiment_score", return_value={'score': 50}):
+             scanner_instance._analyze_stock(
+                "005930", {}, daily_prices,
+                MarketRegimeDetector.REGIME_BULL, [], None
+             )
+    
+             # Verify _detect_signals called with updated dataframe
+             # The dataframe should now have 2 rows (yesterday + today, or updated last row if same date)
+             # Since we used yesterday, it should append or update. Logic says if last != today, append.
+>            args, _ = mock_detect.call_args
+             ^^^^^^^
+E            TypeError: cannot unpack non-iterable NoneType object
+
+tests/services/buy-scanner/test_scanner.py:256: TypeError
+_________ TestSellExecutorBasicFlow.test_successful_sell_order_dry_run _________
+
+self = <test_sell_executor.TestSellExecutorBasicFlow object at 0x7f172868dca0>
+mock_kis = <MagicMock id='139737356494864'>
+mock_config = <test_sell_executor.MockConfig object at 0x7f1723605190>
+mock_telegram = <MagicMock id='139737354490304'>
+sample_holding = {'avg_price': 70000, 'buy_price': 70000, 'code': '005930', 'created_at': datetime.datetime(2025, 12, 22, 8, 31, 58, 477004, tzinfo=datetime.timezone.utc), ...}
+
+    def test_successful_sell_order_dry_run(self, mock_kis, mock_config, mock_telegram, sample_holding):
+        """성공적인 매도 주문 (DRY RUN)"""
+        import pandas as pd
+    
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.database') as mock_db:
+    
+            # Setup mocks
+            mock_portfolio.return_value = [sample_holding]
+            mock_traded.return_value = False
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = pd.DataFrame({
+                'CLOSE_PRICE': [75000]
+            })
+            mock_db.get_rag_context_with_validation.return_value = ("뉴스 없음", False, None)
+            mock_db.execute_trade_and_log.return_value = True
+    
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    
+            executor = load_executor_module()
+    
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config,
+                telegram_bot=mock_telegram
+            )
+    
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='익절 (목표가 도달)',
+                dry_run=True
+            )
+    
+>           assert result['status'] == 'success'
+E           AssertionError: assert 'error' == 'success'
+E             
+E             - success
+E             + error
+
+tests/services/sell-executor/test_sell_executor.py:148: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    sell_executor:executor.py:112 가격 조회 실패
+_________________ TestCalculateIC.test_ic_positive_correlation _________________
+
+self = <hybrid_scoring.test_factor_analyzer.TestCalculateIC object at 0x7f172854a360>
+analyzer = <shared.hybrid_scoring.factor_analyzer.FactorAnalyzer object at 0x7f172854a390>
+
+    def test_ic_positive_correlation(self, analyzer):
+        """양의 상관관계 → IC > 0"""
+        # 팩터와 수익률이 같은 방향 (30개 이상 필요)
+        factor_values = pd.Series(list(range(1, 51)))
+        forward_returns = pd.Series([x * 0.01 for x in range(1, 51)])
+    
+        # calculate_ic는 (IC, IC_std, IR) 튜플 반환
+>       ic_mean, ic_std, ir = analyzer.calculate_ic(factor_values, forward_returns)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_analyzer.py:327: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+shared/hybrid_scoring/factor_analyzer.py:521: in calculate_ic
+    ic = valid['factor'].corr(valid['return'], method='spearman')
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/series.py:2991: in corr
+    return nanops.nancorr(
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:85: in _f
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1614: in nancorr
+    f = get_corr_func(method)
+        ^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1629: in get_corr_func
+    from scipy.stats import spearmanr
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """
+    SciPy: A scientific computing package for Python
+    ================================================
+    
+    Documentation is available in the docstrings and
+    online at https://docs.scipy.org/doc/scipy/
+    
+    Subpackages
+    -----------
+    ::
+    
+     cluster                      --- Vector Quantization / Kmeans
+     constants                    --- Physical and mathematical constants and units
+     datasets                     --- Dataset methods
+     differentiate                --- Finite difference differentiation tools
+     fft                          --- Discrete Fourier transforms
+     fftpack                      --- Legacy discrete Fourier transforms
+     integrate                    --- Integration routines
+     interpolate                  --- Interpolation Tools
+     io                           --- Data input and output
+     linalg                       --- Linear algebra routines
+     ndimage                      --- N-D image package
+     odr                          --- Orthogonal Distance Regression
+     optimize                     --- Optimization Tools
+     signal                       --- Signal Processing Tools
+     sparse                       --- Sparse Matrices
+     spatial                      --- Spatial data structures and algorithms
+     special                      --- Special functions
+     stats                        --- Statistical Functions
+    
+    Public API in the main SciPy namespace
+    --------------------------------------
+    ::
+    
+     __version__       --- SciPy version string
+     LowLevelCallable  --- Low-level callback function
+     show_config       --- Show scipy build configuration
+     test              --- Run scipy unittests
+    
+    """
+    
+    import importlib as _importlib
+    
+>   from numpy import __version__ as __numpy_version__
+E   ImportError: cannot import name '__version__' from '<unknown module name>' (unknown location)
+
+venv/lib/python3.12/site-packages/scipy/__init__.py:44: ImportError
+_________________ TestCalculateIC.test_ic_negative_correlation _________________
+
+self = <hybrid_scoring.test_factor_analyzer.TestCalculateIC object at 0x7f172854a690>
+analyzer = <shared.hybrid_scoring.factor_analyzer.FactorAnalyzer object at 0x7f1723299d00>
+
+    def test_ic_negative_correlation(self, analyzer):
+        """음의 상관관계 → IC < 0"""
+        factor_values = pd.Series(list(range(1, 51)))
+        forward_returns = pd.Series([0.5 - x * 0.01 for x in range(1, 51)])
+    
+>       ic_mean, ic_std, ir = analyzer.calculate_ic(factor_values, forward_returns)
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_analyzer.py:336: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+shared/hybrid_scoring/factor_analyzer.py:521: in calculate_ic
+    ic = valid['factor'].corr(valid['return'], method='spearman')
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/series.py:2991: in corr
+    return nanops.nancorr(
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:85: in _f
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1614: in nancorr
+    f = get_corr_func(method)
+        ^^^^^^^^^^^^^^^^^^^^^
+venv/lib/python3.12/site-packages/pandas/core/nanops.py:1629: in get_corr_func
+    from scipy.stats import spearmanr
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    """
+    SciPy: A scientific computing package for Python
+    ================================================
+    
+    Documentation is available in the docstrings and
+    online at https://docs.scipy.org/doc/scipy/
+    
+    Subpackages
+    -----------
+    ::
+    
+     cluster                      --- Vector Quantization / Kmeans
+     constants                    --- Physical and mathematical constants and units
+     datasets                     --- Dataset methods
+     differentiate                --- Finite difference differentiation tools
+     fft                          --- Discrete Fourier transforms
+     fftpack                      --- Legacy discrete Fourier transforms
+     integrate                    --- Integration routines
+     interpolate                  --- Interpolation Tools
+     io                           --- Data input and output
+     linalg                       --- Linear algebra routines
+     ndimage                      --- N-D image package
+     odr                          --- Orthogonal Distance Regression
+     optimize                     --- Optimization Tools
+     signal                       --- Signal Processing Tools
+     sparse                       --- Sparse Matrices
+     spatial                      --- Spatial data structures and algorithms
+     special                      --- Special functions
+     stats                        --- Statistical Functions
+    
+    Public API in the main SciPy namespace
+    --------------------------------------
+    ::
+    
+     __version__       --- SciPy version string
+     LowLevelCallable  --- Low-level callback function
+     show_config       --- Show scipy build configuration
+     test              --- Run scipy unittests
+    
+    """
+    
+    import importlib as _importlib
+    
+>   from numpy import __version__ as __numpy_version__
+E   ImportError: cannot import name '__version__' from '<unknown module name>' (unknown location)
+
+venv/lib/python3.12/site-packages/scipy/__init__.py:44: ImportError
+_______________ TestHistoricalPrices.test_get_historical_prices ________________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7f172856c1a0>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7f17232def90>
+sample_stock_prices = None
+
+    def test_get_historical_prices(self, repo, sample_stock_prices):
+        """단일 종목 주가 조회"""
+        df = repo.get_historical_prices('005930', days=10)
+    
+        assert isinstance(df, pd.DataFrame)
+>       assert len(df) == 10
+E       assert 0 == 10
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests/shared/hybrid_scoring/test_factor_repository.py:149: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (10)
+____________ TestHistoricalPrices.test_get_historical_prices_sorted ____________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7f172856c470>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7f17236917c0>
+sample_stock_prices = None
+
+    def test_get_historical_prices_sorted(self, repo, sample_stock_prices):
+        """날짜 오름차순 정렬"""
+        df = repo.get_historical_prices('005930', days=10)
+    
+        # 날짜가 오름차순이어야 함
+>       dates = df['PRICE_DATE'].tolist()
+                ^^^^^^^^^^^^^^^^
+
+tests/shared/hybrid_scoring/test_factor_repository.py:158: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+venv/lib/python3.12/site-packages/pandas/core/frame.py:4113: in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = RangeIndex(start=0, stop=0, step=1), key = 'PRICE_DATE'
+
+    @doc(Index.get_loc)
+    def get_loc(self, key) -> int:
+        if is_integer(key) or (is_float(key) and key.is_integer()):
+            new_key = int(key)
+            try:
+                return self._range.index(new_key)
+            except ValueError as err:
+                raise KeyError(key) from err
+        if isinstance(key, Hashable):
+>           raise KeyError(key)
+E           KeyError: 'PRICE_DATE'
+
+venv/lib/python3.12/site-packages/pandas/core/indexes/range.py:417: KeyError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (10)
+_____________ TestHistoricalPrices.test_get_historical_prices_bulk _____________
+
+self = <hybrid_scoring.test_factor_repository.TestHistoricalPrices object at 0x7f172856cb00>
+repo = <shared.db.factor_repository.FactorRepository object at 0x7f17233d2330>
+in_memory_db = <sqlalchemy.orm.session.Session object at 0x7f17233d0530>
+
+    def test_get_historical_prices_bulk(self, repo, in_memory_db):
+        """여러 종목 일괄 조회"""
+        # 두 종목 데이터 추가
+        base_date = datetime.now()
+        for code in ['005930', '000660']:
+            for i in range(5):
+                in_memory_db.add(StockDailyPrice(
+                    stock_code=code,
+                    price_date=base_date - timedelta(days=i),
+                    close_price=70000,
+                    volume=1000000,
+                    high_price=71000,
+                    low_price=69000
+                ))
+        in_memory_db.commit()
+    
+        result = repo.get_historical_prices_bulk(['005930', '000660'], days=5)
+    
+        assert '005930' in result
+        assert '000660' in result
+>       assert len(result['005930']) == 5
+E       assert 0 == 5
+E        +  where 0 = len(Empty DataFrame\nColumns: []\nIndex: [])
+
+tests/shared/hybrid_scoring/test_factor_repository.py:188: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (005930): Length of values (0) does not match length of index (5)
+ERROR    shared.db.factor_repository:factor_repository.py:100 ❌ [FactorRepo] 주가 데이터 조회 실패 (000660): Length of values (0) does not match length of index (5)
+_______________ TestTechnicalScore.test_technical_score_oversold _______________
+
+self = <test_factor_scoring.TestTechnicalScore object at 0x7f172843dac0>
+scorer = <shared.factor_scoring.FactorScorer object at 0x7f1723c9c0b0>
+
+    def test_technical_score_oversold(self, scorer):
+        """과매도 상태"""
+        # 급락 데이터 (RSI 낮음)
+        prices = [60000 - i * 500 for i in range(30)]
+        df = pd.DataFrame({
+            'CLOSE_PRICE': prices,
+            'VOLUME': [1000000] * 30
+        })
+    
+        score, factors = scorer.calculate_technical_score(df)
+    
+        # 과매도면 RSI 점수 높음
+>       assert factors.get('rsi_score', 0) >= 20
+E       AssertionError: assert 15 >= 20
+E        +  where 15 = <built-in method get of dict object at 0x7f171d192880>('rsi_score', 0)
+E        +    where <built-in method get of dict object at 0x7f171d192880> = {'bb_score': 15, 'rsi_score': 15, 'volume_score': 20}.get
+
+tests/shared/test_factor_scoring.py:241: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.strategy:strategy.py:111 ❌ (RSI) 지원하지 않는 데이터 타입: <class 'unittest.mock.MagicMock'>
+_______________ TestMarketRegimeDetector.test_detect_regime_bull _______________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7f172831f4a0>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7f1723c987a0>
+bull_kospi_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_detect_regime_bull(self, detector, bull_kospi_df):
+        """상승장 감지"""
+        current_price = 2750  # MA20 대비 위
+    
+        regime, context = detector.detect_regime(bull_kospi_df, current_price, quiet=True)
+    
+>       assert regime in ['BULL', 'STRONG_BULL']
+E       AssertionError: assert 'SIDEWAYS' in ['BULL', 'STRONG_BULL']
+
+tests/shared/test_market_regime.py:93: AssertionError
+_______________ TestMarketRegimeDetector.test_detect_regime_bear _______________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7f17282f76e0>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7f1723ca0e90>
+bear_kospi_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_detect_regime_bear(self, detector, bear_kospi_df):
+        """하락장 감지"""
+        current_price = 2400  # MA20 대비 아래
+    
+        regime, context = detector.detect_regime(bear_kospi_df, current_price, quiet=True)
+    
+>       assert regime == 'BEAR'
+E       AssertionError: assert 'SIDEWAYS' == 'BEAR'
+E         
+E         - BEAR
+E         + SIDEWAYS
+
+tests/shared/test_market_regime.py:103: AssertionError
+_____ TestMarketRegimeDetector.test_detect_regime_uses_ma10_for_short_data _____
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7f172831c9b0>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7f1723ca29f0>
+
+    def test_detect_regime_uses_ma10_for_short_data(self, detector):
+        """10~19일 데이터는 MA10 사용"""
+        # 12일 데이터
+        prices = [2500 + i * 5 for i in range(12)]
+        short_df = pd.DataFrame({'CLOSE_PRICE': prices})
+    
+        regime, context = detector.detect_regime(short_df, 2560, quiet=True)
+    
+>       assert context.get('using_ma10', False) is True
+E       AssertionError: assert False is True
+E        +  where False = <built-in method get of dict object at 0x7f171c637400>('using_ma10', False)
+E        +    where <built-in method get of dict object at 0x7f171c637400> = {'error': '데이터 부족'}.get
+
+tests/shared/test_market_regime.py:140: AssertionError
+___________ TestMarketRegimeDetector.test_detect_regime_strong_bull ____________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7f172831d6a0>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7f1723ca22a0>
+
+    def test_detect_regime_strong_bull(self, detector):
+        """급등장 감지"""
+        # 급등 데이터: 5일간 5% 이상 상승 (30일 데이터)
+        base = 2500
+        prices = [base] * 25 + [base * 1.01, base * 1.02, base * 1.03, base * 1.04, base * 1.05]
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+    
+        current_price = base * 1.06  # MA 대비 높음
+    
+        regime, context = detector.detect_regime(df, current_price, quiet=True)
+    
+        # 급등장 또는 상승장
+>       assert regime in ['STRONG_BULL', 'BULL']
+E       AssertionError: assert 'SIDEWAYS' in ['STRONG_BULL', 'BULL']
+
+tests/shared/test_market_regime.py:154: AssertionError
+__________ TestMarketRegimeDetector.test_detect_regime_returns_scores __________
+
+self = <test_market_regime.TestMarketRegimeDetector object at 0x7f172831fb00>
+detector = <shared.market_regime.MarketRegimeDetector object at 0x7f1723ca1610>
+sample_kospi_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_detect_regime_returns_scores(self, detector, sample_kospi_df):
+        """국면별 점수 반환"""
+        regime, context = detector.detect_regime(sample_kospi_df, 2600, quiet=True)
+    
+>       assert 'regime_scores' in context
+E       AssertionError: assert 'regime_scores' in {'error': '데이터 부족'}
+
+tests/shared/test_market_regime.py:160: AssertionError
+__________________________ TestRSI.test_rsi_dataframe __________________________
+
+self = <test_strategy.TestRSI object at 0x7f172826bb30>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_rsi_dataframe(self, daily_prices_df):
+        """DataFrame 입력"""
+        result = strategy.calculate_rsi(daily_prices_df, period=14)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:219: AssertionError
+------------------------------ Captured log call -------------------------------
+ERROR    shared.strategy:strategy.py:111 ❌ (RSI) 지원하지 않는 데이터 타입: <class 'unittest.mock.MagicMock'>
+____________________________ TestATR.test_atr_basic ____________________________
+
+self = <test_strategy.TestATR object at 0x7f1728290950>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_atr_basic(self, daily_prices_df):
+        """기본 ATR 계산"""
+        # Use real DataFrame fixture, not MagicMock
+        result = strategy.calculate_atr(daily_prices_df, period=14)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:259: AssertionError
+___________________ TestBollingerBands.test_lower_band_basic ___________________
+
+self = <test_strategy.TestBollingerBands object at 0x7f172826ba40>
+daily_prices_df = <MagicMock name='mock.DataFrame()' id='139737362041888'>
+
+    def test_lower_band_basic(self, daily_prices_df):
+        """하단 밴드 계산"""
+        # Use real DataFrame fixture, not MagicMock
+        result = strategy.calculate_bollinger_bands(daily_prices_df, period=20, std_dev=2)
+    
+>       assert result is not None
+E       assert None is not None
+
+tests/shared/test_strategy.py:323: AssertionError
+______________ TestIsOperatingHours.test_weekday_operating_hours _______________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bdd90>
+
+    def test_weekday_operating_hours(self):
+        """평일 운영 시간 내"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 10:00 KST
+        mock_dt = real_datetime(2025, 12, 22, 10, 0, 0)  # 월요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        # Mock datetime.now to return the localized datetime
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            # Set up the mock to return our test datetime when .now() is called
+            mock_datetime_module.now.return_value = mock_dt
+            # Preserve the real datetime class for other operations
+            mock_datetime_module.side_effect = lambda *args, **kw: real_datetime(*args, **kw) if args else mock_datetime_module
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:372: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+___________ TestIsOperatingHours.test_weekday_before_operating_hours ___________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bd7f0>
+
+    def test_weekday_before_operating_hours(self):
+        """평일 운영 시간 전"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 06:00 KST (운영 시간 전)
+        mock_dt = real_datetime(2025, 12, 22, 6, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:388: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+___________ TestIsOperatingHours.test_weekday_after_operating_hours ____________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bd610>
+
+    def test_weekday_after_operating_hours(self):
+        """평일 운영 시간 후"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 18:00 KST (운영 시간 후)
+        mock_dt = real_datetime(2025, 12, 22, 18, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:404: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_______________ TestIsOperatingHours.test_weekend_returns_false ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bcdd0>
+
+    def test_weekend_returns_false(self):
+        """주말은 항상 False"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 토요일 10:00 KST
+        mock_dt = real_datetime(2025, 12, 27, 10, 0, 0)  # 토요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:420: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+________________ TestIsOperatingHours.test_sunday_returns_false ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bf530>
+
+    def test_sunday_returns_false(self):
+        """일요일은 항상 False"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 일요일 12:00 KST
+        mock_dt = real_datetime(2025, 12, 28, 12, 0, 0)  # 일요일
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:436: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_______________ TestIsOperatingHours.test_custom_operating_hours _______________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bf860>
+
+    def test_custom_operating_hours(self):
+        """사용자 정의 운영 시간"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 09:30 KST
+        mock_dt = real_datetime(2025, 12, 22, 9, 30, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+            # 09:00 - 15:30 운영 시간
+>           result = is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:453: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 9, start_minute = 0, end_hour = 15, end_minute = 30
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+________________ TestIsOperatingHours.test_edge_case_start_time ________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280bfb90>
+
+    def test_edge_case_start_time(self):
+        """정확히 시작 시간"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 07:00 KST (정확히 시작 시간)
+        mock_dt = real_datetime(2025, 12, 22, 7, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:469: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+_________________ TestIsOperatingHours.test_edge_case_end_time _________________
+
+self = <test_utils.TestIsOperatingHours object at 0x7f17280d4230>
+
+    def test_edge_case_end_time(self):
+        """정확히 종료 시간"""
+        import pytz
+        from datetime import datetime as real_datetime
+    
+        # 월요일 17:00 KST (정확히 종료 시간)
+        mock_dt = real_datetime(2025, 12, 22, 17, 0, 0)
+        kst = pytz.timezone('Asia/Seoul')
+        mock_dt = kst.localize(mock_dt)
+    
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
+>           result = is_operating_hours(start_hour=7, end_hour=17)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/shared/test_utils.py:485: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+start_hour = 7, start_minute = 0, end_hour = 17, end_minute = 0
+
+    def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+        """
+        Check if current KST time is within operating hours (Weekdays only).
+        """
+        kst = pytz.timezone('Asia/Seoul')
+        now = datetime.now(kst)
+    
+        # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
+>       if now.weekday() >= 5:
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: '>=' not supported between instances of 'MagicMock' and 'int'
+
+shared/utils.py:344: TypeError
+=============================== warnings summary ===============================
+services/scheduler-service/main.py:172
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:172: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("cron_expr")
+
+services/scheduler-service/main.py:178
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:178: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("reschedule_mode")
+
+services/scheduler-service/main.py:184
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:184: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("interval_seconds")
+
+services/scheduler-service/main.py:209
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:209: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("cron_expr")
+
+services/scheduler-service/main.py:215
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:215: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("reschedule_mode")
+
+services/scheduler-service/main.py:221
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:221: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    @validator("interval_seconds")
+
+services/scheduler-service/main.py:465
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:465: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+venv/lib/python3.12/site-packages/fastapi/applications.py:4495
+venv/lib/python3.12/site-packages/fastapi/applications.py:4495
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+services/scheduler-service/main.py:485
+  /home/youngs75/projects/my-prime-jennie/services/scheduler-service/main.py:485: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+tests/integration/test_e2e_pipeline.py::TestE2EPipeline::test_buy_and_sell_flow
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py:941: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+tests/services/scheduler-service/test_scheduler.py::TestSchedulerService::test_job_update
+  /home/youngs75/projects/my-prime-jennie/venv/lib/python3.12/site-packages/pydantic/main.py:1114: PydanticDeprecatedSince20: The `dict` method is deprecated; use `model_dump` instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.9/migration/
+    warnings.warn('The `dict` method is deprecated; use `model_dump` instead.', category=PydanticDeprecatedSince20)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update
+FAILED tests/services/sell-executor/test_sell_executor.py::TestSellExecutorBasicFlow::test_successful_sell_order_dry_run
+FAILED tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_positive_correlation
+FAILED tests/shared/hybrid_scoring/test_factor_analyzer.py::TestCalculateIC::test_ic_negative_correlation
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_sorted
+FAILED tests/shared/hybrid_scoring/test_factor_repository.py::TestHistoricalPrices::test_get_historical_prices_bulk
+FAILED tests/shared/test_factor_scoring.py::TestTechnicalScore::test_technical_score_oversold
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bull
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_bear
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_uses_ma10_for_short_data
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_strong_bull
+FAILED tests/shared/test_market_regime.py::TestMarketRegimeDetector::test_detect_regime_returns_scores
+FAILED tests/shared/test_strategy.py::TestRSI::test_rsi_dataframe - assert No...
+FAILED tests/shared/test_strategy.py::TestATR::test_atr_basic - assert None i...
+FAILED tests/shared/test_strategy.py::TestBollingerBands::test_lower_band_basic
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_before_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekday_after_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_weekend_returns_false
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_sunday_returns_false
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_custom_operating_hours
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_start_time
+FAILED tests/shared/test_utils.py::TestIsOperatingHours::test_edge_case_end_time
+================= 24 failed, 866 passed, 16 warnings in 22.66s =================

@@ -11,17 +11,29 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Dynamic import for scanner
-spec = importlib.util.spec_from_file_location(
-    "scanner", 
-    os.path.join(PROJECT_ROOT, "services/buy-scanner/scanner.py")
-)
-scanner_module = importlib.util.module_from_spec(spec)
-sys.modules["scanner"] = scanner_module
-spec.loader.exec_module(scanner_module)
-
-from scanner import BuyScanner
+# Removed global import logic
+# from scanner import BuyScanner # Removed top-level import
 from shared.market_regime import MarketRegimeDetector, StrategySelector
+
+@pytest.fixture
+def scanner_module_setup():
+    """Setup scanner module and clean up after test"""
+    # Dynamic import for scanner
+    spec = importlib.util.spec_from_file_location(
+        "scanner", 
+        os.path.join(PROJECT_ROOT, "services/buy-scanner/scanner.py")
+    )
+    scanner_module = importlib.util.module_from_spec(spec)
+    
+    # Patch sys.modules safely
+    with patch.dict(sys.modules, {"scanner": scanner_module}):
+        spec.loader.exec_module(scanner_module)
+        yield scanner_module
+
+@pytest.fixture
+def BuyScanner(scanner_module_setup):
+    """Get BuyScanner class from the loaded module"""
+    return scanner_module_setup.BuyScanner
 
 @pytest.fixture
 def mock_kis():
@@ -41,7 +53,7 @@ def mock_db_session():
     return MagicMock()
 
 @pytest.fixture
-def scanner_instance(mock_kis, mock_config):
+def scanner_instance(BuyScanner, mock_kis, mock_config):
     with patch("scanner.MarketRegimeDetector") as mock_detector_cls, \
          patch("scanner.StrategySelector") as mock_selector_cls, \
          patch("scanner.FactorScorer") as mock_scorer_cls:

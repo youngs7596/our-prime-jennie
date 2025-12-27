@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
-from shared.db.connection import session_scope
+from shared.db import connection
 from shared.db import repository as repo
 from shared.strategy_presets import (
     apply_preset_to_config,
@@ -88,7 +88,7 @@ class SellExecutor:
             if shared_regime_cache:
                 market_context = shared_regime_cache.get('market_context_dict', {}) or {}
 
-            with session_scope() as session:
+            with connection.session_scope() as session:
                 # 1. 보유 내역 확인
                 portfolio = repo.get_active_portfolio(session)
                 holding = next((h for h in portfolio if h['code'] == stock_code), None)
