@@ -138,5 +138,8 @@ langchain-text-splitters
 # -------------------------------------------
 pybreaker>=1.2.0
 apscheduler>=3.10.4
-croniter>=1.4.0
+croniter
+scipy
+numpy
+pandas>=1.4.0
 
