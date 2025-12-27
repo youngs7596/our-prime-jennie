@@ -1,5 +1,8 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-27
+- **Jenkins CI Stability**: Python 3.12 업그레이드, 의존성 (`numpy`/`pandas`) 고정, `pytest` 순차 실행 전환으로 안정성 확보
+- **Test Pollution Fix**: `scanner`, `monitor` 등의 테스트 격리 개선 및 `utils` Mock 누수 수정으로 간섭 해결
 ## 2025-12-26
 - **Rules Enhancement**: 구현 검증 원칙에 Integration Test 명시적 포함, 변경 유형별 검증 범위 테이블 개선
 - **Feature Integration**: Fact-Checker, Circuit Breaker 알림을 Scout/KIS Gateway 서비스에 연동 완료
