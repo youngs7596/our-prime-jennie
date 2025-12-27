@@ -49,7 +49,7 @@ def test_pipeline_smoke():
     # 2. Run Council (Mock)
     reviews_dir = PROJECT_ROOT / "smoke_reviews"
     cmd_council = [
-        "./venv/bin/python",
+        sys.executable,  # Fixed: use current Python interpreter
         "scripts/run_weekly_council.py",
         "--input", str(packet_out),
         "--output-dir", str(reviews_dir),
