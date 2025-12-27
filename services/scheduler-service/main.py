@@ -394,7 +394,7 @@ DEFAULT_JOBS = [
         "job_id": "scout-job",
         "description": "AI Scout Job (2h interval)",
         "queue_suffix": "jobs.scout",
-        "cron_expr": "0 */2 * * *",
+        "cron_expr": "0 * * * *",
         "enabled": True,
         "reschedule_mode": "scheduler",
         "timeout_sec": 7200,

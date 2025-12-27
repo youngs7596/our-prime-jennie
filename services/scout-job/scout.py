@@ -386,6 +386,11 @@ def main():
         disable_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
         
         if not disable_check and trading_mode.lower() != "mock":
+            # 주말 체크 (토=5, 일=6)
+            if now_kst.weekday() >= 5:
+                logger.info(f"🛑 [Check] 오늘은 주말({now_kst.strftime('%A')})이므로 실행하지 않습니다. (Scout 종료)")
+                return
+
             if 7 <= now_kst.hour < 16:
                 logger.info(f"📅 [Check] 현재 시간({now_kst.strftime('%H:%M')})은 실행 허용 시간(07:00~16:00)입니다.")
             else:
