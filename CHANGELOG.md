@@ -1,6 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-27
+- **Py3.12 테스트 정합성**: pandas/numpy/scipy 실사용 기준으로 방어 로직 보강(RSI/MA/크로스 계산), FactorRepository DF 변환 안전화, utils.now 주입으로 MagicMock 충돌 제거, Ollama 테스트 CI 스킵. 로컬/CI/Mock 모드 전체 pytest 통과 확인.
 - **Jenkins CI Stability**: Python 3.12 업그레이드, 의존성 (`numpy`/`pandas`) 고정, `pytest` 순차 실행 전환으로 안정성 확보
 - **Test Pollution Fix**: `scanner`, `monitor` 등의 테스트 격리 개선 및 `utils` Mock 누수 수정으로 간섭 해결
 ## 2025-12-26
