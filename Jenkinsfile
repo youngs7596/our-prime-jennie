@@ -23,7 +23,7 @@ pipeline {
         stage('Unit Test') {
             agent {
                 docker {
-                    image 'python:3.11-slim'
+                    image 'python:3.12-slim'
                     args '-v $PWD:/app -w /app'
                     reuseNode true
                 }
