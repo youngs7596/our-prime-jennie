@@ -5,14 +5,7 @@ tests/shared/hybrid_scoring/test_hybrid_scorer.py - HybridScorer 테스트
 shared/hybrid_scoring/hybrid_scorer.py의 하이브리드 스코어링을 테스트합니다.
 """
 
-import sys
 from unittest.mock import MagicMock, patch
-
-# [CRITICAL] Mocking external heavy dependencies to avoid import errors during test collection
-sys.modules["numpy"] = MagicMock()
-sys.modules["pandas"] = MagicMock()
-sys.modules["pytz"] = MagicMock()
-sys.modules["dateutil"] = MagicMock()
 
 import pytest
 from dataclasses import asdict
