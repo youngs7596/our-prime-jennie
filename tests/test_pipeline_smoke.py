@@ -7,6 +7,7 @@ tests/test_pipeline_smoke.py - 파이프라인 스모크 테스트
 
 import pytest
 import subprocess
+import sys
 import os
 import json
 from pathlib import Path
