@@ -215,11 +215,9 @@ class TestBuyScanner:
 
     def test_analyze_stock_realtime_update(self, scanner_instance):
         """Test [Fast Hands] functionality: realtime price update (New Row)"""
-        # Setup yesterday's data
-        yesterday = pd.Timestamp('2024-12-31')
-        # Ensure correct columns exist
+        # Setup yesterday's data - use pd.date_range to avoid MagicMock issues
         daily_prices = pd.DataFrame({
-            'PRICE_DATE': [yesterday], 
+            'PRICE_DATE': pd.date_range(end='2024-12-31', periods=1), 
             'CLOSE_PRICE': [100.0],
             'HIGH_PRICE': [105.0],
             'LOW_PRICE': [95.0],
@@ -352,10 +350,9 @@ class TestBuyScanner:
 
     def test_analyze_stock_realtime_update_existing_row(self, scanner_instance):
         """Test [Fast Hands] updating existing today's row"""
-        # Use a fixed timestamp that we control
-        fixed_today = pd.Timestamp('2025-01-01')
+        # Use pd.date_range to avoid MagicMock issues
         daily_prices = pd.DataFrame({
-            'PRICE_DATE': [fixed_today], 
+            'PRICE_DATE': pd.date_range(start='2025-01-01', periods=1), 
             'CLOSE_PRICE': [100.0],
             'HIGH_PRICE': [105.0],
             'LOW_PRICE': [95.0],
@@ -377,10 +374,12 @@ class TestBuyScanner:
         # Patch datetime.now() to return the same date as our test data
         with patch("scanner.database.get_sentiment_score", return_value={'score': 50}), \
              patch("scanner.datetime") as mock_datetime:
-            # Make datetime.now() return our fixed date
-            mock_datetime.now.return_value = fixed_today.to_pydatetime()
+            # Make datetime.now() return our fixed date (2025-01-01)
+            from datetime import datetime as real_datetime
+            fixed_dt = real_datetime(2025, 1, 1)
+            mock_datetime.now.return_value = fixed_dt
             # Preserve other datetime behavior
-            mock_datetime.side_effect = lambda *args, **kw: datetime(*args, **kw)
+            mock_datetime.side_effect = lambda *args, **kw: real_datetime(*args, **kw) if args else mock_datetime
             
             scanner_instance._analyze_stock(
                 "005930", {}, daily_prices, 

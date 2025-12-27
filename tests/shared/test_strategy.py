@@ -253,6 +253,7 @@ class TestATR:
     
     def test_atr_basic(self, daily_prices_df):
         """기본 ATR 계산"""
+        # Use real DataFrame fixture, not MagicMock
         result = strategy.calculate_atr(daily_prices_df, period=14)
         
         assert result is not None
@@ -316,6 +317,7 @@ class TestBollingerBands:
     
     def test_lower_band_basic(self, daily_prices_df):
         """하단 밴드 계산"""
+        # Use real DataFrame fixture, not MagicMock
         result = strategy.calculate_bollinger_bands(daily_prices_df, period=20, std_dev=2)
         
         assert result is not None
