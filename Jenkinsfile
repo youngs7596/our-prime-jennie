@@ -39,7 +39,7 @@ pipeline {
                     pip install --no-cache-dir pytest pytest-cov
                     # Verify numpy version
                     python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
-                    pytest tests/ -v --tb=short --junitxml=test-results.xml
+                    pytest -n 4 tests/ -v --tb=short --junitxml=test-results.xml
                 '''
             }
             post {
