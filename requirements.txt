@@ -85,6 +85,7 @@ langchain-core==1.2.5
 langchain-google-genai==4.1.2
 
 # Scientific stack (Py3.12 + numpy1.26 호환)
+pandas==2.2.3
 scipy==1.11.4
 
 # ChromaDB 연동
