@@ -42,19 +42,26 @@ class TestLLMFactoryHelpers:
     
     def test_get_env_provider_type_fast(self):
         """FAST tier 기본값 - gemini"""
-        with patch.dict(os.environ, {}, clear=False):
+        # Ensure env var is absent
+        with patch.dict(os.environ):
+            if "TIER_FAST_PROVIDER" in os.environ:
+                del os.environ["TIER_FAST_PROVIDER"]
             provider_type = LLMFactory._get_env_provider_type(LLMTier.FAST)
             assert provider_type == "gemini"
     
     def test_get_env_provider_type_reasoning(self):
         """REASONING tier 기본값 - openai"""
-        with patch.dict(os.environ, {}, clear=False):
+        with patch.dict(os.environ):
+            if "TIER_REASONING_PROVIDER" in os.environ:
+                del os.environ["TIER_REASONING_PROVIDER"]
             provider_type = LLMFactory._get_env_provider_type(LLMTier.REASONING)
             assert provider_type == "openai"
     
     def test_get_env_provider_type_thinking(self):
         """THINKING tier 기본값 - openai"""
-        with patch.dict(os.environ, {}, clear=False):
+        with patch.dict(os.environ):
+            if "TIER_THINKING_PROVIDER" in os.environ:
+                del os.environ["TIER_THINKING_PROVIDER"]
             provider_type = LLMFactory._get_env_provider_type(LLMTier.THINKING)
             assert provider_type == "openai"
     
@@ -70,7 +77,13 @@ class TestLLMFactoryHelpers:
     
     def test_get_local_model_name_defaults(self):
         """로컬 모델명 기본값 - gemma3:27b"""
-        with patch.dict(os.environ, {}, clear=False):
+        with patch.dict(os.environ):
+            # Clean up all fallback keys
+            for tier in ["FAST", "REASONING", "THINKING"]:
+                key = f"LOCAL_MODEL_{tier}"
+                if key in os.environ:
+                    del os.environ[key]
+
             assert LLMFactory._get_local_model_name(LLMTier.FAST) == "gemma3:27b"
             assert LLMFactory._get_local_model_name(LLMTier.REASONING) == "gemma3:27b"
             assert LLMFactory._get_local_model_name(LLMTier.THINKING) == "gemma3:27b"

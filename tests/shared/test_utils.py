@@ -364,6 +364,8 @@ class TestIsOperatingHours:
         
         with patch('shared.utils.datetime') as mock_datetime:
             mock_datetime.now.return_value = mock_dt
+            # Also ensure side_effect is None to prefer return_value
+            mock_datetime.now.side_effect = None
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True

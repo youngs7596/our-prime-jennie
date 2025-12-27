@@ -32,7 +32,7 @@ def test_pipeline_smoke():
     # 1. Build Weekly Packet (Dummy)
     packet_out = PROJECT_ROOT / "smoke_packet.json"
     cmd_build = [
-        "./venv/bin/python", 
+        sys.executable, # Changed from "./venv/bin/python"
         "scripts/build_weekly_packet.py", 
         "--dummy", 
         "--output", str(packet_out)
