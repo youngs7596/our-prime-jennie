@@ -333,18 +333,36 @@ def handle_errors(
 import pytz
 from datetime import datetime
 
-def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0) -> bool:
+def is_operating_hours(start_hour=7, start_minute=0, end_hour=17, end_minute=0, now=None) -> bool:
     """
     Check if current KST time is within operating hours (Weekdays only).
     """
     kst = pytz.timezone('Asia/Seoul')
-    now = datetime.now(kst)
+    try:
+        current = now
+        if current is None:
+            current = datetime.now(kst)
+        else:
+            if callable(current):
+                current = current()
+            if not isinstance(current, datetime) and hasattr(current, "now"):
+                current = current.now()
+            if not isinstance(current, datetime):
+                logger.warning(f"⚠️ is_operating_hours: now 인자가 datetime이 아닙니다. ({type(current)})")
+                return False
+            if current.tzinfo is None:
+                current = kst.localize(current)
+            else:
+                current = current.astimezone(kst)
+    except Exception as e:
+        logger.error(f"❌ is_operating_hours 시간 계산 실패: {e}")
+        return False
     
     # 0=Monday, 4=Friday, 5=Saturday, 6=Sunday
-    if now.weekday() >= 5:
+    if current.weekday() >= 5:
         return False
         
-    current_time = now.time()
+    current_time = current.time()
     start_time = current_time.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
     end_time = current_time.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
     

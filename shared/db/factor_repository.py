@@ -51,6 +51,19 @@ class FactorRepository:
         """
         self.session = session
     
+    def _rows_to_df(self, rows, columns) -> pd.DataFrame:
+        """
+        SQLAlchemy 결과를 안전하게 DataFrame으로 변환
+        """
+        try:
+            if not rows:
+                return pd.DataFrame()
+            data = [tuple(r) for r in rows]
+            return pd.DataFrame(data, columns=columns)
+        except Exception as e:
+            logger.error(f"❌ [FactorRepo] DataFrame 변환 실패: {e}")
+            return pd.DataFrame()
+    
     # =========================================================================
     # 주가 데이터 조회
     # =========================================================================
@@ -88,7 +101,7 @@ class FactorRepository:
             if not results:
                 return pd.DataFrame()
             
-            df = pd.DataFrame(results, columns=[
+            df = self._rows_to_df(results, [
                 'PRICE_DATE', 'CLOSE_PRICE', 'VOLUME', 'HIGH_PRICE', 'LOW_PRICE'
             ])
             df['PRICE_DATE'] = pd.to_datetime(df['PRICE_DATE'])
@@ -269,15 +282,11 @@ class FactorRepository:
                     .all()
                 )
                 
-                if rows:
-                    df = pd.DataFrame(rows, columns=[
-                        'TRADE_DATE', 'FOREIGN_NET_BUY', 'INSTITUTION_NET_BUY'
-                    ])
+                df = self._rows_to_df(rows, ['TRADE_DATE', 'FOREIGN_NET_BUY', 'INSTITUTION_NET_BUY'])
+                if not df.empty:
                     df['TRADE_DATE'] = pd.to_datetime(df['TRADE_DATE'])
                     df = df.sort_values('TRADE_DATE').reset_index(drop=True)
-                    result[code] = df
-                else:
-                    result[code] = pd.DataFrame()
+                result[code] = df
             
             return result
             
@@ -320,15 +329,11 @@ class FactorRepository:
                     .all()
                 )
                 
-                if rows:
-                    df = pd.DataFrame(rows, columns=[
-                        'NEWS_DATE', 'SENTIMENT_SCORE', 'CATEGORY'
-                    ])
+                df = self._rows_to_df(rows, ['NEWS_DATE', 'SENTIMENT_SCORE', 'CATEGORY'])
+                if not df.empty:
                     df['NEWS_DATE'] = pd.to_datetime(df['NEWS_DATE'])
                     df = df.sort_values('NEWS_DATE').reset_index(drop=True)
-                    result[code] = df
-                else:
-                    result[code] = pd.DataFrame()
+                result[code] = df
             
             return result
             
