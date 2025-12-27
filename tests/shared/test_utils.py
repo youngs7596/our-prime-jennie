@@ -356,16 +356,19 @@ class TestIsOperatingHours:
     def test_weekday_operating_hours(self):
         """평일 운영 시간 내"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 10:00 KST
-        mock_dt = datetime(2025, 12, 22, 10, 0, 0)  # 월요일
+        mock_dt = real_datetime(2025, 12, 22, 10, 0, 0)  # 월요일
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
-            # Also ensure side_effect is None to prefer return_value
-            mock_datetime.now.side_effect = None
+        # Mock datetime.now to return the localized datetime
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            # Set up the mock to return our test datetime when .now() is called
+            mock_datetime_module.now.return_value = mock_dt
+            # Preserve the real datetime class for other operations
+            mock_datetime_module.side_effect = lambda *args, **kw: real_datetime(*args, **kw) if args else mock_datetime_module
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
@@ -373,14 +376,15 @@ class TestIsOperatingHours:
     def test_weekday_before_operating_hours(self):
         """평일 운영 시간 전"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 06:00 KST (운영 시간 전)
-        mock_dt = datetime(2025, 12, 22, 6, 0, 0)
+        mock_dt = real_datetime(2025, 12, 22, 6, 0, 0)
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
@@ -388,14 +392,15 @@ class TestIsOperatingHours:
     def test_weekday_after_operating_hours(self):
         """평일 운영 시간 후"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 18:00 KST (운영 시간 후)
-        mock_dt = datetime(2025, 12, 22, 18, 0, 0)
+        mock_dt = real_datetime(2025, 12, 22, 18, 0, 0)
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
@@ -403,14 +408,15 @@ class TestIsOperatingHours:
     def test_weekend_returns_false(self):
         """주말은 항상 False"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 토요일 10:00 KST
-        mock_dt = datetime(2025, 12, 27, 10, 0, 0)  # 토요일
+        mock_dt = real_datetime(2025, 12, 27, 10, 0, 0)  # 토요일
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
@@ -418,14 +424,15 @@ class TestIsOperatingHours:
     def test_sunday_returns_false(self):
         """일요일은 항상 False"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 일요일 12:00 KST
-        mock_dt = datetime(2025, 12, 28, 12, 0, 0)  # 일요일
+        mock_dt = real_datetime(2025, 12, 28, 12, 0, 0)  # 일요일
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is False
@@ -433,14 +440,15 @@ class TestIsOperatingHours:
     def test_custom_operating_hours(self):
         """사용자 정의 운영 시간"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 09:30 KST
-        mock_dt = datetime(2025, 12, 22, 9, 30, 0)
+        mock_dt = real_datetime(2025, 12, 22, 9, 30, 0)
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             # 09:00 - 15:30 운영 시간
             result = is_operating_hours(start_hour=9, start_minute=0, end_hour=15, end_minute=30)
         
@@ -449,14 +457,15 @@ class TestIsOperatingHours:
     def test_edge_case_start_time(self):
         """정확히 시작 시간"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 07:00 KST (정확히 시작 시간)
-        mock_dt = datetime(2025, 12, 22, 7, 0, 0)
+        mock_dt = real_datetime(2025, 12, 22, 7, 0, 0)
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
@@ -464,14 +473,15 @@ class TestIsOperatingHours:
     def test_edge_case_end_time(self):
         """정확히 종료 시간"""
         import pytz
+        from datetime import datetime as real_datetime
         
         # 월요일 17:00 KST (정확히 종료 시간)
-        mock_dt = datetime(2025, 12, 22, 17, 0, 0)
+        mock_dt = real_datetime(2025, 12, 22, 17, 0, 0)
         kst = pytz.timezone('Asia/Seoul')
         mock_dt = kst.localize(mock_dt)
         
-        with patch('shared.utils.datetime') as mock_datetime:
-            mock_datetime.now.return_value = mock_dt
+        with patch('shared.utils.datetime') as mock_datetime_module:
+            mock_datetime_module.now.return_value = mock_dt
             result = is_operating_hours(start_hour=7, end_hour=17)
         
         assert result is True
