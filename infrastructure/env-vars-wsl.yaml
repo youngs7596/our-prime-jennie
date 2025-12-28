@@ -114,4 +114,4 @@ ENABLE_NEWS_ANALYSIS: "true"
 SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화
 FACT_CHECK_ALERT_ENABLED: "true"  # LLM 환각 탐지 시 Telegram 알림 활성화
 DISABLE_MARKET_OPEN_CHECK: "false" # [Config] 장 운영 시간 체크 비활성화 (기본값)
-ENABLE_STARTUP_ONESHOT=true
+ENABLE_STARTUP_ONESHOT: "true"

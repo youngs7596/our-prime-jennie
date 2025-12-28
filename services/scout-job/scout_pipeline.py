@@ -234,9 +234,19 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
     hunter_reason = hunter_result.get('reason', '')
     
     # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증
+    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증
     try:
+        # 뉴스 원문에 정량 데이터 + 스냅샷 컨텍스트를 추가하여 검증
+        snapshot_context = (
+            f"PER: {snapshot.get('per')} | PBR: {snapshot.get('pbr')} | "
+            f"시가총액: {snapshot.get('market_cap')} | "
+            f"ROE: {snapshot.get('roe')} | "
+            f"영업이익률: {snapshot.get('operating_margin')}"
+        )
+        fact_check_source = f"{news_from_chroma}\n\n[정량 분석 리포트]\n{quant_context}\n\n[재무 데이터]\n{snapshot_context}"
+        
         fact_result = get_fact_checker().check(
-            original_news=news_from_chroma,
+            original_news=fact_check_source,
             llm_analysis=hunter_reason,
             stock_name=info['name']
         )
