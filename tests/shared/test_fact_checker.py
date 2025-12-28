@@ -81,6 +81,31 @@ class TestFactChecker:
         checker2 = get_fact_checker()
         assert checker1 is checker2
 
+    def test_check_quant_context_match(self, checker):
+        """정량 데이터 컨텍스트 포함 시 검증 성공"""
+        news_text = "삼성전자는 최근 반도체 업황 둔화로 어려움을 겪고 있다."
+        
+        # 단순화된 컨텍스트 (줄바꿈 이슈 방지)
+        quant_context = "총점: 58.9점, 모멘텀: 15.0점, 가치: 12.0점"
+        snapshot_context = "PER: 10.5 | PBR: 0.90 | 시가총액: 400조원"
+        
+        # LLM 분석 (키워드 매칭을 위해 정확한 단어 사용)
+        analysis = "정량 총점 58.9점이며, PBR 0.90 배이다."
+        
+        # 1. 뉴스만 제공 시 -> 실패 (숫자 불일치)
+        result_fail = checker.check(news_text, analysis, stock_name="삼성전자")
+        assert result_fail.details['numbers']['valid'] is False
+        
+        # 2. 정량 컨텍스트 + 스냅샷 포함 제공 시 -> 성공
+        full_context = f"{news_text}\n\n[정량 분석 리포트]\n{quant_context}\n\n[재무 데이터]\n{snapshot_context}"
+        result_pass = checker.check(full_context, analysis, stock_name="삼성전자")
+        
+        # 숫자 검증 성공 확인
+        assert result_pass.details['numbers']['valid'] is True
+        # 키워드 검증 성공 확인 (총점, PBR 등은 원문에 존재)
+        assert result_pass.details['keywords']['valid'] is True
+        assert len(result_pass.warnings) == 0
+
 
 class TestFactCheckResult:
     """FactCheckResult 테스트"""
@@ -114,3 +139,5 @@ class TestFactCheckResult:
             details={}
         )
         assert result.has_hallucination is False
+    
+
