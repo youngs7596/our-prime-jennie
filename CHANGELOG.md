@@ -1,5 +1,11 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-28
+- **AI Auditor 구현**: Regex 기반 환각 검증 → Gemini 2.5 Flash LLM 기반으로 교체, 더 정확한 맥락 이해 및 환각 탐지 가능 (`fact_checker.py`)
+- **Fact-Checker Enhancement**: 정량 점수(Quant Score) 및 재무 데이터(Snapshot) 컨텍스트 주입으로 Fact-Checker의 환각 오탐지(False Positive) 해결 (`scout_pipeline.py`)
+- **AI Auditor Planning**: AI 감사 시스템 도입을 위한 Cloud LLM 가격/성능 분석 완료 (Gemini 2.5 Pro 선정, 일일 예산 제한 설계)
+- **Unit Test**: `test_check_quant_context_match` 추가로 Fact-Checker 컨텍스트 검증 로직 강화
+
 ## 2025-12-27
 - **Py3.12 테스트 정합성**: pandas/numpy/scipy 실사용 기준으로 방어 로직 보강(RSI/MA/크로스 계산), FactorRepository DF 변환 안전화, utils.now 주입으로 MagicMock 충돌 제거, Ollama 테스트 CI 스킵. 로컬/CI/Mock 모드 전체 pytest 통과 확인.
 - **Jenkins CI Stability**: Python 3.12 업그레이드, 의존성 (`numpy`/`pandas`) 고정, `pytest` 순차 실행 전환으로 안정성 확보
