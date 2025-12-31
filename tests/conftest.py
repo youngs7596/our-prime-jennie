@@ -204,3 +204,28 @@ def mock_env_vars(monkeypatch):
     
     return _set_env_vars
 
+
+@pytest.fixture(autouse=True)
+def isolated_env():
+    """
+    모든 테스트가 격리된 환경변수 상태에서 실행되도록 보장합니다.
+    테스트 실행 전의 환경변수를 저장했다가, 테스트 종료 후 원상복구합니다.
+    """
+    old_environ = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(old_environ)
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """
+    알려진 싱글톤/전역 상태를 리셋하여 테스트 간 격리를 강화합니다.
+    """
+    # 1. Redis Cache
+    from shared import redis_cache
+    if hasattr(redis_cache, "reset_redis_connection"):
+        redis_cache.reset_redis_connection()
+        
+    # 2. Config (만약 Config 클래스가 싱글톤으로 인스턴스를 유지한다면 여기서 리셋)
+    # from shared.config import config
+    # config._instance = None 등 필요한 조치
