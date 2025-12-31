@@ -42,10 +42,18 @@ def mock_kis():
 @pytest.fixture
 def mock_config():
     config = MagicMock()
-    config.get_int.return_value = 20 # Default period
-    config.get_float.return_value = 0.5
-    config.get.return_value = "MOCK"
-    config.get_bool.return_value = False
+    # 기본은 "default 파라미터가 있으면 그 값을 그대로 사용"하도록 해서
+    # 테스트가 설정값 변화에 덜 민감하도록 만듭니다.
+    config.get_int.side_effect = lambda k, default=None: default if default is not None else 20
+    config.get_float.side_effect = lambda k, default=None: default if default is not None else 0.5
+    config.get.side_effect = lambda k, default=None, use_cache=True: default if default is not None else "MOCK"
+    config.get_bool.side_effect = lambda k, default=None: default if default is not None else False
+
+    # per-symbol getter는 기본적으로 전역 getter로 위임
+    config.get_int_for_symbol.side_effect = lambda code, k, default=None: config.get_int(k, default=default)
+    config.get_float_for_symbol.side_effect = lambda code, k, default=None: config.get_float(k, default=default)
+    config.get_bool_for_symbol.side_effect = lambda code, k, default=None: config.get_bool(k, default=default)
+    config.get_for_symbol.side_effect = lambda code, k, default=None: config.get(k, default=default)
     return config
 
 @pytest.fixture
@@ -245,7 +253,8 @@ class TestBuyScanner:
             'volume': 2000
         }
         
-        scanner_instance.config.get_int.return_value = 1 # Small requirement
+        # fixture에서 get_int.side_effect를 사용하므로 return_value 대신 side_effect로 덮어써야 함
+        scanner_instance.config.get_int.side_effect = lambda k, default=None: 1  # Small requirement
         
         # Mock scoring
         scanner_instance._calculate_factor_score = MagicMock(return_value=(80, {}))
@@ -378,7 +387,8 @@ class TestBuyScanner:
             'volume': 2000.0 
         }
         
-        scanner_instance.config.get_int.return_value = 1
+        # fixture에서 get_int.side_effect를 사용하므로 return_value 대신 side_effect로 덮어써야 함
+        scanner_instance.config.get_int.side_effect = lambda k, default=None: 1
         scanner_instance._calculate_factor_score = MagicMock(return_value=(80, {}))
         mock_detect = MagicMock(return_value=('GOLDEN_CROSS', {}))
         scanner_instance._detect_signals = mock_detect
