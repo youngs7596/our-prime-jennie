@@ -1,0 +1,12 @@
+{
+  "reviewer": "Minji (Mock)",
+  "execution_plan": "Update strategy thresholds based on recent volatility.",
+  "patch_candidates": [
+    {
+      "target_file": "config/symbol_overrides.json",
+      "operation": "update",
+      "description": "Adjust override for symbol 000120",
+      "content": "Updated content here (mock)"
+    }
+  ]
+}

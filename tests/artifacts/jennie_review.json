@@ -1,0 +1,12 @@
+{
+  "reviewer": "Jennie (Mock)",
+  "selected_cases": [
+    {
+      "case_id": "MOCK-1",
+      "category": "VETO",
+      "symbol": "005930",
+      "reasoning_summary": "Mock reason",
+      "model_decision": "REJECT"
+    }
+  ]
+}

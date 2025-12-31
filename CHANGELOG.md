@@ -4,6 +4,7 @@
 - **테스트 격리성 강화**: `conftest.py`에 `isolated_env` 및 `reset_singletons` 픽스처(autouse) 추가로 환경변수/싱글톤 테스트 간섭 원천 차단
 - **Daily Council 마이그레이션**: `scripts/build_daily_packet.py` (Dummy 모드/스키마 검증), `scripts/run_daily_council.py` (Mock Council) 구현 및 Smoke Test 검증 완료
 - **수익 극대화 전략 활성화**: `refresh_symbol_profiles.py` 실행 성공 (DB 포트/인증 수정), `config/symbol_overrides.json`에 70+ 종목 맞춤 전략 생성 및 Hot Reload 확인
+- **Daily Council 고도화 (완료)**: `build_daily_packet.py`의 실제 DB 데이터(`ShadowRadarLog`) 연동, `run_daily_council.py`의 LangChain 제거 및 LLM 파이프라인 최적화, `apply_patch_bundle.py`의 안전성 검증(스키마 자동 보정, 위험 명령어 차단) 완료. DB 포트(3307) 연결 문제 해결 및 전체 통합 테스트 통과.
 
 ## 2025-12-31
 - **수익 극대화 전략 4종 구현**: 트레일링 익절, 분할 익절, 상관관계 분산, 기술적 패턴 탐지 강화
