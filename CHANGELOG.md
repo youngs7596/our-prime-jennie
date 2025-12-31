@@ -1,6 +1,22 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2025-12-31
+- **수익 극대화 전략 4종 구현**: 트레일링 익절, 분할 익절, 상관관계 분산, 기술적 패턴 탐지 강화
+  - **트레일링 익절 (ATR Trailing Take Profit)**: 최고가 추적 후 ATR×배수 하락 시 익절. Redis High Watermark 관리.
+    - `shared/redis_cache.py`: `update_high_watermark()`, `get_high_watermark()`, `delete_high_watermark()` 추가
+    - `services/price-monitor/monitor.py`: 트레일링 익절 로직 추가 (활성화 조건: 수익률 5% 이상)
+  - **분할 익절 (Scale-out)**: 수익률 5%/10%/15% 도달 시 25%씩 단계적 매도
+    - `shared/redis_cache.py`: `get_scale_out_level()`, `set_scale_out_level()`, `delete_scale_out_level()` 추가
+    - `shared/settings/registry.py`: `SCALE_OUT_LEVEL_*` 설정 추가
+    - `services/price-monitor/monitor.py`: 수익률별 분할 익절 로직 추가
+  - **상관관계 기반 포트폴리오 분산**: 신규 매수 종목과 기존 보유 종목 간 상관관계 분석, 높은 상관관계(0.85+) 시 매수 거부, 중간 상관관계 시 비중 축소
+    - `shared/correlation.py`: 상관관계 계산 모듈 신규 생성
+    - `shared/settings/registry.py`: `CORRELATION_*` 설정 추가
+    - `services/buy-executor/executor.py`: 매수 전 상관관계 체크 및 포지션 조정 로직 추가
+  - **기술적 패턴 탐지 강화**: 볼린저밴드 스퀴즈, MACD 다이버전스 추가
+    - `shared/strategy.py`: `check_bollinger_squeeze()`, `calculate_macd()`, `check_macd_divergence()` 추가
+  - 테스트 51개 추가, 전체 939개 테스트 통과
+
 - **종목별 매수/매도 임계치 시스템**: RSI/거래량/Tier2 조건을 종목별 특성(변동성, 유동성, RSI 분포)에 맞게 개별화. 일률적 기준으로 인한 매수 신호 미발생 문제 해결.
   - `shared/config.py`: `get_*_for_symbol()` API 추가 (종목별 설정 조회)
   - `shared/symbol_profile.py`: RSI P20/P80, 평균 거래량 기반 임계치 자동 산출

@@ -485,6 +485,141 @@ class TestPrepareSequence:
         assert result is None
 
 
+# ============================================================================
+# 볼린저밴드 스퀴즈 테스트
+# ============================================================================
+
+class TestBollingerSqueeze:
+    """볼린저밴드 스퀴즈 테스트"""
+    
+    def test_squeeze_detected(self):
+        """스퀴즈 상태 감지"""
+        # 변동성이 매우 작은 데이터 (스퀴즈)
+        prices = [100 + i * 0.1 for i in range(30)]  # 거의 일정한 가격
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.check_bollinger_squeeze(df, period=20, squeeze_threshold=0.10)
+        
+        assert result is not None
+        assert result['is_squeeze'] == True
+        assert result['bandwidth'] < 10  # 10% 미만
+    
+    def test_no_squeeze(self):
+        """비스퀴즈 상태"""
+        # 변동성이 큰 데이터
+        np.random.seed(42)
+        prices = [100 + np.random.uniform(-10, 10) for _ in range(30)]
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.check_bollinger_squeeze(df, period=20, squeeze_threshold=0.03)
+        
+        assert result is not None
+        # 변동성이 크면 스퀴즈 아님
+        assert result['bandwidth'] > 3
+    
+    def test_position_upper(self):
+        """현재가가 상단 밴드 위"""
+        # 급상승 후 상단 밴드 돌파
+        prices = [100] * 25 + [100, 105, 110, 115, 120]  # 마지막에 급등
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.check_bollinger_squeeze(df, period=20)
+        
+        assert result is not None
+        # 급등 후 상단 위치
+        assert 'upper' in result['position'] or result['position'] == 'middle'
+    
+    def test_insufficient_data(self):
+        """데이터 부족"""
+        df = pd.DataFrame({'CLOSE_PRICE': [100, 101, 102]})
+        
+        result = strategy.check_bollinger_squeeze(df, period=20)
+        
+        assert result is None
+
+
+# ============================================================================
+# MACD 테스트
+# ============================================================================
+
+class TestMACD:
+    """MACD 지표 테스트"""
+    
+    def test_macd_calculation(self):
+        """기본 MACD 계산"""
+        np.random.seed(42)
+        prices = [100 + i * 0.5 + np.random.uniform(-2, 2) for i in range(50)]
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.calculate_macd(df)
+        
+        assert result is not None
+        assert 'macd' in result
+        assert 'signal_line' in result
+        assert 'histogram' in result
+        assert 'is_bullish' in result
+    
+    def test_macd_bullish_trend(self):
+        """상승 추세에서 MACD"""
+        # 상승 추세 데이터 생성
+        prices = [100 + i * 1.5 for i in range(50)]  # 꾸준한 상승
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.calculate_macd(df)
+        
+        assert result is not None
+        # 상승 추세에서는 보통 MACD > 0
+        assert result['macd'] > 0
+    
+    def test_macd_crossing_detection(self):
+        """MACD 크로스 감지"""
+        # 하락 후 상승하는 데이터 (골든크로스 발생 가능)
+        prices = list(range(120, 100, -1)) + list(range(100, 125))  # 45개
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.calculate_macd(df)
+        
+        assert result is not None
+        # 크로스 관련 키 존재
+        assert 'is_crossing_up' in result
+        assert 'is_crossing_down' in result
+    
+    def test_insufficient_data(self):
+        """데이터 부족"""
+        df = pd.DataFrame({'CLOSE_PRICE': [100, 101, 102]})
+        
+        result = strategy.calculate_macd(df)
+        
+        assert result is None
+
+
+class TestMACDDivergence:
+    """MACD 다이버전스 테스트"""
+    
+    def test_bearish_divergence(self):
+        """베어리시 다이버전스 (가격 상승, MACD 하락)"""
+        # 가격은 상승하지만 MACD는 하락하는 패턴
+        # 초기: 급등 후 완만한 상승 (MACD가 정점 후 하락)
+        prices = list(range(80, 120)) + [120 + i * 0.5 for i in range(20)]
+        df = pd.DataFrame({'CLOSE_PRICE': prices})
+        
+        result = strategy.check_macd_divergence(df, lookback=10)
+        
+        assert result is not None
+        assert 'bearish_divergence' in result
+        assert 'bullish_divergence' in result
+        assert 'price_trend' in result
+        assert 'macd_trend' in result
+    
+    def test_insufficient_data(self):
+        """데이터 부족"""
+        df = pd.DataFrame({'CLOSE_PRICE': list(range(20))})
+        
+        result = strategy.check_macd_divergence(df, lookback=10)
+        
+        assert result is None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 

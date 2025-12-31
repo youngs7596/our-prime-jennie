@@ -1194,3 +1194,183 @@ class TestExceptionHandling:
         
         assert result is False
 
+
+class TestHighWatermark:
+    """High Watermark (트레일링 익절) 관련 테스트"""
+    
+    def test_update_high_watermark_new_stock(self, fake_redis):
+        """새 종목의 High Watermark 초기 설정"""
+        from shared.redis_cache import update_high_watermark, get_high_watermark
+        
+        # Given: 새 종목
+        stock_code = "005930"
+        buy_price = 80000
+        current_price = 82000
+        
+        # When: High Watermark 업데이트
+        result = update_high_watermark(stock_code, current_price, buy_price, redis_client=fake_redis)
+        
+        # Then: 현재가가 최고가로 설정됨
+        assert result["high_price"] == 82000
+        assert result["buy_price"] == 80000
+        assert result["updated"] is True  # 최초 설정이므로 갱신됨
+    
+    def test_update_high_watermark_price_increase(self, fake_redis):
+        """가격 상승 시 High Watermark 갱신"""
+        from shared.redis_cache import update_high_watermark
+        
+        stock_code = "005930"
+        buy_price = 80000
+        
+        # Given: 초기 최고가 설정
+        update_high_watermark(stock_code, 82000, buy_price, redis_client=fake_redis)
+        
+        # When: 가격 더 상승
+        result = update_high_watermark(stock_code, 85000, buy_price, redis_client=fake_redis)
+        
+        # Then: 최고가 갱신됨
+        assert result["high_price"] == 85000
+        assert result["updated"] is True
+    
+    def test_update_high_watermark_price_decrease(self, fake_redis):
+        """가격 하락 시 High Watermark 유지"""
+        from shared.redis_cache import update_high_watermark
+        
+        stock_code = "005930"
+        buy_price = 80000
+        
+        # Given: 최고가 85000 설정
+        update_high_watermark(stock_code, 85000, buy_price, redis_client=fake_redis)
+        
+        # When: 가격 하락
+        result = update_high_watermark(stock_code, 83000, buy_price, redis_client=fake_redis)
+        
+        # Then: 최고가 유지, 하락률 계산됨
+        assert result["high_price"] == 85000
+        assert result["updated"] is False
+        assert result["profit_from_high_pct"] < 0  # 최고가 대비 하락
+    
+    def test_update_high_watermark_calculate_drop_pct(self, fake_redis):
+        """최고가 대비 하락률 정확히 계산"""
+        from shared.redis_cache import update_high_watermark
+        
+        stock_code = "005930"
+        buy_price = 80000
+        
+        # Given: 최고가 100000 설정
+        update_high_watermark(stock_code, 100000, buy_price, redis_client=fake_redis)
+        
+        # When: 5% 하락 (100000 → 95000)
+        result = update_high_watermark(stock_code, 95000, buy_price, redis_client=fake_redis)
+        
+        # Then: 하락률 -5%
+        assert result["profit_from_high_pct"] == -5.0
+    
+    def test_get_high_watermark_not_found(self, fake_redis):
+        """존재하지 않는 종목 조회 시 기본값 반환"""
+        from shared.redis_cache import get_high_watermark
+        
+        # When: 없는 종목 조회
+        result = get_high_watermark("999999", redis_client=fake_redis)
+        
+        # Then: 기본값 반환
+        assert result["high_price"] is None
+        assert result["buy_price"] is None
+    
+    def test_delete_high_watermark(self, fake_redis):
+        """High Watermark 삭제 (매도 완료 시)"""
+        from shared.redis_cache import update_high_watermark, delete_high_watermark, get_high_watermark
+        
+        stock_code = "005930"
+        
+        # Given: High Watermark 설정됨
+        update_high_watermark(stock_code, 85000, 80000, redis_client=fake_redis)
+        
+        # When: 삭제
+        result = delete_high_watermark(stock_code, redis_client=fake_redis)
+        
+        # Then: 삭제 성공, 조회 시 기본값
+        assert result is True
+        data = get_high_watermark(stock_code, redis_client=fake_redis)
+        assert data["high_price"] is None
+    
+    def test_update_high_watermark_redis_not_connected(self, mocker):
+        """Redis 미연결 시 기본값 반환"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.update_high_watermark("005930", 85000, 80000)
+        
+        # Redis 없어도 기본값 반환
+        assert result["high_price"] == 85000
+        assert result["updated"] is False
+
+
+class TestScaleOut:
+    """Scale-out (분할 익절) 관련 테스트"""
+    
+    def test_get_scale_out_level_default(self, fake_redis):
+        """Scale-out 레벨 기본값 0"""
+        from shared.redis_cache import get_scale_out_level
+        
+        result = get_scale_out_level("005930", redis_client=fake_redis)
+        assert result == 0
+    
+    def test_set_and_get_scale_out_level(self, fake_redis):
+        """Scale-out 레벨 설정 및 조회"""
+        from shared.redis_cache import set_scale_out_level, get_scale_out_level
+        
+        # Given: 종목 코드
+        stock_code = "005930"
+        
+        # When: 레벨 1 설정
+        result = set_scale_out_level(stock_code, 1, redis_client=fake_redis)
+        
+        # Then: 성공, 레벨 1 반환
+        assert result is True
+        level = get_scale_out_level(stock_code, redis_client=fake_redis)
+        assert level == 1
+    
+    def test_scale_out_level_progression(self, fake_redis):
+        """Scale-out 레벨 단계적 진행"""
+        from shared.redis_cache import set_scale_out_level, get_scale_out_level
+        
+        stock_code = "005930"
+        
+        # Level 1 → 2 → 3 진행
+        set_scale_out_level(stock_code, 1, redis_client=fake_redis)
+        assert get_scale_out_level(stock_code, redis_client=fake_redis) == 1
+        
+        set_scale_out_level(stock_code, 2, redis_client=fake_redis)
+        assert get_scale_out_level(stock_code, redis_client=fake_redis) == 2
+        
+        set_scale_out_level(stock_code, 3, redis_client=fake_redis)
+        assert get_scale_out_level(stock_code, redis_client=fake_redis) == 3
+    
+    def test_delete_scale_out_level(self, fake_redis):
+        """Scale-out 레벨 삭제 (전량 매도 시)"""
+        from shared.redis_cache import set_scale_out_level, delete_scale_out_level, get_scale_out_level
+        
+        stock_code = "005930"
+        
+        # Given: 레벨 2까지 진행
+        set_scale_out_level(stock_code, 2, redis_client=fake_redis)
+        
+        # When: 삭제
+        result = delete_scale_out_level(stock_code, redis_client=fake_redis)
+        
+        # Then: 삭제 성공, 레벨 0으로 복귀
+        assert result is True
+        level = get_scale_out_level(stock_code, redis_client=fake_redis)
+        assert level == 0
+    
+    def test_get_scale_out_level_redis_not_connected(self, mocker):
+        """Redis 미연결 시 기본값 0"""
+        from shared import redis_cache
+        
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+        
+        result = redis_cache.get_scale_out_level("005930")
+        assert result == 0
+

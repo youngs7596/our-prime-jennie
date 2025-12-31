@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import shared.database as database
 from shared.db import connection
 from shared.db import repository as repo
+from shared.redis_cache import delete_high_watermark, delete_scale_out_level
 from shared.strategy_presets import (
     apply_preset_to_config,
     resolve_preset_for_regime,
@@ -236,6 +237,13 @@ class SellExecutor:
                         logger.info("✅ 텔레그램 알림 발송 완료")
                     except Exception as e:
                         logger.warning(f"⚠️ 텔레그램 알림 발송 실패: {e}")
+                
+                # High Watermark 및 Scale-out 상태 정리
+                try:
+                    delete_high_watermark(stock_code)
+                    delete_scale_out_level(stock_code)
+                except Exception as e:
+                    logger.warning(f"⚠️ 트레이딩 상태 삭제 실패: {e}")
                 
                 logger.info("=== 매도 처리 완료 ===")
                 return {

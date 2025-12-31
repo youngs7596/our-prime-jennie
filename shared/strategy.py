@@ -460,3 +460,218 @@ def check_long_term_trend(current_price, ma_value):
     if ma_value is None or ma_value == 0:
         return False
     return current_price >= ma_value
+
+
+# ===================================================================
+# 볼린저밴드 스퀴즈 (Bollinger Squeeze)
+# ===================================================================
+def check_bollinger_squeeze(daily_prices_df, period=20, std_dev=2, squeeze_threshold=0.06):
+    """
+    볼린저밴드 스퀴즈 상태를 확인합니다.
+    
+    스퀴즈란 밴드폭이 줄어든 상태로, 이후 큰 가격 변동이 예상됩니다.
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        period: 볼린저 밴드 기간 (기본 20일)
+        std_dev: 표준편차 배수 (기본 2)
+        squeeze_threshold: 스퀴즈 판정 임계값 (밴드폭/중심선 비율, 기본 6%)
+    
+    Returns:
+        dict: {
+            'is_squeeze': bool,        # 스퀴즈 상태 여부
+            'bandwidth': float,        # 밴드폭 비율 (%)
+            'position': str,           # 'upper', 'middle', 'lower' (현재가 위치)
+            'upper_band': float,
+            'middle_band': float,
+            'lower_band': float,
+        } 또는 None (데이터 부족)
+    """
+    if len(daily_prices_df) < period:
+        return None
+    
+    try:
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < period:
+            return None
+        
+        rolling_mean = series.rolling(window=period).mean()
+        rolling_std = series.rolling(window=period).std()
+        
+        middle_band = rolling_mean.iloc[-1]
+        upper_band = middle_band + (rolling_std.iloc[-1] * std_dev)
+        lower_band = middle_band - (rolling_std.iloc[-1] * std_dev)
+        
+        # 밴드폭 계산 (중심선 대비 비율)
+        bandwidth = (upper_band - lower_band) / middle_band if middle_band > 0 else 0
+        
+        # 스퀴즈 판정
+        is_squeeze = bandwidth < squeeze_threshold
+        
+        # 현재가 위치 판정
+        current_price = series.iloc[-1]
+        if current_price >= upper_band:
+            position = 'upper'
+        elif current_price <= lower_band:
+            position = 'lower'
+        else:
+            position = 'middle'
+        
+        return {
+            'is_squeeze': is_squeeze,
+            'bandwidth': round(bandwidth * 100, 2),  # 퍼센트로 변환
+            'position': position,
+            'upper_band': upper_band,
+            'middle_band': middle_band,
+            'lower_band': lower_band,
+        }
+    except Exception as e:
+        logger.error(f"❌ (BB Squeeze) 볼린저 스퀴즈 계산 중 오류: {e}", exc_info=True)
+        return None
+
+
+# ===================================================================
+# MACD (Moving Average Convergence Divergence)
+# ===================================================================
+def calculate_macd(daily_prices_df, fast=12, slow=26, signal=9):
+    """
+    MACD 지표를 계산합니다.
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        fast: 빠른 EMA 기간 (기본 12)
+        slow: 느린 EMA 기간 (기본 26)
+        signal: 시그널 라인 기간 (기본 9)
+    
+    Returns:
+        dict: {
+            'macd': float,           # MACD 값 (빠른 EMA - 느린 EMA)
+            'signal_line': float,    # 시그널 라인 (MACD의 9일 EMA)
+            'histogram': float,      # 히스토그램 (MACD - 시그널)
+            'is_bullish': bool,      # MACD > 시그널 (상승 신호)
+            'is_crossing_up': bool,  # 골든 크로스 발생
+            'is_crossing_down': bool # 데드 크로스 발생
+        } 또는 None (데이터 부족)
+    """
+    min_periods = slow + signal
+    if len(daily_prices_df) < min_periods:
+        return None
+    
+    try:
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < min_periods:
+            return None
+        
+        # EMA 계산
+        ema_fast = series.ewm(span=fast, adjust=False).mean()
+        ema_slow = series.ewm(span=slow, adjust=False).mean()
+        
+        # MACD 라인
+        macd_line = ema_fast - ema_slow
+        
+        # 시그널 라인
+        signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+        
+        # 히스토그램
+        histogram = macd_line - signal_line
+        
+        # 최신 값
+        macd = macd_line.iloc[-1]
+        sig = signal_line.iloc[-1]
+        hist = histogram.iloc[-1]
+        
+        # 크로스 판정 (어제 vs 오늘)
+        yesterday_macd = macd_line.iloc[-2]
+        yesterday_sig = signal_line.iloc[-2]
+        
+        is_crossing_up = yesterday_macd <= yesterday_sig and macd > sig
+        is_crossing_down = yesterday_macd >= yesterday_sig and macd < sig
+        
+        return {
+            'macd': round(macd, 2),
+            'signal_line': round(sig, 2),
+            'histogram': round(hist, 2),
+            'is_bullish': macd > sig,
+            'is_crossing_up': is_crossing_up,
+            'is_crossing_down': is_crossing_down,
+        }
+    except Exception as e:
+        logger.error(f"❌ (MACD) MACD 계산 중 오류: {e}", exc_info=True)
+        return None
+
+
+def check_macd_divergence(daily_prices_df, lookback=10):
+    """
+    MACD 다이버전스를 확인합니다.
+    
+    - 베어리시 다이버전스: 가격은 고점 갱신, MACD는 하락 → 하락 신호
+    - 불리시 다이버전스: 가격은 저점 갱신, MACD는 상승 → 상승 신호
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        lookback: 비교 기간 (기본 10일)
+    
+    Returns:
+        dict: {
+            'bearish_divergence': bool,  # 베어리시 다이버전스 (하락 경고)
+            'bullish_divergence': bool,  # 불리시 다이버전스 (상승 신호)
+            'price_trend': str,          # 'up', 'down', 'sideways'
+            'macd_trend': str,           # 'up', 'down', 'sideways'
+        } 또는 None
+    """
+    if len(daily_prices_df) < 26 + lookback:
+        return None
+    
+    try:
+        macd_data = calculate_macd(daily_prices_df)
+        if not macd_data:
+            return None
+        
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None:
+            return None
+        
+        # 최근 lookback 기간의 가격 추세
+        recent_prices = series.tail(lookback)
+        price_start = recent_prices.iloc[0]
+        price_end = recent_prices.iloc[-1]
+        price_change = (price_end - price_start) / price_start if price_start > 0 else 0
+        
+        # MACD 추세 (직접 계산)
+        ema_fast = series.ewm(span=12, adjust=False).mean()
+        ema_slow = series.ewm(span=26, adjust=False).mean()
+        macd_line = ema_fast - ema_slow
+        
+        recent_macd = macd_line.tail(lookback)
+        macd_start = recent_macd.iloc[0]
+        macd_end = recent_macd.iloc[-1]
+        macd_change = macd_end - macd_start
+        
+        # 추세 판정
+        if price_change > 0.02:
+            price_trend = 'up'
+        elif price_change < -0.02:
+            price_trend = 'down'
+        else:
+            price_trend = 'sideways'
+        
+        if macd_change > 0:
+            macd_trend = 'up'
+        elif macd_change < 0:
+            macd_trend = 'down'
+        else:
+            macd_trend = 'sideways'
+        
+        # 다이버전스 판정
+        bearish_divergence = price_trend == 'up' and macd_trend == 'down'
+        bullish_divergence = price_trend == 'down' and macd_trend == 'up'
+        
+        return {
+            'bearish_divergence': bearish_divergence,
+            'bullish_divergence': bullish_divergence,
+            'price_trend': price_trend,
+            'macd_trend': macd_trend,
+        }
+    except Exception as e:
+        logger.error(f"❌ (MACD Divergence) 다이버전스 확인 중 오류: {e}", exc_info=True)
+        return None
