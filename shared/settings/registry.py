@@ -26,6 +26,13 @@ REGISTRY = {
     "BUY_GOLDEN_CROSS_SHORT": {"value": 5, "type": "int", "desc": "골든크로스 단기 이평", "category": "Signal", "db_priority": True},
     "BUY_GOLDEN_CROSS_LONG": {"value": 20, "type": "int", "desc": "골든크로스 장기 이평", "category": "Signal", "db_priority": True},
     "BUY_RSI_OVERSOLD_THRESHOLD": {"value": 30, "type": "int", "desc": "RSI 과매도 기준", "category": "Signal", "db_priority": True},
+    "BUY_RSI_OVERSOLD_BULL_THRESHOLD": {"value": 40, "type": "int", "desc": "상승장 RSI 과매도 기준(완화)", "category": "Signal", "db_priority": True},
+
+    # Tier2 안전장치 (Judge 미통과 종목의 기술적 진입 보호장치)
+    "TIER2_VOLUME_MULTIPLIER": {"value": 1.2, "type": "float", "desc": "Tier2 거래량 조건(20일 평균 대비 배수)", "category": "Signal", "db_priority": True},
+    "TIER2_RSI_MIN": {"value": 40, "type": "int", "desc": "Tier2 RSI 하한(중립구간 시작)", "category": "Signal", "db_priority": True},
+    "TIER2_RSI_MAX": {"value": 70, "type": "int", "desc": "Tier2 RSI 상한(과매수 회피)", "category": "Signal", "db_priority": True},
+    "TIER2_MIN_CONDITIONS": {"value": 3, "type": "int", "desc": "Tier2 복합 안전장치 최소 충족 조건 수", "category": "Signal", "db_priority": True},
 
     # ===== 리스크/비중 (운영 튜닝) =====
     "MAX_BUY_COUNT_PER_DAY": {"value": 5, "type": "int", "desc": "일일 최대 매수 건수", "category": "Risk", "db_priority": True},
@@ -33,6 +40,9 @@ REGISTRY = {
     "MAX_POSITION_VALUE_PCT": {"value": 10.0, "type": "float", "desc": "단일 종목 최대 비중(%)", "category": "Risk", "db_priority": True},
     "MAX_SECTOR_PCT": {"value": 30.0, "type": "float", "desc": "섹터 최대 비중(%)", "category": "Risk", "db_priority": True},
     "CASH_KEEP_PCT": {"value": 10.0, "type": "float", "desc": "최소 현금 보유 비중(%)", "category": "Risk", "db_priority": True},
+
+    # ===== 매도 (운영 튜닝) =====
+    "SELL_RSI_OVERBOUGHT_THRESHOLD": {"value": 75.0, "type": "float", "desc": "RSI 과열(부분 익절) 기준", "category": "Selling", "db_priority": True},
 
     # ===== Secrets (env 우선 - 코드로 변경 불가) =====
     "OPENAI_API_KEY": {"value": "", "type": "str", "desc": "OpenAI API Key", "category": "Secrets", "sensitive": True},

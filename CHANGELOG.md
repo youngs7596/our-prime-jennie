@@ -1,5 +1,12 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-31
+- **종목별 매수/매도 임계치 시스템**: RSI/거래량/Tier2 조건을 종목별 특성(변동성, 유동성, RSI 분포)에 맞게 개별화. 일률적 기준으로 인한 매수 신호 미발생 문제 해결.
+  - `shared/config.py`: `get_*_for_symbol()` API 추가 (종목별 설정 조회)
+  - `shared/symbol_profile.py`: RSI P20/P80, 평균 거래량 기반 임계치 자동 산출
+  - `services/buy-scanner/scanner.py`, `services/price-monitor/monitor.py`: 종목별 설정 적용
+  - `scripts/refresh_symbol_profiles.py`: Scout universe(KOSPI 200개) 전체 프로파일 배치 스크립트, 크론잡 등록(평일 16:40)
+
 ## 2025-12-28
 - **AI Auditor 구현**: Regex 기반 환각 검증 → Gemini 2.5 Flash LLM 기반으로 교체, 더 정확한 맥락 이해 및 환각 탐지 가능 (`fact_checker.py`)
 - **Fact-Checker Enhancement**: 정량 점수(Quant Score) 및 재무 데이터(Snapshot) 컨텍스트 주입으로 Fact-Checker의 환각 오탐지(False Positive) 해결 (`scout_pipeline.py`)

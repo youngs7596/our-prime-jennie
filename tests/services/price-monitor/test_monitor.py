@@ -40,6 +40,9 @@ def mock_config():
     config = MagicMock()
     config.get_float.return_value = -5.0 # Stop Loss default
     config.get_int.return_value = 30 # Max holding days
+    # per-symbol getter는 기본적으로 전역 getter로 위임
+    config.get_float_for_symbol.side_effect = lambda code, k, default=None: config.get_float(k, default)
+    config.get_int_for_symbol.side_effect = lambda code, k, default=None: config.get_int(k, default)
     return config
 
 @pytest.fixture

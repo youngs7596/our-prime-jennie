@@ -40,15 +40,8 @@ class BuyScanner:
     
     # 상수 정의
     BB_DISTANCE_THRESHOLD_PCT = 2.0
-    RSI_OVERSOLD_BULL_THRESHOLD = 40
     MOMENTUM_SIGNAL_THRESHOLD = 3.0
     RELATIVE_STRENGTH_THRESHOLD = 2.0
-    
-    # Tier2 골든크로스 안전장치 상수
-    TIER2_VOLUME_MULTIPLIER = 1.2   # 거래량 20일 평균 대비 1.2배 이상
-    TIER2_RSI_MIN = 40              # RSI 40 이상 (과매도 탈출)
-    TIER2_RSI_MAX = 70              # RSI 70 이하 (과매수 아님)
-    TIER2_MIN_CONDITIONS = 3        # 최소 3개 조건 충족 필요 (Tier2 품질 상향)
     
     def __init__(self, kis, config):
         """
@@ -681,9 +674,9 @@ class BuyScanner:
                 
                 # RSI 과매도
                 if rsi_value:
-                    rsi_threshold = self.config.get_int('BUY_RSI_OVERSOLD_THRESHOLD', default=30)
+                    rsi_threshold = self.config.get_int_for_symbol(stock_code, 'BUY_RSI_OVERSOLD_THRESHOLD', default=30)
                     if current_regime == MarketRegimeDetector.REGIME_BULL:
-                        rsi_threshold = self.RSI_OVERSOLD_BULL_THRESHOLD
+                        rsi_threshold = self.config.get_int_for_symbol(stock_code, 'BUY_RSI_OVERSOLD_BULL_THRESHOLD', default=40)
                     
                     logger.debug(f"[{stock_code}] RSI: {rsi_value:.2f}, RSI 과매도 임계값: {rsi_threshold}")
                     if rsi_value <= rsi_threshold:
@@ -710,7 +703,7 @@ class BuyScanner:
                         )
                         if not tier2_result['passed']:
                             logger.info(f"[{stock_code}] 🛡️ Tier2 안전장치 미충족 - 골든크로스 무시 "
-                                       f"(충족: {tier2_result['met_count']}/{self.TIER2_MIN_CONDITIONS}개)")
+                                       f"(충족: {tier2_result['met_count']}/{tier2_result.get('required_min', 3)}개)")
                             continue  # 다음 전략으로 넘어감
                         logger.info(f"[{stock_code}] ✅ Tier2 안전장치 통과! {tier2_result['conditions_met']}")
                     
@@ -773,6 +766,12 @@ class BuyScanner:
         conditions_failed = []
         
         try:
+            # Tier2 파라미터 (전역 기본값 유지 + 종목별 오버라이드 지원)
+            tier2_volume_multiplier = self.config.get_float_for_symbol(stock_code, "TIER2_VOLUME_MULTIPLIER", default=1.2)
+            tier2_rsi_min = self.config.get_float_for_symbol(stock_code, "TIER2_RSI_MIN", default=40.0)
+            tier2_rsi_max = self.config.get_float_for_symbol(stock_code, "TIER2_RSI_MAX", default=70.0)
+            tier2_min_conditions = self.config.get_int_for_symbol(stock_code, "TIER2_MIN_CONDITIONS", default=3)
+
             # 1. 거래량 조건
             if len(daily_prices_df) >= 20 and 'VOLUME' in daily_prices_df.columns:
                 current_volume = daily_prices_df['VOLUME'].iloc[-1]
@@ -802,20 +801,20 @@ class BuyScanner:
                 except Exception:
                     projected_volume = float(current_volume or 0)
 
-                if avg_volume_20 > 0 and projected_volume >= avg_volume_20 * self.TIER2_VOLUME_MULTIPLIER:
+                if avg_volume_20 > 0 and projected_volume >= avg_volume_20 * tier2_volume_multiplier:
                     conditions_met.append(f"거래량 {projected_volume/avg_volume_20:.1f}x(보정)")
                 else:
                     ratio = projected_volume / avg_volume_20 if avg_volume_20 > 0 else 0
-                    conditions_failed.append(f"거래량 {ratio:.1f}x < {self.TIER2_VOLUME_MULTIPLIER}x")
+                    conditions_failed.append(f"거래량 {ratio:.1f}x < {tier2_volume_multiplier}x")
             else:
                 conditions_failed.append("거래량 데이터 부족")
             
             # 2. RSI 조건 (중립 구간)
             if rsi_value is not None:
-                if self.TIER2_RSI_MIN <= rsi_value <= self.TIER2_RSI_MAX:
+                if tier2_rsi_min <= float(rsi_value) <= tier2_rsi_max:
                     conditions_met.append(f"RSI {rsi_value:.1f} (중립)")
                 else:
-                    conditions_failed.append(f"RSI {rsi_value:.1f} (범위 외)")
+                    conditions_failed.append(f"RSI {rsi_value:.1f} (범위 외: {tier2_rsi_min:.0f}~{tier2_rsi_max:.0f})")
             else:
                 conditions_failed.append("RSI 계산 불가")
             
@@ -844,13 +843,14 @@ class BuyScanner:
                     conditions_failed.append("장기 이평선 데이터 부족")
             
             met_count = len(conditions_met)
-            passed = met_count >= self.TIER2_MIN_CONDITIONS
+            passed = met_count >= tier2_min_conditions
             
             logger.debug(f"[{stock_code}] Tier2 조건 체크: 충족 {met_count}개 - {conditions_met}, 미충족 - {conditions_failed}")
             
             return {
                 'passed': passed,
                 'met_count': met_count,
+                'required_min': tier2_min_conditions,
                 'conditions_met': conditions_met,
                 'conditions_failed': conditions_failed
             }

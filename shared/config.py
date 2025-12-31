@@ -40,6 +40,7 @@ shared/config.py - my-prime-jennie 설정 관리 모듈
 
 import os
 import logging
+import json
 from typing import Any, Optional, Dict
 from functools import lru_cache
 
@@ -80,6 +81,11 @@ class ConfigManager:
         self.cache_ttl = cache_ttl
         self._memory_cache: Dict[str, tuple] = {}  # {key: (value, timestamp)}
         self._db_cache: Dict[str, tuple] = {}  # {key: (value, timestamp)}
+
+        # 종목별 오버라이드(JSON 파일) 캐시
+        self._symbol_overrides_cache: Optional[dict] = None
+        self._symbol_overrides_mtime: Optional[float] = None
+        self._symbol_overrides_loaded_at: float = 0.0
         
         # 기본값 정의 (AgentConfig에서 가져온 값들)
         # 딕셔너리 구조 변경: 값 -> {"value": 값, "desc": "설명", "category": "카테고리"}
@@ -208,6 +214,159 @@ class ConfigManager:
             logger.debug(f"[Config] 레지스트리 기본값 병합 완료 ({len(registry_defaults)} keys)")
         except Exception as e:
             logger.warning(f"[Config] 레지스트리 기본값 로드 실패: {e}")
+
+    # -------------------------------------------------------------------------
+    # 종목별 설정 오버라이드 (per-symbol)
+    # -------------------------------------------------------------------------
+
+    def _project_root_dir(self) -> str:
+        """
+        프로젝트 루트 디렉토리 추정.
+
+        - shared/config.py 기준으로 상위 1단계가 프로젝트 루트라는 전제를 사용합니다.
+        """
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+    def _symbol_override_key(self, stock_code: str, key: str) -> str:
+        """
+        종목별 설정 키 네임스페이스.
+
+        예) SYMBOL_005930__TIER2_RSI_MAX
+        """
+        return f"SYMBOL_{stock_code}__{key}"
+
+    def _load_symbol_overrides_json(self, force_reload: bool = False) -> dict:
+        """
+        config/symbol_overrides.json 로드 (선택 기능).
+
+        - 파일이 없으면 빈 dict를 반환합니다.
+        - 파일이 있어도 JSON 파싱 실패 시 안전하게 빈 dict로 처리합니다.
+        - 로딩 비용을 줄이기 위해 mtime/TTL 기반 캐시를 사용합니다.
+        """
+        import time
+
+        # TTL: 60초 (운영에서 실시간 편집 대응 + 과도한 파일 IO 방지)
+        ttl_sec = 60.0
+        now = time.time()
+
+        root = self._project_root_dir()
+        path = os.path.join(root, "config", "symbol_overrides.json")
+
+        # 파일이 없으면 캐시를 비우지 않고 빈 dict 반환
+        if not os.path.exists(path):
+            return {}
+
+        try:
+            mtime = os.path.getmtime(path)
+        except Exception:
+            mtime = None
+
+        # 캐시 사용 조건
+        if (
+            not force_reload
+            and self._symbol_overrides_cache is not None
+            and (now - float(self._symbol_overrides_loaded_at)) < ttl_sec
+            and (mtime is None or self._symbol_overrides_mtime == mtime)
+        ):
+            return self._symbol_overrides_cache or {}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+            if not isinstance(data, dict):
+                logger.warning("[Config] symbol_overrides.json 형식 오류: 최상위가 dict가 아님")
+                data = {}
+        except Exception as e:
+            logger.warning(f"[Config] symbol_overrides.json 로드 실패: {e}")
+            data = {}
+
+        self._symbol_overrides_cache = data
+        self._symbol_overrides_mtime = mtime
+        self._symbol_overrides_loaded_at = now
+        return data
+
+    def _get_symbol_override_from_file(self, stock_code: str, key: str) -> Any:
+        """
+        symbol_overrides.json에서 종목별 override 조회.
+
+        JSON 구조 예:
+        {
+          "symbols": {
+            "005930": {
+              "TIER2_VOLUME_MULTIPLIER": 1.1,
+              "TIER2_RSI_MAX": 75
+            }
+          }
+        }
+        """
+        data = self._load_symbol_overrides_json(force_reload=False)
+        symbols = data.get("symbols") if isinstance(data, dict) else None
+        if not isinstance(symbols, dict):
+            return None
+        per_symbol = symbols.get(str(stock_code))
+        if not isinstance(per_symbol, dict):
+            return None
+        if key in per_symbol:
+            return per_symbol.get(key)
+        return None
+
+    def get_for_symbol(self, stock_code: str, key: str, default: Any = None) -> Any:
+        """
+        종목별 설정 조회.
+
+        우선순위:
+        1) 메모리/환경변수/DB: SYMBOL_{code}__{key}
+        2) 파일 오버라이드: config/symbol_overrides.json
+        3) 전역 설정: {key}
+
+        Note:
+        - per-symbol 키는 레지스트리에 등록되지 않을 수 있으므로,
+          타입 변환은 get_int_for_symbol/get_float_for_symbol 등을 사용하세요.
+        """
+        symbol_key = self._symbol_override_key(stock_code, key)
+
+        # 1) 런타임/운영 오버라이드(메모리/ENV/DB)
+        v = self.get(symbol_key, default=None)
+        if v is not None:
+            return v
+
+        # 2) 파일 기반 오버라이드
+        file_v = self._get_symbol_override_from_file(stock_code, key)
+        if file_v is not None:
+            return file_v
+
+        # 3) 전역 키 fallback
+        return self.get(key, default=default)
+
+    def get_int_for_symbol(self, stock_code: str, key: str, default: int = None) -> int:
+        v = self.get_for_symbol(stock_code, key, default=None)
+        if v is None:
+            return default if default is not None else 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            logger.warning(f"[Config] '{stock_code}'의 '{key}'를 정수로 변환 실패: {v}, 기본값 사용")
+            return default if default is not None else 0
+
+    def get_float_for_symbol(self, stock_code: str, key: str, default: float = None) -> float:
+        v = self.get_for_symbol(stock_code, key, default=None)
+        if v is None:
+            return default if default is not None else 0.0
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            logger.warning(f"[Config] '{stock_code}'의 '{key}'를 실수로 변환 실패: {v}, 기본값 사용")
+            return default if default is not None else 0.0
+
+    def get_bool_for_symbol(self, stock_code: str, key: str, default: bool = None) -> bool:
+        v = self.get_for_symbol(stock_code, key, default=None)
+        if v is None:
+            return default if default is not None else False
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v)
     
     def get(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
         """

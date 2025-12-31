@@ -65,8 +65,11 @@ beautifulsoup4>=4.12.0
 # LLM Providers (Scout Pipeline)
 # -------------------------------------------
 
-# Google Gemini (뉴스 임베딩)
+# Google Gemini (뉴스 임베딩)sm
 google-generativeai>=0.5.0
+
+# Google Gemini 신규 SDK (google.genai import용 - AI Auditor 등)
+google-genai>=1.0.0
 
 # OpenAI (Judge)
 openai>=1.0.0

@@ -214,7 +214,7 @@ class PriceMonitor:
             if not daily_prices.empty and len(daily_prices) >= 15:
                 prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
                 rsi = strategy.calculate_rsi(prices[::-1], period=14)
-                threshold = self.config.get_float('SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
+                threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
                 if rsi and rsi >= threshold:
                     return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f})", "quantity_pct": 50.0}
 
