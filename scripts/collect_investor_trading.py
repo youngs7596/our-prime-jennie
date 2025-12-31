@@ -9,8 +9,8 @@ KRX(pykrx 라이브러리)를 통해 외국인/기관 순매수 데이터를 수
 데이터 소스: KRX 정보데이터시스템 (pykrx 래퍼)
 
 Usage:
-    DB_TYPE=MARIADB python3 scripts/collect_investor_trading.py --days 365 --codes 100
-    DB_TYPE=MARIADB python3 scripts/collect_investor_trading.py --days 730 --codes 200
+    python3 scripts/collect_investor_trading.py --days 365 --codes 100
+    python3 scripts/collect_investor_trading.py --days 730 --codes 200
 """
 
 import argparse
@@ -26,7 +26,6 @@ from dotenv import load_dotenv
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
 
-import shared.auth as auth
 import shared.database as database
 from shared.hybrid_scoring.schema import execute_upsert
 
@@ -37,60 +36,35 @@ TABLE_NAME = "STOCK_INVESTOR_TRADING"
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def ensure_table_exists(connection):
     """테이블이 없으면 생성"""
     cursor = connection.cursor()
     try:
-        if _is_mariadb():
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                    ID INT AUTO_INCREMENT PRIMARY KEY,
-                    TRADE_DATE DATE NOT NULL,
-                    STOCK_CODE VARCHAR(20) NOT NULL,
-                    STOCK_NAME VARCHAR(100),
-                    FOREIGN_BUY BIGINT DEFAULT 0 COMMENT '외국인 매수량',
-                    FOREIGN_SELL BIGINT DEFAULT 0 COMMENT '외국인 매도량',
-                    FOREIGN_NET_BUY BIGINT DEFAULT 0 COMMENT '외국인 순매수량',
-                    INSTITUTION_BUY BIGINT DEFAULT 0 COMMENT '기관 매수량',
-                    INSTITUTION_SELL BIGINT DEFAULT 0 COMMENT '기관 매도량',
-                    INSTITUTION_NET_BUY BIGINT DEFAULT 0 COMMENT '기관 순매수량',
-                    INDIVIDUAL_BUY BIGINT DEFAULT 0 COMMENT '개인 매수량',
-                    INDIVIDUAL_SELL BIGINT DEFAULT 0 COMMENT '개인 매도량',
-                    INDIVIDUAL_NET_BUY BIGINT DEFAULT 0 COMMENT '개인 순매수량',
-                    CLOSE_PRICE INT DEFAULT 0 COMMENT '종가',
-                    VOLUME BIGINT DEFAULT 0 COMMENT '거래량',
-                    SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE KEY UK_DATE_CODE (TRADE_DATE, STOCK_CODE)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='외국인/기관 투자자별 매매 데이터'
-            """)
-        else:
-            try:
-                cursor.execute(f"SELECT 1 FROM {TABLE_NAME} WHERE ROWNUM=1")
-            except Exception:
-                cursor.execute(f"""
-                    CREATE TABLE {TABLE_NAME} (
-                        ID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                        TRADE_DATE DATE NOT NULL,
-                        STOCK_CODE VARCHAR2(20) NOT NULL,
-                        STOCK_NAME VARCHAR2(100),
-                        FOREIGN_BUY NUMBER DEFAULT 0,
-                        FOREIGN_SELL NUMBER DEFAULT 0,
-                        FOREIGN_NET_BUY NUMBER DEFAULT 0,
-                        INSTITUTION_BUY NUMBER DEFAULT 0,
-                        INSTITUTION_SELL NUMBER DEFAULT 0,
-                        INSTITUTION_NET_BUY NUMBER DEFAULT 0,
-                        INDIVIDUAL_BUY NUMBER DEFAULT 0,
-                        INDIVIDUAL_SELL NUMBER DEFAULT 0,
-                        INDIVIDUAL_NET_BUY NUMBER DEFAULT 0,
-                        CLOSE_PRICE NUMBER DEFAULT 0,
-                        VOLUME NUMBER DEFAULT 0,
-                        SCRAPED_AT TIMESTAMP DEFAULT SYSTIMESTAMP,
-                        CONSTRAINT UK_DATE_CODE UNIQUE (TRADE_DATE, STOCK_CODE)
-                    )
-                """)
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+                ID INT AUTO_INCREMENT PRIMARY KEY,
+                TRADE_DATE DATE NOT NULL,
+                STOCK_CODE VARCHAR(20) NOT NULL,
+                STOCK_NAME VARCHAR(100),
+                FOREIGN_BUY BIGINT DEFAULT 0 COMMENT '외국인 매수량',
+                FOREIGN_SELL BIGINT DEFAULT 0 COMMENT '외국인 매도량',
+                FOREIGN_NET_BUY BIGINT DEFAULT 0 COMMENT '외국인 순매수량',
+                INSTITUTION_BUY BIGINT DEFAULT 0 COMMENT '기관 매수량',
+                INSTITUTION_SELL BIGINT DEFAULT 0 COMMENT '기관 매도량',
+                INSTITUTION_NET_BUY BIGINT DEFAULT 0 COMMENT '기관 순매수량',
+                INDIVIDUAL_BUY BIGINT DEFAULT 0 COMMENT '개인 매수량',
+                INDIVIDUAL_SELL BIGINT DEFAULT 0 COMMENT '개인 매도량',
+                INDIVIDUAL_NET_BUY BIGINT DEFAULT 0 COMMENT '개인 순매수량',
+                CLOSE_PRICE INT DEFAULT 0 COMMENT '종가',
+                VOLUME BIGINT DEFAULT 0 COMMENT '거래량',
+                SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY UK_DATE_CODE (TRADE_DATE, STOCK_CODE)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='외국인/기관 투자자별 매매 데이터'
+        """)
         connection.commit()
         logger.info(f"✅ 테이블 확인 완료: {TABLE_NAME}")
     except Exception as e:
@@ -102,23 +76,8 @@ def ensure_table_exists(connection):
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
 def load_stock_codes(limit: int = None) -> List[str]:

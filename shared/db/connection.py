@@ -63,8 +63,7 @@ def init_engine(
         max_sessions = int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "10")) + min_sessions
     """
     SQLAlchemy Engine + Session Factory를 초기화합니다.
-    기존 oracledb Connection Pool과 병행 운영되며,
-    추후에는 이 Engine을 기본 진입점으로 사용할 예정입니다.
+    현재 DB는 MariaDB로 단일화되어 있으며, Oracle(oracledb) 병행 운영은 종료되었습니다.
     """
     global _engine, _session_factory, _engine_config
 

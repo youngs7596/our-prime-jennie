@@ -35,40 +35,14 @@ def initialize_service():
     load_dotenv()
     
     try:
-        # 1. DB Connection Pool 초기화 (Cloud Run 인스턴스 내에서 재사용)
-        # Secret은 캐싱되므로 두 번째 호출부터는 빠르게 동작
+        # 1. DB 엔진 초기화 (MariaDB + SQLAlchemy 단일화)
+        # - Oracle/OCI Wallet 분기 제거: 더 이상 Oracle DB를 사용하지 않습니다.
         if not database.is_pool_initialized():
-            logger.info("🔧 DB Connection Pool 초기화 중... (Secret 캐싱 활성화)")
-            db_user = auth.get_secret(
-                os.getenv("SECRET_ID_ORACLE_DB_USER"), 
-                os.getenv("GCP_PROJECT_ID"),
-                use_cache=True  # Secret 캐싱 사용
-            )
-            db_password = auth.get_secret(
-                os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), 
-                os.getenv("GCP_PROJECT_ID"),
-                use_cache=True  # Secret 캐싱 사용
-            )
-            db_service_name = os.getenv("OCI_DB_SERVICE_NAME")
-            wallet_path = os.getenv("OCI_WALLET_DIR_NAME", "wallet")
-            
-            # 절대 경로로 변환
-            if not wallet_path.startswith('/'):
-                wallet_path = f"/app/{wallet_path}"
-            
-            # Pool 생성 (min=1, max=5로 설정하여 성능 최적화)
-            database.init_connection_pool(
-                db_user=db_user,
-                db_password=db_password,
-                db_service_name=db_service_name,
-                wallet_path=wallet_path,
-                min_sessions=1,  # 초기화 시간 단축
-                max_sessions=5,  # 성능 향상
-                increment=1
-            )
-            logger.info("✅ DB Connection Pool 초기화 완료 (Secret 캐싱 적용)")
+            logger.info("🔧 DB 엔진 초기화 중...")
+            database.init_connection_pool(min_sessions=1, max_sessions=5, increment=1)
+            logger.info("✅ DB 엔진 초기화 완료")
         else:
-            logger.info("✅ DB Connection Pool 이미 초기화됨 (재사용, Secret도 캐시됨)")
+            logger.info("✅ DB 엔진 이미 초기화됨 (재사용)")
         
         # 2. KIS API 초기화
         trading_mode = os.getenv("TRADING_MODE", "MOCK")

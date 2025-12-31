@@ -51,37 +51,14 @@ def initialize_service():
     load_dotenv()
     
     try:
-        # 1. DB Connection Pool 초기화
+        # 1. DB 엔진 초기화 (MariaDB + SQLAlchemy 단일화)
+        # - Oracle/OCI Wallet 분기 제거: 더 이상 Oracle DB를 사용하지 않습니다.
         if not database.is_pool_initialized():
-            logger.info("🔧 DB Connection Pool 초기화 중...")
-            db_user = auth.get_secret(
-                os.getenv("SECRET_ID_ORACLE_DB_USER") or "mariadb-user",
-                os.getenv("GCP_PROJECT_ID"),
-                use_cache=True
-            )
-            db_password = auth.get_secret(
-                os.getenv("SECRET_ID_ORACLE_DB_PASSWORD") or "mariadb-password",
-                os.getenv("GCP_PROJECT_ID"),
-                use_cache=True
-            )
-            db_service_name = os.getenv("OCI_DB_SERVICE_NAME")
-            wallet_path = os.getenv("OCI_WALLET_DIR_NAME", "wallet")
-            
-            if not wallet_path.startswith('/'):
-                wallet_path = f"/app/{wallet_path}"
-            
-            database.init_connection_pool(
-                db_user=db_user,
-                db_password=db_password,
-                db_service_name=db_service_name,
-                wallet_path=wallet_path,
-                min_sessions=1,
-                max_sessions=5,
-                increment=1
-            )
-            logger.info("✅ DB Connection Pool 초기화 완료")
+            logger.info("🔧 DB 엔진 초기화 중...")
+            database.init_connection_pool(min_sessions=1, max_sessions=5, increment=1)
+            logger.info("✅ DB 엔진 초기화 완료")
         else:
-            logger.info("✅ DB Connection Pool 이미 초기화됨")
+            logger.info("✅ DB 엔진 이미 초기화됨")
         
         # 1.5. SQLAlchemy 엔진 초기화 (session_scope 사용을 위해 필수)
         try:

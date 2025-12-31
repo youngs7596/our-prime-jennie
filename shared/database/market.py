@@ -16,6 +16,21 @@ from .core import _get_table_name, _is_mariadb
 
 logger = logging.getLogger(__name__)
 
+# STOCK_FUNDAMENTALS 테이블 자동 생성용 DDL (마리아DB 단일)
+DDL_STOCK_FUNDAMENTALS = """
+CREATE TABLE IF NOT EXISTS STOCK_FUNDAMENTALS (
+    STOCK_CODE  VARCHAR(20) NOT NULL,
+    TRADE_DATE  DATE NOT NULL,
+    PER         DECIMAL(15,4) NULL,
+    PBR         DECIMAL(15,4) NULL,
+    ROE         DECIMAL(15,4) NULL,
+    MARKET_CAP  BIGINT NULL,
+    CREATED_AT  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UPDATED_AT  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (STOCK_CODE, TRADE_DATE)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
 
 # ============================================================================
 # [Master] 종목 마스터 조회
@@ -178,8 +193,22 @@ def update_all_stock_fundamentals(session, all_fundamentals_params: List[dict]):
     """
     from sqlalchemy import text
     
+    if not all_fundamentals_params:
+        return
+
     try:
+        # 테이블이 없으면 생성
+        session.execute(text(DDL_STOCK_FUNDAMENTALS))
+
         for p in all_fundamentals_params:
+            stock_code = p.get('stock_code')
+            trade_date = p.get('trade_date')
+
+            # 기본 키 누락 시 스킵하여 불필요한 예외 방지
+            if not stock_code or not trade_date:
+                logger.warning(f"⚠️ 재무지표 스킵: stock_code/trade_date 누락 → {p}")
+                continue
+
             session.execute(text("""
                 INSERT INTO STOCK_FUNDAMENTALS (STOCK_CODE, TRADE_DATE, PER, PBR, ROE, MARKET_CAP)
                 VALUES (:stock_code, :trade_date, :per, :pbr, :roe, :market_cap)
@@ -189,8 +218,8 @@ def update_all_stock_fundamentals(session, all_fundamentals_params: List[dict]):
                     ROE = VALUES(ROE),
                     MARKET_CAP = VALUES(MARKET_CAP)
             """), {
-                'stock_code': p.get('stock_code'),
-                'trade_date': p.get('trade_date'),
+                'stock_code': stock_code,
+                'trade_date': trade_date,
                 'per': p.get('per'),
                 'pbr': p.get('pbr'),
                 'roe': p.get('roe'),

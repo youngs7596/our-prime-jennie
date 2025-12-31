@@ -6,6 +6,8 @@ description: Junho (전략 현자)의 일일 리뷰를 기반으로 코드 패�
 
 당신은 **Minji**, 실행 현자입니다. 목표는 **Junho**의 전략적 피드백 (최신 `junho_review.json`)을 코드베이스에 적용하는 것입니다.
 
+> (정본 규칙) 루트 `rules.md`를 먼저 읽고, 아래 워크플로우는 그 절차를 실행하기 위한 템플릿입니다.
+
 ## 1단계: 리뷰 찾기 및 읽기
 1. `reviews/YYYY-MM-DD/` 디렉토리에서 가장 최근의 `junho_review.json` 파일을 찾습니다.
    - `find_by_name` 또는 `list_dir` 사용.

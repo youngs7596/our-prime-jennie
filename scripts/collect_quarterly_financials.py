@@ -57,20 +57,16 @@ CREATE TABLE IF NOT EXISTS FINANCIAL_METRICS_QUARTERLY (
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def ensure_table_exists(conn):
     """테이블 생성"""
     cursor = conn.cursor()
     try:
-        if _is_mariadb():
-            cursor.execute("SHOW TABLES LIKE 'financial_metrics_quarterly'")
-            exists = cursor.fetchone() is not None
-        else:
-            cursor.execute("SELECT COUNT(*) FROM user_tables WHERE table_name = 'FINANCIAL_METRICS_QUARTERLY'")
-            row = cursor.fetchone()
-            exists = (list(row.values())[0] if isinstance(row, dict) else row[0]) > 0
+        cursor.execute("SHOW TABLES LIKE 'financial_metrics_quarterly'")
+        exists = cursor.fetchone() is not None
         
         if not exists:
             logger.info("테이블 'FINANCIAL_METRICS_QUARTERLY' 생성 중...")
@@ -356,64 +352,36 @@ def save_quarterly_metrics(conn, metrics_list: list) -> int:
     
     try:
         for m in metrics_list:
-            if _is_mariadb():
-                sql = """
-                INSERT INTO FINANCIAL_METRICS_QUARTERLY 
-                    (STOCK_CODE, QUARTER_DATE, QUARTER_NAME, EPS, BPS, NET_INCOME, 
-                     TOTAL_EQUITY, CLOSE_PRICE, PER, PBR, ROE)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    QUARTER_NAME = VALUES(QUARTER_NAME),
-                    EPS = VALUES(EPS),
-                    BPS = VALUES(BPS),
-                    NET_INCOME = VALUES(NET_INCOME),
-                    TOTAL_EQUITY = VALUES(TOTAL_EQUITY),
-                    CLOSE_PRICE = VALUES(CLOSE_PRICE),
-                    PER = VALUES(PER),
-                    PBR = VALUES(PBR),
-                    ROE = VALUES(ROE),
-                    UPDATED_AT = CURRENT_TIMESTAMP
-                """
-                cursor.execute(sql, (
-                    m.get('stock_code'),
-                    m.get('quarter_date'),
-                    m.get('quarter_name'),
-                    m.get('eps'),
-                    m.get('bps'),
-                    m.get('net_income'),
-                    m.get('total_equity'),
-                    m.get('close_price'),
-                    m.get('per'),
-                    m.get('pbr'),
-                    m.get('roe'),
-                ))
-            else:
-                # Oracle MERGE
-                sql = """
-                MERGE INTO FINANCIAL_METRICS_QUARTERLY t
-                USING (SELECT :code AS STOCK_CODE, TO_DATE(:qdate, 'YYYY-MM-DD') AS QUARTER_DATE FROM DUAL) s
-                ON (t.STOCK_CODE = s.STOCK_CODE AND t.QUARTER_DATE = s.QUARTER_DATE)
-                WHEN MATCHED THEN UPDATE SET
-                    QUARTER_NAME = :qname, EPS = :eps, BPS = :bps, NET_INCOME = :net_income,
-                    TOTAL_EQUITY = :total_equity, CLOSE_PRICE = :close_price,
-                    PER = :per, PBR = :pbr, ROE = :roe
-                WHEN NOT MATCHED THEN INSERT
-                    (STOCK_CODE, QUARTER_DATE, QUARTER_NAME, EPS, BPS, NET_INCOME, TOTAL_EQUITY, CLOSE_PRICE, PER, PBR, ROE)
-                VALUES (:code, TO_DATE(:qdate, 'YYYY-MM-DD'), :qname, :eps, :bps, :net_income, :total_equity, :close_price, :per, :pbr, :roe)
-                """
-                cursor.execute(sql, {
-                    'code': m.get('stock_code'),
-                    'qdate': m.get('quarter_date'),
-                    'qname': m.get('quarter_name'),
-                    'eps': m.get('eps'),
-                    'bps': m.get('bps'),
-                    'net_income': m.get('net_income'),
-                    'total_equity': m.get('total_equity'),
-                    'close_price': m.get('close_price'),
-                    'per': m.get('per'),
-                    'pbr': m.get('pbr'),
-                    'roe': m.get('roe'),
-                })
+            sql = """
+            INSERT INTO FINANCIAL_METRICS_QUARTERLY 
+                (STOCK_CODE, QUARTER_DATE, QUARTER_NAME, EPS, BPS, NET_INCOME, 
+                 TOTAL_EQUITY, CLOSE_PRICE, PER, PBR, ROE)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                QUARTER_NAME = VALUES(QUARTER_NAME),
+                EPS = VALUES(EPS),
+                BPS = VALUES(BPS),
+                NET_INCOME = VALUES(NET_INCOME),
+                TOTAL_EQUITY = VALUES(TOTAL_EQUITY),
+                CLOSE_PRICE = VALUES(CLOSE_PRICE),
+                PER = VALUES(PER),
+                PBR = VALUES(PBR),
+                ROE = VALUES(ROE),
+                UPDATED_AT = CURRENT_TIMESTAMP
+            """
+            cursor.execute(sql, (
+                m.get('stock_code'),
+                m.get('quarter_date'),
+                m.get('quarter_name'),
+                m.get('eps'),
+                m.get('bps'),
+                m.get('net_income'),
+                m.get('total_equity'),
+                m.get('close_price'),
+                m.get('per'),
+                m.get('pbr'),
+                m.get('roe'),
+            ))
             saved += 1
         
         conn.commit()
@@ -431,14 +399,9 @@ def get_kospi_codes(conn, limit: int = None) -> list:
     cursor = conn.cursor()
     
     try:
-        if _is_mariadb():
-            sql = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
-            if limit:
-                sql += f" LIMIT {limit}"
-        else:
-            sql = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
-            if limit:
-                sql = f"SELECT * FROM ({sql}) WHERE ROWNUM <= {limit}"
+        sql = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
+        if limit:
+            sql += f" LIMIT {limit}"
         
         cursor.execute(sql)
         rows = cursor.fetchall()
@@ -465,10 +428,7 @@ def main():
     logger.info("=" * 60)
     
     # DB 연결
-    conn = database.get_db_connection(
-        db_user='dummy', db_password='dummy',
-        db_service_name='dummy', wallet_path='dummy'
-    )
+    conn = database.get_db_connection()
     
     if not conn:
         logger.error("❌ DB 연결 실패")

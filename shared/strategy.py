@@ -7,6 +7,7 @@ import math
 import os
 
 import pandas as pd
+import numpy as np
 
 # "youngs75_jennie.strategy" 이름으로 로거 생성
 logger = logging.getLogger(__name__) 
@@ -67,7 +68,10 @@ def calculate_moving_average(prices_list, period=20):
     주어진 가격 리스트로 이동평균(MA)을 계산합니다.
     (prices_list: [최신, ..., 과거] 순서)
     """
-    if prices_list is None or len(prices_list) < period:
+    if prices_list is None:
+        logger.debug(f"   (MA) 데이터가 None으로 계산 불가")
+        return None
+    if len(prices_list) < period:
         logger.debug(f"   (MA) {period}일치 데이터 부족 ({len(prices_list)}일)으로 계산 불가")
         return None
     if _RUST_BACKEND_ENABLED and _rust_moving_average:
@@ -80,8 +84,11 @@ def calculate_moving_average(prices_list, period=20):
             except Exception as rust_err:  # pragma: no cover - diagnostics only
                 logger.debug("⚠️ Rust MA 계산 실패, Python 로직으로 폴백: %s", rust_err)
     recent_prices = prices_list[:period]
-    series = pd.Series(recent_prices)
-    return series.mean()
+    series = _to_numeric_series(recent_prices, reverse=False)
+    if series is None or len(series) < period:
+        return None
+    arr = series.to_numpy(dtype=float, copy=False)
+    return float(np.mean(arr))
 
 # --- (수정: calculate_rsi) ---
 def calculate_rsi(data, period=14):
@@ -93,41 +100,50 @@ def calculate_rsi(data, period=14):
     series = None
     
     # 1. 입력 데이터 타입에 따라 pd.Series로 변환
+    arr = None
     if isinstance(data, pd.DataFrame):
         if 'CLOSE_PRICE' not in data.columns or len(data) < period + 1:
             logger.debug(f"   (RSI) DataFrame 데이터 부족 ({len(data)}일) 또는 'CLOSE_PRICE' 컬럼 없음")
             return None
-        series = data['CLOSE_PRICE']
+        arr = pd.to_numeric(data['CLOSE_PRICE'], errors="coerce").to_numpy(dtype=float)
     elif isinstance(data, list):
         if len(data) < period + 1:
             logger.debug(f"   (RSI) List 데이터 부족 ({len(data)}일)으로 계산 불가")
             return None
-        prices_reversed = data[::-1] # [과거, ..., 최신] 순으로 변경
-        series = pd.Series(prices_reversed)
+        prices_reversed = data[::-1]  # [과거, ..., 최신]
+        arr = np.asarray(prices_reversed, dtype=float)
     else:
         logger.error(f"❌ (RSI) 지원하지 않는 데이터 타입: {type(data)}")
         return None
 
-    # 2. RSI 계산 로직 (공통)
+    arr = arr[~np.isnan(arr)]
+    if arr.size < period + 1:
+        logger.debug("   (RSI) 유효 데이터 부족으로 계산 불가")
+        return None
+
     try:
         if _RUST_BACKEND_ENABLED and _rust_rsi:
-            rust_ready = _prepare_sequence(series.tolist())
+            rust_ready = _prepare_sequence(arr.tolist())
             if rust_ready and len(rust_ready) >= period + 1:
                 rust_value = _rust_rsi(rust_ready, period)
                 if rust_value is not None:
                     return rust_value
-        delta = series.diff(1).dropna()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
-        avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
-        
-        if avg_loss.iloc[-1] == 0: 
-            return 100.0 if avg_gain.iloc[-1] > 0 else 50.0 
-            
+
+        delta = np.diff(arr)
+        gains = np.where(delta > 0, delta, 0.0)
+        losses = np.where(delta < 0, -delta, 0.0)
+
+        gain_series = pd.Series(gains)
+        loss_series = pd.Series(losses)
+        avg_gain = gain_series.ewm(com=period - 1, min_periods=period).mean().iloc[-1]
+        avg_loss = loss_series.ewm(com=period - 1, min_periods=period).mean().iloc[-1]
+
+        if avg_loss == 0:
+            return 100.0 if avg_gain > 0 else 50.0
+
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
-        return rsi.iloc[-1]
+        return float(rsi)
     except Exception as e:
         logger.error(f"❌ (RSI) RSI 계산 중 오류 발생: {e}", exc_info=True)
         return None
@@ -138,7 +154,10 @@ def calculate_atr(daily_prices_df, period=14):
     '3단계 ATR 스탑'을 위한 ATR(Average True Range)을 계산합니다.
     (daily_prices_df: 날짜 오름차순 정렬)
     """
-    if daily_prices_df is None or len(daily_prices_df) < period:
+    if daily_prices_df is None:
+        logger.debug("   (ATR) 데이터가 None으로 계산 불가")
+        return None
+    if len(daily_prices_df) < period:
         logger.debug(f"   (ATR) {period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
         return None
         
@@ -158,6 +177,13 @@ def calculate_atr(daily_prices_df, period=14):
                     return rust_value
 
         df = daily_prices_df.copy()
+        df['CLOSE_PRICE'] = _to_numeric_series(df['CLOSE_PRICE'])
+        df['HIGH_PRICE'] = _to_numeric_series(df['HIGH_PRICE'])
+        df['LOW_PRICE'] = _to_numeric_series(df['LOW_PRICE'])
+        df = df.dropna(subset=['CLOSE_PRICE', 'HIGH_PRICE', 'LOW_PRICE'])
+        if len(df) < period:
+            logger.debug(f"   (ATR) 유효 데이터 부족 ({len(df)}일)")
+            return None
         df['prev_close'] = df['CLOSE_PRICE'].shift(1)
         df['tr1'] = df['HIGH_PRICE'] - df['LOW_PRICE']
         df['tr2'] = abs(df['HIGH_PRICE'] - df['prev_close'])
@@ -185,7 +211,10 @@ def calculate_bollinger_bands(daily_prices_df, period=20, std_dev=2):
         return None
     
     try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < period:
+            logger.debug(f"   (BB) 유효 데이터 부족 ({len(series) if series is not None else 0}일)")
+            return None
         rolling_mean = series.rolling(window=period).mean()
         rolling_std = series.rolling(window=period).std()
         
@@ -211,9 +240,8 @@ def check_golden_cross(daily_prices_df, short_period=5, long_period=20):
     if len(daily_prices_df) < long_period:
         logger.debug(f"   (MA) {long_period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
         return False
-        
     try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = pd.to_numeric(daily_prices_df['CLOSE_PRICE'], errors="coerce").dropna()
         short_ma = series.rolling(window=short_period).mean()
         long_ma = series.rolling(window=long_period).mean()
         
@@ -244,7 +272,7 @@ def check_death_cross(daily_prices_df, short_period=5, long_period=20):
         return False
         
     try:
-        series = daily_prices_df['CLOSE_PRICE']
+        series = pd.to_numeric(daily_prices_df['CLOSE_PRICE'], errors="coerce").dropna()
         short_ma = series.rolling(window=short_period).mean()
         long_ma = series.rolling(window=long_period).mean()
         
@@ -258,10 +286,26 @@ def check_death_cross(daily_prices_df, short_period=5, long_period=20):
         if yesterday_short_ma >= yesterday_long_ma and today_short_ma < today_long_ma:
             return True
         return False
-        
     except Exception as e:
         logger.error(f"❌ (MA) 데드 크로스 계산 중 오류 발생: {e}", exc_info=True)
         return False
+
+# -----------------------------------------------------------------
+# 헬퍼: 숫자 변환 + NA 제거
+# -----------------------------------------------------------------
+def _to_numeric_series(values, reverse=False):
+    """
+    값 시퀀스를 float 변환 후 NA 제거하여 pd.Series 반환.
+    reverse=True이면 순서 뒤집음.
+    """
+    try:
+        series = pd.Series(values[::-1] if reverse else values)
+        series = pd.to_numeric(series, errors="coerce")
+        series = series.dropna()
+        return series
+    except Exception as e:
+        logger.error(f"❌ (_to_numeric_series) 변환 실패: {e}")
+        return None
 
 # -----------------------------------------------------------
 # '수익 실현' 신호 (RSI 과열)
@@ -416,3 +460,218 @@ def check_long_term_trend(current_price, ma_value):
     if ma_value is None or ma_value == 0:
         return False
     return current_price >= ma_value
+
+
+# ===================================================================
+# 볼린저밴드 스퀴즈 (Bollinger Squeeze)
+# ===================================================================
+def check_bollinger_squeeze(daily_prices_df, period=20, std_dev=2, squeeze_threshold=0.06):
+    """
+    볼린저밴드 스퀴즈 상태를 확인합니다.
+    
+    스퀴즈란 밴드폭이 줄어든 상태로, 이후 큰 가격 변동이 예상됩니다.
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        period: 볼린저 밴드 기간 (기본 20일)
+        std_dev: 표준편차 배수 (기본 2)
+        squeeze_threshold: 스퀴즈 판정 임계값 (밴드폭/중심선 비율, 기본 6%)
+    
+    Returns:
+        dict: {
+            'is_squeeze': bool,        # 스퀴즈 상태 여부
+            'bandwidth': float,        # 밴드폭 비율 (%)
+            'position': str,           # 'upper', 'middle', 'lower' (현재가 위치)
+            'upper_band': float,
+            'middle_band': float,
+            'lower_band': float,
+        } 또는 None (데이터 부족)
+    """
+    if len(daily_prices_df) < period:
+        return None
+    
+    try:
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < period:
+            return None
+        
+        rolling_mean = series.rolling(window=period).mean()
+        rolling_std = series.rolling(window=period).std()
+        
+        middle_band = rolling_mean.iloc[-1]
+        upper_band = middle_band + (rolling_std.iloc[-1] * std_dev)
+        lower_band = middle_band - (rolling_std.iloc[-1] * std_dev)
+        
+        # 밴드폭 계산 (중심선 대비 비율)
+        bandwidth = (upper_band - lower_band) / middle_band if middle_band > 0 else 0
+        
+        # 스퀴즈 판정
+        is_squeeze = bandwidth < squeeze_threshold
+        
+        # 현재가 위치 판정
+        current_price = series.iloc[-1]
+        if current_price >= upper_band:
+            position = 'upper'
+        elif current_price <= lower_band:
+            position = 'lower'
+        else:
+            position = 'middle'
+        
+        return {
+            'is_squeeze': is_squeeze,
+            'bandwidth': round(bandwidth * 100, 2),  # 퍼센트로 변환
+            'position': position,
+            'upper_band': upper_band,
+            'middle_band': middle_band,
+            'lower_band': lower_band,
+        }
+    except Exception as e:
+        logger.error(f"❌ (BB Squeeze) 볼린저 스퀴즈 계산 중 오류: {e}", exc_info=True)
+        return None
+
+
+# ===================================================================
+# MACD (Moving Average Convergence Divergence)
+# ===================================================================
+def calculate_macd(daily_prices_df, fast=12, slow=26, signal=9):
+    """
+    MACD 지표를 계산합니다.
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        fast: 빠른 EMA 기간 (기본 12)
+        slow: 느린 EMA 기간 (기본 26)
+        signal: 시그널 라인 기간 (기본 9)
+    
+    Returns:
+        dict: {
+            'macd': float,           # MACD 값 (빠른 EMA - 느린 EMA)
+            'signal_line': float,    # 시그널 라인 (MACD의 9일 EMA)
+            'histogram': float,      # 히스토그램 (MACD - 시그널)
+            'is_bullish': bool,      # MACD > 시그널 (상승 신호)
+            'is_crossing_up': bool,  # 골든 크로스 발생
+            'is_crossing_down': bool # 데드 크로스 발생
+        } 또는 None (데이터 부족)
+    """
+    min_periods = slow + signal
+    if len(daily_prices_df) < min_periods:
+        return None
+    
+    try:
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None or len(series) < min_periods:
+            return None
+        
+        # EMA 계산
+        ema_fast = series.ewm(span=fast, adjust=False).mean()
+        ema_slow = series.ewm(span=slow, adjust=False).mean()
+        
+        # MACD 라인
+        macd_line = ema_fast - ema_slow
+        
+        # 시그널 라인
+        signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+        
+        # 히스토그램
+        histogram = macd_line - signal_line
+        
+        # 최신 값
+        macd = macd_line.iloc[-1]
+        sig = signal_line.iloc[-1]
+        hist = histogram.iloc[-1]
+        
+        # 크로스 판정 (어제 vs 오늘)
+        yesterday_macd = macd_line.iloc[-2]
+        yesterday_sig = signal_line.iloc[-2]
+        
+        is_crossing_up = yesterday_macd <= yesterday_sig and macd > sig
+        is_crossing_down = yesterday_macd >= yesterday_sig and macd < sig
+        
+        return {
+            'macd': round(macd, 2),
+            'signal_line': round(sig, 2),
+            'histogram': round(hist, 2),
+            'is_bullish': macd > sig,
+            'is_crossing_up': is_crossing_up,
+            'is_crossing_down': is_crossing_down,
+        }
+    except Exception as e:
+        logger.error(f"❌ (MACD) MACD 계산 중 오류: {e}", exc_info=True)
+        return None
+
+
+def check_macd_divergence(daily_prices_df, lookback=10):
+    """
+    MACD 다이버전스를 확인합니다.
+    
+    - 베어리시 다이버전스: 가격은 고점 갱신, MACD는 하락 → 하락 신호
+    - 불리시 다이버전스: 가격은 저점 갱신, MACD는 상승 → 상승 신호
+    
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        lookback: 비교 기간 (기본 10일)
+    
+    Returns:
+        dict: {
+            'bearish_divergence': bool,  # 베어리시 다이버전스 (하락 경고)
+            'bullish_divergence': bool,  # 불리시 다이버전스 (상승 신호)
+            'price_trend': str,          # 'up', 'down', 'sideways'
+            'macd_trend': str,           # 'up', 'down', 'sideways'
+        } 또는 None
+    """
+    if len(daily_prices_df) < 26 + lookback:
+        return None
+    
+    try:
+        macd_data = calculate_macd(daily_prices_df)
+        if not macd_data:
+            return None
+        
+        series = _to_numeric_series(daily_prices_df['CLOSE_PRICE'])
+        if series is None:
+            return None
+        
+        # 최근 lookback 기간의 가격 추세
+        recent_prices = series.tail(lookback)
+        price_start = recent_prices.iloc[0]
+        price_end = recent_prices.iloc[-1]
+        price_change = (price_end - price_start) / price_start if price_start > 0 else 0
+        
+        # MACD 추세 (직접 계산)
+        ema_fast = series.ewm(span=12, adjust=False).mean()
+        ema_slow = series.ewm(span=26, adjust=False).mean()
+        macd_line = ema_fast - ema_slow
+        
+        recent_macd = macd_line.tail(lookback)
+        macd_start = recent_macd.iloc[0]
+        macd_end = recent_macd.iloc[-1]
+        macd_change = macd_end - macd_start
+        
+        # 추세 판정
+        if price_change > 0.02:
+            price_trend = 'up'
+        elif price_change < -0.02:
+            price_trend = 'down'
+        else:
+            price_trend = 'sideways'
+        
+        if macd_change > 0:
+            macd_trend = 'up'
+        elif macd_change < 0:
+            macd_trend = 'down'
+        else:
+            macd_trend = 'sideways'
+        
+        # 다이버전스 판정
+        bearish_divergence = price_trend == 'up' and macd_trend == 'down'
+        bullish_divergence = price_trend == 'down' and macd_trend == 'up'
+        
+        return {
+            'bearish_divergence': bearish_divergence,
+            'bullish_divergence': bullish_divergence,
+            'price_trend': price_trend,
+            'macd_trend': macd_trend,
+        }
+    except Exception as e:
+        logger.error(f"❌ (MACD Divergence) 다이버전스 확인 중 오류: {e}", exc_info=True)
+        return None

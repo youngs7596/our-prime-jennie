@@ -166,25 +166,28 @@ def _perform_scan(trigger_source: str = "manual") -> dict:
         logger.warning(f"⏸️ 매수 일시 중지 상태입니다. 스캔을 건너뜁니다. (사유: {reason})")
         return {"status": "trading_paused", "reason": reason}
 
-    # 장 운영 여부 확인 (가능한 경우)
-    try:
-        if hasattr(scanner.kis, "check_market_open"):
-            if not scanner.kis.check_market_open():
-                logger.warning("💤 시장 미운영(휴장/주말/장외)으로 스캔을 건너뜁니다.")
-                return {"status": "market_closed", "dry_run": True}
-        else:
-            # Gateway 클라이언트인 경우 최소한 주말/시간 필터 적용
-            from datetime import datetime
-            import pytz
-            kst = pytz.timezone("Asia/Seoul")
-            now = datetime.now(kst)
-            if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
-                logger.warning("💤 시장 미운영 시간(주말/장외)으로 스캔을 건너뜁니다.")
-                return {"status": "market_closed", "dry_run": True}
-    except Exception as e:
-        logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
-        # 체크 실패 시 안전하게 스캔을 중단
-        return {"status": "market_check_failed", "error": str(e)}
+    # 장 운영 여부 확인 (가능한 경우) — mock/test에서는 스킵 가능
+    disable_market_open_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+    is_mock_mode = os.getenv("TRADING_MODE", "REAL").lower() == "mock"
+    if not disable_market_open_check and not is_mock_mode:
+        try:
+            if hasattr(scanner.kis, "check_market_open"):
+                if not scanner.kis.check_market_open():
+                    logger.warning("💤 시장 미운영(휴장/주말/장외)으로 스캔을 건너뜁니다.")
+                    return {"status": "market_closed", "dry_run": True}
+            else:
+                # Gateway 클라이언트인 경우 최소한 주말/시간 필터 적용
+                from datetime import datetime
+                import pytz
+                kst = pytz.timezone("Asia/Seoul")
+                now = datetime.now(kst)
+                if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
+                    logger.warning("💤 시장 미운영 시간(주말/장외)으로 스캔을 건너뜁니다.")
+                    return {"status": "market_closed", "dry_run": True}
+        except Exception as e:
+            logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
+            # 체크 실패 시 안전하게 스캔을 중단
+            return {"status": "market_check_failed", "error": str(e)}
 
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
     logger.info("=== 매수 신호 스캔 시작 (trigger=%s) ===", trigger_source)

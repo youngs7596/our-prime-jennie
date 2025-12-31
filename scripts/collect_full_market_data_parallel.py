@@ -5,7 +5,7 @@
 """
 scripts/collect_full_market_data_parallel.py
 KOSPI 전 종목의 700일치 데이터를 병렬로 수집합니다.
-- MariaDB/Oracle 하이브리드 지원 (Claude Opus 4.5)
+- MariaDB 단일 지원 (Oracle/분기 제거)
 """
 
 import os
@@ -35,28 +35,21 @@ MAX_WORKERS = 5  # 동시 실행 스레드 수 (API 제한 고려)
 DAYS_TO_COLLECT = 711
 
 def _is_mariadb() -> bool:
-    """현재 DB 타입이 MariaDB인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    """단일화: MariaDB만 사용"""
+    return True
 
-def collect_stock_data(code, kis_client, db_config):
+def collect_stock_data(code, kis_client):
     """단일 종목 데이터 수집 및 저장 (스레드에서 실행)"""
     conn = None
     try:
         # DB 연결 (스레드별 독립 연결)
-        conn = database.get_db_connection(**db_config)
+        conn = database.get_db_connection()
         if not conn:
             logger.error(f"❌ [{code}] DB 연결 실패")
             return False
             
         cur = conn.cursor()
         
-        # Oracle 전용: 병렬 DML 비활성화 (ORA-12838 방지)
-        if not _is_mariadb():
-            try:
-                cur.execute("ALTER SESSION DISABLE PARALLEL DML")
-            except:
-                pass
-            
         market_data = MarketData(kis_client)
         
         end_date = datetime.now().strftime("%Y%m%d")
@@ -69,54 +62,23 @@ def collect_stock_data(code, kis_client, db_config):
             logger.warning(f"⚠️ [{code}] 데이터 없음")
             return False
             
-        # DB 저장
-        if _is_mariadb():
-            # MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
-            sql = """
-            INSERT INTO STOCK_DAILY_PRICES_3Y 
-                (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                OPEN_PRICE = VALUES(OPEN_PRICE),
-                HIGH_PRICE = VALUES(HIGH_PRICE),
-                LOW_PRICE = VALUES(LOW_PRICE),
-                CLOSE_PRICE = VALUES(CLOSE_PRICE),
-                VOLUME = VALUES(VOLUME)
-            """
-            for row in rows:
-                cur.execute(sql, (
-                    code, row['date'], row['open'], row['high'], 
-                    row['low'], row['close'], row['volume']
-                ))
-        else:
-            # Oracle: MERGE INTO
-            for row in rows:
-                params = {
-                    'code': code,
-                    'pdate': row['date'],
-                    'open': row['open'],
-                    'high': row['high'],
-                    'low': row['low'],
-                    'close': row['close'],
-                    'vol': row['volume']
-                }
-                
-                merge_sql = """
-                MERGE INTO STOCK_DAILY_PRICES_3Y target
-                USING (SELECT :code AS STOCK_CODE, TO_DATE(:pdate, 'YYYY-MM-DD') AS PRICE_DATE FROM DUAL) source
-                ON (target.STOCK_CODE = source.STOCK_CODE AND target.PRICE_DATE = source.PRICE_DATE)
-                WHEN MATCHED THEN
-                    UPDATE SET 
-                        OPEN_PRICE = :open,
-                        HIGH_PRICE = :high,
-                        LOW_PRICE = :low,
-                        CLOSE_PRICE = :close,
-                        VOLUME = :vol
-                WHEN NOT MATCHED THEN
-                    INSERT (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
-                    VALUES (:code, TO_DATE(:pdate, 'YYYY-MM-DD'), :open, :high, :low, :close, :vol)
-                """
-                cur.execute(merge_sql, params)
+        # DB 저장 (MariaDB: INSERT ... ON DUPLICATE KEY UPDATE)
+        sql = """
+        INSERT INTO STOCK_DAILY_PRICES_3Y 
+            (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            OPEN_PRICE = VALUES(OPEN_PRICE),
+            HIGH_PRICE = VALUES(HIGH_PRICE),
+            LOW_PRICE = VALUES(LOW_PRICE),
+            CLOSE_PRICE = VALUES(CLOSE_PRICE),
+            VOLUME = VALUES(VOLUME)
+        """
+        for row in rows:
+            cur.execute(sql, (
+                code, row['date'], row['open'], row['high'], 
+                row['low'], row['close'], row['volume']
+            ))
         
         conn.commit()
         cur.close()
@@ -133,10 +95,6 @@ def collect_stock_data(code, kis_client, db_config):
 
 def main():
     load_dotenv()
-    
-    # DB 타입 확인
-    db_type = os.getenv("DB_TYPE", "ORACLE").upper()
-    logger.info(f"DB 타입: {db_type}")
     
     # KIS Client 초기화 (공유)
     project_id = os.getenv("GCP_PROJECT_ID")
@@ -168,26 +126,7 @@ def main():
         logger.error("KIS API 인증 실패")
         return
 
-    # DB 설정 (스레드에 전달용)
-    # MariaDB는 환경변수에서 직접 읽으므로 Oracle 형식의 더미 값 전달
-    if _is_mariadb():
-        db_config = {
-            "db_user": "dummy",  # MariaDB는 환경변수에서 읽음
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy"
-        }
-    else:
-        db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-        db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-        wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-        
-        db_config = {
-            "db_user": db_user,
-            "db_password": db_password,
-            "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-            "wallet_path": wallet_path
-        }
+    # DB 설정: MariaDB 단일화로 스레드에 별도 설정을 전달하지 않습니다.
 
     # KOSPI 종목 리스트 가져오기
     logger.info("FinanceDataReader를 사용하여 KOSPI 종목 리스트를 가져옵니다...")
@@ -201,7 +140,7 @@ def main():
     fail_count = 0
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_code = {executor.submit(collect_stock_data, code, kis_client, db_config): code for code in codes}
+        future_to_code = {executor.submit(collect_stock_data, code, kis_client): code for code in codes}
         
         for i, future in enumerate(as_completed(future_to_code)):
             code = future_to_code[future]

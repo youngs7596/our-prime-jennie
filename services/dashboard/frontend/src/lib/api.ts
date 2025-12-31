@@ -148,6 +148,18 @@ export const llmApi = {
   },
 }
 
+// Config Registry API
+export const configApi = {
+  list: async () => {
+    const response = await api.get('/config')
+    return response.data
+  },
+  update: async (key: string, value: any, description?: string) => {
+    const response = await api.put(`/config/${key}`, { value, description })
+    return response.data
+  },
+}
+
 // NEW: 3 Sages Council API
 
 export const councilApi = {

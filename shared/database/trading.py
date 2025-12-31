@@ -36,26 +36,57 @@ def get_active_watchlist(connection) -> Dict[str, Dict]:
     watchlist = {}
     
     # SQLAlchemy Session인지 확인
+    def _parse_llm_reason(raw_reason: str):
+        marker = "[LLM_METADATA]"
+        metadata = {}
+        clean = raw_reason or ""
+        if raw_reason and marker in raw_reason:
+            base, metadata_raw = raw_reason.split(marker, 1)
+            clean = base.strip()
+            try:
+                metadata = json.loads(metadata_raw.strip())
+            except Exception:
+                metadata = {}
+        return clean, metadata
+
     if isinstance(connection, Session):
-        result = connection.execute(text("SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON FROM WatchList"))
+        # TRADE_TIER 컬럼은 Project Recon v1.1 이후 존재합니다. (없으면 NULL)
+        result = connection.execute(
+            text(
+                f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON, "
+                f"TRADE_TIER FROM {db_models.resolve_table_name('WATCHLIST')}"
+            )
+        )
         rows = result.fetchall()
         for row in rows:
             code = row[0]
             name = row[1]
             is_tradable = row[2]
             llm_score = row[3]
-            llm_reason = row[4]
+            llm_reason_raw = row[4]
+            trade_tier_db = row[5] if len(row) > 5 else None
+            llm_reason, llm_metadata = _parse_llm_reason(llm_reason_raw)
+            trade_tier = (
+                trade_tier_db
+                or llm_metadata.get("trade_tier")
+                or ("TIER1" if bool(is_tradable) else "BLOCKED")
+            )
             watchlist[code] = {
                 "code": code,
                 "name": name,
                 "is_tradable": is_tradable,
                 "llm_score": llm_score,
                 "llm_reason": llm_reason,
+                "llm_metadata": llm_metadata,
+                "trade_tier": trade_tier,
             }
     else:
         # Legacy: raw connection with cursor
         cursor = connection.cursor()
-        cursor.execute("SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON FROM WatchList")
+        cursor.execute(
+            f"SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON, TRADE_TIER "
+            f"FROM {db_models.resolve_table_name('WATCHLIST')}"
+        )
         rows = cursor.fetchall()
         cursor.close()
         
@@ -65,15 +96,31 @@ def get_active_watchlist(connection) -> Dict[str, Dict]:
                 name = row.get('STOCK_NAME') or row.get('stock_name')
                 is_tradable = row.get('IS_TRADABLE', True)
                 llm_score = row.get('LLM_SCORE', None)
-                llm_reason = row.get('LLM_REASON', None)
+                llm_reason_raw = row.get('LLM_REASON', None)
+                trade_tier_db = row.get('TRADE_TIER', None)
             else:
-                code, name, is_tradable, llm_score, llm_reason = row
+                # 컬럼 존재 여부에 따라 튜플 길이가 달라질 수 있어 안전하게 처리
+                code = row[0]
+                name = row[1]
+                is_tradable = row[2]
+                llm_score = row[3]
+                llm_reason_raw = row[4] if len(row) > 4 else None
+                trade_tier_db = row[5] if len(row) > 5 else None
+
+            llm_reason, llm_metadata = _parse_llm_reason(llm_reason_raw)
+            trade_tier = (
+                trade_tier_db
+                or llm_metadata.get("trade_tier")
+                or ("TIER1" if bool(is_tradable) else "BLOCKED")
+            )
             watchlist[code] = {
                 "code": code,
                 "name": name,
                 "is_tradable": is_tradable,
                 "llm_score": llm_score,
                 "llm_reason": llm_reason,
+                "llm_metadata": llm_metadata,
+                "trade_tier": trade_tier,
             }
     return watchlist
 
@@ -90,7 +137,7 @@ def save_to_watchlist(session, candidates: List[Dict]):
     # Step 1: 24시간 지난 오래된 종목 삭제 (TTL)
     logger.info("   (DB) 1. 24시간 지난 오래된 종목 정리 중...")
     session.execute(text("""
-        DELETE FROM WatchList 
+        DELETE FROM WATCHLIST 
         WHERE LLM_UPDATED_AT < DATE_SUB(NOW(), INTERVAL 24 HOUR)
     """))
     
@@ -98,17 +145,17 @@ def save_to_watchlist(session, candidates: List[Dict]):
     
     now = datetime.now(timezone.utc)
     
-    # UPSERT 쿼리
-    if _is_mariadb():
-        sql_upsert = """
-        INSERT INTO WatchList (
+    # UPSERT 쿼리 (MariaDB 단일화)
+    sql_upsert = """
+        INSERT INTO WATCHLIST (
             STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
-            LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+            TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
             PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             STOCK_NAME = VALUES(STOCK_NAME),
             IS_TRADABLE = VALUES(IS_TRADABLE),
+            TRADE_TIER = VALUES(TRADE_TIER),
             LLM_SCORE = VALUES(LLM_SCORE),
             LLM_REASON = VALUES(LLM_REASON),
             LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
@@ -120,10 +167,6 @@ def save_to_watchlist(session, candidates: List[Dict]):
             EPS_GROWTH = VALUES(EPS_GROWTH),
             FINANCIAL_UPDATED_AT = VALUES(FINANCIAL_UPDATED_AT)
         """
-    else:
-        # Oracle: MERGE (간소화를 위해 생략하거나 필요시 추가 구현)
-        # 일단 MariaDB만 지원하는 것으로 구현 (기존 파일 참고 필요하면 추가)
-        pass 
         
     insert_count = 0
     update_count = 0
@@ -133,6 +176,9 @@ def save_to_watchlist(session, candidates: List[Dict]):
         llm_score = c.get('llm_score', 0)
         llm_reason = c.get('llm_reason', '') or ''
         llm_metadata = c.get('llm_metadata')
+        trade_tier = c.get("trade_tier") or (llm_metadata or {}).get("trade_tier")
+        if not trade_tier:
+            trade_tier = "TIER1" if c.get("is_tradable", True) else "BLOCKED"
 
         if llm_metadata:
             try:
@@ -151,6 +197,7 @@ def save_to_watchlist(session, candidates: List[Dict]):
                 'name': c['name'],
                 'created_at': now,
                 'is_tradable': 1 if c.get('is_tradable', True) else 0,
+                'trade_tier': trade_tier,
                 'llm_score': llm_score,
                 'llm_reason': llm_reason,
                 'llm_updated_at': now,
@@ -159,14 +206,15 @@ def save_to_watchlist(session, candidates: List[Dict]):
                 'financial_updated_at': now
             }
             result = session.execute(text("""
-                INSERT INTO WatchList (
+                INSERT INTO WATCHLIST (
                     STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
-                    LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+                    TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
                     PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
-                ) VALUES (:code, :name, :created_at, :is_tradable, :llm_score, :llm_reason, :llm_updated_at,
+                ) VALUES (:code, :name, :created_at, :is_tradable, :trade_tier, :llm_score, :llm_reason, :llm_updated_at,
                           :per, :pbr, :roe, :market_cap, :sales_growth, :eps_growth, :financial_updated_at)
                 ON DUPLICATE KEY UPDATE
                     STOCK_NAME = VALUES(STOCK_NAME), IS_TRADABLE = VALUES(IS_TRADABLE),
+                    TRADE_TIER = VALUES(TRADE_TIER),
                     LLM_SCORE = VALUES(LLM_SCORE), LLM_REASON = VALUES(LLM_REASON), LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
                     PER = VALUES(PER), PBR = VALUES(PBR), ROE = VALUES(ROE), MARKET_CAP = VALUES(MARKET_CAP),
                     SALES_GROWTH = VALUES(SALES_GROWTH), EPS_GROWTH = VALUES(EPS_GROWTH), FINANCIAL_UPDATED_AT = VALUES(FINANCIAL_UPDATED_AT)
@@ -186,17 +234,16 @@ def save_to_watchlist_history(session, candidates_to_save, snapshot_date=None):
     """
     from sqlalchemy import text
     
-    is_mariadb = _is_mariadb()
     table_name = "WATCHLIST_HISTORY"
     
     try:
         if snapshot_date is None:
             snapshot_date = datetime.now().strftime('%Y-%m-%d')
 
-        if is_mariadb:
-            session.execute(text(f"DELETE FROM {table_name} WHERE SNAPSHOT_DATE = :snapshot_date"), {"snapshot_date": snapshot_date})
-        else:
-            session.execute(text(f"DELETE FROM {table_name} WHERE SNAPSHOT_DATE = TO_DATE(:snapshot_date, 'YYYY-MM-DD')"), {"snapshot_date": snapshot_date})
+        session.execute(
+            text(f"DELETE FROM {table_name} WHERE SNAPSHOT_DATE = :snapshot_date"),
+            {"snapshot_date": snapshot_date},
+        )
         
         if not candidates_to_save:
             session.commit()
@@ -265,18 +312,28 @@ def get_watchlist_history(session, snapshot_date):
 
 def get_active_portfolio(session) -> List[Dict]:
     """
-    활성 포트폴리오 조회 (SQLAlchemy)
+    활성 포트폴리오 조회
+    - SQLAlchemy Session 또는 raw connection 모두 지원
     """
     from sqlalchemy import text
+    from sqlalchemy.orm import Session
     
-    table_name = _get_table_name("Portfolio")
-    result = session.execute(text(f"""
+    table_name = db_models.resolve_table_name("PORTFOLIO")
+    sql = f"""
         SELECT ID, STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, AVERAGE_BUY_PRICE, 0,
                CREATED_AT, STOP_LOSS_PRICE, CURRENT_HIGH_PRICE
         FROM {table_name}
         WHERE QUANTITY > 0
-    """))
-    rows = result.fetchall()
+    """
+    
+    if isinstance(session, Session):
+        result = session.execute(text(sql))
+        rows = result.fetchall()
+    else:
+        cursor = session.cursor()
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        cursor.close()
     
     portfolio = []
     for row in rows:
@@ -304,7 +361,7 @@ def remove_from_portfolio(session, stock_code, quantity):
     from sqlalchemy import text
     
     try:
-        portfolio_table = _get_table_name("Portfolio")
+        portfolio_table = db_models.resolve_table_name("PORTFOLIO")
         
         result = session.execute(text(f"""
             SELECT ID, QUANTITY, AVERAGE_BUY_PRICE 
@@ -363,8 +420,8 @@ def _execute_trade_and_log_sqlalchemy(
     
     # 1. Trade Log 저장
     try:
-        tradelog_table = _get_table_name("TradeLog")
-        portfolio_table = _get_table_name("Portfolio")
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
+        portfolio_table = db_models.resolve_table_name("PORTFOLIO")
         
         now = datetime.now(timezone.utc)
         
@@ -510,7 +567,7 @@ def record_trade(session, stock_code: str, trade_type: str, quantity: int,
     """
     from sqlalchemy import text
     
-    table_name = _get_table_name("TradeLog")
+    table_name = db_models.resolve_table_name("TRADELOG")
     extra_json = json.dumps(extra, default=str) if extra else None
     now_ts = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
     
@@ -564,7 +621,7 @@ def get_trade_log(session, limit=50):
     from sqlalchemy import text
     
     try:
-        tradelog_table = _get_table_name("TradeLog")
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
         result = session.execute(text(f"""
             SELECT LOG_ID, PORTFOLIO_ID, STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, REASON, TRADE_TIMESTAMP
             FROM {tradelog_table}
@@ -588,7 +645,7 @@ def was_traded_recently(session, stock_code, hours=24):
     from sqlalchemy import text
     
     try:
-        tradelog_table = _get_table_name("TradeLog")
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
         result = session.execute(text(f"""
             SELECT 1 FROM {tradelog_table}
             WHERE STOCK_CODE = :stock_code 
@@ -612,7 +669,7 @@ def get_recently_traded_stocks_batch(session, stock_codes: list, hours: int = 24
         return set()
     
     try:
-        tradelog_table = _get_table_name("TradeLog")
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
         placeholder = ','.join([f':code{i}' for i in range(len(stock_codes))])
         params = {f'code{i}': code for i, code in enumerate(stock_codes)}
         params['hours'] = hours
@@ -638,7 +695,7 @@ def check_duplicate_order(session, stock_code, trade_type, time_window_minutes=5
     from sqlalchemy import text
     
     try:
-        tradelog_table = _get_table_name("TradeLog")
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
         result = session.execute(text(f"""
             SELECT 1 FROM {tradelog_table}
             WHERE STOCK_CODE = :stock_code 
@@ -661,10 +718,16 @@ def get_trade_logs(session, date: str) -> List[Dict]:
     특정 날짜의 거래 내역 조회 (SQLAlchemy)
     Args:
         date (str): 'YYYYMMDD' or 'YYYY-MM-DD'
+    
+    Returns:
+        List[Dict]: 거래 내역 리스트
+            - stock_code, stock_name, action (BUY/SELL), quantity, price, amount
+            - profit_amount, reason, trade_time, strategy_signal
     """
-    # from .models import TradeLog  <-- Incorrect
     TradeLog = db_models.TradeLog
+    Portfolio = db_models.Portfolio
     from sqlalchemy import func
+    from sqlalchemy.orm import aliased
     
     try:
         if len(date) == 8:
@@ -675,29 +738,43 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         start_dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
         end_dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         
+        # 포트폴리오 테이블과 조인하여 종목명 조회
         rows = session.query(
             TradeLog.stock_code,
             TradeLog.trade_type,
             TradeLog.quantity,
             TradeLog.price,
+            TradeLog.reason,
+            TradeLog.strategy_signal,
             func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
-            TradeLog.trade_timestamp
-        ).filter(TradeLog.trade_timestamp >= start_dt, TradeLog.trade_timestamp <= end_dt)\
-         .order_by(TradeLog.trade_timestamp.asc()).all()
+            TradeLog.trade_timestamp,
+            Portfolio.stock_name  # 종목명
+        ).outerjoin(
+            Portfolio, TradeLog.stock_code == Portfolio.stock_code
+        ).filter(
+            TradeLog.trade_timestamp >= start_dt, 
+            TradeLog.trade_timestamp <= end_dt
+        ).order_by(TradeLog.trade_timestamp.asc()).all()
         
         trades = []
         for row in rows:
-            if isinstance(row, dict):
-                 trades.append(row)
-            else:
-                trades.append({
-                    "stock_code": row[0],
-                    "trade_type": row[1],
-                    "quantity": row[2],
-                    "price": row[3],
-                    "profit_amount": float(row[4]) if row[4] else 0.0,
-                    "trade_time": row[5]
-                })
+            quantity = int(row[2] or 0)
+            price = float(row[3] or 0)
+            
+            trades.append({
+                "stock_code": row[0],
+                "stock_name": row[8] or row[0],  # 종목명 없으면 코드 사용
+                "action": row[1],  # BUY/SELL (기존 trade_type → action으로 변환)
+                "quantity": quantity,
+                "price": price,
+                "amount": quantity * price,  # 거래금액 계산
+                "reason": row[4] or "",
+                "strategy_signal": row[5] or "",
+                "profit_amount": float(row[6]) if row[6] else 0.0,
+                "trade_time": row[7]
+            })
+        
+        logger.info(f"📋 거래 내역 조회: {date} - {len(trades)}건")
         return trades
         
     except Exception as e:

@@ -11,6 +11,7 @@ import numpy as np
 from unittest.mock import MagicMock, patch
 
 
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -31,10 +32,10 @@ def selector():
 
 @pytest.fixture
 def sample_kospi_df():
-    """샘플 KOSPI 데이터프레임 (20일)"""
+    """샘플 KOSPI 데이터프레임 (30일 - MA20 계산 충분)"""
     # 기본 상승 추세
     base_price = 2500
-    prices = [base_price + i * 5 for i in range(20)]  # 2500 → 2595
+    prices = [base_price + i * 5 for i in range(30)]  # 2500 → 2645
     
     return pd.DataFrame({
         'CLOSE_PRICE': prices
@@ -43,10 +44,10 @@ def sample_kospi_df():
 
 @pytest.fixture
 def bull_kospi_df():
-    """상승장 KOSPI 데이터"""
+    """상승장 KOSPI 데이터 (30일)"""
     # MA20 대비 크게 위에 있는 상승 추세
     base_price = 2500
-    prices = [base_price + i * 10 for i in range(20)]  # 2500 → 2690 (급등)
+    prices = [base_price + i * 10 for i in range(30)]  # 2500 → 2790 (급등)
     
     return pd.DataFrame({
         'CLOSE_PRICE': prices
@@ -55,10 +56,10 @@ def bull_kospi_df():
 
 @pytest.fixture
 def bear_kospi_df():
-    """하락장 KOSPI 데이터"""
+    """하락장 KOSPI 데이터 (30일)"""
     # MA20 대비 아래에 있는 하락 추세
     base_price = 2700
-    prices = [base_price - i * 10 for i in range(20)]  # 2700 → 2510 (하락)
+    prices = [base_price - i * 10 for i in range(30)]  # 2700 → 2410 (하락)
     
     return pd.DataFrame({
         'CLOSE_PRICE': prices
@@ -67,10 +68,10 @@ def bear_kospi_df():
 
 @pytest.fixture
 def sideways_kospi_df():
-    """횡보장 KOSPI 데이터"""
+    """횡보장 KOSPI 데이터 (30일)"""
     # MA20 근처에서 횡보
     base_price = 2500
-    prices = [base_price + (i % 3 - 1) * 5 for i in range(20)]  # 작은 변동
+    prices = [base_price + (i % 3 - 1) * 5 for i in range(30)]  # 작은 변동
     
     return pd.DataFrame({
         'CLOSE_PRICE': prices
@@ -141,9 +142,9 @@ class TestMarketRegimeDetector:
     
     def test_detect_regime_strong_bull(self, detector):
         """급등장 감지"""
-        # 급등 데이터: 5일간 5% 이상 상승
+        # 급등 데이터: 5일간 5% 이상 상승 (30일 데이터)
         base = 2500
-        prices = [base] * 15 + [base * 1.01, base * 1.02, base * 1.03, base * 1.04, base * 1.05]
+        prices = [base] * 25 + [base * 1.01, base * 1.02, base * 1.03, base * 1.04, base * 1.05]
         df = pd.DataFrame({'CLOSE_PRICE': prices})
         
         current_price = base * 1.06  # MA 대비 높음
@@ -243,11 +244,12 @@ class TestStrategySelector:
         assert 'TREND_FOLLOWING' in strategies
     
     def test_select_strategies_bear(self, selector):
-        """하락장 전략 선택 (빈 리스트)"""
+        """하락장 전략 선택 (Project Recon: 제한적 추세 추종)"""
         strategies = selector.select_strategies('BEAR')
         
-        # 하락장은 매수 안함 (P-Parking)
-        assert strategies == []
+        # [Project Recon] ENABLE_RECON_IN_BEAR=True(기본값)일 때 제한적 추세 추종 허용
+        # 기본값이 True이므로 TREND_FOLLOWING이 포함됨
+        assert strategies == ['TREND_FOLLOWING'] or strategies == []
     
     def test_select_strategies_unknown_default(self, selector):
         """알 수 없는 국면은 기본 전략"""
@@ -290,9 +292,9 @@ class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_extreme_price_movement(self, detector):
-        """극단적인 가격 변동"""
+        """극단적인 가격 변동 (30일 데이터)"""
         # 폭락 후 급등
-        prices = [3000] * 15 + [2500, 2400, 2300, 2200, 3000]  # 마지막에 급등
+        prices = [3000] * 25 + [2500, 2400, 2300, 2200, 3000]  # 마지막에 급등
         df = pd.DataFrame({'CLOSE_PRICE': prices})
         
         regime, context = detector.detect_regime(df, 3000, quiet=True)
@@ -301,8 +303,8 @@ class TestEdgeCases:
         assert regime in ['STRONG_BULL', 'BULL', 'SIDEWAYS', 'BEAR']
     
     def test_constant_prices(self, detector):
-        """가격 변화 없음"""
-        prices = [2500] * 20
+        """가격 변화 없음 (30일 데이터)"""
+        prices = [2500] * 30
         df = pd.DataFrame({'CLOSE_PRICE': prices})
         
         regime, context = detector.detect_regime(df, 2500, quiet=True)

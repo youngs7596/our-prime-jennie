@@ -113,6 +113,9 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
 
     for row in rows:
         reason, metadata = _parse_llm_reason(row.llm_reason or "")
+        inferred_tier = "TIER1" if bool(row.is_tradable) else "BLOCKED"
+        # Project Recon v1.1: DB 컬럼 우선, 없으면 메타데이터/추론으로 폴백
+        trade_tier = getattr(row, "trade_tier", None) or metadata.get("trade_tier") or inferred_tier
         watchlist[row.stock_code] = {
             "name": row.stock_name,
             "is_tradable": bool(row.is_tradable),
@@ -122,6 +125,7 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
             "llm_score": float(row.llm_score) if row.llm_score is not None else 0,
             "llm_reason": reason,
             "llm_metadata": metadata,
+            "trade_tier": trade_tier,
             "llm_grade": metadata.get("llm_grade"),
             "bear_strategy": metadata.get("bear_strategy"),
         }
@@ -294,7 +298,29 @@ def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str
         .distinct()
     )
     rows = session.execute(query).scalars().all()
+    rows = session.execute(query).scalars().all()
     return set(rows)
+
+
+def check_duplicate_order(session: Session, stock_code: str, trade_type: str, time_window_minutes: int = 5) -> bool:
+    """
+    최근 N분 내 동일 종목/유형의 주문 여부 확인 (Idempotency Check)
+    """
+    # [Hybrid Fix] Python timedelta 사용
+    from datetime import datetime, timedelta, timezone
+    
+    threshold_dt = datetime.now(timezone.utc) - timedelta(minutes=time_window_minutes)
+    
+    exists_query = (
+        select(models.TradeLog.stock_code)
+        .where(models.TradeLog.stock_code == stock_code)
+        .where(models.TradeLog.trade_type == trade_type)
+        .where(models.TradeLog.trade_timestamp >= threshold_dt)
+        .limit(1)
+    )
+    result = session.execute(exists_query).first()
+    return result is not None
+
 
 
 # =============================================================================

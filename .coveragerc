@@ -1,0 +1,42 @@
+[run]
+# 측정 대상 소스 디렉토리
+source = 
+    shared
+    services
+
+# 제외 경로
+omit = 
+    */tests/*
+    */__pycache__/*
+    */venv/*
+    */.venv/*
+    */node_modules/*
+    */migrations/*
+    */.git/*
+    */htmlcov/*
+    # 프론트엔드 (Python 아님)
+    */frontend/*
+    # 설정/스크립트
+    */conftest.py
+    setup.py
+
+[report]
+# 리포트에서 제외할 라인 패턴
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    raise AssertionError
+    if TYPE_CHECKING:
+    @abstractmethod
+
+# 커버리지 미달 시 실패 기준 (선택)
+# fail_under = 70
+
+# 누락 라인 표시
+show_missing = True
+
+[html]
+directory = htmlcov
+

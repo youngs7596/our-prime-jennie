@@ -16,8 +16,8 @@ FactorAnalyzer 배치 작업 실행 스크립트
 5. 공시 영향도: DART 공시 유형별 승률
 
 Usage:
-    DB_TYPE=MARIADB python3 scripts/run_factor_analysis.py
-    DB_TYPE=MARIADB python3 scripts/run_factor_analysis.py --codes 100 --regime BULL
+    python3 scripts/run_factor_analysis.py
+    python3 scripts/run_factor_analysis.py --codes 100 --regime BULL
 """
 
 import argparse
@@ -44,27 +44,13 @@ logger = logging.getLogger(__name__)
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
 def load_stock_codes(limit: int = None):

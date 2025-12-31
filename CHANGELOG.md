@@ -1,6 +1,83 @@
 # 📅 변경 이력 (Change Log)
 
+## 2025-12-31
+- **수익 극대화 전략 4종 구현**: 트레일링 익절, 분할 익절, 상관관계 분산, 기술적 패턴 탐지 강화
+  - **트레일링 익절 (ATR Trailing Take Profit)**: 최고가 추적 후 ATR×배수 하락 시 익절. Redis High Watermark 관리.
+    - `shared/redis_cache.py`: `update_high_watermark()`, `get_high_watermark()`, `delete_high_watermark()` 추가
+    - `services/price-monitor/monitor.py`: 트레일링 익절 로직 추가 (활성화 조건: 수익률 5% 이상)
+  - **분할 익절 (Scale-out)**: 수익률 5%/10%/15% 도달 시 25%씩 단계적 매도
+    - `shared/redis_cache.py`: `get_scale_out_level()`, `set_scale_out_level()`, `delete_scale_out_level()` 추가
+    - `shared/settings/registry.py`: `SCALE_OUT_LEVEL_*` 설정 추가
+    - `services/price-monitor/monitor.py`: 수익률별 분할 익절 로직 추가
+  - **상관관계 기반 포트폴리오 분산**: 신규 매수 종목과 기존 보유 종목 간 상관관계 분석, 높은 상관관계(0.85+) 시 매수 거부, 중간 상관관계 시 비중 축소
+    - `shared/correlation.py`: 상관관계 계산 모듈 신규 생성
+    - `shared/settings/registry.py`: `CORRELATION_*` 설정 추가
+    - `services/buy-executor/executor.py`: 매수 전 상관관계 체크 및 포지션 조정 로직 추가
+  - **기술적 패턴 탐지 강화**: 볼린저밴드 스퀴즈, MACD 다이버전스 추가
+    - `shared/strategy.py`: `check_bollinger_squeeze()`, `calculate_macd()`, `check_macd_divergence()` 추가
+  - 테스트 51개 추가, 전체 939개 테스트 통과
+
+- **종목별 매수/매도 임계치 시스템**: RSI/거래량/Tier2 조건을 종목별 특성(변동성, 유동성, RSI 분포)에 맞게 개별화. 일률적 기준으로 인한 매수 신호 미발생 문제 해결.
+  - `shared/config.py`: `get_*_for_symbol()` API 추가 (종목별 설정 조회)
+  - `shared/symbol_profile.py`: RSI P20/P80, 평균 거래량 기반 임계치 자동 산출
+  - `services/buy-scanner/scanner.py`, `services/price-monitor/monitor.py`: 종목별 설정 적용
+  - `scripts/refresh_symbol_profiles.py`: Scout universe(KOSPI 200개) 전체 프로파일 배치 스크립트, 크론잡 등록(평일 16:40)
+
+## 2025-12-28
+- **AI Auditor 구현**: Regex 기반 환각 검증 → Gemini 2.5 Flash LLM 기반으로 교체, 더 정확한 맥락 이해 및 환각 탐지 가능 (`fact_checker.py`)
+- **Fact-Checker Enhancement**: 정량 점수(Quant Score) 및 재무 데이터(Snapshot) 컨텍스트 주입으로 Fact-Checker의 환각 오탐지(False Positive) 해결 (`scout_pipeline.py`)
+- **AI Auditor Planning**: AI 감사 시스템 도입을 위한 Cloud LLM 가격/성능 분석 완료 (Gemini 2.5 Pro 선정, 일일 예산 제한 설계)
+- **Unit Test**: `test_check_quant_context_match` 추가로 Fact-Checker 컨텍스트 검증 로직 강화
+
+## 2025-12-27
+- **Py3.12 테스트 정합성**: pandas/numpy/scipy 실사용 기준으로 방어 로직 보강(RSI/MA/크로스 계산), FactorRepository DF 변환 안전화, utils.now 주입으로 MagicMock 충돌 제거, Ollama 테스트 CI 스킵. 로컬/CI/Mock 모드 전체 pytest 통과 확인.
+- **Jenkins CI Stability**: Python 3.12 업그레이드, 의존성 (`numpy`/`pandas`) 고정, `pytest` 순차 실행 전환으로 안정성 확보
+- **Test Pollution Fix**: `scanner`, `monitor` 등의 테스트 격리 개선 및 `utils` Mock 누수 수정으로 간섭 해결
+## 2025-12-26
+- **Rules Enhancement**: 구현 검증 원칙에 Integration Test 명시적 포함, 변경 유형별 검증 범위 테이블 개선
+- **Feature Integration**: Fact-Checker, Circuit Breaker 알림을 Scout/KIS Gateway 서비스에 연동 완료
+- **Quality & Feature Improvements**: Fact-Checker(LLM 환각 탐지), Circuit Breaker(KIS API 장애 대응), Monitoring Alerts(Telegram 알림) 구현 및 E2E 통합 테스트 / 운영 가이드 문서화 완료 (총 136+ tests passed)
+- **Unit Test Coverage Improvement (Phase 4 & 5)**: `hybrid_scorer.py` 46%→86%, `news_classifier.py` 34%→96% 달성 (Shared 모듈 전체 안정화 완료)
+- **Unit Test Coverage Improvement (Services)**: `services/scout-job`, `buy-executor`, `sell-executor` 테스트 커버리지 확보 및 검증 완료
+- **Unit Test Coverage Improvement (Phase 3)**: `llm_providers.py` 25%→43%, OllamaLLMProvider 테스트 8개 추가 (총 22개 테스트 케이스)
+- **Unit Test Coverage Improvement (Phase 10)**: `buy-executor` (56%), `sell-executor` (77%), `scheduler-service` (69%) 테스트 커버리지 달성 및 검증 완료
+- **Unit Test Coverage Improvement (Phase 2)**: `redis_cache.py` 71%→99%, `db/connection.py` 29%→100%, `db/repository.py` 89%→98%, `gemini.py` 0%→100%, `auth.py` 91%→100% 달성 (총 189개 테스트 케이스)
+- **Unit Test Coverage Improvement (Phase 1)**: `position_sizing.py` 96%→100%, `secret_manager.py` 94%→100%, `llm_prompts.py` 90%→100%, `utils.py` 92%→93% 달성 (총 116개 테스트 케이스)
+- **MariaDB Deadlock Fix**: `news-crawler` 서비스의 동시 DB 쓰기 시 발생하는 1213 Deadlock 에러에 exponential backoff 재시도 로직 구현
+- **LLM Cost Optimization**: Gemini/OpenAI 기본 모델을 비용 효율적인 모델로 변경 (`gemini-2.5-flash`, `gpt-4o-mini`)
+- **Config DB Priority**: 운영 튜닝 키 17개에 `db_priority=True` 플래그 추가, Dashboard 수정 시 DB 값 우선 적용
+- **Config Cleanup**: 미사용 환경변수 `INVESTMENT_AMOUNT`, `DAILY_BUY_LIMIT_AMOUNT` 삭제
+- **Infrastructure Fix**: MariaDB 컨테이너 포트 매핑 (3307:3306) 누락 수정으로 `scout-job` 등의 DB 접속 오류 해결
+- **LLM Config Centralization**: `env-vars-wsl.yaml`로 FAST/REASONING/THINKING 프로바이더 설정 일원화
+- **Gemini Stabilization**: Rate Limit (429) 대응을 위한 Exponential Backoff 재시도 로직 추가 및 `news-crawler` 동시성 최적화 (5→3)
+- **Scout Flexibility**: `scout-job` 실행 시간(07:00~16:00) 윈도우 방식으로 변경하여 휴장일/장전 시간대에도 실행 가능하도록 개선 (Safety Override)
+- **News Crawler Fix**: `google-genai` 패키지 누락 수정 및 컨테이너 재빌드
+
+## 2025-12-25
+- **LangChain/Gemini**: langchain-google-genai를 google.genai 기반 최신(4.1.2)으로 업데이트하고 Gemini LLM 경로를 신 SDK로 마이그레이션, 스모크 테스트 완료 (임베딩/챗)
+
+- **피드백 시스템 스케줄 등록**: `update_analyst_feedback.py` crontab 등록 (평일 17:00), AI 성과 분석 시간 변경 (07:00→16:40)
+- **Project Recon 검증 & 버그 수정**: 정찰병 전략 구현 지시서 기준 검증 완료, RECON tier에서 `is_tradable=True` 누락 로직 수정 (`scout_pipeline.py`)
+- **Dashboard Frontend 빌드 수정**: 누락 컴포넌트(Dialog, Label, Badge) 추가, `react-hot-toast` 패키지 추가, Settings.tsx 타입 에러 수정
+- **Configuration Refactor**: `scout` & `news-crawler` 장 운영 시간 체크를 전역 설정(`env-vars-wsl.yaml`)으로 바이패스 가능하도록 개선 (Safety Override 포함)
+- **Unit Test 추가**: SecretManager, Registry, Config API 테스트 44개 작성 (Coverage 34%)
+- **Coverage 설정**: `.coveragerc` 생성 - shared/services 측정, venv/frontend 제외
+- **Scout Hotfix**: 휴장일(크리스마스 등) 인식 오류 수정 - 로컬 시간 체크 로직(`/utils.py`) 대신 증권사 Gateway API(`check_market_open`) 연동으로 정확도 확보
+
+- **Scout 최적화**: 정량 필터링 강화 (상위 80% → 40% 통과), Hunter 처리량 약 50% 감소로 LLM 부담 경감
+- **gemma3:27b 통합**: 모든 LLM Tier (FAST/REASONING/THINKING)를 gemma3:27b로 통일 - 속도 2배 향상, 안정성 100%
+- **Hunter/Judge 로그 상세화**: 정량점수 분해, 핵심지표(PER/PBR/RSI), 경쟁사 수혜 로깅 추가
+- **대시보드 UI 개편**: Stripe 스타일 적용 (딥 네이비 배경, 인디고 액센트, 화이트 카드)
+- **Oracle 레거시 제거 검증**: Mock 모드 E2E 테스트 완료 - MariaDB/SQLAlchemy 연동, RabbitMQ 메시지 처리, HTTP API 처리 모두 정상 작동 확인 (사이드 이펙트 없음)
+- **Mock Mode Testing**: Buy Executor 시작 실패 버그(`IndentationError`) 수정 및 전체 매수/매도 시나리오(Scout→Executor) 검증 완료
+- **Portfolio Data Integrity Fix**: `portfolio` 테이블의 중복 보유 내역(현대차, SK스퀘어) 제거 및 `total_buy_amount` 재계산 로직 적용 (데이터 정합성 복구)
+- **Critical Bug Fix**: `buy-executor`가 `STOP_LOSS_PRICE`를 DB에 저장하지 않던 심각한 버그 수정 (기본 -5% 자동 설정) 및 기존 누락 데이터(미래에셋생명 등) 일괄 복구 완료
+- **Language Policy**: `rules.md`에 AI 답변 언어를 한국어로 강제하는 '최우선 원칙(Critical Rule)' 추가
+
 ## 2025-12-23
+
+- **Oracle/OCI 레거시 전면 제거**: 28개 파일에서 Oracle DB 관련 코드 952줄 삭제, MariaDB/SQLAlchemy 단일 체계로 통일 (환경변수, 시크릿, DB 분기 로직, MERGE INTO/DUAL/SYSTIMESTAMP SQL 등)
+- **AI Analyst & Stability**: AI Analyst 대시보드 시각화 강화(태그, 스파크라인) 및 Buy Scanner 중복 매수 방지(Redis Lock) 구현
 
 ### Public Release (our-prime-jennie v1.0)
 - **GitHub 배포**: `our-prime-jennie` Public 저장소 생성 및 배포 완료 (https://github.com/youngs7596/our-prime-jennie)

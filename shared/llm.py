@@ -150,10 +150,16 @@ class JennieBrain:
             prompt = build_news_sentiment_prompt(title, description)
             # logger.debug(f"--- [JennieBrain] 뉴스 분석 via {provider.name} ---")
             
+            # [Optimization] Use Flash model for FAST tier if available (e.g. Gemini 2.5 Flash)
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
             result = provider.generate_json(
                 prompt,
                 ANALYSIS_RESPONSE_SCHEMA,
-                temperature=0.0 # Deterministic
+                temperature=0.0, # Deterministic
+                model_name=model_name
             )
             return result
         except Exception as e:
@@ -540,10 +546,16 @@ class JennieBrain:
             logger.info(f"--- [JennieBrain/Competitor] 뉴스 분석 via {provider.name} ---")
             logger.debug(f"   Target: {news_title[:50]}...")
 
+            # [Optimization] Use Flash model for FAST tier if available (e.g. Gemini 2.5 Flash)
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
             result = provider.generate_json(
                 prompt,
                 SCHEMA,
-                temperature=0.1 # Deterministic for classification
+                temperature=0.1, # Deterministic for classification
+                model_name=model_name
             )
             return result
             

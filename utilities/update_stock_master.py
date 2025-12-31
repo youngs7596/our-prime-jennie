@@ -6,7 +6,7 @@
 #
 # - 대상: KOSPI, KOSDAQ 전체 종목
 # - 소스: KIS API (전체 종목 다운로드)
-# - 저장: DB 테이블 STOCK_MASTER (MariaDB/Oracle 지원)
+# - 저장: DB 테이블 STOCK_MASTER (MariaDB 단일 지원, Oracle/분기 제거)
 #
 # MariaDB 지원
 
@@ -26,7 +26,6 @@ import ssl
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
 
-import shared.auth as auth
 import shared.database as database
 
 logging.basicConfig(
@@ -36,50 +35,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def _is_mariadb() -> bool:
-    """현재 DB 타입이 MariaDB인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
-
-# Oracle용 DDL
-DDL_STOCK_MASTER = """
-CREATE TABLE STOCK_MASTER (
-  STOCK_CODE        VARCHAR2(16) NOT NULL,
-  STOCK_NAME        VARCHAR2(128),
-  STD_CODE          VARCHAR2(16),
-  SECURITY_GROUP    VARCHAR2(4),
-  MARKET_CAP_SCALE  VARCHAR2(4),
-  INDUSTRY_CODE     VARCHAR2(8),
-  SECTOR_KOSPI200   VARCHAR2(64),
-  IS_MANUFACTURING  CHAR(1),
-  IS_LOW_LIQUIDITY  CHAR(1),
-  IS_GOVERNANCE_IDX CHAR(1),
-  IS_KOSPI100       CHAR(1),
-  IS_KOSPI50        CHAR(1),
-  IS_KRX100         CHAR(1),
-  IS_KRX_AUTO       CHAR(1),
-  IS_KRX_SEMI       CHAR(1),
-  IS_KRX_BIO        CHAR(1),
-  IS_KRX_BANK       CHAR(1),
-  IS_SPAC           CHAR(1),
-  IS_SHORT_TERM_OVERHEAT CHAR(1),
-  IS_TRADING_HALT   CHAR(1),
-  IS_ADMINISTRATIVE CHAR(1),
-  MARKET_WARNING    VARCHAR2(4),
-  BASE_PRICE        NUMBER,
-  FACE_VALUE        NUMBER,
-  LISTING_DATE      DATE,
-  LISTED_SHARES     NUMBER,
-  CAPITAL           NUMBER,
-  SETTLEMENT_MONTH  VARCHAR2(4),
-  MARKET_CAP        NUMBER,
-  ROE               NUMBER(10,2),
-  IS_KOSPI          NUMBER(1) DEFAULT 0,
-  IS_KOSDAQ         NUMBER(1) DEFAULT 0,
-  IS_ETF            NUMBER(1) DEFAULT 0,
-  IS_ETN            NUMBER(1) DEFAULT 0,
-  LAST_UPDATED      TIMESTAMP DEFAULT SYSTIMESTAMP,
-  CONSTRAINT PK_STOCK_MASTER PRIMARY KEY (STOCK_CODE)
-)
-"""
+    """단일화: MariaDB만 사용"""
+    return True
 
 # MariaDB용 DDL
 DDL_STOCK_MASTER_MARIADB = """
@@ -130,22 +87,13 @@ def ensure_table_exists(connection):
     try:
         cur = connection.cursor()
         
-        if _is_mariadb():
-            # MariaDB: SHOW TABLES로 확인
-            cur.execute("SHOW TABLES LIKE 'stock_master'")
-            exists = cur.fetchone() is not None
-        else:
-            # Oracle: user_tables에서 확인
-            cur.execute("SELECT COUNT(*) FROM user_tables WHERE table_name = 'STOCK_MASTER'")
-            row = cur.fetchone()
-            exists = (list(row.values())[0] if isinstance(row, dict) else row[0]) > 0
+        # MariaDB: SHOW TABLES로 확인
+        cur.execute("SHOW TABLES LIKE 'stock_master'")
+        exists = cur.fetchone() is not None
         
         if not exists:
             logger.info("테이블 'STOCK_MASTER' 미존재. 생성 시도...")
-            if _is_mariadb():
-                cur.execute(DDL_STOCK_MASTER_MARIADB)
-            else:
-                cur.execute(DDL_STOCK_MASTER)
+            cur.execute(DDL_STOCK_MASTER_MARIADB)
             connection.commit()
             logger.info("✅ 'STOCK_MASTER' 생성 완료.")
         else:
@@ -344,145 +292,71 @@ def upsert_stock_master(connection, stocks):
     if not stocks:
         return
 
-    is_mariadb = os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
+    sql_upsert = """
+    INSERT INTO STOCK_MASTER (
+        STOCK_CODE, STOCK_NAME, STD_CODE, SECURITY_GROUP, MARKET_CAP_SCALE, 
+        INDUSTRY_CODE, SECTOR_KOSPI200, IS_MANUFACTURING, IS_LOW_LIQUIDITY, 
+        IS_GOVERNANCE_IDX, IS_KOSPI100, IS_KOSPI50, IS_KRX100, IS_KRX_AUTO, 
+        IS_KRX_SEMI, IS_KRX_BIO, IS_KRX_BANK, IS_SPAC, IS_SHORT_TERM_OVERHEAT,
+        IS_TRADING_HALT, IS_ADMINISTRATIVE, MARKET_WARNING, BASE_PRICE, 
+        FACE_VALUE, LISTING_DATE, LISTED_SHARES, CAPITAL, SETTLEMENT_MONTH, 
+        MARKET_CAP, IS_KOSPI, IS_KOSDAQ, IS_ETF, IS_ETN
+    ) VALUES (
+        %(stock_code)s, %(stock_name)s, %(std_code)s, %(security_group)s, 
+        %(market_cap_scale)s, %(industry_code)s, %(sector_kospi200)s, 
+        %(is_manufacturing)s, %(is_low_liquidity)s, %(is_governance_idx)s, 
+        %(is_kospi100)s, %(is_kospi50)s, %(is_krx100)s, %(is_krx_auto)s, 
+        %(is_krx_semi)s, %(is_krx_bio)s, %(is_krx_bank)s, %(is_spac)s, 
+        %(is_short_term_overheat)s, %(is_trading_halt)s, %(is_administrative)s, 
+        %(market_warning)s, %(base_price)s, %(face_value)s, %(listing_date)s, 
+        %(listed_shares)s, %(capital)s, %(settlement_month)s, %(market_cap)s, 
+        %(is_kospi)s, %(is_kosdaq)s, %(is_etf)s, %(is_etn)s
+    ) ON DUPLICATE KEY UPDATE
+        STOCK_NAME = VALUES(STOCK_NAME),
+        STD_CODE = VALUES(STD_CODE),
+        SECURITY_GROUP = VALUES(SECURITY_GROUP),
+        MARKET_CAP_SCALE = VALUES(MARKET_CAP_SCALE),
+        INDUSTRY_CODE = VALUES(INDUSTRY_CODE),
+        SECTOR_KOSPI200 = VALUES(SECTOR_KOSPI200),
+        IS_MANUFACTURING = VALUES(IS_MANUFACTURING),
+        IS_LOW_LIQUIDITY = VALUES(IS_LOW_LIQUIDITY),
+        IS_GOVERNANCE_IDX = VALUES(IS_GOVERNANCE_IDX),
+        IS_KOSPI100 = VALUES(IS_KOSPI100),
+        IS_KOSPI50 = VALUES(IS_KOSPI50),
+        IS_KRX100 = VALUES(IS_KRX100),
+        IS_KRX_AUTO = VALUES(IS_KRX_AUTO),
+        IS_KRX_SEMI = VALUES(IS_KRX_SEMI),
+        IS_KRX_BIO = VALUES(IS_KRX_BIO),
+        IS_KRX_BANK = VALUES(IS_KRX_BANK),
+        IS_SPAC = VALUES(IS_SPAC),
+        IS_SHORT_TERM_OVERHEAT = VALUES(IS_SHORT_TERM_OVERHEAT),
+        IS_TRADING_HALT = VALUES(IS_TRADING_HALT),
+        IS_ADMINISTRATIVE = VALUES(IS_ADMINISTRATIVE),
+        MARKET_WARNING = VALUES(MARKET_WARNING),
+        BASE_PRICE = VALUES(BASE_PRICE),
+        FACE_VALUE = VALUES(FACE_VALUE),
+        LISTING_DATE = VALUES(LISTING_DATE),
+        LISTED_SHARES = VALUES(LISTED_SHARES),
+        CAPITAL = VALUES(CAPITAL),
+        SETTLEMENT_MONTH = VALUES(SETTLEMENT_MONTH),
+        MARKET_CAP = VALUES(MARKET_CAP),
+        IS_KOSPI = VALUES(IS_KOSPI),
+        IS_KOSDAQ = VALUES(IS_KOSDAQ),
+        IS_ETF = VALUES(IS_ETF),
+        IS_ETN = VALUES(IS_ETN),
+        LAST_UPDATED = CURRENT_TIMESTAMP
+    """
     
-    if is_mariadb:
-        # MariaDB: INSERT ... ON DUPLICATE KEY UPDATE
-        sql_upsert = """
-        INSERT INTO STOCK_MASTER (
-            STOCK_CODE, STOCK_NAME, STD_CODE, SECURITY_GROUP, MARKET_CAP_SCALE, 
-            INDUSTRY_CODE, SECTOR_KOSPI200, IS_MANUFACTURING, IS_LOW_LIQUIDITY, 
-            IS_GOVERNANCE_IDX, IS_KOSPI100, IS_KOSPI50, IS_KRX100, IS_KRX_AUTO, 
-            IS_KRX_SEMI, IS_KRX_BIO, IS_KRX_BANK, IS_SPAC, IS_SHORT_TERM_OVERHEAT,
-            IS_TRADING_HALT, IS_ADMINISTRATIVE, MARKET_WARNING, BASE_PRICE, 
-            FACE_VALUE, LISTING_DATE, LISTED_SHARES, CAPITAL, SETTLEMENT_MONTH, 
-            MARKET_CAP, IS_KOSPI, IS_KOSDAQ, IS_ETF, IS_ETN
-        ) VALUES (
-            %(stock_code)s, %(stock_name)s, %(std_code)s, %(security_group)s, 
-            %(market_cap_scale)s, %(industry_code)s, %(sector_kospi200)s, 
-            %(is_manufacturing)s, %(is_low_liquidity)s, %(is_governance_idx)s, 
-            %(is_kospi100)s, %(is_kospi50)s, %(is_krx100)s, %(is_krx_auto)s, 
-            %(is_krx_semi)s, %(is_krx_bio)s, %(is_krx_bank)s, %(is_spac)s, 
-            %(is_short_term_overheat)s, %(is_trading_halt)s, %(is_administrative)s, 
-            %(market_warning)s, %(base_price)s, %(face_value)s, %(listing_date)s, 
-            %(listed_shares)s, %(capital)s, %(settlement_month)s, %(market_cap)s, 
-            %(is_kospi)s, %(is_kosdaq)s, %(is_etf)s, %(is_etn)s
-        ) ON DUPLICATE KEY UPDATE
-            STOCK_NAME = VALUES(STOCK_NAME),
-            STD_CODE = VALUES(STD_CODE),
-            SECURITY_GROUP = VALUES(SECURITY_GROUP),
-            MARKET_CAP_SCALE = VALUES(MARKET_CAP_SCALE),
-            INDUSTRY_CODE = VALUES(INDUSTRY_CODE),
-            SECTOR_KOSPI200 = VALUES(SECTOR_KOSPI200),
-            IS_MANUFACTURING = VALUES(IS_MANUFACTURING),
-            IS_LOW_LIQUIDITY = VALUES(IS_LOW_LIQUIDITY),
-            IS_GOVERNANCE_IDX = VALUES(IS_GOVERNANCE_IDX),
-            IS_KOSPI100 = VALUES(IS_KOSPI100),
-            IS_KOSPI50 = VALUES(IS_KOSPI50),
-            IS_KRX100 = VALUES(IS_KRX100),
-            IS_KRX_AUTO = VALUES(IS_KRX_AUTO),
-            IS_KRX_SEMI = VALUES(IS_KRX_SEMI),
-            IS_KRX_BIO = VALUES(IS_KRX_BIO),
-            IS_KRX_BANK = VALUES(IS_KRX_BANK),
-            IS_SPAC = VALUES(IS_SPAC),
-            IS_SHORT_TERM_OVERHEAT = VALUES(IS_SHORT_TERM_OVERHEAT),
-            IS_TRADING_HALT = VALUES(IS_TRADING_HALT),
-            IS_ADMINISTRATIVE = VALUES(IS_ADMINISTRATIVE),
-            MARKET_WARNING = VALUES(MARKET_WARNING),
-            BASE_PRICE = VALUES(BASE_PRICE),
-            FACE_VALUE = VALUES(FACE_VALUE),
-            LISTING_DATE = VALUES(LISTING_DATE),
-            LISTED_SHARES = VALUES(LISTED_SHARES),
-            CAPITAL = VALUES(CAPITAL),
-            SETTLEMENT_MONTH = VALUES(SETTLEMENT_MONTH),
-            MARKET_CAP = VALUES(MARKET_CAP),
-            IS_KOSPI = VALUES(IS_KOSPI),
-            IS_KOSDAQ = VALUES(IS_KOSDAQ),
-            IS_ETF = VALUES(IS_ETF),
-            IS_ETN = VALUES(IS_ETN),
-            LAST_UPDATED = CURRENT_TIMESTAMP
-        """
-        
-        try:
-            with connection.cursor() as cur:
-                cur.executemany(sql_upsert, stocks)
-                connection.commit()
-                logger.info(f"✅ 저장 완료: {len(stocks)}건")
-        except Exception as e:
-            logger.error(f"❌ 저장 실패: {e}", exc_info=True)
-            connection.rollback()
-            raise
-    else:
-        # Oracle: MERGE INTO
-        sql_merge = """
-        MERGE INTO STOCK_MASTER t
-        USING (
-            SELECT :stock_code AS stock_code, :stock_name AS stock_name, :std_code AS std_code,
-                   :security_group AS security_group, :market_cap_scale AS market_cap_scale,
-                   :industry_code AS industry_code, :sector_kospi200 AS sector_kospi200,
-                   :is_manufacturing AS is_manufacturing, :is_low_liquidity AS is_low_liquidity,
-                   :is_governance_idx AS is_governance_idx, :is_kospi100 AS is_kospi100,
-                   :is_kospi50 AS is_kospi50, :is_krx100 AS is_krx100, :is_krx_auto AS is_krx_auto,
-                   :is_krx_semi AS is_krx_semi, :is_krx_bio AS is_krx_bio, :is_krx_bank AS is_krx_bank,
-                   :is_spac AS is_spac, :is_short_term_overheat AS is_short_term_overheat,
-                   :is_trading_halt AS is_trading_halt, :is_administrative AS is_administrative,
-                   :market_warning AS market_warning, :base_price AS base_price, :face_value AS face_value,
-                   TO_DATE(:listing_date, 'YYYY-MM-DD') AS listing_date, :listed_shares AS listed_shares,
-                   :capital AS capital, :settlement_month AS settlement_month, :market_cap AS market_cap, :is_kospi AS is_kospi, 
-                   :is_kosdaq AS is_kosdaq, :is_etf AS is_etf, :is_etn AS is_etn
-            FROM DUAL
-        ) s
-        ON (t.STOCK_CODE = s.stock_code)
-        WHEN MATCHED THEN
-            UPDATE SET
-                t.STOCK_NAME = s.stock_name, t.STD_CODE = s.std_code, t.SECURITY_GROUP = s.security_group,
-                t.MARKET_CAP_SCALE = s.market_cap_scale, t.INDUSTRY_CODE = s.industry_code,
-                t.SECTOR_KOSPI200 = s.sector_kospi200, t.IS_MANUFACTURING = s.is_manufacturing,
-                t.IS_LOW_LIQUIDITY = s.is_low_liquidity, t.IS_GOVERNANCE_IDX = s.is_governance_idx,
-                t.IS_KOSPI100 = s.is_kospi100, t.IS_KOSPI50 = s.is_kospi50, t.IS_KRX100 = s.is_krx100,
-                t.IS_KRX_AUTO = s.is_krx_auto, t.IS_KRX_SEMI = s.is_krx_semi, t.IS_KRX_BIO = s.is_krx_bio,
-                t.IS_KRX_BANK = s.is_krx_bank, t.IS_SPAC = s.is_spac,
-                t.IS_SHORT_TERM_OVERHEAT = s.is_short_term_overheat, t.IS_TRADING_HALT = s.is_trading_halt,
-                t.IS_ADMINISTRATIVE = s.is_administrative, t.MARKET_WARNING = s.market_warning,
-                t.BASE_PRICE = s.base_price, t.FACE_VALUE = s.face_value, t.LISTING_DATE = s.listing_date,
-                t.LISTED_SHARES = s.listed_shares, t.CAPITAL = s.capital,
-                t.SETTLEMENT_MONTH = s.settlement_month, t.MARKET_CAP = s.market_cap, t.IS_KOSPI = s.is_kospi, 
-                t.IS_KOSDAQ = s.is_kosdaq, t.IS_ETF = s.is_etf, t.IS_ETN = s.is_etn, 
-                t.LAST_UPDATED = SYSTIMESTAMP
-        WHEN NOT MATCHED THEN
-            INSERT (
-                STOCK_CODE, STOCK_NAME, STD_CODE, SECURITY_GROUP, MARKET_CAP_SCALE, INDUSTRY_CODE, SECTOR_KOSPI200,
-                IS_MANUFACTURING, IS_LOW_LIQUIDITY, IS_GOVERNANCE_IDX, IS_KOSPI100, IS_KOSPI50, IS_KRX100,
-                IS_KRX_AUTO, IS_KRX_SEMI, IS_KRX_BIO, IS_KRX_BANK, IS_SPAC, IS_SHORT_TERM_OVERHEAT,
-                IS_TRADING_HALT, IS_ADMINISTRATIVE, MARKET_WARNING, BASE_PRICE, FACE_VALUE, LISTING_DATE, LISTED_SHARES, 
-                CAPITAL, SETTLEMENT_MONTH, MARKET_CAP, IS_KOSPI, IS_KOSDAQ, IS_ETF, IS_ETN
-            ) VALUES (
-                s.stock_code, s.stock_name, s.std_code, s.security_group, s.market_cap_scale, s.industry_code, s.sector_kospi200,
-                s.is_manufacturing, s.is_low_liquidity, s.is_governance_idx, s.is_kospi100, s.is_kospi50, s.is_krx100,
-                s.is_krx_auto, s.is_krx_semi, s.is_krx_bio, s.is_krx_bank, s.is_spac, s.is_short_term_overheat,
-                s.is_trading_halt, s.is_administrative, s.market_warning, s.base_price, s.face_value, s.listing_date, s.listed_shares, 
-                s.capital, s.settlement_month, s.market_cap, s.is_kospi, s.is_kosdaq, s.is_etf, s.is_etn
-            )
-        """
-        try:
-            with connection.cursor() as cur:
-                # ORA-12838 오류 방지를 위해 세션의 병렬 DML 비활성화
-                try:
-                    cur.execute("ALTER SESSION DISABLE PARALLEL DML")
-                except Exception as e:
-                    logger.warning(f"병렬 DML 비활성화 실패 (무시): {e}")
-                cur.executemany(sql_merge, stocks)
-                connection.commit()
-                logger.info(f"✅ 저장 완료: {len(stocks)}건")
-        except Exception as e:
-            logger.error(f"❌ 저장 실패: {e}", exc_info=True)
-            connection.rollback()
-            raise
-
-def _is_mariadb() -> bool:
-    """현재 DB 타입이 MariaDB인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
-
+    try:
+        with connection.cursor() as cur:
+            cur.executemany(sql_upsert, stocks)
+            connection.commit()
+            logger.info(f"✅ 저장 완료: {len(stocks)}건")
+    except Exception as e:
+        logger.error(f"❌ 저장 실패: {e}", exc_info=True)
+        connection.rollback()
+        raise
 
 def main():
     project_root_for_env = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -495,22 +369,8 @@ def main():
     logger.info("--- 🤖 종목 마스터 업데이트 시작 ---")
     db_conn = None
     try:
-        # MariaDB/Oracle 분기 처리
-        if _is_mariadb():
-            logger.info("   DB 타입: MariaDB")
-            db_conn = database.get_db_connection(
-                db_user="dummy", db_password="dummy",
-                db_service_name="dummy", wallet_path="dummy"
-            )
-        else:
-            logger.info("   DB 타입: Oracle")
-            db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), os.getenv("GCP_PROJECT_ID"))
-            db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), os.getenv("GCP_PROJECT_ID"))
-            wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-            db_conn = database.get_db_connection(
-                db_user=db_user, db_password=db_password,
-                db_service_name=os.getenv("OCI_DB_SERVICE_NAME"), wallet_path=wallet_path
-            )
+        logger.info("   DB 타입: MariaDB (단일화)")
+        db_conn = database.get_db_connection()
         
         if not db_conn:
             raise RuntimeError("DB 연결 실패")

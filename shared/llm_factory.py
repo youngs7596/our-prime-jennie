@@ -77,13 +77,16 @@ class LLMFactory:
     def _get_local_model_name(tier: LLMTier) -> str:
         """Get the specific local model name for a tier."""
         env_key = f"LOCAL_MODEL_{tier.value}"
+        # 2025-12-24: 모든 Tier를 gemma3:27b로 통일
+        # - 속도: qwen3 대비 2~3배 빠름
+        # - 안정성: 32개 병렬 요청 100% 성공
+        # - 품질: 분석 결과 우수 (reason 필드에 상세 분석 포함)
         defaults = {
-            # Qwen3 32B Strategy (All Tiers)
-            LLMTier.FAST: "qwen3:32b",      # High-end 24GB VRAM model
-            LLMTier.REASONING: "qwen3:32b", # Unified Model
-            LLMTier.THINKING: "qwen3:32b"   # Unified Model
+            LLMTier.FAST: "gemma3:27b",       # 감성분석, 요약
+            LLMTier.REASONING: "gemma3:27b",  # Hunter, Debate
+            LLMTier.THINKING: "gemma3:27b"    # Judge
         }
-        return os.getenv(env_key, defaults.get(tier, "qwen3:32b"))
+        return os.getenv(env_key, defaults.get(tier, "gemma3:27b"))
 
     @classmethod
     def get_provider(cls, tier: LLMTier):

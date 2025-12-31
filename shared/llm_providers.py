@@ -467,20 +467,25 @@ class OllamaLLMProvider(BaseLLMProvider):
 class GeminiLLMProvider(BaseLLMProvider):
     def __init__(self, project_id: str, gemini_api_key_secret: str, safety_settings):
         super().__init__(safety_settings)
-        import google.generativeai as genai
+        import google.genai as genai
         from . import auth
         
         api_key = auth.get_secret(gemini_api_key_secret, project_id)
         if not api_key:
             raise RuntimeError(f"GCP Secret '{gemini_api_key_secret}' 로드 실패")
 
-        genai.configure(api_key=api_key)
+        # google.genai는 Client/GenerativeModel에 직접 키를 전달하므로 전역 configure 불필요
         self._genai = genai
-        # Updated to Gemini 3 Pro for Self-Evolution tasks (Daily Feedback)
-        # Note: As of Dec 2025, stable is 'gemini-3-pro-preview' in API
-        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview")
+        self._api_key = api_key
+        self._client = genai.Client(api_key=api_key)
+        # Updated to Gemini 2.5 Flash for Cost Efficiency (User Request)
+        # Note: 'gemini-3-pro' is too expensive for default usage.
+        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
         self.flash_model = os.getenv("LLM_FLASH_MODEL_NAME", "gemini-2.5-flash")
         self._model_cache: Dict[tuple[str, float, str], Any] = {}
+
+    def _get_api_key(self) -> str:
+        return self._api_key
 
     @property
     def name(self) -> str:
@@ -498,11 +503,10 @@ class GeminiLLMProvider(BaseLLMProvider):
                 "response_mime_type": "application/json",
                 "response_schema": response_schema,
             }
-            self._model_cache[cache_key] = self._genai.GenerativeModel(
-                model_name=model_name,
-                generation_config=generation_config,
-                safety_settings=self.safety_settings,
-            )
+            self._model_cache[cache_key] = {
+                "model_name": model_name,
+                "generation_config": generation_config,
+            }
         return self._model_cache[cache_key]
 
     def generate_json(
@@ -519,14 +523,36 @@ class GeminiLLMProvider(BaseLLMProvider):
             model_candidates.extend(fallback_models)
 
         last_error: Optional[Exception] = None
+        max_retries = 3
+
         for target_model in model_candidates:
-            try:
-                model = self._get_or_create_model(target_model, response_schema, temperature)
-                response = model.generate_content(prompt, safety_settings=self.safety_settings)
-                return json.loads(response.text)
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    model = self._get_or_create_model(target_model, response_schema, temperature)
+                    response = self._client.models.generate_content(
+                        model=model["model_name"],
+                        contents=prompt,
+                        config=model["generation_config"],
+                    )
+                    return json.loads(response.text)
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = (2 ** attempt) + 1  # 2, 3, 5 seconds...
+                            # If error message contains explicit retry delay, we could parse it, but simple backoff is often enough.
+                            # The log showed "Please retry in 30.3s", so we might need a longer wait if we parse it.
+                            # For now, let's just use a more aggressive backoff for 429.
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+                    
+                    # Not a 429 or retries exhausted
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM 호출 실패: {last_error}") from last_error
 
@@ -571,27 +597,39 @@ class GeminiLLMProvider(BaseLLMProvider):
             last_message = "Continue"
 
         last_error: Optional[Exception] = None
-        for target_model in model_candidates:
-            try:
-                generation_config = {"temperature": temperature}
-                if response_schema:
-                    generation_config["response_mime_type"] = "application/json"
-                    generation_config["response_schema"] = response_schema
+        max_retries = 3
 
-                model = self._genai.GenerativeModel(
-                    model_name=target_model,
-                    generation_config=generation_config,
-                    safety_settings=self.safety_settings,
-                )
-                chat = model.start_chat(history=gemini_history)
-                response = chat.send_message(last_message)
-                
-                if response_schema:
-                    return json.loads(response.text)
-                return {"text": response.text}
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+        for target_model in model_candidates:
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    generation_config = {"temperature": temperature}
+                    if response_schema:
+                        generation_config["response_mime_type"] = "application/json"
+                        generation_config["response_schema"] = response_schema
+
+                    response = self._client.models.generate_content(
+                        model=target_model,
+                        contents=gemini_history + [{"role": "user", "parts": [{"text": last_message}]}],
+                        config=generation_config,
+                    )
+
+                    text = response.text
+                    if response_schema:
+                        return json.loads(text)
+                    return {"text": text}
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Chat Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM Chat 호출 실패: {last_error}") from last_error
 
@@ -626,9 +664,9 @@ class OpenAILLMProvider(BaseLLMProvider):
         
         self.client = self._openai_module(api_key=api_key)
         # [Budget Strategy 2025]
-        # Default (Reasoning Tier): gpt-5-mini (Latest Budget Model)
-        # Thinking (Judge Tier): gpt-4o (Previous Flagship - Balanced Cost/Perf)
-        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-5-mini")
+        # Default (Reasoning Tier): gpt-4o-mini (Cost Efficiency)
+        # Thinking (Judge Tier): gpt-4o (Balanced Cost/Perf)
+        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
         self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
     
     def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):

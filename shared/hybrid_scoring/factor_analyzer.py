@@ -34,7 +34,6 @@ from .schema import (
     get_confidence_level,
     create_hybrid_scoring_tables,
     execute_upsert,
-    is_oracle,
 )
 from .factor_constants import (
     DEFAULT_LOOKBACK_YEARS,
@@ -377,9 +376,8 @@ class FactorAnalyzer:
         return results
     
     def _is_mariadb(self) -> bool:
-        """현재 DB 타입이 MariaDB인지 확인"""
-        import os
-        return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+        """단일화: MariaDB만 사용"""
+        return True
     
     def _get_historical_prices(self, 
                                stock_codes: List[str],
@@ -473,16 +471,19 @@ class FactorAnalyzer:
     
     def _calc_rsi_oversold(self, df: pd.DataFrame, period: int = 14) -> pd.Series:
         """RSI 과매도 팩터 (30 이하면 높은 값)"""
-        close = df['CLOSE_PRICE']
-        delta = close.diff()
-        gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-        
-        rs = gain / loss
+        close = pd.to_numeric(df['CLOSE_PRICE'], errors="coerce").dropna().to_numpy(dtype=float)
+        if close.size < period + 1:
+            return pd.Series(dtype=float)
+        delta = np.diff(close)
+        gains = np.where(delta > 0, delta, 0.0)
+        losses = np.where(delta < 0, -delta, 0.0)
+        gain_series = pd.Series(gains)
+        loss_series = pd.Series(losses)
+        avg_gain = gain_series.rolling(window=period).mean()
+        avg_loss = loss_series.rolling(window=period).mean()
+        rs = avg_gain / avg_loss.replace(0, pd.NA)
         rsi = 100 - (100 / (1 + rs))
-        
-        # RSI가 낮을수록 좋으므로 (100 - RSI) 반환
-        return 100 - rsi
+        return (100 - rsi).fillna(0)
     
     def _calc_foreign_buy(self, df: pd.DataFrame, foreign_data: pd.Series = None) -> pd.Series:
         """외국인 순매수 팩터"""
@@ -715,7 +716,7 @@ class FactorAnalyzer:
         """
         팩터 분석 결과를 FACTOR_METADATA에 저장
         
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         NaN/inf 값을 None으로 변환하여 MySQL 호환성 확보
         """
         try:
@@ -769,7 +770,7 @@ class FactorAnalyzer:
         """
         조건부 성과 결과를 FACTOR_PERFORMANCE에 저장
         
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         """
         try:
             from sqlalchemy import text
@@ -1295,7 +1296,7 @@ class FactorAnalyzer:
         NEWS_FACTOR_STATS 테이블에 뉴스 영향도 저장
         
         GPT 피드백: "NEWS_FACTOR_STATS 테이블을 채우기 위한 분석 로직" 구현
-        Claude Opus 4.5 피드백: Oracle MERGE INTO 호환성 추가
+        Claude Opus 4.5 피드백: DB UPSERT 일관성 강화
         """
         try:
             from sqlalchemy import text

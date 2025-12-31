@@ -6,7 +6,7 @@ my-prime-jennie은 프로젝트의 다음 단계로, AI 에이전트 3인(Jennie
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.11-green)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ED)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
@@ -124,6 +124,8 @@ my-prime-jennie/
 | 📰 **실시간 뉴스 분석** | 뉴스 감성 분석 및 카테고리 자동 분류 |
 | 🔄 **마이크로서비스 아키텍처** | Docker Compose 기반 11개 서비스 |
 | 📱 **텔레그램 알림** | 매수/매도 체결 실시간 알림 |
+| 🛡️ **Fact-Checker** | LLM 환각 탐지 및 Telegram 경고 알림 |
+| ⚡ **Circuit Breaker** | KIS API 장애 대응 (자동 차단/복구) |
 
 ---
 
@@ -239,6 +241,50 @@ Scout 파이프라인(Phase 1.8)에서 종목별 투자 주체(외국인/기관/
 4. **승인 (Approval)**: 개발자(User)가 PR을 검토하고 승인하면 배포.
 
 > **Guardrails**: 배포 후 이상 징후 감지 시 자동 롤백/거래 중단 (설정: `configs/guardrails.yaml`)
+
+### 8. Fact-Checker (LLM 환각 탐지)
+
+**"AI가 말하는 '사실'을 교차 검증한다"**
+
+LLM이 생성한 분석 결과를 외부 데이터(뉴스, 재무제표 등)와 교차 검증하여 환각(Hallucination)을 탐지합니다.
+
+```python
+from shared.fact_checker import FactChecker
+
+checker = FactChecker()
+result = checker.verify_claim(
+    claim="삼성전자가 2분기 실적을 20% 상회했다",
+    stock_code="005930"
+)
+# Returns: FactCheckResult(is_valid=False, confidence=0.2, reason="실적 발표 전")
+```
+
+- **Scout 연동**: Hunter 분석 후 자동 교차 검증
+- **Telegram 알림**: `FACT_CHECK_ALERT_ENABLED=true` 시 환각 탐지 시 즉시 알림
+
+### 9. Circuit Breaker (KIS API 장애 대응)
+
+**"API 장애 시 자동 차단 → 복구 시 자동 재개"**
+
+KIS API 연속 실패 시 자동으로 호출을 차단하고, 일정 시간 후 복구를 시도합니다.
+
+```python
+from shared.kis.circuit_breaker import CircuitBreaker
+
+cb = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
+
+@cb
+def call_kis_api():
+    return kis_client.get_balance()
+```
+
+| 상태 | 설명 |
+|------|------|
+| **CLOSED** | 정상 상태, 모든 호출 허용 |
+| **OPEN** | 장애 감지, 모든 호출 즉시 실패 반환 |
+| **HALF_OPEN** | 복구 시도, 일부 호출만 허용하여 테스트 |
+
+- **상태 변화 알림**: Telegram으로 OPEN/HALF_OPEN/CLOSED 상태 변화 알림
 
 ---
 
@@ -842,21 +888,25 @@ pytest tests/shared/hybrid_scoring/ -v
 
 ### 테스트 커버리지
 
-| 모듈 | 테스트 수 | 설명 |
-|------|---------|------|
-| `test_redis_cache.py` | 25개 | Redis 캐싱 (fakeredis 사용) |
-| `test_repository.py` | 45개 | SQLAlchemy ORM (in-memory SQLite) |
-| `test_llm_*.py` | 52개 | LLM 프로바이더 및 JennieBrain |
-| `test_utils.py` | 27개 | 유틸리티 데코레이터 |
-| `test_config.py` | 24개 | ConfigManager |
-| `test_auth.py` | 12개 | 시크릿 로더 |
-| `test_market_regime.py` | 18개 | 시장 국면 탐지 |
-| `test_factor_scoring.py` | 22개 | 팩터 스코어링 |
-| `test_position_sizing.py` | 15개 | 포지션 사이징 |
-| `test_notification.py` | 16개 | 텔레그램 알림 |
-| `test_sector_classifier.py` | 18개 | 섹터 분류 |
-| `hybrid_scoring/` | 106개 | 하이브리드 스코어링 전체 |
-| **총계** | **410개** | - |
+| 모듈 | 테스트 수 | 커버리지 | 설명 |
+|------|---------|---------|------|
+| `test_redis_cache.py` | 25개 | 99% | Redis 캐싱 (fakeredis 사용) |
+| `test_repository.py` | 45개 | 98% | SQLAlchemy ORM (in-memory SQLite) |
+| `test_llm_*.py` | 52개 | 43% | LLM 프로바이더 및 JennieBrain |
+| `test_utils.py` | 27개 | 93% | 유틸리티 데코레이터 |
+| `test_config.py` | 24개 | 100% | ConfigManager |
+| `test_auth.py` | 12개 | 100% | 시크릿 로더 |
+| `test_market_regime.py` | 18개 | - | 시장 국면 탐지 |
+| `test_factor_scoring.py` | 22개 | - | 팩터 스코어링 |
+| `test_position_sizing.py` | 15개 | 100% | 포지션 사이징 |
+| `test_notification.py` | 16개 | - | 텔레그램 알림 |
+| `test_sector_classifier.py` | 18개 | - | 섹터 분류 |
+| `hybrid_scoring/` | 106개 | 86%+ | 하이브리드 스코어링 전체 |
+| `test_fact_checker.py` | 10개 | - | LLM 환각 탐지 |
+| `test_circuit_breaker.py` | 13개 | - | KIS API Circuit Breaker |
+| `test_monitoring_alerts.py` | 7개 | - | Telegram 모니터링 알림 |
+| **services/** | 130개+ | 56-77% | scout-job, buy/sell-executor, scheduler |
+| **총계** | **550개+** | - | - |
 
 ### 테스트 의존성
 
@@ -887,8 +937,10 @@ MIT License
 
 <div align="center">
 
-**my-prime-jennie v1.0**
+**my-prime-jennie v1.1**
 
 *AI가 발굴하고, 통계가 검증하고, 사람이 결정한다.*
+
+**Last Updated: 2025-12-26**
 
 </div>
