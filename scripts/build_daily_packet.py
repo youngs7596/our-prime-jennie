@@ -11,6 +11,13 @@ import logging
 import os
 import random
 import sys
+import os
+
+# Add project root to sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from datetime import datetime
 from typing import Dict, List, Any
 
@@ -79,12 +86,100 @@ def generate_dummy_data() -> Dict[str, Any]:
 
 def gather_real_data() -> Dict[str, Any]:
     """
-    실제 로그 파일에서 데이터를 수집합니다.
-    (현재는 미구현, 추후 로그 파일 파싱 로직 추가 필요)
+    DB에서 실제 로그 데이터를 수집합니다.
+    - ShadowRadarLog: 필터링 탈락 (VETO)
+    - LLMDecisionLedger: LLM 분석 결과 (DECISION)
     """
-    logger.warning("Real data gathering is not fully implemented yet. Using dummy data structure for now.")
-    # TODO: Implement log parsing logic here
-    return generate_dummy_data()
+    logger.info("Connecting to DB to gather real data...")
+    
+    # Import necessary modules
+    try:
+        from shared.db.connection import session_scope
+        from shared.db.models import ShadowRadarLog, LLMDecisionLedger
+        from sqlalchemy import text
+    except ImportError as e:
+        logger.error(f"Failed to import shared modules: {e}")
+        return generate_dummy_data()
+
+    cases = []
+    summary_stats = {
+        "veto_count": 0,
+        "no_trade_ratio": 0.0,
+        "total_scanned": 0,
+        "selected_candidates": 0
+    }
+    
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    try:
+        with session_scope(readonly=True) as session:
+            # 1. Total Scanned Count (Approximate from Shadow + Decision)
+            veto_count = session.query(ShadowRadarLog).filter(
+                ShadowRadarLog.timestamp >= today_start
+            ).count()
+            
+            decision_count = session.query(LLMDecisionLedger).filter(
+                LLMDecisionLedger.timestamp >= today_start
+            ).count()
+            
+            summary_stats["total_scanned"] = veto_count + decision_count
+            summary_stats["selected_candidates"] = decision_count
+            
+            if summary_stats["total_scanned"] > 0:
+                summary_stats["no_trade_ratio"] = veto_count / summary_stats["total_scanned"]
+                summary_stats["veto_count"] = veto_count
+                
+            # 2. ShadowRadarLog (VETO Cases)
+            veto_logs = session.query(ShadowRadarLog).filter(
+                ShadowRadarLog.timestamp >= today_start
+            ).all()
+
+            for log in veto_logs:
+                cases.append({
+                    "case_id": f"VETO-{log.log_id}",
+                    "category": "VETO",
+                    "symbol": log.stock_code,
+                    "reasoning_summary": log.rejection_reason or "No reason recorded",
+                    "model_decision": "REJECT",
+                    "market_context": f"Trigger: {log.trigger_type}, Stage: {log.rejection_stage}"
+                })
+
+            # 3. LLMDecisionLedger (DECISION Cases)
+            decisions = session.query(LLMDecisionLedger).filter(
+                LLMDecisionLedger.timestamp >= today_start
+            ).all()
+
+            for dec in decisions:
+                cat = "NORMAL"
+                if dec.final_decision == "BUY" and (dec.hunter_score or 0) > 80:
+                    cat = "BEST"
+                elif dec.gate_result == "REJECT" and (dec.hunter_score or 0) > 70:
+                    cat = "VIOLATION"
+                elif dec.final_decision == "HOLD" and (dec.hunter_score or 0) > 50:
+                    cat = "WORST"
+                
+                cases.append({
+                    "case_id": f"DEC-{dec.log_id}",
+                    "category": cat,
+                    "symbol": dec.stock_code,
+                    "reasoning_summary": dec.final_reason or "No reason recorded",
+                    "model_decision": dec.final_decision,
+                    "market_context": f"Regime: {dec.market_regime}, Score: {dec.hunter_score}"
+                })
+
+    except Exception as e:
+        logger.error(f"Failed to gather data from DB: {e}")
+        # import traceback
+        # logger.error(traceback.format_exc())
+        logger.warning("Falling back to dummy data generation.")
+        return generate_dummy_data()
+
+    logger.info(f"Gathered {len(cases)} cases from DB.")
+    return {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "summary_stats": summary_stats,
+        "representative_cases": cases
+    }
 
 def main():
     parser = argparse.ArgumentParser(description="Build Daily Packet for Council Review")
@@ -93,6 +188,21 @@ def main():
     parser.add_argument("--schema", default="schemas/daily_packet.schema.json", help="Path to schema file")
     
     args = parser.parse_args()
+
+    # DB 초기화 (실제 데이터 모드일 때만 필요)
+    if not args.dummy:
+        from dotenv import load_dotenv
+        from shared.db.connection import ensure_engine_initialized
+        
+        load_dotenv(override=True)
+        
+        # DB params debugging
+        host = os.getenv("MARIADB_HOST", "N/A")
+        port = os.getenv("MARIADB_PORT", "N/A")
+        user = os.getenv("MARIADB_USER", "N/A")
+        logger.info(f"DB Connection Params: HOST={host}, PORT={port}, USER={user}")
+        
+        ensure_engine_initialized()
 
     # 데이터 생성
     if args.dummy:

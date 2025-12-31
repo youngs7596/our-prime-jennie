@@ -631,3 +631,24 @@ def reset_global_config():
     """전역 ConfigManager 인스턴스 초기화 (테스트용)"""
     global _global_config
     _global_config = None
+
+
+# -------------------------------------------------------------------------
+# 모듈 레벨 헬퍼 함수 (편의성 제공)
+# -------------------------------------------------------------------------
+
+def get_config(key: str, default: Any = None) -> Any:
+    """전역 설정을 조회하는 헬퍼 함수"""
+    return get_global_config().get(key, default)
+
+def get_int_for_symbol(stock_code: str, key: str, default: int = None) -> int:
+    """종목별 정수 설정을 조회하는 헬퍼 함수"""
+    return get_global_config().get_int_for_symbol(stock_code, key, default)
+
+def get_float_for_symbol(stock_code: str, key: str, default: float = None) -> float:
+    """종목별 실수 설정을 조회하는 헬퍼 함수"""
+    return get_global_config().get_float_for_symbol(stock_code, key, default)
+
+def get_bool_for_symbol(stock_code: str, key: str, default: bool = None) -> bool:
+    """종목별 불린 설정을 조회하는 헬퍼 함수"""
+    return get_global_config().get_bool_for_symbol(stock_code, key, default)

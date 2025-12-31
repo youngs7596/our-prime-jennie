@@ -33,6 +33,7 @@ ALLOWED_PREFIXES = [
     "prompts/",
     "rules/",
     "tests/",
+    "config/",
     # "shared/llm_constants.py" # Maybe allowed? Plan says No. Sticking to strict plan.
 ]
 
@@ -128,17 +129,75 @@ def apply_patch(target_file: Path, diff_content: str, dry_run: bool, backup: boo
              os.remove(tmp_diff_path)
         return False
 
+DANGEROUS_KEYWORDS = [
+    "rm -rf", "shutil.rmtree", "os.remove", "os.unlink", # 삭제 관련
+    "DROP TABLE", "DELETE FROM", "TRUNCATE", # DB 관련
+    "subprocess", "os.system", "popen", # 시스템 호출 관련
+    "sudo", "chmod 777", # 권한 관련
+    "mkfs", "dd if=" # 치명적 시스템 명령
+]
+
+def check_safety(diff_content: str) -> bool:
+    """위험한 키워드가 포함되어 있는지 검사"""
+    for keyword in DANGEROUS_KEYWORDS:
+        if keyword in diff_content:
+            logger.error(f"⛔ Security Violation: Detected dangerous keyword '{keyword}' in patch.")
+            return False
+    return True
+
+def normalize_bundle(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """번들 스키마를 정규화하여 패치 리스트를 추출"""
+    patches = []
+    
+    # 1. 'patches' 키 확인
+    if "patches" in bundle:
+        patches = bundle["patches"]
+    # 2. 'changes' 키 확인 (가끔 LLM이 이걸 씀)
+    elif "changes" in bundle:
+        patches = bundle["changes"]
+        logger.warning("⚠️ Schema Mismatch: Used 'changes' key instead of 'patches'. (Auto-corrected)")
+    # 3. 'patch_list' 키 확인
+    elif "patch_list" in bundle:
+        patches = bundle["patch_list"]
+        logger.warning("⚠️ Schema Mismatch: Used 'patch_list' key instead of 'patches'. (Auto-corrected)")
+    # 4. 'patch_candidates' 키 확인 (Minji Mock)
+    elif "patch_candidates" in bundle:
+        patches = bundle["patch_candidates"]
+        logger.warning("⚠️ Schema Mismatch: Used 'patch_candidates' key instead of 'patches'. (Auto-corrected)")
+    
+    normalized_patches = []
+    for p in patches:
+        # 필드 이름 정규화
+        target = p.get("target_file") or p.get("file") or p.get("path")
+        diff = p.get("diff") or p.get("content") or p.get("patch")
+        desc = p.get("description") or p.get("summary") or "No description"
+        
+        if target and diff:
+            normalized_patches.append({
+                "target_file": target,
+                "diff": diff,
+                "description": desc
+            })
+        else:
+            logger.warning(f"⚠️ Skipping invalid patch item: {p.keys()}")
+            
+    return normalized_patches
+
 def main():
     args = parse_args()
     
+    if not os.path.exists(args.input):
+        logger.error(f"Input file not found: {args.input}")
+        sys.exit(1)
+
     with open(args.input, "r", encoding="utf-8") as f:
         bundle = json.load(f)
         
     logger.info(f"Loaded Bundle: {bundle.get('bundle_id')} (Drafted: {bundle.get('created_at')})")
     
-    patches = bundle.get("patches", [])
+    patches = normalize_bundle(bundle)
     if not patches:
-        logger.info("No patches in bundle.")
+        logger.info("No valid patches found in bundle.")
         return
 
     success_count = 0
@@ -151,6 +210,11 @@ def main():
         
         logger.info(f"\nProcessing Patch: {desc}")
         
+        # Safety Check
+        if not check_safety(diff):
+            fail_count += 1
+            continue
+
         if apply_patch(target, diff, not args.apply, not args.no_backup):
             success_count += 1
         else:
