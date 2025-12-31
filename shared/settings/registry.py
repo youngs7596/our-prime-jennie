@@ -43,6 +43,26 @@ REGISTRY = {
 
     # ===== 매도 (운영 튜닝) =====
     "SELL_RSI_OVERBOUGHT_THRESHOLD": {"value": 75.0, "type": "float", "desc": "RSI 과열(부분 익절) 기준", "category": "Selling", "db_priority": True},
+    
+    # 트레일링 익절 관련 설정
+    "TRAILING_TAKE_PROFIT_ENABLED": {"value": True, "type": "bool", "desc": "트레일링 익절 활성화 여부", "category": "Selling", "db_priority": True},
+    "TRAILING_TAKE_PROFIT_ACTIVATION_PCT": {"value": 5.0, "type": "float", "desc": "트레일링 익절 활성화 수익률 (%)", "category": "Selling", "db_priority": True},
+    "TRAILING_TAKE_PROFIT_ATR_MULT": {"value": 1.5, "type": "float", "desc": "트레일링 익절 ATR 배수 (최고가 - ATR×배수)", "category": "Selling", "db_priority": True},
+    
+    # 분할 익절 관련 설정
+    "SCALE_OUT_ENABLED": {"value": True, "type": "bool", "desc": "분할 익절 활성화 여부", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_1_PCT": {"value": 5.0, "type": "float", "desc": "1차 분할 익절 수익률 (%)", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_1_SELL_PCT": {"value": 25.0, "type": "float", "desc": "1차 분할 익절 매도 비율 (%)", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_2_PCT": {"value": 10.0, "type": "float", "desc": "2차 분할 익절 수익률 (%)", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_2_SELL_PCT": {"value": 25.0, "type": "float", "desc": "2차 분할 익절 매도 비율 (%)", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_3_PCT": {"value": 15.0, "type": "float", "desc": "3차 분할 익절 수익률 (%)", "category": "Selling", "db_priority": True},
+    "SCALE_OUT_LEVEL_3_SELL_PCT": {"value": 25.0, "type": "float", "desc": "3차 분할 익절 매도 비율 (%)", "category": "Selling", "db_priority": True},
+
+    # 상관관계 기반 분산 관리
+    "CORRELATION_CHECK_ENABLED": {"value": True, "type": "bool", "desc": "상관관계 체크 활성화 여부", "category": "Risk", "db_priority": True},
+    "CORRELATION_THRESHOLD": {"value": 0.7, "type": "float", "desc": "상관관계 경고 임계값 (0~1)", "category": "Risk", "db_priority": True},
+    "CORRELATION_BLOCK_THRESHOLD": {"value": 0.85, "type": "float", "desc": "상관관계 매수 거부 임계값", "category": "Risk", "db_priority": True},
+    "CORRELATION_ADJUST_POSITION": {"value": True, "type": "bool", "desc": "상관관계에 따라 포지션 자동 축소", "category": "Risk", "db_priority": True},
 
     # ===== Secrets (env 우선 - 코드로 변경 불가) =====
     "OPENAI_API_KEY": {"value": "", "type": "str", "desc": "OpenAI API Key", "category": "Secrets", "sensitive": True},

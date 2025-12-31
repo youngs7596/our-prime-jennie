@@ -23,6 +23,7 @@ from shared.strategy_presets import (
     apply_preset_to_config,
     resolve_preset_for_regime,
 )
+from shared.correlation import check_portfolio_correlation, get_correlation_risk_adjustment
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +232,54 @@ class BuyExecutor:
             portfolio_value = sum([p.get('quantity', 0) * p.get('current_price', p.get('avg_price', 0)) for p in current_portfolio])
             total_assets = available_cash + portfolio_value
             
+            # =====================================================================
+            # 5.5 상관관계 체크 (포트폴리오 분산 효과 검증)
+            # =====================================================================
+            correlation_enabled = self.config.get_bool('CORRELATION_CHECK_ENABLED', default=True)
+            correlation_adjustment = 1.0  # 기본값: 조정 없음
+            
+            if correlation_enabled and current_portfolio:
+                try:
+                    # 매수 예정 종목 가격 조회
+                    new_stock_prices_df = database.get_daily_prices(
+                        session, stock_code, limit=60, table_name="STOCK_DAILY_PRICES_3Y"
+                    )
+                    if new_stock_prices_df is not None and not new_stock_prices_df.empty:
+                        new_stock_prices = new_stock_prices_df['CLOSE_PRICE'].tolist()
+                        
+                        # 가격 조회 함수 정의
+                        def price_lookup(code):
+                            df = database.get_daily_prices(
+                                session, code, limit=60, table_name="STOCK_DAILY_PRICES_3Y"
+                            )
+                            if df is not None and not df.empty:
+                                return df['CLOSE_PRICE'].tolist()
+                            return None
+                        
+                        corr_threshold = self.config.get_float('CORRELATION_THRESHOLD', default=0.7)
+                        corr_block = self.config.get_float('CORRELATION_BLOCK_THRESHOLD', default=0.85)
+                        
+                        passed, warning, max_corr = check_portfolio_correlation(
+                            stock_code, new_stock_prices, current_portfolio,
+                            price_lookup, threshold=corr_threshold, min_periods=30
+                        )
+                        
+                        if max_corr >= corr_block:
+                            # 매우 높은 상관관계: 매수 거부
+                            logger.warning(f"🚫 상관관계 초과로 매수 거부: {stock_name} (상관관계: {max_corr:.2f} ≥ {corr_block})")
+                            return {"status": "skipped", "reason": f"High correlation ({max_corr:.2f}) with existing portfolio"}
+                        
+                        if warning:
+                            logger.warning(warning)
+                        
+                        # 상관관계에 따른 포지션 조정
+                        if self.config.get_bool('CORRELATION_ADJUST_POSITION', default=True):
+                            correlation_adjustment = get_correlation_risk_adjustment(max_corr, 1.0)
+                            if correlation_adjustment < 1.0:
+                                logger.info(f"📊 상관관계 조정: {max_corr:.2f} → 비중 {correlation_adjustment*100:.0f}%")
+                except Exception as e:
+                    logger.warning(f"⚠️ 상관관계 체크 실패(계속 진행): {e}")
+            
             manual_qty = scan_result.get('manual_quantity') or selected_candidate.get('manual_quantity')
             
             if manual_qty:
@@ -263,6 +312,9 @@ class BuyExecutor:
                     # downstream(사후 분석/리포트/추후 sell-engine 확장)용으로 risk_setting에 남김
                     recon_sl = self.config.get_float("RECON_STOP_LOSS_PCT", default=-0.025)
                     risk_setting = {**(risk_setting or {}), "stop_loss_pct": recon_sl, "recon_mode": True}
+                
+                # 상관관계 조정 적용
+                position_size_ratio *= correlation_adjustment
                 
                 position_size = int(base_quantity * position_size_ratio)
                 

@@ -69,6 +69,14 @@ class MockConfig:
         val = self._values.get(key)
         return float(val) if val is not None else default
     
+    def get_bool(self, key, default=False):
+        val = self._values.get(key)
+        if val is None:
+            return default
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() in ('true', '1', 'yes')
+    
     def set(self, key, value, persist_to_db=False):
         """설정값 업데이트 (apply_preset_to_config 호출용)"""
         self._values[key] = value
@@ -448,14 +456,17 @@ class TestDryRunMode:
     def test_dry_run_no_actual_order(self, mock_kis, mock_config):
         """DRY_RUN 모드에서 실제 주문 없음"""
         # DRY_RUN 모드에서는 kis.place_buy_order가 호출되지 않음
-        with patch('shared.db.connection.session_scope') as mock_session, \
-             patch('shared.db.repository') as mock_repo, \
-             patch('shared.database') as mock_db, \
-             patch('shared.redis_cache') as mock_redis, \
-             patch('shared.position_sizing.PositionSizer') as mock_sizer, \
-             patch('shared.portfolio_diversification.DiversificationChecker') as mock_div, \
-             patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
-             patch('shared.market_regime.MarketRegimeDetector'):
+        executor_module = load_executor_module()
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
             
             # Setup mocks
             mock_db.get_market_regime_cache.return_value = None
@@ -475,9 +486,7 @@ class TestDryRunMode:
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
-            
-            buy_exec = executor.BuyExecutor(
+            buy_exec = executor_module.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
                 gemini_api_key="test_key"

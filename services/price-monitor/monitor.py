@@ -14,6 +14,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import shared.database as database
 import shared.strategy as strategy
 import shared.redis_cache as redis_cache
+from shared.redis_cache import (
+    update_high_watermark, 
+    delete_high_watermark,
+    get_scale_out_level,
+    set_scale_out_level,
+)
 from shared.db.connection import session_scope
 from shared.db import repository as repo
 from shared.notification import TelegramBot
@@ -190,27 +196,107 @@ class PriceMonitor:
             profit_pct = ((current_price - buy_price) / buy_price) * 100
             daily_prices = database.get_daily_prices(session, stock_code, limit=30)
             
-            # 1. ATR Trailing Stop
+            # ATR 계산 (여러 조건에서 사용)
+            atr = None
             if not daily_prices.empty and len(daily_prices) >= 15:
                 atr = strategy.calculate_atr(daily_prices, period=14)
-                if atr:
-                    mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
-                    stop_price = buy_price - (mult * atr)
-                    if current_price < stop_price:
-                        return {"signal": True, "reason": f"ATR Stop (Price {current_price} < {stop_price:.0f})", "quantity_pct": 100.0}
             
-            # Fallback: Fixed Stop Loss
+            # =====================================================================
+            # 1. 손절 조건 (Stop Loss)
+            # =====================================================================
+            
+            # 1-1. ATR Trailing Stop (손절)
+            if atr:
+                mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
+                stop_price = buy_price - (mult * atr)
+                if current_price < stop_price:
+                    return {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
+            
+            # 1-2. Fallback: Fixed Stop Loss
             stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-5.0)
             
-            # [Jennie's Fix] Stop Loss는 항상 음수여야 합니다. 양수로 설정된 경우 음수로 변환합니다.
-            # 예: 사용자가 5.0(5% 손절)으로 설정하면 -5.0으로 처리하여 2% 수익 구간에서 매도되는 사고 방지
+            # [Jennie's Fix] Stop Loss는 항상 음수여야 합니다.
             if stop_loss > 0:
                 stop_loss = -stop_loss
 
             if profit_pct <= stop_loss:
                 return {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
 
-            # 2. RSI Overbought (Scale-out)
+            # =====================================================================
+            # 2. 트레일링 익절 (Trailing Take Profit) - 신규 추가
+            # =====================================================================
+            
+            # High Watermark 업데이트 (최고가 추적)
+            watermark = update_high_watermark(stock_code, current_price, buy_price)
+            high_price = watermark.get('high_price', current_price)
+            
+            # 트레일링 익절 조건 체크
+            trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
+            activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
+            
+            if trailing_enabled and atr:
+                # 최고가 기준 수익률
+                high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+                
+                # 활성화 조건: 최고가 기준 수익이 activation_pct 이상일 때
+                if high_profit_pct >= activation_pct:
+                    trailing_mult = self.config.get_float('TRAILING_TAKE_PROFIT_ATR_MULT', default=1.5)
+                    trailing_stop_price = high_price - (atr * trailing_mult)
+                    
+                    # 트레일링 익절 발동: 현재가가 트레일링 스탑가 이하
+                    if current_price <= trailing_stop_price:
+                        return {
+                            "signal": True,
+                            "reason": f"Trailing TP: High {high_price:,.0f} → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
+                            "quantity_pct": 100.0
+                        }
+
+            # =====================================================================
+            # 3. 분할 익절 (Scale-out) - 수익률 단계별 부분 매도
+            # =====================================================================
+            scale_out_enabled = self.config.get_bool('SCALE_OUT_ENABLED', default=True)
+            
+            if scale_out_enabled and profit_pct > 0:
+                current_level = get_scale_out_level(stock_code)
+                
+                # 각 레벨별 설정 조회
+                level_1_pct = self.config.get_float('SCALE_OUT_LEVEL_1_PCT', default=5.0)
+                level_1_sell = self.config.get_float('SCALE_OUT_LEVEL_1_SELL_PCT', default=25.0)
+                level_2_pct = self.config.get_float('SCALE_OUT_LEVEL_2_PCT', default=10.0)
+                level_2_sell = self.config.get_float('SCALE_OUT_LEVEL_2_SELL_PCT', default=25.0)
+                level_3_pct = self.config.get_float('SCALE_OUT_LEVEL_3_PCT', default=15.0)
+                level_3_sell = self.config.get_float('SCALE_OUT_LEVEL_3_SELL_PCT', default=25.0)
+                
+                # 아직 레벨 1 미도달
+                if current_level < 1 and profit_pct >= level_1_pct:
+                    set_scale_out_level(stock_code, 1)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L1: +{profit_pct:.1f}% (목표 +{level_1_pct}%)",
+                        "quantity_pct": level_1_sell
+                    }
+                
+                # 레벨 1 완료, 레벨 2 미도달
+                if current_level < 2 and profit_pct >= level_2_pct:
+                    set_scale_out_level(stock_code, 2)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L2: +{profit_pct:.1f}% (목표 +{level_2_pct}%)",
+                        "quantity_pct": level_2_sell
+                    }
+                
+                # 레벨 2 완료, 레벨 3 미도달
+                if current_level < 3 and profit_pct >= level_3_pct:
+                    set_scale_out_level(stock_code, 3)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L3: +{profit_pct:.1f}% (목표 +{level_3_pct}%)",
+                        "quantity_pct": level_3_sell
+                    }
+
+            # =====================================================================
+            # 4. RSI 과열 (추가 Scale-out)
+            # =====================================================================
             if not daily_prices.empty and len(daily_prices) >= 15:
                 prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
                 rsi = strategy.calculate_rsi(prices[::-1], period=14)
@@ -218,12 +304,17 @@ class PriceMonitor:
                 if rsi and rsi >= threshold:
                     return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f})", "quantity_pct": 50.0}
 
-            # 3. Target Profit
-            target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
-            if profit_pct >= target:
-                return {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
+            # =====================================================================
+            # 5. 고정 목표 익절 (트레일링 비활성화 시 폴백)
+            # =====================================================================
+            if not trailing_enabled:
+                target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
+                if profit_pct >= target:
+                    return {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
             
-            # 4. Death Cross
+            # =====================================================================
+            # 6. Death Cross
+            # =====================================================================
             if not daily_prices.empty and len(daily_prices) >= 20:
                 import pandas as pd
                 new_row = pd.DataFrame([{'PRICE_DATE': datetime.now(), 'CLOSE_PRICE': current_price, 'OPEN_PRICE': current_price, 'HIGH_PRICE': current_price, 'LOW_PRICE': current_price}])
@@ -231,7 +322,9 @@ class PriceMonitor:
                 if strategy.check_death_cross(df):
                     return {"signal": True, "reason": "Death Cross", "quantity_pct": 100.0}
             
-            # 5. Max Holding Days
+            # =====================================================================
+            # 7. Max Holding Days
+            # =====================================================================
             if holding.get('buy_date'):
                 days = (datetime.now() - datetime.strptime(holding['buy_date'], '%Y%m%d')).days
                 if days >= self.config.get_int('MAX_HOLDING_DAYS', default=30):

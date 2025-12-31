@@ -73,9 +73,22 @@ class TestPriceMonitor:
             assert "Fixed Stop Loss" in result['reason']
 
     def test_check_sell_signal_target_profit(self, monitor_instance, mock_config, mock_db_session):
-        """Test Target Profit Trigger"""
-        with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()):
-            monitor_instance.config.get_float.side_effect = lambda k, default: 10.0 if 'TARGET_PROFIT' in k else default
+        """Test Target Profit Trigger (트레일링/분할 익절 비활성화 시)"""
+        def config_side_effect(key, default=None):
+            config_map = {
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': False,  # 트레일링 비활성화
+                'SCALE_OUT_ENABLED': False,  # 분할 익절 비활성화
+                'SELL_STOP_LOSS_PCT': -5.0,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
+             patch("monitor.update_high_watermark", return_value={"high_price": 120, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
+             patch("monitor.get_scale_out_level", return_value=0):
             
             # Buy 100, Current 120 (+20%) -> Should Trigger
             result = monitor_instance._check_sell_signal(
@@ -198,13 +211,25 @@ class TestPriceMonitor:
 
     def test_check_sell_signal_rsi_overbought(self, monitor_instance, mock_db_session):
         """Test RSI Overbought Scale-out"""
+        def config_side_effect(key, default=None):
+            config_map = {
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'SELL_TARGET_PROFIT_PCT': 20.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': False,
+                'SCALE_OUT_ENABLED': False,  # 분할 익절 비활성화
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame({'CLOSE_PRICE': [100]*20})), \
              patch("monitor.strategy.calculate_atr", return_value=None), \
-             patch("monitor.strategy.calculate_rsi", return_value=80.0): # RSI > 75
-            
-            # Ensure Target Profit (10%) doesn't trigger at +10%
-            # Set Target Profit to 20%
-            monitor_instance.config.get_float.side_effect = lambda k, default: 75.0 if 'RSI' in k else (20.0 if 'TARGET' in k else -5.0)
+             patch("monitor.strategy.calculate_rsi", return_value=80.0), \
+             patch("monitor.update_high_watermark", return_value={"high_price": 110, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
+             patch("monitor.get_scale_out_level", return_value=0):
             
             result = monitor_instance._check_sell_signal(
                 mock_db_session, "005930", "Samsung", 100, 110, {}
@@ -317,3 +342,353 @@ class TestPriceMonitor:
             
             monitor_instance.start_monitoring()
             monitor_instance._monitor_with_polling.assert_not_called()
+
+
+class TestTrailingTakeProfit:
+    """트레일링 익절 테스트"""
+    
+    def test_trailing_tp_triggered_after_high(self, monitor_instance, mock_config, mock_db_session):
+        """트레일링 익절 발동 테스트 - 최고가 대비 하락 시"""
+        # Mock daily prices for ATR calculation
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        # 설정 모킹
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': True,
+                'TRAILING_TAKE_PROFIT_ACTIVATION_PCT': 5.0,
+                'TRAILING_TAKE_PROFIT_ATR_MULT': 1.5,
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'MAX_HOLDING_DAYS': 30,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark:
+            
+            # 시나리오: 매수가 80000, 최고가 90000 (12.5% 상승), 현재가 88000
+            # 트레일링 스탑가 = 90000 - (1000 * 1.5) = 88500
+            # 현재가 88000 < 88500 → 트레일링 익절 발동
+            mock_watermark.return_value = {
+                "high_price": 90000,
+                "buy_price": 80000,
+                "profit_from_high_pct": -2.22,
+                "updated": False
+            }
+            
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 88000, {}
+            )
+            
+            assert result is not None
+            assert result['signal'] is True
+            assert "Trailing TP" in result['reason']
+            assert result['quantity_pct'] == 100.0
+    
+    def test_trailing_tp_not_triggered_above_stop(self, monitor_instance, mock_config, mock_db_session):
+        """트레일링 익절 미발동 테스트 - 현재가가 스탑가 이상"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': True,
+                'TRAILING_TAKE_PROFIT_ACTIVATION_PCT': 5.0,
+                'TRAILING_TAKE_PROFIT_ATR_MULT': 1.5,
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'MAX_HOLDING_DAYS': 30,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'SCALE_OUT_ENABLED': False,  # Scale-out 비활성화
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark, \
+             patch("monitor.get_scale_out_level", return_value=0):
+            
+            # 시나리오: 매수가 80000, 최고가 90000, 현재가 89000
+            # 트레일링 스탑가 = 90000 - 1500 = 88500
+            # 현재가 89000 > 88500 → 트레일링 익절 미발동
+            mock_watermark.return_value = {
+                "high_price": 90000,
+                "buy_price": 80000,
+                "profit_from_high_pct": -1.11,
+                "updated": False
+            }
+            
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 89000, {}
+            )
+            
+            # 트레일링 익절 조건 미충족, 다른 매도 조건도 없음 → None
+            assert result is None
+    
+    def test_trailing_tp_not_activated_low_profit(self, monitor_instance, mock_config, mock_db_session):
+        """트레일링 익절 비활성화 테스트 - 수익률 미달"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': True,
+                'TRAILING_TAKE_PROFIT_ACTIVATION_PCT': 5.0,  # 5% 이상이어야 활성화
+                'TRAILING_TAKE_PROFIT_ATR_MULT': 1.5,
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'MAX_HOLDING_DAYS': 30,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark:
+            
+            # 시나리오: 매수가 80000, 최고가 83000 (3.75% 상승) → 활성화 조건(5%) 미달
+            mock_watermark.return_value = {
+                "high_price": 83000,
+                "buy_price": 80000,
+                "profit_from_high_pct": 0,
+                "updated": False
+            }
+            
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 83000, {}
+            )
+            
+            # 트레일링 활성화 조건 미달 → None
+            assert result is None
+    
+    def test_trailing_tp_disabled(self, monitor_instance, mock_config, mock_db_session):
+        """트레일링 익절 비활성화 시 고정 익절로 폴백"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': False,  # 트레일링 비활성화
+                'SCALE_OUT_ENABLED': False,  # Scale-out 비활성화
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'MAX_HOLDING_DAYS': 30,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark, \
+             patch("monitor.get_scale_out_level", return_value=0):
+            
+            mock_watermark.return_value = {
+                "high_price": 90000,
+                "buy_price": 80000,
+                "profit_from_high_pct": 0,
+                "updated": False
+            }
+            
+            # 12.5% 수익 → 고정 목표(10%) 초과
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 90000, {}
+            )
+            
+            assert result is not None
+            assert "Target Profit" in result['reason']
+
+
+class TestScaleOut:
+    """분할 익절 (Scale-out) 테스트"""
+    
+    def test_scale_out_level_1_triggered(self, monitor_instance, mock_config, mock_db_session):
+        """분할 익절 레벨 1 발동 테스트"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': True,
+                'TRAILING_TAKE_PROFIT_ACTIVATION_PCT': 10.0,  # 10% 이상이어야 트레일링 활성화
+                'SCALE_OUT_ENABLED': True,
+                'SCALE_OUT_LEVEL_1_PCT': 5.0,
+                'SCALE_OUT_LEVEL_1_SELL_PCT': 25.0,
+                'SCALE_OUT_LEVEL_2_PCT': 10.0,
+                'SCALE_OUT_LEVEL_2_SELL_PCT': 25.0,
+                'SCALE_OUT_LEVEL_3_PCT': 15.0,
+                'SCALE_OUT_LEVEL_3_SELL_PCT': 25.0,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'MAX_HOLDING_DAYS': 30,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark, \
+             patch("monitor.get_scale_out_level", return_value=0), \
+             patch("monitor.set_scale_out_level") as mock_set_level:
+            
+            mock_watermark.return_value = {
+                "high_price": 84000,
+                "buy_price": 80000,
+                "profit_from_high_pct": 0,
+                "updated": False
+            }
+            
+            # 5% 수익 → 레벨 1 발동
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 84000, {}
+            )
+            
+            assert result is not None
+            assert result['signal'] is True
+            assert "Scale-out L1" in result['reason']
+            assert result['quantity_pct'] == 25.0
+            mock_set_level.assert_called_with("005930", 1)
+    
+    def test_scale_out_level_2_after_level_1(self, monitor_instance, mock_config, mock_db_session):
+        """분할 익절 레벨 2 발동 테스트 (레벨 1 완료 후)"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': True,
+                'TRAILING_TAKE_PROFIT_ACTIVATION_PCT': 15.0,
+                'SCALE_OUT_ENABLED': True,
+                'SCALE_OUT_LEVEL_1_PCT': 5.0,
+                'SCALE_OUT_LEVEL_1_SELL_PCT': 25.0,
+                'SCALE_OUT_LEVEL_2_PCT': 10.0,
+                'SCALE_OUT_LEVEL_2_SELL_PCT': 25.0,
+                'SCALE_OUT_LEVEL_3_PCT': 15.0,
+                'SCALE_OUT_LEVEL_3_SELL_PCT': 25.0,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'MAX_HOLDING_DAYS': 30,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark, \
+             patch("monitor.get_scale_out_level", return_value=1), \
+             patch("monitor.set_scale_out_level") as mock_set_level:
+            
+            mock_watermark.return_value = {
+                "high_price": 88000,
+                "buy_price": 80000,
+                "profit_from_high_pct": 0,
+                "updated": False
+            }
+            
+            # 10% 수익, 레벨 1 완료 → 레벨 2 발동
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 88000, {}
+            )
+            
+            assert result is not None
+            assert result['signal'] is True
+            assert "Scale-out L2" in result['reason']
+            assert result['quantity_pct'] == 25.0
+            mock_set_level.assert_called_with("005930", 2)
+    
+    def test_scale_out_disabled(self, monitor_instance, mock_config, mock_db_session):
+        """분할 익절 비활성화 시 스킵"""
+        prices = pd.DataFrame({
+            'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
+        })
+        
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 2.0,
+                'SELL_STOP_LOSS_PCT': -5.0,
+                'TRAILING_TAKE_PROFIT_ENABLED': False,
+                'SCALE_OUT_ENABLED': False,  # 비활성화
+                'SELL_TARGET_PROFIT_PCT': 10.0,
+                'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'MAX_HOLDING_DAYS': 30,
+            }
+            return config_map.get(key, default)
+        
+        monitor_instance.config.get_float.side_effect = config_side_effect
+        monitor_instance.config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
+        monitor_instance.config.get_int.side_effect = lambda k, default=0: config_side_effect(k, default)
+        monitor_instance.config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
+        
+        with patch("monitor.database.get_daily_prices", return_value=prices), \
+             patch("monitor.strategy.calculate_atr", return_value=1000), \
+             patch("monitor.strategy.calculate_rsi", return_value=50.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
+             patch("monitor.update_high_watermark") as mock_watermark, \
+             patch("monitor.get_scale_out_level", return_value=0):
+            
+            mock_watermark.return_value = {
+                "high_price": 84000,
+                "buy_price": 80000,
+                "profit_from_high_pct": 0,
+                "updated": False
+            }
+            
+            # 5% 수익이지만 Scale-out 비활성화 → 고정 목표 익절 체크
+            result = monitor_instance._check_sell_signal(
+                mock_db_session, "005930", "Samsung", 80000, 84000, {}
+            )
+            
+            # 5% < 10% (목표 익절) → None
+            assert result is None
