@@ -89,7 +89,8 @@ def start_scheduler_worker():
     )
     scheduler_job_worker.start()
     logger.info("✅ News Crawler Scheduler Worker 시작 (queue=%s)", queue_name)
-    _bootstrap_scheduler_job()
+    # [HOTFIX] 재시작 시 불필요한 작업 큐잉 방지 (스케줄러에 전적으로 위임)
+    # _bootstrap_scheduler_job()
 
 
 def _bootstrap_scheduler_job():
