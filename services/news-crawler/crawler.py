@@ -104,10 +104,67 @@ SENTIMENT_COOLDOWN_SECONDS = float(os.getenv("SENTIMENT_COOLDOWN_SECONDS", "0.2"
 
 # --- 🔽 '일반 경제' RSS 피드 🔽 ---
 GENERAL_RSS_FEEDS = [
+    {"source_name": "Hankyung (Finance)", "url": "https://www.hankyung.com/feed/finance"},
+    {"source_name": "Hankyung (Economy)", "url": "https://www.hankyung.com/feed/economy"},
     {"source_name": "Maeil Business (Economy)", "url": "https://www.mk.co.kr/rss/50000001/"},
     {"source_name": "Maeil Business (Stock)", "url": "https://www.mk.co.kr/rss/50100001/"},
-    {"source_name": "Investing.com (News)", "url": "https://kr.investing.com/rss/news.rss"}
 ]
+
+# ==============================================================================
+# 뉴스 소스 필터링 설정 (2026-01 현자 3인 피드백 반영)
+# ==============================================================================
+
+# Tier 1: 신뢰할 수 있는 경제/금융 전문지 도메인 (hostname suffix 매칭)
+TRUSTED_NEWS_DOMAINS = {
+    "hankyung.com",      # 한국경제
+    "mk.co.kr",          # 매일경제
+    "sedaily.com",       # 서울경제
+    "mt.co.kr",          # 머니투데이
+    "fnnews.com",        # 파이낸셜뉴스
+    "thebell.co.kr",     # 더벨 (M&A/IB)
+    "newspim.com",       # 뉴스핌
+    "edaily.co.kr",      # 이데일리
+    "etoday.co.kr",      # 이투데이
+    "yna.co.kr",         # 연합뉴스
+    "etnews.com",        # 전자신문 (IT/반도체)
+    "biz.chosun.com",    # 조선비즈
+    "newsis.com",        # 뉴시스
+}
+
+# Wrapper 도메인 (포털/구글 - 신뢰 소스로 취급하지 않음)
+WRAPPER_DOMAINS = {
+    "news.naver.com", "n.news.naver.com",
+    "v.daum.net", "news.v.daum.net",
+    "news.google.com",
+}
+
+# 노이즈 키워드 (제목에 있으면 저품질로 판단하여 제외)
+NOISE_KEYWORDS = [
+    "특징주", "오전 시황", "장마감", "마감 시황", "급등락",
+    "오늘의 증시", "환율", "개장", "출발", "상위 종목",
+    "장중 시황", "거래량 상위", "외인 순매수", "기관 순매수",
+]
+
+# 신뢰할 수 있는 언론사 이름 (Google News source.title 매칭용)
+TRUSTED_SOURCE_NAMES = {
+    "한국경제", "한경", "Hankyung",
+    "매일경제", "매경", "MK",
+    "서울경제",
+    "머니투데이",
+    "파이낸셜뉴스",
+    "더벨", "thebell",
+    "뉴스핌",
+    "이데일리",
+    "이투데이",
+    "연합뉴스", "연합뉴스TV",
+    "전자신문", "ETNews",
+    "조선비즈",
+    "뉴시스",
+    "헤럴드경제",
+    "아시아경제",
+    "데일리안",
+    "뉴스1",
+}
 
 # ==============================================================================
 # LangChain, Chroma 클라이언트 초기화
@@ -211,6 +268,11 @@ def get_kospi_200_universe():
     """
     KOSPI 시가총액 상위 200개 종목을 가져옵니다.
     Scout와 동일한 Universe를 사용하여 뉴스를 수집합니다.
+    
+    Fallback 순서:
+    1. FinanceDataReader API
+    2. 네이버 금융 시총 스크래핑
+    3. DB WatchList (최후의 수단)
     """
     universe_size = int(os.getenv("SCOUT_UNIVERSE_SIZE", "200"))
     logger.info(f"  (1/6) KOSPI 시총 상위 {universe_size}개 종목 로드 중...")
@@ -252,9 +314,66 @@ def get_kospi_200_universe():
         except Exception as e:
             logger.warning(f"⚠️ (1/6) FinanceDataReader 실패: {e}")
     
-    # 2. Fallback: DB의 WatchList 사용
-    logger.info("  (1/6) Fallback: DB WatchList 조회 중...")
+    # 2. Fallback: 네이버 금융 시총 스크래핑
+    universe = _scrape_naver_finance_top_stocks(universe_size)
+    if universe:
+        return universe
+    
+    # 3. 최후 Fallback: DB의 WatchList 사용
+    logger.info("  (1/6) 최후 Fallback: DB WatchList 조회 중...")
     return get_watchlist_from_db()
+
+
+def _scrape_naver_finance_top_stocks(limit: int = 200) -> list:
+    """
+    네이버 금융에서 KOSPI 시총 상위 종목을 스크래핑합니다.
+    FDR API 장애 시 Fallback으로 사용.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    
+    logger.info("  (1/6) 네이버 금융 시총 스크래핑 시도 중...")
+    
+    universe = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
+    try:
+        # KOSPI 시총 상위 (페이지당 50개, 최대 4페이지 = 200개)
+        pages_needed = (limit // 50) + 1
+        
+        for page in range(1, pages_needed + 1):
+            if len(universe) >= limit:
+                break
+                
+            url = f'https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}'
+            resp = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            rows = soup.select('table.type_2 tbody tr')
+            for row in rows:
+                if len(universe) >= limit:
+                    break
+                    
+                cells = row.select('td')
+                if len(cells) >= 2:
+                    link = cells[1].select_one('a')
+                    if link:
+                        name = link.text.strip()
+                        href = link.get('href', '')
+                        code = href.split('code=')[-1][:6] if 'code=' in href else ''
+                        if code and len(code) == 6 and code.isdigit():
+                            universe.append({"code": code, "name": name})
+        
+        if universe:
+            logger.info(f"✅ (1/6) 네이버 금융 스크래핑으로 {len(universe)}개 종목 로드 완료!")
+            return universe
+        else:
+            logger.warning("⚠️ (1/6) 네이버 금융 스크래핑 결과 없음")
+            
+    except Exception as e:
+        logger.warning(f"⚠️ (1/6) 네이버 금융 스크래핑 실패: {e}")
+    
+    return []
 
 
 def get_watchlist_from_db():
@@ -293,12 +412,78 @@ def get_numeric_timestamp(feed_entry):
     else:
         return int(datetime.now(timezone.utc).timestamp())
 
+# ==============================================================================
+# 뉴스 소스 필터링 유틸 함수 (Phase 1,2,3)
+# ==============================================================================
+
+def get_hostname(url: str) -> str:
+    """URL에서 hostname 추출"""
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower().strip(".")
+    except Exception:
+        return ""
+
+def is_trusted_hostname(host: str) -> bool:
+    """hostname이 신뢰 도메인인지 확인 (suffix 매칭)"""
+    return any(host == d or host.endswith("." + d) for d in TRUSTED_NEWS_DOMAINS)
+
+def is_wrapper_domain(host: str) -> bool:
+    """hostname이 wrapper 도메인(포털/구글)인지 확인"""
+    return any(host == d or host.endswith("." + d) for d in WRAPPER_DOMAINS)
+
+def extract_date_from_url(url: str):
+    """
+    URL 패턴에서 발행일 추출 (예: /20250102...)
+    한경, 매경 등 대부분의 국내 언론사 지원
+    """
+    import re
+    from datetime import date as date_class
+    match = re.search(r'/(\d{4})(\d{2})(\d{2})\d+', url)
+    if match:
+        try:
+            return date_class(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            return None
+    return None
+
+def is_noise_title(title: str) -> bool:
+    """제목이 노이즈(저품질) 뉴스인지 확인"""
+    for noise in NOISE_KEYWORDS:
+        if noise in title:
+            return True
+    return False
+
+def is_trusted_source_name(source_name: str) -> bool:
+    """Google News의 source.title이 신뢰 언론사인지 확인"""
+    if not source_name:
+        return False
+    for trusted in TRUSTED_SOURCE_NAMES:
+        if trusted in source_name:
+            return True
+    return False
+
+def compute_news_hash(title: str) -> str:
+    """제목 기반 중복 체크용 해시"""
+    import hashlib
+    import re as re_module
+    # 특수문자, 공백 정규화 후 해싱
+    normalized = re_module.sub(r'[^\w]', '', title.lower())
+    return hashlib.md5(normalized.encode()).hexdigest()[:12]
+
+# 세션 내 중복 제거용 캐시
+_seen_news_hashes = set()
+
 def crawl_news_for_stock(stock_code, stock_name):
     """
     Google News RSS를 사용하여 특정 종목의 뉴스를 수집합니다.
+    [2026-01 개선] 신뢰 소스 필터링 + 노이즈 키워드 제외 + 중복 제거
     """
     logger.info(f"  (2/6) [App 5] '{stock_name}({stock_code})' Google News RSS 피드 수집 중...")
     documents = []
+    
+    # 필터링 통계
+    stats = {"total": 0, "wrapper": 0, "untrusted": 0, "noise": 0, "old": 0, "dup": 0, "accepted": 0}
+    
     try:
         query = f'"{stock_name}" OR "{stock_code}"'
         encoded_query = urllib.parse.quote(query)
@@ -310,12 +495,55 @@ def crawl_news_for_stock(stock_code, stock_name):
             return []
 
         for entry in feed.entries:
-            # 7일이 지난 뉴스는 수집 단계에서 제외
-            published_timestamp = get_numeric_timestamp(entry)
-            if datetime.fromtimestamp(published_timestamp, tz=timezone.utc) < datetime.now(timezone.utc) - timedelta(days=7):
-                logger.debug(f"  (2/6) 오래된 뉴스 제외: {entry.title[:30]}...")
+            stats["total"] += 1
+            
+            # 1. 소스 검증 (Google wrapper vs 직접 URL)
+            host = get_hostname(entry.link)
+            source_title = entry.get('source', {}).get('title', '')
+            
+            if is_wrapper_domain(host):
+                # Google/포털 wrapper인 경우 -> source.title로 신뢰 검증
+                if not is_trusted_source_name(source_title):
+                    stats["untrusted"] += 1
+                    continue
+                # 신뢰 언론사면 wrapper여도 통과
+            else:
+                # 직접 URL인 경우 -> hostname으로 신뢰 검증
+                if not is_trusted_hostname(host):
+                    stats["untrusted"] += 1
+                    continue
+            
+            # 3. 노이즈 키워드 체크
+            if is_noise_title(entry.title):
+                stats["noise"] += 1
                 continue
-
+            
+            # 4. 날짜 필터링 (URL 패턴 우선, fallback은 RSS)
+            article_date = extract_date_from_url(entry.link)
+            if article_date:
+                from datetime import date as date_class
+                days_old = (date_class.today() - article_date).days
+                if days_old > 7:
+                    stats["old"] += 1
+                    continue
+            else:
+                # fallback: RSS published 날짜
+                published_timestamp = get_numeric_timestamp(entry)
+                if datetime.fromtimestamp(published_timestamp, tz=timezone.utc) < datetime.now(timezone.utc) - timedelta(days=7):
+                    stats["old"] += 1
+                    continue
+            
+            # 5. 중복 체크 (제목 해시)
+            news_hash = compute_news_hash(entry.title)
+            if news_hash in _seen_news_hashes:
+                stats["dup"] += 1
+                continue
+            _seen_news_hashes.add(news_hash)
+            
+            # 모든 필터 통과 -> 수집
+            stats["accepted"] += 1
+            published_timestamp = get_numeric_timestamp(entry)
+            
             doc = Document(
                 page_content=f"뉴스 제목: {entry.title}\n링크: {entry.link}",
                 metadata={
@@ -327,9 +555,16 @@ def crawl_news_for_stock(stock_code, stock_name):
                 }
             )
             documents.append(doc)
+            
     except Exception as e:
         logger.exception(f"🔥 (2/6) '{stock_name}' 뉴스 수집 중 오류 발생")
+    
+    # 필터링 통계 로그
+    if stats["total"] > 0:
+        logger.info(f"  (2/6) [{stock_name}] 필터링: 총{stats['total']} → wrapper:{stats['wrapper']} untrusted:{stats['untrusted']} noise:{stats['noise']} old:{stats['old']} dup:{stats['dup']} → 수집:{stats['accepted']}")
+    
     return documents
+
 
 def crawl_general_news():
     """
@@ -401,7 +636,7 @@ def process_unified_analysis(documents):
         return
 
     logger.info("="*60)
-    logger.info("🚀 [Unified] 통합 뉴스 분석 시작 - Ollama (gpt-oss:20b)")
+    logger.info("🚀 [Unified] 통합 뉴스 분석 시작 - Ollama (gemma3:27b)")
     logger.info("🚀 [Unified] Single-Pass LLM Call (Sentiment + Risk) - 비용/시간 최적화")
     logger.info("="*60)
     
