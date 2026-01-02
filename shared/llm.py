@@ -140,6 +140,7 @@ class JennieBrain:
         """
         뉴스 제목과 요약을 분석하여 긍정/부정 점수를 매깁니다.
         High Volume / Low Risk -> FAST Tier (Local LLM)
+        [2026-01] Cloud Fallback 제거 - Local LLM 전용 (비용 ₩0)
         """
         provider = self._get_provider(LLMTier.FAST)
         if provider is None:
@@ -148,7 +149,6 @@ class JennieBrain:
         try:
             # build_news_sentiment_prompt args: news_title, news_summary
             prompt = build_news_sentiment_prompt(title, description)
-            # logger.debug(f"--- [JennieBrain] 뉴스 분석 via {provider.name} ---")
             
             # [Optimization] Use Flash model for FAST tier if available (e.g. Gemini 2.5 Flash)
             model_name = None
@@ -163,23 +163,9 @@ class JennieBrain:
             )
             return result
         except Exception as e:
-            logger.warning(f"⚠️ [News] Local LLM failed: {e}. Attempting Cloud Fallback (Tier-Adaptive)...")
-            try:
-                # Tier-Adaptive Fallback
-                fallback_provider = LLMFactory.get_fallback_provider(LLMTier.FAST)
-                if fallback_provider is None:
-                     raise ValueError("No fallback provider for FAST tier")
-
-                result = fallback_provider.generate_json(
-                    prompt,
-                    ANALYSIS_RESPONSE_SCHEMA,
-                    temperature=0.0
-                )
-                logger.info(f"   ✅ [News] Cloud Fallback Success via {fallback_provider.name}")
-                return result
-            except Exception as fb_e:
-                logger.error(f"❌ [News] Fallback failed: {fb_e}")
-                return {'score': 50, 'reason': f'분석 실패 (Local+Cloud): {e}'}
+            # [2026-01] Cloud Fallback 제거 - Local LLM 실패 시 기본값 반환
+            logger.warning(f"⚠️ [News] Local LLM 분석 실패 (Skip): {e}")
+            return {'score': 50, 'reason': f'Local LLM 분석 실패: {str(e)[:50]}'}
 
     # -----------------------------------------------------------------
     # 토론 (Bull vs Bear)

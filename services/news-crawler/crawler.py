@@ -76,10 +76,15 @@ except Exception as e:
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
-# langchain_google_genai 내부 google.generativeai FutureWarning 무시
-warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")
-warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+# [Cost Optimization] Cloud Embedding -> Local Embedding
+# langchain_google_genai -> langchain_huggingface
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    LOCAL_EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    LOCAL_EMBEDDINGS_AVAILABLE = False
+    logger.warning("⚠️ langchain_huggingface not available, falling back to Cloud Embeddings")
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # ==============================================================================
@@ -124,13 +129,14 @@ text_splitter = None
 db_client = None
 vectorstore = None
 jennie_brain = None # JennieBrain 인스턴스
+classifier = None # NewsClassifier 인스턴스 (Cost saving)
 
 def initialize_services():
     """
     LangChain 및 ChromaDB 서비스를 초기화합니다.
     run_collection_job() 실행 시에만 호출됩니다.
     """
-    global embeddings, text_splitter, db_client, vectorstore, jennie_brain
+    global embeddings, text_splitter, db_client, vectorstore, jennie_brain, classifier
     
     # SQLAlchemy 엔진 초기화 (session_scope 사용 전에 필수)
     try:
@@ -139,13 +145,32 @@ def initialize_services():
     except Exception as e:
         logger.warning(f"⚠️ SQLAlchemy 엔진 초기화 실패: {e}")
     
-    logger.info("... [RAG Crawler v8.1] LangChain 및 AI 컴포넌트 초기화 시작 ...")
+    logger.info("... [RAG Crawler v10.0] LangChain 및 AI 컴포넌트 초기화 시작 ...")
     try:
-        api_key = ensure_gemini_api_key()
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=api_key,
-        )
+        # [Cost Optimization] Local Embeddings 사용 (Cloud API 비용 ₩0)
+        if LOCAL_EMBEDDINGS_AVAILABLE:
+            logger.info("="*60)
+            logger.info("🏠 [LOCAL] Embedding 모델 로딩 중 (jhgan/ko-sroberta-multitask)")
+            logger.info("🏠 [LOCAL] Cloud API 호출 없음 - 비용: ₩0")
+            logger.info("="*60)
+            embeddings = HuggingFaceEmbeddings(
+                model_name="jhgan/ko-sroberta-multitask",  # 한국어 최적화 모델
+                model_kwargs={"device": "cpu"},
+                encode_kwargs={"normalize_embeddings": True}
+            )
+            logger.info("✅ [LOCAL] Embedding 모델 로딩 완료! (비용: ₩0)")
+        else:
+            # Fallback: Cloud Embeddings (비용 발생)
+            logger.error("="*60)
+            logger.error("🚨 [CLOUD] Cloud Embedding 사용 중! - 비용 발생!")
+            logger.error("🚨 [CLOUD] langchain-huggingface 설치 필요!")
+            logger.error("="*60)
+            api_key = ensure_gemini_api_key()
+            embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/text-embedding-004",
+                google_api_key=api_key,
+            )
+        
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         logger.info("✅ LangChain 컴포넌트(Embedding, Splitter) 초기화 성공.")
         
@@ -159,6 +184,15 @@ def initialize_services():
         except Exception as e:
             logger.warning(f"⚠️ JennieBrain 초기화 실패 (감성 분석 Skip): {e}")
             jennie_brain = None
+
+        # [Cost Optimization] NewsClassifier 초기화
+        global classifier
+        if get_classifier:
+            classifier = get_classifier()
+            logger.info("✅ NewsClassifier 초기화 성공 (비용 최적화 필터 가동).")
+        else:
+            classifier = None
+
 
     except Exception as e:
         logger.exception("🔥 LangChain 컴포넌트 초기화 실패!")
@@ -373,6 +407,10 @@ def process_sentiment_analysis(documents):
     if not jennie_brain or not documents:
         return
 
+    logger.info("="*60)
+    logger.info("🏠 [LOCAL] 감성 분석 시작 - Ollama (gemma3:27b) 사용")
+    logger.info("🏠 [LOCAL] Cloud API 호출 없음 - 비용: ₩0")
+    logger.info("="*60)
     logger.info(f"  [Sentiment] 신규 문서 {len(documents)}개에 대한 감성 분석 시작 (병렬 처리)...")
 
     MAX_WORKERS = 3 # OpenAI/Gemini Rate Limit 고려하여 5개 병렬로 제한
@@ -443,15 +481,13 @@ def process_sentiment_analysis(documents):
     processed_count = 0
     futures = []
     
+    # [Local LLM] 제한 없이 모든 종목 뉴스 분석 (비용 ₩0)
+    # stock_code가 있는 문서만 분석 대상
+    stock_docs = [doc for doc in documents if doc.metadata.get("stock_code")]
+    logger.info(f"  [Sentiment] 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
+    
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for doc in documents:
-            if 0 < MAX_SENTIMENT_DOCS_PER_RUN <= len(futures):
-                logger.info(
-                    "  [Sentiment] 1회 실행당 분석 제한(%s개)에 도달했습니다. 나머지는 다음 주기에 처리됩니다.",
-                    MAX_SENTIMENT_DOCS_PER_RUN
-                )
-                break
-            
+        for doc in stock_docs:
             futures.append(executor.submit(_analyze_single_doc, doc))
             
         for future in as_completed(futures):
@@ -610,15 +646,13 @@ def process_competitor_benefit_analysis(documents):
     total_events_created = 0
     futures = []
     
+    # [Local LLM] 제한 없이 모든 종목 뉴스 분석 (비용 ₩0)
+    # stock_code가 있는 문서만 분석 대상
+    stock_docs = [doc for doc in documents if doc.metadata.get("stock_code")]
+    logger.info(f"  [경쟁사 수혜] 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
+    
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for doc in documents:
-            if 0 < MAX_SENTIMENT_DOCS_PER_RUN <= len(futures):
-                logger.info(
-                    "  [경쟁사 수혜] 1회 실행당 분석 제한(%s개)에 도달했습니다. 나머지는 다음 주기에 처리됩니다.",
-                    MAX_SENTIMENT_DOCS_PER_RUN
-                )
-                break
-            
+        for doc in stock_docs:
             futures.append(executor.submit(_analyze_single_competitor_benefit, doc))
             
         for future in as_completed(futures):
@@ -642,6 +676,7 @@ def add_documents_to_chroma(documents):
 
     logger.info(f"  {step_id} [App 5] '새' 문서 {len(documents)}개 텍스트 분할 및 임베딩 중...")
     try:
+        # Local Embedding 사용 - 필터링 없이 모든 문서 임베딩 (비용 ₩0)
         splitted_docs = text_splitter.split_documents(documents)
         
         for i in range(0, len(splitted_docs), VERTEX_AI_BATCH_SIZE): # type: ignore
@@ -651,7 +686,11 @@ def add_documents_to_chroma(documents):
                 batch_docs
             )
         
-        logger.info(f"✅ {step_id} [App 4] Chroma 서버에 '새' 청크 총 {len(splitted_docs)}개 저장 완료!")
+        logger.info("="*60)
+        logger.info("🏠 [LOCAL] 임베딩 완료 - HuggingFace (ko-sroberta) 사용")
+        logger.info("🏠 [LOCAL] Cloud API 호출 없음 - 비용: ₩0")
+        logger.info("="*60)
+        logger.info(f"✅ {step_id} Chroma 서버에 '새' 청크 총 {len(splitted_docs)}개 저장 완료!")
     except Exception as e:
         logger.exception(f"🔥 {step_id} [App 4] Chroma 서버에 'Write' 중 심각한 오류 발생")
 

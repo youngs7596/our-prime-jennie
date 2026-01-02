@@ -58,14 +58,13 @@ class LLMFactory:
         Defaults: FAST -> gemini (cloud), REASONING -> ollama (local), THINKING -> openai
         """
         env_key = f"TIER_{tier.value}_PROVIDER"
-        # FAST tier uses Cloud Gemini for speed (Ollama queue saturation issue)
-        # THINKING tier uses OpenAI for deep reasoning (stable API)
-        # [Budget Strategy 2025]
-        # FAST -> Gemini Flash (Free Tier / Lowest Cost)
+        # [Cost Optimization 2026-01]
+        # Scout와 News-Crawler 스케줄 분리로 Local LLM 사용 가능
+        # FAST -> Ollama (Local gemma3:27b) - 비용 ₩0
         # REASONING -> OpenAI GPT-4o-mini (Best Value vs Performance)
         # THINKING -> OpenAI GPT-4o (Standard Quality)
         if tier == LLMTier.FAST:
-            default = "gemini"
+            default = "ollama"  # Cloud Gemini -> Local Ollama
         elif tier == LLMTier.THINKING:
             default = "openai" 
         else:
