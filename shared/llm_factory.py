@@ -76,11 +76,11 @@ class LLMFactory:
     def _get_local_model_name(tier: LLMTier) -> str:
         """Get the specific local model name for a tier."""
         env_key = f"LOCAL_MODEL_{tier.value}"
-        # 2026-01-02: FAST Tier -> gpt-oss:20b (70% faster sentiment analysis)
-        # - 프롬프트 튜닝으로 한국어 출력 안정화 완료
-        # - REASONING/THINKING은 gemma3:27b 유지 (복잡 추론 품질 우선)
+        # 2026-01-03: FAST Tier -> gemma3:27b (JSON 안정성 개선)
+        # - gpt-oss:20b에서 JSON 파싱 오류 다수 발생 -> gemma3로 변경
+        # - 뉴스 필터링 개선으로 처리량 감소 (1800개 -> ~300개) -> 속도 부담 감소
         defaults = {
-            LLMTier.FAST: "gpt-oss:20b",       # 감성분석 (속도 최적화)
+            LLMTier.FAST: "gemma3:27b",        # 감성분석 (JSON 안정성)
             LLMTier.REASONING: "gemma3:27b",  # Hunter, Debate
             LLMTier.THINKING: "gemma3:27b"    # Judge
         }

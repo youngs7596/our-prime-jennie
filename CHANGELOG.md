@@ -1,5 +1,15 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-03
+- **News Crawler 뉴스 소스 필터링 개선**: 3-Phase 구현 완료 (현자 3인 피드백 반영)
+  - Phase 1: hostname suffix 매칭, WRAPPER_DOMAINS 분리 (naver/daum/google)
+  - Phase 2: URL 패턴 기반 실제 발행일 추출
+  - Phase 3: 노이즈 키워드 필터, 제목 해시 중복 제거
+- **Google News wrapper URL 문제 해결**: `entry.link`가 `news.google.com`일 때 `source.title`로 신뢰 언론사 검증
+- **LLM 모델 변경**: `gpt-oss:20b` → `gemma3:27b` (JSON 출력 안정성 개선)
+- **FDR API 장애 대응**: 네이버 금융 시총 스크래핑 Fallback 추가 (`_scrape_naver_finance_top_stocks`)
+- **Universe 확장**: WatchList 18개 → KOSPI 200개 종목으로 뉴스 수집 정상화
+
 ## 2025-12-31 (오후 세션)
 - **테스트 격리성 강화**: `conftest.py`에 `isolated_env` 및 `reset_singletons` 픽스처(autouse) 추가로 환경변수/싱글톤 테스트 간섭 원천 차단
 - **Daily Council 마이그레이션**: `scripts/build_daily_packet.py` (Dummy 모드/스키마 검증), `scripts/run_daily_council.py` (Mock Council) 구현 및 Smoke Test 검증 완료
