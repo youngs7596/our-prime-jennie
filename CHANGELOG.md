@@ -10,6 +10,7 @@
 - **News Crawler Cost Elimination**: `news-crawler`의 임베딩(HuggingFace Local) 및 감성/경쟁사 분석(Ollama Local) 전면 로컬화 완료 (Cloud 비용 100% 절감). Docker 빌드 최적화 및 40개 분석 제한 제거.
 - **LLM 감성 분석 최적화 (Phase 1)**: `gpt-oss:20b` + 배치 처리 도입으로 뉴스 감성 분석 속도 **2배 향상** (0.35 → 0.70 items/sec). 한국어 출력 강제 프롬프트 튜닝 적용. (`llm_factory.py`, `llm_prompts.py`, `llm.py`, `crawler.py` 수정)
 - **LLM 감성 분석 최적화 (Phase 2)**: `news-crawler`의 LLM 분석 로직을 Sentiment와 Competitor Risk 통합 프롬프트로 단일화하여 처리 속도 및 비용 효율성 극대화. Integration Test(`tests/test_crawler_flow.py`) 추가로 검증 강화.
+- **News Crawler Cleanup**: 통합 분석 배포 완료 및 레거시 감성/경쟁사 분석 코드(`crawler.py`) 완전 제거.
 
 ## 2025-12-31
 - **수익 극대화 전략 4종 구현**: 트레일링 익절, 분할 익절, 상관관계 분산, 기술적 패턴 탐지 강화

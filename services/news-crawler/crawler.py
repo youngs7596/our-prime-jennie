@@ -52,8 +52,8 @@ try:
     from shared.db.models import WatchList as WatchListModel
     from shared.gemini import ensure_gemini_api_key
     # 경쟁사 수혜 분석 모듈
-    from shared.news_classifier import NewsClassifier, get_classifier
-    from shared.hybrid_scoring.competitor_analyzer import CompetitorAnalyzer
+    # from shared.news_classifier import NewsClassifier, get_classifier
+    # from shared.hybrid_scoring.competitor_analyzer import CompetitorAnalyzer
     logger.info("✅ 'shared' 패키지 모듈 import 성공")
 except ImportError as e: # type: ignore
     logger.error(f"🚨 'shared' 공용 패키지를 찾을 수 없습니다! (오류: {e})")
@@ -129,14 +129,13 @@ text_splitter = None
 db_client = None
 vectorstore = None
 jennie_brain = None # JennieBrain 인스턴스
-classifier = None # NewsClassifier 인스턴스 (Cost saving)
 
 def initialize_services():
     """
     LangChain 및 ChromaDB 서비스를 초기화합니다.
     run_collection_job() 실행 시에만 호출됩니다.
     """
-    global embeddings, text_splitter, db_client, vectorstore, jennie_brain, classifier
+    global embeddings, text_splitter, db_client, vectorstore, jennie_brain
     
     # SQLAlchemy 엔진 초기화 (session_scope 사용 전에 필수)
     try:
@@ -185,13 +184,6 @@ def initialize_services():
             logger.warning(f"⚠️ JennieBrain 초기화 실패 (감성 분석 Skip): {e}")
             jennie_brain = None
 
-        # [Cost Optimization] NewsClassifier 초기화
-        global classifier
-        if get_classifier:
-            classifier = get_classifier()
-            logger.info("✅ NewsClassifier 초기화 성공 (비용 최적화 필터 가동).")
-        else:
-            classifier = None
 
 
     except Exception as e:
@@ -626,9 +618,6 @@ def _create_competitor_event(doc, risk_data):
         logger.error(f"❌ [Event Creation] 실패: {e}")
 
 
-def old_process_sentiment_analysis(documents):
-    # Deprecated - kept for reference if needed, or deleted
-    pass
                     
                     # 동일 섹터 경쟁사 조회
 
@@ -734,10 +723,8 @@ def run_collection_job():
         
         # [New] 4-1. 새로운 문서 감성 분석 및 저장
         if os.getenv("ENABLE_NEWS_ANALYSIS", "true").lower() == "true":
-            process_sentiment_analysis(new_documents_to_add)
-        
-            # 4-2. 경쟁사 수혜 분석 및 저장
-            process_competitor_benefit_analysis(new_documents_to_add)
+            # [2026-01 Optimized] Unified Analysis (Sentiment + Risk)
+            process_unified_analysis(new_documents_to_add)
         else:
             logger.info("⚠️ [Config] 'ENABLE_NEWS_ANALYSIS=false' 설정으로 인해 분석 단계 생략.")
         
