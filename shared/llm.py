@@ -243,6 +243,93 @@ class JennieBrain:
             # Fallback: 기본값 반환
             return [{'id': item['id'], 'score': 50, 'reason': '배치 분석 실패'} for item in items]
 
+    def analyze_news_unified(self, items: list) -> list:
+        """
+        통합 뉴스 분석 (감성 + 리스크 동시 처리)
+        [Optimization] Single-Pass Analysis (Cost/Time Reduction)
+        
+        Args:
+            items: List of dicts with 'id', 'title', 'summary' keys
+        
+        Returns:
+            List of dicts with structure:
+            {
+                "id": int,
+                "sentiment": {"score": int, "reason": str},
+                "competitor_risk": {"is_detected": bool, "type": str, "benefit_score": int, "reason": str}
+            }
+        """
+        provider = self._get_provider(LLMTier.FAST)
+        if provider is None:
+            # 기본값 반환
+            return self._get_unified_fallback_response(items, "Helper initialization failed")
+
+        try:
+            # Import prompt builder
+            from shared.llm_prompts import build_unified_analysis_prompt
+            prompt = build_unified_analysis_prompt(items)
+            
+            # [Optimization] Use Flash model for FAST tier if available
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
+            # Schema Definition (Strict JSON)
+            UNIFIED_SCHEMA = {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "sentiment": {
+                                    "type": "object", 
+                                    "properties": {"score": {"type": "integer"}, "reason": {"type": "string"}},
+                                    "required": ["score", "reason"]
+                                },
+                                "competitor_risk": {
+                                    "type": "object",
+                                    "properties": {
+                                        "is_detected": {"type": "boolean"},
+                                        "type": {"type": "string"},
+                                        "benefit_score": {"type": "integer"},
+                                        "reason": {"type": "string"}
+                                    },
+                                    "required": ["is_detected", "type", "benefit_score", "reason"]
+                                }
+                            },
+                            "required": ["id", "sentiment", "competitor_risk"]
+                        }
+                    }
+                },
+                "required": ["results"]
+            }
+
+            result = provider.generate_json(
+                prompt, 
+                UNIFIED_SCHEMA, 
+                temperature=0.1,
+                model_name=model_name
+            )
+            return result.get('results', [])
+
+        except Exception as e:
+            logger.error(f"❌ [Unified Analysis] 분석 실패: {e}")
+            return self._get_unified_fallback_response(items, f"Analysis Error: {str(e)[:50]}")
+
+    def _get_unified_fallback_response(self, items: list, reason: str) -> list:
+        """통합 분석 실패 시 기본값 생성"""
+        fallback_results = []
+        for item in items:
+            fallback_results.append({
+                "id": item.get('id', 0),
+                "sentiment": {"score": 50, "reason": reason},
+                "competitor_risk": {"is_detected": False, "type": "NONE", "benefit_score": 0, "reason": reason}
+            })
+        return fallback_results
+
 
     # -----------------------------------------------------------------
     # 토론 (Bull vs Bear)

@@ -398,30 +398,31 @@ def filter_new_documents(documents):
     logger.info(f"✅ {step_id} 중복 검사 완료. 새로운 문서 {len(new_docs)}개 발견.")
     return new_docs
 
-def process_sentiment_analysis(documents):
+def process_unified_analysis(documents):
     """
-    [2026-01 Optimized] 수집된 뉴스 중 종목 뉴스에 대해 실시간 감성 분석을 수행합니다.
-    배치 처리(Batch Processing) 도입으로 ~70% 속도 향상
-    분석 결과는 Redis 및 MariaDB에 저장됩니다.
+    [2026-01 Optimized] 통합 뉴스 분석 (감성 + 경쟁사 리스크)
+    Single-Pass LLM Call로 두 가지 분석을 동시에 수행합니다.
+    - 감성 분석: Redis & MariaDB 저장
+    - 리스크 탐지: 경쟁사 수혜 이벤트 생성
     """
     if not jennie_brain or not documents:
         return
 
     logger.info("="*60)
-    logger.info("🏠 [LOCAL] 감성 분석 시작 - Ollama (gpt-oss:20b) 사용")
-    logger.info("🏠 [LOCAL] 배치 처리 최적화 - 비용: ₩0")
+    logger.info("🚀 [Unified] 통합 뉴스 분석 시작 - Ollama (gpt-oss:20b)")
+    logger.info("🚀 [Unified] Single-Pass LLM Call (Sentiment + Risk) - 비용/시간 최적화")
     logger.info("="*60)
     
     # stock_code가 있는 문서만 분석 대상
     stock_docs = [doc for doc in documents if doc.metadata.get("stock_code")]
-    logger.info(f"  [Sentiment] 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
+    logger.info(f"  [Unified] 대상 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
     
     if not stock_docs:
         return
 
-    # 배치 준비: 문서를 (id, title, summary, metadata) 형태로 변환
+    # 배치 준비
     batch_items = []
-    doc_map = {}  # id -> doc 매핑 (나중에 저장용)
+    doc_map = {}
     
     for idx, doc in enumerate(stock_docs):
         content_lines = doc.page_content.split('\n')
@@ -430,254 +431,207 @@ def process_sentiment_analysis(documents):
         batch_items.append({
             "id": idx,
             "title": news_title,
-            "summary": news_title  # 제목만 사용 (현재 로직과 동일)
+            "summary": news_title 
         })
         doc_map[idx] = doc
     
-    # 배치 단위로 분석 (BATCH_SIZE=5)
+    # 배치 분석 실행 (BATCH_SIZE=5)
     BATCH_SIZE = 5
     all_results = []
     
     for i in range(0, len(batch_items), BATCH_SIZE):
         batch = batch_items[i:i + BATCH_SIZE]
-        logger.info(f"  [Sentiment] 배치 {i//BATCH_SIZE + 1}/{(len(batch_items) + BATCH_SIZE - 1)//BATCH_SIZE} 분석 중...")
+        logger.info(f"  [Unified] 배치 {i//BATCH_SIZE + 1}/{(len(batch_items) + BATCH_SIZE - 1)//BATCH_SIZE} 분석 중...")
         
         try:
-            results = jennie_brain.analyze_news_sentiment_batch(batch)
+            results = jennie_brain.analyze_news_unified(batch)
             all_results.extend(results)
         except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] 배치 분석 오류: {e}")
-            # Fallback: 기본값 추가
+            logger.warning(f"⚠️ [Unified] 배치 분석 오류: {e}")
+            # Fallback
             for item in batch:
-                all_results.append({'id': item['id'], 'score': 50, 'reason': '배치 분석 실패'})
+                all_results.append({
+                    'id': item['id'], 
+                    'sentiment': {'score': 50, 'reason': '분석 실패'},
+                    'competitor_risk': {'is_detected': False, 'type': 'NONE', 'benefit_score': 0, 'reason': '분석 실패'}
+                })
+
+    # 결과 처리 (병렬 저장)
+    logger.info(f"  [Unified] {len(all_results)}건 결과 처리 시작 (병렬 저장/이벤트 생성)...")
     
-    # 결과 저장
+    # DB 작업이 혼합되어 있으므로 안전하게 처리
+    _process_unified_results_parallel(all_results, doc_map)
+
+
+def _process_unified_results_parallel(results, doc_map):
+    """
+    통합 분석 결과를 병렬로 처리합니다.
+    1. 감성 분석 결과 저장 (Redis/DB)
+    2. 리스크 탐지 시 경쟁사 수혜 이벤트 생성
+    """
+    MAX_WORKERS = 5 # DB Pool 고려
     processed_count = 0
-    for result in all_results:
-        idx = result.get('id')
-        if idx is None or idx not in doc_map:
-            continue
-            
-        doc = doc_map[idx]
-        score = result.get('score', 50)
-        reason = result.get('reason', '분석 불가')
-        
-        stock_code = doc.metadata.get("stock_code")
-        stock_name = doc.metadata.get("stock_name")
-        content_lines = doc.page_content.split('\n')
-        news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
-        news_link = doc.metadata.get("source_url")
-        published_at = doc.metadata.get("created_at_utc")
-        
-        # 뉴스 날짜 추출
-        news_date_str = None
-        if published_at:
-            try:
-                news_date_str = datetime.fromtimestamp(published_at, tz=timezone.utc).strftime('%Y-%m-%d')
-            except Exception:
-                pass
-        
-        # Redis 저장
-        try:
-            database.set_sentiment_score(
-                stock_code, score, reason, 
-                source_url=news_link, 
-                stock_name=stock_name,
-                news_title=news_title,
-                news_date=news_date_str
-            )
-        except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] Redis 저장 실패 (Skip): {e}")
-        
-        # DB 저장 (Deadlock 재시도)
-        import random
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                with session_scope() as session:
-                    database.save_news_sentiment(session, stock_code, news_title, score, reason, news_link, published_at)
-                processed_count += 1
-                break
-            except Exception as e:
-                error_str = str(e)
-                is_deadlock = "1213" in error_str or "Deadlock" in error_str
-                
-                if is_deadlock and attempt < max_retries - 1:
-                    wait_time = random.uniform(0.1, 0.5) * (attempt + 1)
-                    logger.info(f"🔄 [Sentiment] Deadlock 감지, {wait_time:.2f}초 후 재시도...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    logger.warning(f"⚠️ [Sentiment] DB 저장 실패 (Skip): {e}")
-                    break
-
-    logger.info(f"✅ [Sentiment] 종목 뉴스 {processed_count}건 감성 분석 및 저장 완료.")
-
-
-
-
-def process_competitor_benefit_analysis(documents):
-    """
-    뉴스에서 경쟁사 수혜 기회를 분석합니다.
-    LLM-First Analysis (JennieBrain Reasoning Tier)
-    ThreadPoolExecutor를 사용한 병렬 처리 도입 (Cloud LLM 속도 활용)
-    """
-    if not jennie_brain or not CompetitorAnalyzer or not documents:
-        return
-    
-    logger.info(f"  [경쟁사 수혜] 신규 문서 {len(documents)}개 경쟁사 수혜 분석 시작 (병렬 처리)...")
-    
-    from shared.db.connection import get_session, session_scope # ensure import
-    from shared.db.models import IndustryCompetitors, CompetitorBenefitEvents
-    
-    MAX_WORKERS = 3
-    
-    def _analyze_single_competitor_benefit(doc):
-        # 문서 정보 추출
-        stock_code = doc.metadata.get("stock_code")
-        if not stock_code:
-            return 0
-        
-        content_lines = doc.page_content.split('\n')
-        news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
-        news_link = doc.metadata.get("source_url")
-        
-        events_created = 0
-
-        # 1. LLM 심층 분석
-        try:
-            analysis_result = jennie_brain.analyze_competitor_benefit(news_title)
-        except Exception as e:
-            logger.warning(f"⚠️ [경쟁사 수혜] LLM 분석 오류 '{news_title[:20]}...': {e}")
-            return 0
-
-        # 2. 리스크 아니면 Skip
-        if not analysis_result.get('is_risk'):
-            return 0
-        
-        event_type = analysis_result.get('event_type', 'OTHER')
-        benefit_score = analysis_result.get('competitor_benefit_score', 0)
-        
-        logger.info(f"  🔴 [악재 감지/LLM] {stock_code} - {event_type}: {news_title[:50]}... (Score: {benefit_score})")
-
-        # 3. DB 로직 (Thread-Safe하게 내부에서 세션 생성) - Deadlock 재시도
-        import random
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                with session_scope() as session:
-                    # 해당 종목의 섹터 확인
-                    affected_stock = session.query(IndustryCompetitors).filter(
-                        IndustryCompetitors.stock_code == stock_code
-                    ).first()
-                    
-                    if not affected_stock:
-                        return 0
-                    
-                    sector_code = affected_stock.sector_code
-                    sector_name = affected_stock.sector_name
-                    affected_name = affected_stock.stock_name
-                    
-                    # 동일 섹터 경쟁사 조회
-                    competitors = session.query(IndustryCompetitors).filter(
-                        IndustryCompetitors.sector_code == sector_code,
-                        IndustryCompetitors.stock_code != stock_code,
-                        IndustryCompetitors.is_active == 1
-                    ).all()
-                    
-                    if not competitors:
-                        return 0
-                    
-                    # 이벤트 생성
-                    duration_days = 7
-                    if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK']:
-                        duration_days = 30
-                    expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
-                    
-                    for competitor in competitors:
-                        # 중복 조회
-                        existing = session.query(CompetitorBenefitEvents).filter(
-                            CompetitorBenefitEvents.affected_stock_code == stock_code,
-                            CompetitorBenefitEvents.beneficiary_stock_code == competitor.stock_code,
-                            CompetitorBenefitEvents.event_type == event_type,
-                            CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
-                        ).first()
-                        
-                        if existing:
-                            continue
-                        
-                        # 새로운 이벤트 추가
-                        benefit_event = CompetitorBenefitEvents(
-                            affected_stock_code=stock_code,
-                            affected_stock_name=affected_name,
-                            event_type=event_type,
-                            event_title=news_title[:1000],
-                            event_severity=-10,
-                            source_url=news_link,
-                            beneficiary_stock_code=competitor.stock_code,
-                            beneficiary_stock_name=competitor.stock_name,
-                            benefit_score=benefit_score,
-                            sector_code=sector_code,
-                            sector_name=sector_name,
-                            status='ACTIVE',
-                            expires_at=expires_at
-                        )
-                        session.add(benefit_event)
-                        events_created += 1
-                        
-                        # Redis 저장 (Loop 안에서 호출하되, 에러나도 진행)
-                        try:
-                            database.set_competitor_benefit_score(
-                                stock_code=competitor.stock_code,
-                                score=benefit_score,
-                                reason=f"경쟁사 {affected_name}의 {event_type} 악재로 인한 수혜 (LLM Analysis)",
-                                affected_stock=stock_code,
-                                event_type=event_type,
-                                ttl=duration_days * 86400
-                            )
-                        except Exception as e:
-                            logger.warning(f"⚠️ [경쟁사 수혜] Redis 저장 실패: {e}")
-
-                        logger.info(
-                            f"  ✅ [수혜 등록] {competitor.stock_name}({competitor.stock_code}) "
-                            f"+{benefit_score}점 ← {affected_name} {event_type}"
-                        )
-                    
-                    # session_scope exit -> commit
-                    return events_created
-                    
-            except Exception as e:
-                error_str = str(e)
-                is_deadlock = "1213" in error_str or "Deadlock" in error_str
-                
-                if is_deadlock and attempt < max_retries - 1:
-                    wait_time = random.uniform(0.1, 0.5) * (attempt + 1)
-                    logger.info(f"🔄 [경쟁사 수혜] Deadlock 감지, {wait_time:.2f}초 후 재시도 ({attempt + 1}/{max_retries})...")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    logger.error(f"❌ [경쟁사 수혜] DB 처리 중 오류: {e}")
-                    return 0
-
-    total_events_created = 0
-    futures = []
-    
-    # [Local LLM] 제한 없이 모든 종목 뉴스 분석 (비용 ₩0)
-    # stock_code가 있는 문서만 분석 대상
-    stock_docs = [doc for doc in documents if doc.metadata.get("stock_code")]
-    logger.info(f"  [경쟁사 수혜] 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
+    risk_event_count = 0
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for doc in stock_docs:
-            futures.append(executor.submit(_analyze_single_competitor_benefit, doc))
+        futures = []
+        for res in results:
+            futures.append(executor.submit(_handle_single_unified_result, res, doc_map))
             
         for future in as_completed(futures):
             try:
-                total_events_created += future.result()
+                success, is_risk = future.result()
+                if success: processed_count += 1
+                if is_risk: risk_event_count += 1
             except Exception as e:
-                logger.error(f"❌ [경쟁사 수혜] 스레드 실행 중 오류: {e}")
+                logger.error(f"❌ [Unified] 결과 처리 중 오류: {e}")
+                
+    logger.info(f"✅ [Unified] 완료: 감성분석 {processed_count}건 저장, 리스크 이벤트 {risk_event_count}건 생성.")
 
-    logger.info(f"✅ [경쟁사 수혜] 수혜 이벤트 {total_events_created}건 생성 완료 (병렬 처리)")
+
+def _handle_single_unified_result(result, doc_map):
+    """개별 통합 결과 처리 핸들러"""
+    idx = result.get('id')
+    doc = doc_map.get(idx)
+    if not doc: return False, False
+    
+    # 1. 감성 분석 저장
+    sentiment = result.get('sentiment', {})
+    score = sentiment.get('score', 50)
+    reason = sentiment.get('reason', 'N/A')
+    
+    # (기존 _save_single_sentiment_result 로직 인라인 or 재사용)
+    # 여기서는 로직을 단순화하여 직접 호출
+    save_success = _save_sentiment_to_db(doc, score, reason)
+    
+    # 2. 경쟁사 리스크 이벤트 처리
+    risk = result.get('competitor_risk', {})
+    is_risk = risk.get('is_detected', False)
+    
+    if is_risk:
+        _create_competitor_event(doc, risk)
+        
+    return save_success, is_risk
+
+
+def _save_sentiment_to_db(doc, score, reason):
+    """감성 점수 저장 로직 (Redis + MariaDB)"""
+    stock_code = doc.metadata.get("stock_code")
+    stock_name = doc.metadata.get("stock_name")
+    content_lines = doc.page_content.split('\n')
+    news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
+    news_link = doc.metadata.get("source_url")
+    published_at = doc.metadata.get("created_at_utc")
+    
+    news_date_str = None
+    if published_at:
+        try:
+            news_date_str = datetime.fromtimestamp(published_at, tz=timezone.utc).strftime('%Y-%m-%d')
+        except Exception: pass
+        
+    # Redis
+    try:
+        database.set_sentiment_score(stock_code, score, reason, source_url=news_link, stock_name=stock_name, news_title=news_title, news_date=news_date_str)
+    except Exception: pass
+    
+    # DB
+    import random
+    for attempt in range(3):
+        try:
+            with session_scope() as session:
+                database.save_news_sentiment(session, stock_code, news_title, score, reason, news_link, published_at)
+            return True
+        except Exception as e:
+            if "Deadlock" in str(e) and attempt < 2:
+                time.sleep(random.uniform(0.1, 0.5))
+                continue
+            return False
+    return False
+
+
+def _create_competitor_event(doc, risk_data):
+    """경쟁사 수혜 이벤트 생성 로직"""
+    stock_code = doc.metadata.get("stock_code")
+    content_lines = doc.page_content.split('\n')
+    news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
+    news_link = doc.metadata.get("source_url")
+    
+    event_type = risk_data.get('type', 'OTHER')
+    benefit_score = risk_data.get('benefit_score', 0)
+    
+    logger.info(f"  🔴 [Risk Detected] {stock_code} - {event_type} (Benefit Score: {benefit_score})")
+
+    from shared.db.models import IndustryCompetitors, CompetitorBenefitEvents
+    
+    try:
+        with session_scope() as session:
+            # 1. 섹터 확인
+            affected_stock = session.query(IndustryCompetitors).filter(IndustryCompetitors.stock_code == stock_code).first()
+            if not affected_stock: return
+            
+            # 2. 경쟁사 조회
+            competitors = session.query(IndustryCompetitors).filter(
+                IndustryCompetitors.sector_code == affected_stock.sector_code,
+                IndustryCompetitors.stock_code != stock_code,
+                IndustryCompetitors.is_active == 1
+            ).all()
+            
+            if not competitors: return
+            
+            # 3. 이벤트 생성
+            duration_days = 30 if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK'] else 7
+            expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
+            
+            for comp in competitors:
+                # 중복 체크
+                existing = session.query(CompetitorBenefitEvents).filter(
+                    CompetitorBenefitEvents.affected_stock_code == stock_code,
+                    CompetitorBenefitEvents.beneficiary_stock_code == comp.stock_code,
+                    CompetitorBenefitEvents.event_type == event_type,
+                    CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
+                ).first()
+                
+                if existing: continue
+                
+                # 이벤트 등록
+                event = CompetitorBenefitEvents(
+                    affected_stock_code=stock_code,
+                    affected_stock_name=affected_stock.stock_name,
+                    event_type=event_type,
+                    event_title=news_title[:1000],
+                    event_severity=-10, # 기본값
+                    source_url=news_link,
+                    beneficiary_stock_code=comp.stock_code,
+                    beneficiary_stock_name=comp.stock_name,
+                    benefit_score=benefit_score,
+                    sector_code=affected_stock.sector_code,
+                    sector_name=affected_stock.sector_name,
+                    status='ACTIVE',
+                    expires_at=expires_at
+                )
+                session.add(event)
+                
+                # Redis 업데이트 (Optional) - try-catch
+                try:
+                    database.set_competitor_benefit_score(
+                        comp.stock_code, benefit_score, 
+                        f"경쟁사 {affected_stock.stock_name} {event_type} 발생 (Unified Analysis)",
+                        stock_code, event_type, ttl=duration_days*86400
+                    )
+                except: pass
+                
+                logger.info(f"  ✅ [수혜 등록] {comp.stock_name} +{benefit_score}점 (by {event_type})")
+
+    except Exception as e:
+        logger.error(f"❌ [Event Creation] 실패: {e}")
+
+
+def old_process_sentiment_analysis(documents):
+    # Deprecated - kept for reference if needed, or deleted
+    pass
+                    
+                    # 동일 섹터 경쟁사 조회
+
 
 
 

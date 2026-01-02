@@ -392,9 +392,9 @@ bootstrap_schema()
 DEFAULT_JOBS = [
     {
         "job_id": "scout-job",
-        "description": "AI Scout Job (During Market Hours Only)",
+        "description": "AI Scout Job (Market Hours 08:00-15:30)",
         "queue_suffix": "jobs.scout",
-        "cron_expr": "0 9-15 * * 1-5",  # 평일 09:00 ~ 15:00 정시 (장중)
+        "cron_expr": "*/30 8-15 * * 1-5",  # 평일 08:00 ~ 15:30 (30분 간격)
         "enabled": True,
         "reschedule_mode": "scheduler",
         "timeout_sec": 7200,
@@ -402,9 +402,9 @@ DEFAULT_JOBS = [
     },
     {
         "job_id": "news-crawler",
-        "description": "News Crawler (Pre/Post Market)",
+        "description": "News Crawler (07:00, 15:30)",
         "queue_suffix": "jobs.news-crawler",
-        "cron_expr": "30 7,16 * * 1-5",  # 평일 07:30, 16:30 (장전/장후)
+        "cron_expr": "0 7,15,16 * * *",  # 07:00, 15:00, 16:00 (15:30 근사치)
         "enabled": True,
         "reschedule_mode": "scheduler",
         "timeout_sec": 300,
