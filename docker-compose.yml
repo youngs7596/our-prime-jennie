@@ -770,6 +770,9 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - USE_OLLAMA_GATEWAY=true
       - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - OLLAMA_HOST=http://localhost:11434
+      - TIER_FAST_PROVIDER=ollama
+      - TIER_REASONING_PROVIDER=ollama
       - ENABLE_NEWS_ANALYSIS=true
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host

@@ -6,6 +6,9 @@
 - **수익 극대화 전략 활성화**: `refresh_symbol_profiles.py` 실행 성공 (DB 포트/인증 수정), `config/symbol_overrides.json`에 70+ 종목 맞춤 전략 생성 및 Hot Reload 확인
 - **Daily Council 고도화 (완료)**: `build_daily_packet.py`의 실제 DB 데이터(`ShadowRadarLog`) 연동, `run_daily_council.py`의 LangChain 제거 및 LLM 파이프라인 최적화, `apply_patch_bundle.py`의 안전성 검증(스키마 자동 보정, 위험 명령어 차단) 완료. DB 포트(3307) 연결 문제 해결 및 전체 통합 테스트 통과.
 
+## 2026-01-02
+- **News Crawler Cost Elimination**: `news-crawler`의 임베딩(HuggingFace Local) 및 감성/경쟁사 분석(Ollama Local) 전면 로컬화 완료 (Cloud 비용 100% 절감). Docker 빌드 최적화 및 40개 분석 제한 제거.
+
 ## 2025-12-31
 - **수익 극대화 전략 4종 구현**: 트레일링 익절, 분할 익절, 상관관계 분산, 기술적 패턴 탐지 강화
   - **트레일링 익절 (ATR Trailing Take Profit)**: 최고가 추적 후 ATR×배수 하락 시 익절. Redis High Watermark 관리.
