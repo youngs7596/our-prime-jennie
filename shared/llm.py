@@ -167,6 +167,83 @@ class JennieBrain:
             logger.warning(f"⚠️ [News] Local LLM 분석 실패 (Skip): {e}")
             return {'score': 50, 'reason': f'Local LLM 분석 실패: {str(e)[:50]}'}
 
+    def analyze_news_sentiment_batch(self, items: list) -> list:
+        """
+        뉴스 배치 분석 (다건 처리로 속도 향상)
+        [2026-01] gpt-oss:20b + 배치 처리 도입
+        
+        Args:
+            items: List of dicts with 'id', 'title', 'summary' keys
+        Returns:
+            List of dicts with 'id', 'score', 'reason' keys
+        """
+        provider = self._get_provider(LLMTier.FAST)
+        if provider is None:
+            return [{'id': item['id'], 'score': 50, 'reason': '모델 미초기화'} for item in items]
+
+        # Build batched prompt
+        items_text = ""
+        for item in items:
+            items_text += f"""
+        [ID: {item['id']}]
+        - 제목: {item['title']}
+        - 내용: {item['summary']}
+        """
+        
+        prompt = f"""
+        [금융 뉴스 다건 감성 분석]
+        당신은 '금융 전문가'입니다. 아래 {len(items)}개의 뉴스를 각각 분석하여 호재/악재 점수를 매기세요.
+        
+        [중요] 반드시 한국어(Korean)로만 응답하세요. 영어로 출력하면 안 됩니다.
+        
+        {items_text}
+        
+        [채점 기준]
+        - 80 ~ 100점: 강력 호재
+        - 60 ~ 79점: 호재
+        - 40 ~ 59점: 중립
+        - 20 ~ 39점: 악재
+        - 0 ~ 19점: 강력 악재
+        
+        [출력 형식]
+        반드시 아래와 같은 JSON 객체로 응답하세요. ID는 입력된 것과 일치해야 합니다.
+        {{
+            "results": [
+                {{ "id": 0, "score": 85, "reason": "판단 이유(한국어)" }},
+                {{ "id": 1, "score": 30, "reason": "판단 이유(한국어)" }},
+                ...
+            ]
+        }}
+        """
+        
+        BATCH_SCHEMA = {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "score": {"type": "integer"},
+                            "reason": {"type": "string"}
+                        },
+                        "required": ["id", "score", "reason"]
+                    }
+                }
+            },
+            "required": ["results"]
+        }
+
+        try:
+            result = provider.generate_json(prompt, BATCH_SCHEMA, temperature=0.0)
+            return result.get('results', [])
+        except Exception as e:
+            logger.warning(f"⚠️ [News Batch] 배치 분석 실패: {e}")
+            # Fallback: 기본값 반환
+            return [{'id': item['id'], 'score': 50, 'reason': '배치 분석 실패'} for item in items]
+
+
     # -----------------------------------------------------------------
     # 토론 (Bull vs Bear)
     # -----------------------------------------------------------------

@@ -437,6 +437,8 @@ def build_news_sentiment_prompt(news_title, news_summary):
     [금융 뉴스 감성 분석]
     당신은 '금융 전문가'입니다. 아래 뉴스를 보고 해당 종목에 대한 호재/악재 여부를 점수로 판단해주세요.
     
+    [중요] 반드시 한국어(Korean)로만 응답하세요. 영어로 출력하면 안 됩니다.
+    
     - 뉴스 제목: {news_title}
     - 뉴스 내용: {news_summary}
     
@@ -448,7 +450,7 @@ def build_news_sentiment_prompt(news_title, news_summary):
     - 0 ~ 19점 (강력 악재): 어닝 쇼크, 유상증자(악재성), 횡령/배임, 계약 해지, 규제 강화
     
     [출력 형식]
-    JSON으로 응답: {{ "score": 점수(int), "reason": "판단 이유(한 문장)" }}
+    JSON으로 응답: {{ "score": 점수(int), "reason": "판단 이유(한 문장, 한국어)" }}
     """
     return prompt.strip()
 
