@@ -99,6 +99,30 @@ export const systemApi = {
   },
 }
 
+// Scheduler Control API (스케줄러 작업 직접 제어)
+export const schedulerApi = {
+  getJobs: async () => {
+    const response = await api.get('/scheduler/jobs')
+    return response.data
+  },
+  runJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/run`, { trigger_source: 'dashboard' })
+    return response.data
+  },
+  pauseJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/pause`)
+    return response.data
+  },
+  resumeJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/resume`)
+    return response.data
+  },
+  updateJob: async (jobId: string, data: { cron_expr?: string; enabled?: boolean; description?: string }) => {
+    const response = await api.put(`/scheduler/jobs/${jobId}`, data)
+    return response.data
+  },
+}
+
 export const scoutApi = {
   getStatus: async () => {
     const response = await api.get('/scout/status')
