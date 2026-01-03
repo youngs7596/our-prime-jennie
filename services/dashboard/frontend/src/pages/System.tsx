@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Server,
@@ -17,10 +17,11 @@ import {
   Play,
   Pause,
   Power,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { systemApi, schedulerApi } from '@/lib/api'
+import { systemApi, schedulerApi, configApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
 
 const containerVariants = {
@@ -36,24 +37,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 }
 
-const getStatusColor = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'active':
-    case 'running':
-    case 'up':
-    case 'healthy':
-      return 'text-profit-positive'
-    case 'inactive':
-    case 'stopped':
-    case 'down':
-      return 'text-muted-foreground'
-    case 'error':
-    case 'unhealthy':
-      return 'text-profit-negative'
-    default:
-      return 'text-jennie-gold'
-  }
-}
+
 
 const getStatusIcon = (status: string) => {
   switch (status.toLowerCase()) {
@@ -77,7 +61,6 @@ const getStatusIcon = (status: string) => {
 export function SystemPage() {
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const queryClient = useQueryClient()
 
   // 스케줄러 작업 목록 (새 API 사용)
   const { data: schedulerJobsData, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
@@ -111,6 +94,28 @@ export function SystemPage() {
     enabled: !!selectedContainer,
     refetchInterval: 5000, // 5초마다 자동 새로고침
   })
+
+  // 운영 설정 조회
+  const queryClient = useQueryClient()
+  const { data: configData } = useQuery({
+    queryKey: ['config-list'],
+    queryFn: configApi.list,
+    refetchInterval: 60000,
+  })
+
+  // 운영 설정 업데이트 mutation
+  const updateConfigMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: boolean }) =>
+      configApi.update(key, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config-list'] })
+    },
+  })
+
+  // DISABLE_MARKET_OPEN_CHECK 값 추출
+  const disableMarketCheck = configData?.configs?.find(
+    (c: { key: string; value: boolean }) => c.key === 'DISABLE_MARKET_OPEN_CHECK'
+  )?.value ?? false
 
   const handleRefreshAll = () => {
     refetchJobs()
@@ -480,6 +485,60 @@ export function SystemPage() {
               <div className="p-3 rounded-lg bg-white/5">
                 <p className="text-xs text-muted-foreground">Backup DB</p>
                 <p className="font-medium">Oracle Cloud (ATP)</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Operations Settings */}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-jennie-gold" />
+              운영 설정
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* DISABLE_MARKET_OPEN_CHECK 토글 */}
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                <div>
+                  <h4 className="font-semibold text-sm">장 시간 체크 비활성화</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    활성화 시 장 운영 시간(09:00~15:30) 외에도 서비스가 실행됩니다.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    updateConfigMutation.mutate({
+                      key: 'DISABLE_MARKET_OPEN_CHECK',
+                      value: !disableMarketCheck,
+                    })
+                  }}
+                  disabled={updateConfigMutation.isPending}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                    disableMarketCheck ? 'bg-jennie-gold' : 'bg-white/20',
+                    updateConfigMutation.isPending && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                      disableMarketCheck ? 'translate-x-6' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+              {/* 현재 상태 표시 */}
+              <div className="text-xs text-muted-foreground text-center">
+                현재 상태: {disableMarketCheck ? (
+                  <span className="text-jennie-gold font-medium">장외 시간 실행 허용 (테스트 모드)</span>
+                ) : (
+                  <span className="text-profit-positive font-medium">장 시간만 실행 (정상 운영)</span>
+                )}
               </div>
             </div>
           </CardContent>
