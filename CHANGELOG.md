@@ -5,6 +5,7 @@
   - `routers/scheduler.py`: 스케줄러 서비스 프록시 API 신규 생성
   - `System.tsx`: Scheduler Jobs UI 확장 및 운영 설정(장외 시간 실행) 토글 추가
   - `registry.py`: `DISABLE_MARKET_OPEN_CHECK` 설정 연동 (Operations Settings)
+  - `buy-scanner`, `price-monitor`: 환경변수 우선순위 문제 해결 및 ConfigManager 연동 (대시보드 토글 정상화)
 - **네이버 금융 종목 뉴스 직접 크롤링**: Google News RSS 대체로 네이버 금융 iframe API 사용, Google News를 Fallback으로 설정
   - `crawl_naver_finance_news()`: 종목코드 기반 뉴스 직접 크롤링 (정확도 향상)
   - `crawl_stock_news_with_fallback()`: Naver 우선, Google Fallback 래퍼 함수

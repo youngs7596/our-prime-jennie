@@ -167,7 +167,7 @@ def _perform_scan(trigger_source: str = "manual") -> dict:
         return {"status": "trading_paused", "reason": reason}
 
     # 장 운영 여부 확인 (가능한 경우) — mock/test에서는 스킵 가능
-    disable_market_open_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+    disable_market_open_check = scanner.config.get_bool("DISABLE_MARKET_OPEN_CHECK", default=False)
     is_mock_mode = os.getenv("TRADING_MODE", "REAL").lower() == "mock"
     if not disable_market_open_check and not is_mock_mode:
         try:

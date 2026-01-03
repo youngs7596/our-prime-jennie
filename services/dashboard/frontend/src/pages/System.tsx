@@ -118,9 +118,10 @@ export function SystemPage() {
   })
 
   // DISABLE_MARKET_OPEN_CHECK 값 추출
-  const disableMarketCheck = configData?.configs?.find(
-    (c: { key: string; value: boolean }) => c.key === 'DISABLE_MARKET_OPEN_CHECK'
-  )?.value ?? false
+  // DISABLE_MARKET_OPEN_CHECK 값 추출
+  const disableMarketCheck = Array.isArray(configData)
+    ? configData.find((c: { key: string; value: boolean }) => c.key === 'DISABLE_MARKET_OPEN_CHECK')?.value ?? false
+    : false
 
   const handleRefreshAll = () => {
     refetchJobs()
