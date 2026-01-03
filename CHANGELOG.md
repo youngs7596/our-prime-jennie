@@ -1,6 +1,10 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-03
+- **대시보드 서비스 제어 기능**: System 페이지에서 스케줄러 작업(scout-job, news-crawler 등) 실행/일시정지/재개 직접 제어 가능
+  - `routers/scheduler.py`: 스케줄러 서비스 프록시 API 신규 생성
+  - `System.tsx`: Scheduler Jobs UI 확장 (실행/정지/재개 버튼)
+  - `registry.py`: `DISABLE_MARKET_OPEN_CHECK` 운영 설정 추가
 - **네이버 금융 종목 뉴스 직접 크롤링**: Google News RSS 대체로 네이버 금융 iframe API 사용, Google News를 Fallback으로 설정
   - `crawl_naver_finance_news()`: 종목코드 기반 뉴스 직접 크롤링 (정확도 향상)
   - `crawl_stock_news_with_fallback()`: Naver 우선, Google Fallback 래퍼 함수

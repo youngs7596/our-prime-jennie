@@ -82,6 +82,9 @@ REGISTRY = {
     "REDIS_PASSWORD": {"value": "", "type": "str", "desc": "Redis 비밀번호", "category": "Secrets", "sensitive": True},
     "RABBITMQ_PASS": {"value": "", "type": "str", "desc": "RabbitMQ 패스워드", "category": "Secrets", "sensitive": True},
     "RABBITMQ_USER": {"value": "", "type": "str", "desc": "RabbitMQ 사용자", "category": "Secrets", "sensitive": True},
+
+    # ===== 운영 설정 (Operations) =====
+    "DISABLE_MARKET_OPEN_CHECK": {"value": False, "type": "bool", "desc": "장 운영시간 체크 비활성화 (true 시 장외 시간에도 서비스 실행)", "category": "Operations", "db_priority": True},
 }
 
 

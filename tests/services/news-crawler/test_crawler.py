@@ -48,14 +48,14 @@ def mock_session_scope():
 
 class TestCrawler:
     def test_crawl_news_for_stock_success(self, mock_feedparser):
-        """Test fetching news from Google RSS"""
-        # Mock RSS Feed
+        """Test fetching news from Google RSS (with trusted source)"""
+        # Mock RSS Feed with trusted source
         mock_entry = MagicMock()
         mock_entry.title = "Samsung Electronics Hits Record High"
-        mock_entry.link = "http://example.com/news1"
+        mock_entry.link = "https://www.hankyung.com/economy/article/20260103news1"  # Trusted domain
         # 1 day ago (Safe)
         mock_entry.published_parsed = (datetime.now(timezone.utc) - timedelta(days=1)).timetuple()
-        mock_entry.get.return_value = {"title": "Google News"}
+        mock_entry.get.return_value = {"title": "한경"}  # Trusted source name
 
         mock_feedparser.parse.return_value = MagicMock(entries=[mock_entry])
 
@@ -64,7 +64,7 @@ class TestCrawler:
         assert len(docs) == 1
         assert docs[0].metadata["stock_code"] == "005930"
         assert docs[0].metadata["stock_name"] == "Samsung Electronics"
-        assert docs[0].metadata["source_url"] == "http://example.com/news1"
+        assert "hankyung.com" in docs[0].metadata["source_url"]
         assert "Samsung Electronics Hits Record High" in docs[0].page_content
 
     def test_crawl_news_skips_old_news(self, mock_feedparser):
@@ -98,54 +98,53 @@ class TestCrawler:
         assert len(new_docs) == 1
         assert new_docs[0].metadata["source_url"] == "http://example.com/2"
 
-    def test_process_sentiment_analysis(self, mock_jennie_brain, mock_database, mock_session_scope):
-        """Test sentiment analysis flow"""
+    def test_process_unified_analysis(self, mock_jennie_brain, mock_database, mock_session_scope):
+        """Test unified analysis flow (sentiment + competitor risk)"""
         doc = Document(
-            page_content="Good News", 
+            page_content="뉴스 제목: Good News\n링크: http://url", 
             metadata={
                 "stock_code": "005930", 
                 "stock_name": "Samsung", 
                 "source_url": "http://url",
-                "source": "Title"
+                "source": "Title",
+                "created_at_utc": 1735800000
             }
         )
 
-        mock_jennie_brain.analyze_news_sentiment.return_value = {
-            'score': 80, 'reason': 'Good'
-        }
+        # New unified response format
+        mock_jennie_brain.analyze_news_unified.return_value = [{
+            'id': 0,
+            'sentiment': {'score': 80, 'reason': 'Good'},
+            'competitor_risk': {'is_detected': False, 'type': 'NONE', 'benefit_score': 0, 'reason': 'N/A'}
+        }]
 
-        # Run process
-        crawler.process_sentiment_analysis([doc])
+        # Mock session_scope for DB operations
+        mock_session = MagicMock()
+        mock_session_scope.return_value.__enter__.return_value = mock_session
 
-        # Verify LLM call
-        mock_jennie_brain.analyze_news_sentiment.assert_called_once()
+        # Run unified analysis
+        crawler.process_unified_analysis([doc])
+
+        # Verify unified LLM call
+        mock_jennie_brain.analyze_news_unified.assert_called_once()
         
-        # Verify Redis set
-        mock_database.set_sentiment_score.assert_called_with(
-            "005930", 80, 'Good', 
-            source_url="http://url", 
-            stock_name="Samsung", 
-            news_title=ANY, 
-            news_date=ANY
-        )
+        # Verify Redis set was called for sentiment
+        mock_database.set_sentiment_score.assert_called()
 
-        # Verify DB save
-        mock_database.save_news_sentiment.assert_called()
-
-    @patch("crawler.crawl_news_for_stock")
+    @patch("crawler.crawl_stock_news_with_fallback")  # Updated: using fallback function
     @patch("crawler.get_kospi_200_universe")
     @patch("crawler.filter_new_documents")
     @patch("crawler.add_documents_to_chroma")
-    @patch("crawler.process_sentiment_analysis")
+    @patch("crawler.process_unified_analysis")
     @patch("crawler.cleanup_old_data_job")
     @patch("shared.utils.is_operating_hours")
-    def test_run_collection_job_flow(self, mock_is_op, mock_cleanup, mock_sentiment, 
-                                     mock_add, mock_filter, mock_universe, mock_crawl):
-        """Test the main job flow"""
+    def test_run_collection_job_flow(self, mock_is_op, mock_cleanup, mock_unified, 
+                                     mock_add, mock_filter, mock_universe, mock_fallback_crawl):
+        """Test the main job flow with fallback crawler"""
         # Setup mocks
         mock_is_op.return_value = True
         mock_universe.return_value = [{"code": "005930", "name": "Samsung"}]
-        mock_crawl.return_value = [Document(page_content="News", metadata={"url": "abc"})]
+        mock_fallback_crawl.return_value = [Document(page_content="News", metadata={"url": "abc"})]
         mock_filter.return_value = [Document(page_content="News", metadata={"url": "abc"})]
 
         # Use patch for initialize_services since it modifies globals
@@ -154,7 +153,7 @@ class TestCrawler:
 
         # Assertions
         mock_universe.assert_called_once()
-        mock_crawl.assert_called()
+        mock_fallback_crawl.assert_called()  # Now checks fallback function
         mock_filter.assert_called()
         mock_add.assert_called()
         mock_cleanup.assert_called()

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Server,
@@ -14,10 +14,13 @@ import {
   Activity,
   X,
   Terminal,
+  Play,
+  Pause,
+  Power,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { systemApi } from '@/lib/api'
+import { systemApi, schedulerApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
 
 const containerVariants = {
@@ -73,8 +76,18 @@ const getStatusIcon = (status: string) => {
 
 export function SystemPage() {
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
-  
-  const { data: schedulerJobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  // 스케줄러 작업 목록 (새 API 사용)
+  const { data: schedulerJobsData, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
+    queryKey: ['scheduler-jobs'],
+    queryFn: schedulerApi.getJobs,
+    refetchInterval: 30000,
+  })
+
+  // 기존 시스템 상태 (호환성 유지)
+  const { data: schedulerJobs, refetch: refetchSystemStatus } = useQuery({
     queryKey: ['system-status'],
     queryFn: systemApi.getStatus,
     refetchInterval: 30000,
@@ -101,8 +114,46 @@ export function SystemPage() {
 
   const handleRefreshAll = () => {
     refetchJobs()
+    refetchSystemStatus()
     refetchDocker()
     refetchRabbitMQ()
+  }
+
+  // 스케줄러 작업 제어 핸들러
+  const handleRunJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.runJob(jobId)
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 실행 실패:', error)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handlePauseJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.pauseJob(jobId)
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 일시정지 실패:', error)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleResumeJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.resumeJob(jobId)
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 재개 실패:', error)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleContainerClick = (containerName: string) => {
@@ -248,57 +299,112 @@ export function SystemPage() {
         </Card>
       </motion.div>
 
-      {/* Scheduler Jobs */}
+      {/* Scheduler Jobs - 제어 버튼 포함 */}
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-jennie-purple" />
-              Scheduler Jobs
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-jennie-purple" />
+                Scheduler Jobs
+              </div>
+              <span className="text-xs font-normal text-muted-foreground">
+                클릭하여 작업 제어
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {jobsLoading ? (
               <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-16 rounded-lg bg-white/5 animate-pulse" />
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-20 rounded-lg bg-white/5 animate-pulse" />
                 ))}
               </div>
             ) : (
               <div className="space-y-3">
-                {schedulerJobs?.map((job: any) => (
+                {(schedulerJobsData || [])?.map((job: any) => (
                   <div
-                    key={job.service_name}
+                    key={job.job_id}
                     className="p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        {getStatusIcon(job.status)}
+                        {getStatusIcon(job.enabled ? 'active' : 'inactive')}
                         <div>
-                          <h4 className="font-semibold">{job.service_name}</h4>
+                          <h4 className="font-semibold">{job.job_id}</h4>
                           <p className="text-xs text-muted-foreground">
-                            {job.message}
+                            {job.description || job.queue}
+                          </p>
+                          <p className="text-xs text-jennie-blue font-mono mt-1">
+                            {job.cron_expr}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={cn('text-sm font-medium', getStatusColor(job.status))}>
-                          {job.status === 'active' ? '활성' : '비활성'}
-                        </p>
-                        {job.next_run && (
-                          <p className="text-xs text-muted-foreground">
-                            다음 실행: {formatRelativeTime(job.next_run)}
-                          </p>
+                      <div className="flex items-center gap-2">
+                        {/* 즉시 실행 버튼 */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRunJob(job.job_id)}
+                          disabled={actionLoading === job.job_id}
+                          className="gap-1 text-xs"
+                          title="즉시 실행"
+                        >
+                          <Play className="w-3 h-3" />
+                          실행
+                        </Button>
+                        {/* 일시정지/재개 버튼 */}
+                        {job.enabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePauseJob(job.job_id)}
+                            disabled={actionLoading === job.job_id}
+                            className="gap-1 text-xs text-jennie-gold"
+                            title="일시정지"
+                          >
+                            <Pause className="w-3 h-3" />
+                            정지
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResumeJob(job.job_id)}
+                            disabled={actionLoading === job.job_id}
+                            className="gap-1 text-xs text-profit-positive"
+                            title="재개"
+                          >
+                            <Power className="w-3 h-3" />
+                            재개
+                          </Button>
                         )}
                       </div>
                     </div>
-                    {job.last_run && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        마지막 실행: {formatRelativeTime(job.last_run)}
-                      </p>
-                    )}
+                    <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                      <span>
+                        상태: <span className={cn('font-medium', job.enabled ? 'text-profit-positive' : 'text-muted-foreground')}>
+                          {job.enabled ? '활성' : '비활성'}
+                        </span>
+                        {job.last_status && ` · ${job.last_status}`}
+                      </span>
+                      <div className="flex gap-4">
+                        {job.last_run_at && (
+                          <span>마지막: {formatRelativeTime(job.last_run_at)}</span>
+                        )}
+                        {job.next_due_at && (
+                          <span>다음: {formatRelativeTime(job.next_due_at)}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
+                {(!schedulerJobsData || schedulerJobsData.length === 0) && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>등록된 스케줄러 작업이 없습니다</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
