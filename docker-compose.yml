@@ -329,7 +329,7 @@ services:
       - PORT=8081
       - PORT=8081
       - SECRETS_FILE=/app/config/secrets.json
-      - DISABLE_MARKET_OPEN_CHECK=false # [Safety] 실제 매매 서비스는 장 운영 시간 체크 필수
+
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
@@ -571,7 +571,7 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - GUNICORN_CMD_ARGS=--timeout 600
       - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
-      - DISABLE_MARKET_OPEN_CHECK=false # [Safety] 실제 매매 서비스는 장 운영 시간 체크 필수
+
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
