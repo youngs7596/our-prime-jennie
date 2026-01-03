@@ -1,6 +1,10 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-03
+- **네이버 금융 종목 뉴스 직접 크롤링**: Google News RSS 대체로 네이버 금융 iframe API 사용, Google News를 Fallback으로 설정
+  - `crawl_naver_finance_news()`: 종목코드 기반 뉴스 직접 크롤링 (정확도 향상)
+  - `crawl_stock_news_with_fallback()`: Naver 우선, Google Fallback 래퍼 함수
+  - 단위 테스트 5개 추가, 통합 테스트 성공 (삼성전자 16건, SK하이닉스 3건)
 - **News Crawler 뉴스 소스 필터링 개선**: 3-Phase 구현 완료 (현자 3인 피드백 반영)
   - Phase 1: hostname suffix 매칭, WRAPPER_DOMAINS 분리 (naver/daum/google)
   - Phase 2: URL 패턴 기반 실제 발행일 추출
