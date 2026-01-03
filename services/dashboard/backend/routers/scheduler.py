@@ -77,11 +77,14 @@ async def _proxy_request(method: str, path: str, json_data: dict = None) -> dict
             return response.json()
     
     except httpx.ConnectError as e:
-        logger.error(f"스케줄러 서비스 연결 실패: {e}")
-        raise HTTPException(status_code=503, detail="스케줄러 서비스에 연결할 수 없습니다")
+        logger.error(f"스케줄러 서비스 연결 실패 (URL: {url}): {e}")
+        raise HTTPException(status_code=503, detail=f"스케줄러 서비스에 연결할 수 없습니다 ({SCHEDULER_SERVICE_URL})")
     except httpx.TimeoutException:
-        logger.error("스케줄러 서비스 타임아웃")
+        logger.error(f"스케줄러 서비스 타임아웃 (URL: {url}, Timeout: {TIMEOUT}s)")
         raise HTTPException(status_code=504, detail="스케줄러 서비스 응답 시간 초과")
+    except Exception as e:
+        logger.exception(f"스케줄러 프록시 요청 중 예기치 않은 오류 (URL: {url}): {e}")
+        raise HTTPException(status_code=500, detail="스케줄러 서비스 요청 중 내부 오류 발생")
 
 
 # === API Endpoints ===

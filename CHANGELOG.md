@@ -17,6 +17,7 @@
 - **LLM 모델 변경**: `gpt-oss:20b` → `gemma3:27b` (JSON 출력 안정성 개선)
 - **FDR API 장애 대응**: 네이버 금융 시총 스크래핑 Fallback 추가 (`_scrape_naver_finance_top_stocks`)
 - **Universe 확장**: WatchList 18개 → KOSPI 200개 종목으로 뉴스 수집 정상화
+- **Dashboard Stability & Optimization**: 스케줄러 작업 제어(실행/중지/재개) 로깅 및 에러 핸들링 강화, System API 라우터 분리 및 Redis 캐싱(5s TTL)을 통한 성능 최적화 완료 (`routers/system.py` 신설)
 
 ## 2025-12-31 (오후 세션)
 - **테스트 격리성 강화**: `conftest.py`에 `isolated_env` 및 `reset_singletons` 픽스처(autouse) 추가로 환경변수/싱글톤 테스트 간섭 원천 차단
