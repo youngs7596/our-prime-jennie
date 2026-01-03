@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { systemApi, schedulerApi, configApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
+import { toast } from 'react-hot-toast'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -109,6 +110,10 @@ export function SystemPage() {
       configApi.update(key, value),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['config-list'] })
+      toast.success('설정이 저장되었습니다')
+    },
+    onError: (error) => {
+      toast.error('설정 저장 실패: ' + (error as Error).message)
     },
   })
 
@@ -129,9 +134,11 @@ export function SystemPage() {
     setActionLoading(jobId)
     try {
       await schedulerApi.runJob(jobId)
+      toast.success('작업이 실행되었습니다')
       refetchJobs()
     } catch (error) {
       console.error('작업 실행 실패:', error)
+      toast.error('작업 실행 실패')
     } finally {
       setActionLoading(null)
     }
@@ -141,9 +148,11 @@ export function SystemPage() {
     setActionLoading(jobId)
     try {
       await schedulerApi.pauseJob(jobId)
+      toast.success('작업이 일시정지되었습니다')
       refetchJobs()
     } catch (error) {
       console.error('작업 일시정지 실패:', error)
+      toast.error('작업 일시정지 실패')
     } finally {
       setActionLoading(null)
     }
@@ -153,9 +162,11 @@ export function SystemPage() {
     setActionLoading(jobId)
     try {
       await schedulerApi.resumeJob(jobId)
+      toast.success('작업이 재개되었습니다')
       refetchJobs()
     } catch (error) {
       console.error('작업 재개 실패:', error)
+      toast.error('작업 재개 실패')
     } finally {
       setActionLoading(null)
     }
