@@ -44,6 +44,7 @@ def _detect_source(key: str, cfg: ConfigManager, session) -> ConfigItem:
     category = info.get("category", "General") if isinstance(info, dict) else "General"
     typ = info.get("type", type(default_val).__name__) if isinstance(info, dict) else type(default_val).__name__
     sensitive = bool(info.get("sensitive")) if isinstance(info, dict) else False
+    is_db_priority = bool(info.get("db_priority")) if isinstance(info, dict) else False
 
     if sensitive:
         # 시크릿은 값 노출 금지: 존재 여부만 표시
@@ -72,35 +73,68 @@ def _detect_source(key: str, cfg: ConfigManager, session) -> ConfigItem:
             sensitive=True,
         )
 
-    env_val = os.getenv(key)
-    if env_val is not None:
-        return ConfigItem(
-            key=key,
-            value=cfg._convert_type(key, env_val),
-            default=default_val,
-            type=str(typ),
-            category=category,
-            desc=desc,
-            source="env",
-            env_value=env_val,
-            db_value=None,
-            sensitive=False,
-        )
+    # DB Priority 처리 (운영 튜닝 키는 DB 값이 우선)
+    if is_db_priority:
+        db_val = repository.get_config(session, key, silent=True)
+        if db_val is not None:
+            return ConfigItem(
+                key=key,
+                value=cfg._convert_type(key, db_val),
+                default=default_val,
+                type=str(typ),
+                category=category,
+                desc=desc,
+                source="db",
+                env_value=os.getenv(key), # 참고용으로 표시
+                db_value=str(db_val),
+                sensitive=False,
+            )
 
-    db_val = repository.get_config(session, key, silent=True)
-    if db_val is not None:
-        return ConfigItem(
-            key=key,
-            value=cfg._convert_type(key, db_val),
-            default=default_val,
-            type=str(typ),
-            category=category,
-            desc=desc,
-            source="db",
-            env_value=None,
-            db_value=str(db_val),
-            sensitive=False,
-        )
+        env_val = os.getenv(key)
+        if env_val is not None:
+            return ConfigItem(
+                key=key,
+                value=cfg._convert_type(key, env_val),
+                default=default_val,
+                type=str(typ),
+                category=category,
+                desc=desc,
+                source="env",
+                env_value=env_val,
+                db_value=None,
+                sensitive=False,
+            )
+    else:
+        # 기본 로직 (Env > DB)
+        env_val = os.getenv(key)
+        if env_val is not None:
+            return ConfigItem(
+                key=key,
+                value=cfg._convert_type(key, env_val),
+                default=default_val,
+                type=str(typ),
+                category=category,
+                desc=desc,
+                source="env",
+                env_value=env_val,
+                db_value=None,
+                sensitive=False,
+            )
+
+        db_val = repository.get_config(session, key, silent=True)
+        if db_val is not None:
+            return ConfigItem(
+                key=key,
+                value=cfg._convert_type(key, db_val),
+                default=default_val,
+                type=str(typ),
+                category=category,
+                desc=desc,
+                source="db",
+                env_value=None,
+                db_value=str(db_val),
+                sensitive=False,
+            )
 
     return ConfigItem(
         key=key,

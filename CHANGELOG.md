@@ -1,5 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-04
+- **Dashboard Operation Fix**: Resolved `DISABLE_MARKET_OPEN_CHECK` override issue by removing conflicting environment variable in `env-vars-wsl.yaml`, restoring correct DB config priority for `buy-scanner` and `price-monitor` (Dashboard Toggle functional).
 ## 2026-01-03
 - **대시보드 서비스 제어 기능**: System 페이지에서 스케줄러 작업(scout-job, news-crawler 등) 실행/일시정지/재개 직접 제어 가능
   - `routers/scheduler.py`: 스케줄러 서비스 프록시 API 신규 생성
