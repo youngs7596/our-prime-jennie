@@ -530,6 +530,12 @@ class PortfolioEngine:
     # 수수료율 상수 (한국투자증권 OpenAPI 기준)
     FEE_BUY = 0.0000841   # 0.00841%
     FEE_SELL = 0.0005841  # 0.05841%
+    
+    # 슬리피지 상수 (시장가 체결 시 불리한 가격 적용)
+    # 매수: 호가 스프레드 + 시장 충격으로 0.3% 불리하게
+    # 매도: 동일하게 0.3% 불리하게
+    SLIPPAGE_BUY = 0.003   # +0.3% (더 비싸게 매수)
+    SLIPPAGE_SELL = 0.003  # -0.3% (더 싸게 매도)
 
     def execute_buy(
         self,
@@ -541,7 +547,10 @@ class PortfolioEngine:
         sector: str,
         risk_setting: Dict,
     ) -> bool:
-        price = candidate.price
+        # 슬리피지 적용: 시장가 매수 시 불리한 가격으로 체결
+        base_price = candidate.price
+        price = base_price * (1 + self.SLIPPAGE_BUY)  # 0.3% 더 비싸게
+        
         cost = qty * price
         fee = cost * self.FEE_BUY
         total_cost = cost + fee
@@ -601,7 +610,10 @@ class PortfolioEngine:
             row = get_row_at_or_before(price_cache[code], trade_date)
             if row is None:
                 continue
-            price = float(price_lookup(code))
+            base_price = float(price_lookup(code))
+            # 슬리피지 적용: 시장가 매도 시 불리한 가격으로 체결
+            price = base_price * (1 - self.SLIPPAGE_SELL)  # 0.3% 더 싸게
+            
             atr = float(row.get("ATR", pos.atr)) if not pd.isna(row.get("ATR")) else pos.atr
             if not pd.isna(atr):
                 trailing = price - atr * self.stop_loss_atr_mult
@@ -1081,6 +1093,13 @@ class BacktestGPT:
         return curve[slot_idx]
 
     def _generate_intraday_curve(self, code: str, date: pd.Timestamp) -> List[float]:
+        """
+        장중 가격 곡선 생성 (Look-ahead Bias 제거 버전)
+        
+        [중요 변경]
+        - 기존: 당일 OHLC 전체를 사용 → 미래 정보(H/L/C) 참조 문제
+        - 개선: 시가(Open)만 사용 + 전일 ATR 기반 변동폭 추정
+        """
         df = self.price_cache.get(code)
         slots = len(self.slot_offsets) or 1
         if df is None or df.empty:
@@ -1091,17 +1110,58 @@ class BacktestGPT:
             last_price = float(df["CLOSE_PRICE"].iloc[-1])
             return [last_price] * slots
 
-        close_price = float(row.get("CLOSE_PRICE", 0)) or 0.0
-        open_price = float(row.get("OPEN_PRICE", close_price)) or close_price
-        high_price = float(row.get("HIGH_PRICE", max(open_price, close_price))) or max(open_price, close_price)
-        low_price = float(row.get("LOW_PRICE", min(open_price, close_price))) or min(open_price, close_price)
+        # 시가만 사용 (장중에 알 수 있는 유일한 정보)
+        open_price = float(row.get("OPEN_PRICE", 0)) or 0.0
+        if open_price <= 0:
+            open_price = float(row.get("CLOSE_PRICE", 0)) or 0.0
 
-        # 보수적으로 범위 보정
-        high_price = max(high_price, open_price, close_price)
-        low_price = min(low_price, open_price, close_price)
+        # 전일 ATR로 변동폭 추정 (당일 H/L 사용 금지)
+        prev_idx = df.index.get_loc(date) - 1 if date in df.index else -1
+        if prev_idx >= 0:
+            prev_row = df.iloc[prev_idx]
+            atr = float(prev_row.get("ATR", open_price * 0.02)) if not pd.isna(prev_row.get("ATR")) else open_price * 0.02
+        else:
+            atr = open_price * 0.02  # 기본 2% 변동 가정
 
-        return self._simulate_intraday_path(open_price, high_price, low_price, close_price, slots)
+        return self._simulate_intraday_path_v2(open_price, atr, slots)
 
+    def _simulate_intraday_path_v2(
+        self,
+        open_price: float,
+        atr: float,
+        slots: int
+    ) -> List[float]:
+        """
+        시가 기반 장중 가격 경로 생성 (Look-ahead Bias 없음)
+        
+        - 시가에서 시작하여 ATR 범위 내에서 랜덤 워크
+        - 결정론적 시드 사용으로 재현성 보장
+        """
+        if slots <= 1:
+            return [open_price]
+
+        path = [open_price]
+        current = open_price
+        
+        # 매 슬롯마다 ATR의 5% 범위 내에서 변동
+        step_volatility = atr * 0.05
+        
+        for i in range(1, slots):
+            # 결정론적 노이즈 (재현성을 위해 sin 함수 사용)
+            noise = math.sin(i * 1.618) * step_volatility
+            
+            # 평균 회귀 효과 (시가에서 너무 멀어지면 되돌아오는 경향)
+            mean_revert = (open_price - current) * 0.1
+            
+            current = current + noise + mean_revert
+            current = max(current, open_price * 0.9)  # 시가 대비 -10% 이하 방지
+            current = min(current, open_price * 1.1)  # 시가 대비 +10% 이상 방지
+            
+            path.append(max(0.0, current))
+
+        return path[:slots]
+
+    # 기존 메서드는 유지 (하위 호환성)
     def _simulate_intraday_path(
         self,
         open_price: float,
@@ -1110,15 +1170,11 @@ class BacktestGPT:
         close_price: float,
         slots: int
     ) -> List[float]:
+        """[Deprecated] 기존 OHLC 기반 시뮬레이션 - _simulate_intraday_path_v2 사용 권장"""
         if slots <= 1:
             return [close_price]
 
-        # V자 또는 A자 형태의 결정론적 경로 생성
-        # 시가 -> 저가 -> 고가 -> 종가 (V자 형태)
-        # 시가 -> 고가 -> 저가 -> 종가 (A자 형태)
-        # 여기서는 간단하게 V자 형태를 기본으로 사용
         key_points = [open_price, low_price, high_price, close_price]
-
         segments = len(key_points) - 1
         steps_remaining = slots - 1
         extras = steps_remaining % segments if segments > 0 else 0

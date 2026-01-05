@@ -17,9 +17,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import FinanceDataReader as fdr
 from dotenv import load_dotenv
 
+
 # 프로젝트 루트 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
+
+from sqlalchemy import text  # [Patch] for DB query
+from shared.db.connection import init_engine, session_scope  # [Patch]
 
 import shared.auth as auth
 import shared.database as database
@@ -31,8 +35,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # 전역 설정
-MAX_WORKERS = 5  # 동시 실행 스레드 수 (API 제한 고려)
-DAYS_TO_COLLECT = 711
+# [Patch] KIS Rate Limit 준수를 위해 1로 축소 (모의투자 초당 2건 제한)
+MAX_WORKERS = 1
+# [Patch] 사용자 요청: 2주치 데이터 복구 (여유있게 21일)
+DAYS_TO_COLLECT = 21
 
 def _is_mariadb() -> bool:
     """단일화: MariaDB만 사용"""
@@ -129,9 +135,25 @@ def main():
     # DB 설정: MariaDB 단일화로 스레드에 별도 설정을 전달하지 않습니다.
 
     # KOSPI 종목 리스트 가져오기
-    logger.info("FinanceDataReader를 사용하여 KOSPI 종목 리스트를 가져옵니다...")
-    df_krx = fdr.StockListing('KOSPI')
-    codes = df_krx['Code'].tolist()
+    # [Patch] FinanceDataReader 오류(JSONDecodeError) 회피를 위해 DB에서 기존 종목 로드
+    logger.info("DB(STOCK_DAILY_PRICES_3Y)에서 관리 중인 종목 리스트를 로드합니다... (FDR 우회)")
+    
+    # DB 엔진 초기화 (메인 스레드용)
+    init_engine()
+    
+    codes = []
+    try:
+        with session_scope() as session:
+            # 3년치 테이블에 데이터가 있는 종목만 대상으로 함 (기존 유니버스 유지)
+            # distinct stock_code 조회
+            result = session.execute(text("SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y"))
+            codes = [row[0] for row in result.fetchall()]
+    except Exception as e:
+        logger.error(f"❌ DB 종목 리스트 조회 실패: {e}")
+        return
+
+    # df_krx = fdr.StockListing('KOSPI')
+    # codes = df_krx['Code'].tolist()
     logger.info(f"✅ KOSPI 종목 {len(codes)}개 확보 완료.")
     
     logger.info(f"=== KOSPI 전 종목({len(codes)}개) 병렬 수집 시작 (Workers: {MAX_WORKERS}) ===")
