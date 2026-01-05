@@ -1,5 +1,13 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-05
+- **Market Regime Bug Fix**: `shared/market_regime.py`의 `SIDEWAYS` 판단 로직 수정 (이격도 3% 이상 시 SIDEWAYS 점수 0점 강제) - "겁쟁이 봇" 문제 해결
+- **LLM Threshold 하향**: `MIN_LLM_SCORE_RECON` 65점 → 63점 (매수 활성화)
+- **Backtest Look-ahead Bias 제거**: `backtest_gpt_v2.py`의 장중 가격 시뮬레이션을 시가(Open)+ATR 기반으로 변경
+- **Backtest Slippage 적용**: 매수 +0.3%, 매도 -0.3% 슬리피지 추가
+- **Data Collection**: `collect_full_market_data_parallel.py` 수정 (import 순서, MAX_WORKERS=1) 및 KOSPI 958종목 데이터 수집
+- **Optimization**: 백테스트 최적화 30개 조합 실행, `llm_threshold: 65` 최적값 확인
+
 ## 2026-01-04
 - **Dashboard Operation Fix**: Resolved `DISABLE_MARKET_OPEN_CHECK` override issue by removing conflicting environment variable in `env-vars-wsl.yaml`, restoring correct DB config priority for `buy-scanner` and `price-monitor` (Dashboard Toggle functional).
 ## 2026-01-03
