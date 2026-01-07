@@ -7,10 +7,16 @@
 
 ## 🚨 최우선 원칙 (Critical Rule)
 
-**"AI는 반드시 한국어로 대답한다."**
-- 사용자가 영어로 질문하더라도, 답변은 **무조건 한국어**로 합니다.
-- 생각(Thought process)은 영어로 할 수 있으나, 최종 답변(Response)은 한국어여야 합니다.
-- 이 규칙은 다른 어떤 규칙보다 우선합니다.
+**"AI는 어떤 상황에서도 반드시 한국어로 대답한다."**
+
+> **⚠️ Gemini 모델 필독 (ATTENTION GEMINI MODELS)**:
+> Gemini 계열 모델은 종종 영어로 대답하는 경향이 있는데, 이는 **심각한 규칙 위반**입니다.
+> 사용자의 질문이 영어이거나, 코드 변수명이 영어라도 **답변, 설명, 주석은 무조건 한국어**로 작성해야 합니다.
+
+- **절대 원칙**: "English Input" -> "Korean Output"
+- 생각(Thought process)은 영어로 할 수 있으나, **최종 답변(Response)은 100% 한국어**여야 합니다.
+- 이 규칙은 다른 어떤 기술적/절차적 규칙보다 우선합니다.
+
 
 ---
 
@@ -280,5 +286,25 @@ ruff check .
 - 한국어로 대화
 - 코드 주석은 한국어(기존 스타일 따름)
 - 작업 전 짧은 계획 공유, 작업 후 결과 요약
+
+---
+
+## 주요 의사 결정 (Key Decisions)
+
+> 💡 **주요 기술적/정책적 의사 결정 사항은 반드시 이 섹션에 기록하여 팀 전체가 공유해야 합니다.**
+
+### 1. Local LLM 표준화
+- **모델 통일**: 모든 Local LLM Tier(FAST, REASONING, THINKING)는 **`gpt-oss:20b`** 모델을 사용합니다.
+  - 이유: 한국어 성능, 논리력, 속도(양자화) 측면에서 가장 균형 잡힌 성능을 보임 (2026-01-07 기준).
+  - 참고: 이전 모델(`gemma3:27b`, `llama3.1:8b`)은 안정성 및 속도 문제로 제외되었습니다.
+
+### 2. Local LLM 성능 최적화 (Batch vs Parallel)
+- **배치 처리(Batch Processing) 우선**: 로컬 환경(단일 GPU)에서는 병렬 처리보다 **순차적 배치 처리(Sequential Batch Processing)**가 훨씬 더 높은 처리량(Throughput)과 안정성을 제공합니다.
+  - 벤치마크 결과 (2026-01-07):
+    - **Sequential Batch (Batch=5)**: ~12초/배치 (Items/sec ≈ 0.42) - **Winner 🏆**
+    - **Parallel Processing (Workers=5)**: ~32초/배치 (Items/sec ≈ 0.15) - **Loser** (VRAM Thrashing, Context Switching 비용 과다)
+  - **가이드**: `news-crawler` 등 대량 처리 시 `ThreadPoolExecutor` 대신 순차 루프를 사용하고, 프롬프트 내에서 다건(One-Shot Example 포함)을 한 번에 처리하세요.
+
+---
 
 
