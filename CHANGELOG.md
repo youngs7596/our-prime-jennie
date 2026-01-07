@@ -1,5 +1,10 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-07
+- **News Crawler Optimization**: `news-crawler` LLM 처리 방식을 병렬에서 순차적 배치(Sequential Batch)로 원복하여 처리 속도 2.5배 향상 (~12s/batch).
+- **LLM Stability**: `gpt-oss:20b` 모델의 JSON 파싱 오류(`Expecting ',' delimiter`)를 One-Shot Example 프롬프트 추가로 완벽 해결.
+- **Rules Update**: `rules.md`에 '주요 의사 결정(Key Decisions)' 섹션 신설 (Local LLM 모델 통일 및 성능 최적화 규칙 등재).
+
 ## 2026-01-05
 - **Market Regime Bug Fix**: `shared/market_regime.py`의 `SIDEWAYS` 판단 로직 수정 (이격도 3% 이상 시 SIDEWAYS 점수 0점 강제) - "겁쟁이 봇" 문제 해결
 - **LLM Threshold 하향**: `MIN_LLM_SCORE_RECON` 65점 → 63점 (매수 활성화)

@@ -695,12 +695,15 @@ services:
       - infrastructure/env-vars-wsl.yaml
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro
+      - ./services/scout-job:/app/services/scout-job # [Dev] 소스 코드 마운트
       - /docker_data/llm_debug_logs:/app/logs # [v1.4] LLM 디버그 로그
     environment:
       - PORT=8087
       - SECRETS_FILE=/app/config/secrets.json
       - USE_OLLAMA_GATEWAY=true
       - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - ENABLE_RAG=true
+      - RAG_EMBEDDING_PROVIDER=local
       - LLM_DEBUG_ENABLED=false # [v1.5] 로깅 옵션 (기본값: false)
       - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl # [v1.4] 디버그 로깅
       - LLM_DEBUG_ENABLED=false # [v1.5] 로깅 옵션 (기본값: false)
@@ -989,7 +992,7 @@ services:
       - /docker_data/ollama_data:/root/.ollama
     environment:
       - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_NUM_PARALLEL=2 # [Optimization] Batch Processing Optimal (Do not increase)
       - OLLAMA_KEEP_ALIVE=5m
     restart: unless-stopped
     networks:

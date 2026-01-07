@@ -829,7 +829,9 @@ def process_unified_analysis(documents):
         return
 
     logger.info("="*60)
-    logger.info("🚀 [Unified] 통합 뉴스 분석 시작 - Ollama (gemma3:27b)")
+    # [Fix] Log actual model name from Env (since JennieBrain doesn't expose it directly)
+    model_name = os.getenv("LOCAL_MODEL_FAST", "gemma3:27b")
+    logger.info(f"🚀 [Unified] 통합 뉴스 분석 시작 - Ollama ({model_name})")
     logger.info("🚀 [Unified] Single-Pass LLM Call (Sentiment + Risk) - 비용/시간 최적화")
     logger.info("="*60)
     
@@ -855,26 +857,21 @@ def process_unified_analysis(documents):
         })
         doc_map[idx] = doc
     
-    # 배치 분석 실행 (BATCH_SIZE=5)
+    # 배치 분석 실행 (Sequential Batch Processing - Best Performance for Local LLM)
     BATCH_SIZE = 5
+    batches = [batch_items[i:i + BATCH_SIZE] for i in range(0, len(batch_items), BATCH_SIZE)]
     all_results = []
     
-    for i in range(0, len(batch_items), BATCH_SIZE):
-        batch = batch_items[i:i + BATCH_SIZE]
-        logger.info(f"  [Unified] 배치 {i//BATCH_SIZE + 1}/{(len(batch_items) + BATCH_SIZE - 1)//BATCH_SIZE} 분석 중...")
-        
+    logger.info(f"  [Unified] 총 {len(batches)}개 배치 순차 분석 시작 (Single Thread)...")
+    
+    for i, batch in enumerate(batches):
         try:
             results = jennie_brain.analyze_news_unified(batch)
             all_results.extend(results)
+            logger.info(f"  [Unified] 배치 {i+1}/{len(batches)} 분석 완료 ({len(results)}건)")
         except Exception as e:
-            logger.warning(f"⚠️ [Unified] 배치 분석 오류: {e}")
-            # Fallback
-            for item in batch:
-                all_results.append({
-                    'id': item['id'], 
-                    'sentiment': {'score': 50, 'reason': '분석 실패'},
-                    'competitor_risk': {'is_detected': False, 'type': 'NONE', 'benefit_score': 0, 'reason': '분석 실패'}
-                })
+            logger.warning(f"⚠️ [Unified] 배치 {i+1} 분석 실패: {e}")
+            # Fallback handled inside analyze_news_unified usually using get_unified_fallback_response
 
     # 결과 처리 (병렬 저장)
     logger.info(f"  [Unified] {len(all_results)}건 결과 처리 시작 (병렬 저장/이벤트 생성)...")
