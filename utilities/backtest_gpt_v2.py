@@ -139,8 +139,7 @@ def prepare_indicators(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     df = df.sort_index()
-    # [Patch] 결측치 보간
-    df = df.fillna(method='ffill').fillna(method='bfill')
+    df = df.ffill().bfill()
     
     delta = df["CLOSE_PRICE"].diff()
     up = delta.clip(lower=0)
@@ -323,7 +322,6 @@ class ScannerLite:
         rsi_threshold: int,
         breakout_buffer_pct: float,
         bb_buffer_pct: float,
-        top_n: int,
         top_n: int,
         watchlist_cache: Dict[str, Dict] = None,  # LLM 점수 조회용
         investor_cache: Dict[str, pd.DataFrame] = None, # [New] 수급 데이터
@@ -984,10 +982,10 @@ class BacktestGPT:
             strategy_selector=self.strategy_selector,
             factor_scorer=self.factor_scorer,
             stock_names={k: v.get("name", k) for k, v in self.stock_metadata.items()},
-            rsi_threshold=self.args.buy_rsi,
+            rsi_threshold=self.args.rsi_buy,
             breakout_buffer_pct=self.args.breakout_buffer_pct,
             bb_buffer_pct=self.args.bb_buffer_pct,
-            top_n=3,
+            top_n=self.args.top_n,
             watchlist_cache=self.watchlist_cache,
             investor_cache=self.investor_cache,
             financial_cache=self.financial_cache

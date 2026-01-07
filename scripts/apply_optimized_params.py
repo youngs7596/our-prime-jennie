@@ -14,6 +14,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from shared.db.connection import session_scope, ensure_engine_initialized, get_engine
 from shared.config import ConfigManager
+from dotenv import load_dotenv
+
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+load_dotenv(os.path.join(APP_ROOT, ".env"))
+
+# secrets.json 경로 설정
+secrets_path = os.path.join(APP_ROOT, "secrets.json")
+if os.path.exists(secrets_path):
+    os.environ.setdefault("SECRETS_FILE", secrets_path)
 
 # 로그 설정
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -25,20 +34,20 @@ OPTIMIZED_PARAMS = {
     # 진입 (Entry)
     "BUY_RSI_OVERSOLD_THRESHOLD": 35,         # Aggressive Entry
     "BUY_BB_BUFFER_PCT": 1.5,                 # BB Lower + 1.5%
-    "BUY_BREAKOUT_BUFFER_PCT": 0.5,           # Resistance + 0.5% (Reserved)
-    "MIN_LLM_SCORE": 65,                      # Lower threshold for more trades
+    "BUY_BREAKOUT_BUFFER_PCT": 0.8,           # Resistance + 0.8%
+    "MIN_LLM_SCORE": 70,                      # Optimization Goal
     
     # 자금 관리 (Capital)
     "MAX_POSITION_VALUE_PCT": 15.0,           # Max allocation per stock
     "MAX_SECTOR_PCT": 35.0,                   # Max allocation per sector
     "CASH_KEEP_PCT": 3.0,                     # Cash buffer
-    "MAX_BUY_COUNT_PER_DAY": 4,               # Daily buy limit
+    "MAX_BUY_COUNT_PER_DAY": 3,               # Daily buy limit
     
     # 청산 (Exit)
-    "SELL_TARGET_PROFIT_PCT": 6.0,            # +6% Target Profit
+    "PROFIT_TARGET_FULL": 6.0,                # +6% Target Profit
     "SELL_STOP_LOSS_PCT": 5.0,                # -5% Stop Loss (Monitor handles sign)
-    "ATR_MULTIPLIER_INITIAL_STOP": 1.8,       # ATR Trailing multiplier
-    "TRAILING_TAKE_PROFIT_ATR_MULT": 1.8,     # Align with ATR Multiplier
+    "ATR_MULTIPLIER_INITIAL_STOP": 1.6,       # ATR Trailing multiplier
+    "TRAILING_TAKE_PROFIT_ATR_MULT": 1.6,     # Align with ATR Multiplier
     "MAX_HOLDING_DAYS": 35,                   # Time Exit
     
     # RSI 분할 매도

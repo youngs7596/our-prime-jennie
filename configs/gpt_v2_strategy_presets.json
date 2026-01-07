@@ -1,4 +1,26 @@
 {
+  "optimized_20260107": {
+    "label": "Latest Optimized (2026-01-07)",
+    "description": "Score 673.73 – 수익률 212.31%, 월간 22.26%, MDD -11.84% (Test Set Verified)",
+    "params": {
+      "rsi_buy": 35,
+      "breakout_buffer_pct": 0.8,
+      "bb_buffer_pct": 1.5,
+      "llm_threshold": 70,
+      "max_position_allocation": 15.0,
+      "max_stock_pct": 15.0,
+      "max_sector_pct": 35.0,
+      "cash_keep_pct": 3.0,
+      "target_profit_pct": 6.0,
+      "base_stop_loss_pct": 5.0,
+      "stop_loss_atr_mult": 1.6,
+      "sell_rsi_1": 68.0,
+      "sell_rsi_2": 75.0,
+      "sell_rsi_3": 80.0,
+      "max_buys_per_day": 3,
+      "max_hold_days": 35
+    }
+  },
   "oos_validated_v1": {
     "label": "OOS Validated v1.0 (Recommended)",
     "description": "Score 197.50 – Out-of-Sample 검증 완료 (OOS 수익률 12.4%, MDD -3.6%)",
