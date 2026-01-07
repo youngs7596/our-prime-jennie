@@ -1,6 +1,8 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-07
+- **Dynamic RECON Score**: 시장 국면별 동적 RECON 점수 적용 (STRONG_BULL=58, BULL=62, SIDEWAYS=65, BEAR=70)
+- **Privacy Rule 추가**: `rules.md`에 세션 파일 개인정보 보호 규칙 추가
 - **Dual Local LLM 체제 구축**: `exaone3.5:7.8b` (news-crawler용) + `gpt-oss:20b` (Scout Hunter/Judge용) 동시 운영, 뉴스 분석 속도 2배 향상
 - **README.md v1.1 업데이트**: Dual LLM 운영 섹션 추가, VRAM 사용량 및 성능 비교 문서화
 - **Buy Scanner 간격 단축**: 5분 → 3분으로 변경 (매수 기회 포착 빈도 증가)
