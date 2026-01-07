@@ -1,6 +1,15 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-07
+- **Dual Local LLM 체제 구축**: `exaone3.5:7.8b` (news-crawler용) + `gpt-oss:20b` (Scout Hunter/Judge용) 동시 운영, 뉴스 분석 속도 2배 향상
+- **README.md v1.1 업데이트**: Dual LLM 운영 섹션 추가, VRAM 사용량 및 성능 비교 문서화
+- **Buy Scanner 간격 단축**: 5분 → 3분으로 변경 (매수 기회 포착 빈도 증가)
+- **Portfolio 정리**: 수동 보유 종목 SOLD 처리 및 수동 관리 제외 로직 완전 제거
+- **Scout Job 활성화**: `ENABLE_SCOUT_JOB_WORKER=true`, `EXCLUDED_STOCKS=""` 설정
+- **Buy Scanner Asset Fix**: 자산 계산 로직을 "관리 자산(WatchList 종목만)" 기준으로 변경
+- **Config Warning Suppression**: `ConfigManager.get()`에 `silent` 파라미터 추가로 심볼별 설정 경고 로그 억제
+- **DB Cleanup**: Portfolio 중복 데이터 정리 및 수동 매도 종목 SOLD 처리
+- **Manual Management Removal**: `daily-briefing/reporter.py`의 수동 관리 동기화 제외 로직 제거
 - **News Crawler Optimization**: `news-crawler` LLM 처리 방식을 병렬에서 순차적 배치(Sequential Batch)로 원복하여 처리 속도 2.5배 향상 (~12s/batch).
 - **LLM Stability**: `gpt-oss:20b` 모델의 JSON 파싱 오류(`Expecting ',' delimiter`)를 One-Shot Example 프롬프트 추가로 완벽 해결.
 - **Rules Update**: `rules.md`에 '주요 의사 결정(Key Decisions)' 섹션 신설 (Local LLM 모델 통일 및 성능 최적화 규칙 등재).

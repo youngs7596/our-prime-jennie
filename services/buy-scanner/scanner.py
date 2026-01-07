@@ -187,17 +187,30 @@ class BuyScanner:
                 current_portfolio = get_active_portfolio(session)
                 owned_codes = {item['code'] for item in current_portfolio}
                 
-                # [Tiered Execution] 현금 비중 확인
+                # [Tiered Execution] 현금 비중 확인 (Managed Assets Only)
                 try:
                     available_cash = self.kis.get_cash_balance()
-                    # 포트폴리오 가치 추정 (매수가 기준) - 키 이름: avg_price (repository.py 반환값)
-                    portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in current_portfolio])
-                    total_assets = available_cash + portfolio_value
                     
-                    cash_ratio = available_cash / total_assets if total_assets > 0 else 0
+                    # [Asset Logic Change]
+                    # 포트폴리오 가치 계산 시, 봇이 관리하는 종목(WatchList에 있는 종목)만 포함합니다.
+                    # 수동 보유 종목(예: 삼성전자 장기보유)이 Total Assets를 왜곡하여 Cash Ratio를 낮추는 문제를 방지합니다.
+                    managed_portfolio = [p for p in current_portfolio if p['code'] in watchlist]
+                    managed_portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in managed_portfolio])
+                    
+                    # 전체 포트폴리오 가치 (로그용)
+                    total_portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in current_portfolio])
+                    unmanaged_value = total_portfolio_value - managed_portfolio_value
+                    
+                    # 자산 총계 = 현금 + 관리 중인 주식 가치
+                    managed_total_assets = available_cash + managed_portfolio_value
+                    
+                    cash_ratio = available_cash / managed_total_assets if managed_total_assets > 0 else 0
                     tier2_enabled = cash_ratio > 0.3
                     
-                    logger.info(f"💰 자산 현황: 현금 {available_cash:,}원 / 총자산 {total_assets:,}원 (현금비중 {cash_ratio*100:.1f}%)")
+                    logger.info(f"💰 자산 현황: 현금 {available_cash:,}원 (비중 {cash_ratio*100:.1f}%)")
+                    logger.info(f"   - 관리 자산: {managed_total_assets:,}원 (주식: {managed_portfolio_value:,}원)")
+                    logger.info(f"   - 비관리 자산(제외됨): {unmanaged_value:,}원 (총 보유량: {total_portfolio_value:,}원)")
+
                     if tier2_enabled:
                         logger.info("✨ [Tiered Execution] 현금 비중 30% 초과 -> Tier 2 (비주력) 종목 스캔 활성화")
                 except Exception as e:
