@@ -94,11 +94,13 @@ install_jobs() {
     # 새 cron job 정의
     NEW_CRON="$CRON_MARKER
 # 주간 팩터 분석 - 매주 금요일 오후 10시
-0 22 * * 5 cd ${PROJECT_ROOT} && PYTHONPATH=${PROJECT_ROOT} ${PYTHON_PATH} ${WEEKLY_FACTOR_SCRIPT} >> ${LOG_DIR}/weekly_factor_\$(date +\\%Y\\%m\\%d).log 2>&1
+0 22 * * 5 cd ${PROJECT_ROOT} && PYTHONPATH=${PROJECT_ROOT} ${PYTHON_PATH} ${WEEKLY_FACTOR_SCRIPT} >> ${LOG_DIR}/weekly_factor_\$(date +\%Y\%m\%d).log 2>&1
+# 일일 가격 데이터 수집 - 평일 오후 4시 (장 마감 후)
+0 16 * * 1-5 cd ${PROJECT_ROOT} && ${PYTHON_PATH} ${PROJECT_ROOT}/scripts/collect_full_market_data_parallel.py >> ${LOG_DIR}/price_collector_\$(date +\%Y\%m\%d).log 2>&1
 # 일일 브리핑 - 평일 오후 5시 (월~금) - Docker 서비스 직접 호출
-0 17 * * 1-5 curl -s -X POST http://localhost:8086/report >> ${LOG_DIR}/daily_briefing_\$(date +\\%Y\\%m\\%d).log 2>&1
+0 17 * * 1-5 curl -s -X POST http://localhost:8086/report >> ${LOG_DIR}/daily_briefing_\$(date +\%Y\%m\%d).log 2>&1
 # 일일 AI 성과 분석 - 평일 오전 7시 (월~금)
-0 7 * * 1-5 cd ${PROJECT_ROOT} && PYTHONPATH=${PROJECT_ROOT} ${PYTHON_PATH} ${PROJECT_ROOT}/scripts/analyze_ai_performance.py >> ${LOG_DIR}/ai_performance_\$(date +\\%Y\\%m\\%d).log 2>&1"
+0 7 * * 1-5 cd ${PROJECT_ROOT} && PYTHONPATH=${PROJECT_ROOT} ${PYTHON_PATH} ${PROJECT_ROOT}/scripts/analyze_ai_performance.py >> ${LOG_DIR}/ai_performance_\$(date +\%Y\%m\%d).log 2>&1"
 
     # crontab 업데이트
     if [[ -n "$EXISTING_CRON" ]]; then

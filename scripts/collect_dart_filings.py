@@ -79,14 +79,28 @@ def get_db_config():
     return {}
 
 
-def load_stock_codes(limit: int = None) -> List[str]:
-    import FinanceDataReader as fdr
-    codes = fdr.StockListing("KOSPI")["Code"].tolist()
-    if limit:
-        return codes[:limit]
-    return codes
-
-
+def load_stock_codes(limit):
+    """DB에서 종목 코드 로드 (KOSPI)"""
+    # [Patch] FDR 이슈로 인해 DB에서 직접 조회로 변경
+    import shared.database as database
+    conn = database.get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
+        if limit:
+            query += f" LIMIT {limit}"
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        codes = []
+        for row in rows:
+            if isinstance(row, dict):
+                codes.append(row['STOCK_CODE'])
+            else:
+                codes.append(row[0])
+        return codes
+    finally:
+        conn.close()
 def fetch_filings(dart_client, stock_code: str, start: str, end: str) -> List[Dict]:
     """
     DART 공시 목록 조회
@@ -196,8 +210,8 @@ def main():
     # API 키 우선순위: CLI 인자 > 환경변수 > secrets.json
     api_key = args.api_key or os.getenv("DART_API_KEY")
     if not api_key:
-        # secrets.json에서 읽기 시도
-        api_key = auth.get_secret("dart-api-key")
+        # secrets.json에서 읽기 시도 (hyphen or snake_case)
+        api_key = auth.get_secret("dart-api-key") or auth.get_secret("dart_api_key")
     
     if not api_key:
         logger.error("❌ DART_API_KEY가 설정되지 않았습니다.")

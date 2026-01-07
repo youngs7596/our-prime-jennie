@@ -138,6 +138,10 @@ def prepare_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    df = df.sort_index()
+    # [Patch] 결측치 보간
+    df = df.fillna(method='ffill').fillna(method='bfill')
+    
     delta = df["CLOSE_PRICE"].diff()
     up = delta.clip(lower=0)
     down = -delta.clip(upper=0)
@@ -198,6 +202,71 @@ def piecewise_linear(points: List[Tuple[float, float]], t: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# 데이터 로더 (추가)
+# ---------------------------------------------------------------------------
+
+def load_investor_trading(connection, stock_code: str, days: int = 400) -> pd.DataFrame:
+    """외국인/기관 수급 데이터 로드"""
+    query = """
+        SELECT TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY
+        FROM STOCK_INVESTOR_TRADING
+        WHERE STOCK_CODE = %s
+          AND TRADE_DATE >= CURDATE() - INTERVAL %s DAY
+        ORDER BY TRADE_DATE ASC
+    """
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query, (stock_code, days))
+        rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame()
+        
+        if isinstance(rows[0], dict):
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.DataFrame(rows, columns=["TRADE_DATE", "FOREIGN_NET_BUY", "INSTITUTION_NET_BUY"])
+            
+        df["TRADE_DATE"] = pd.to_datetime(df["TRADE_DATE"])
+        df.set_index("TRADE_DATE", inplace=True)
+        return df
+    except Exception as e:
+        logger.warning(f"수급 데이터 로드 실패 ({stock_code}): {e}")
+        return pd.DataFrame()
+    finally:
+        cursor.close()
+
+def load_financial_metrics(connection, stock_code: str) -> pd.DataFrame:
+    """분기별 재무 지표 로드"""
+    query = """
+        SELECT QUARTER_DATE, EPS, ROE, PER, PBR, NET_INCOME, TOTAL_EQUITY
+        FROM FINANCIAL_METRICS_QUARTERLY
+        WHERE STOCK_CODE = %s
+        ORDER BY QUARTER_DATE ASC
+    """
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query, (stock_code,))
+        rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame()
+            
+        if isinstance(rows[0], dict):
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.DataFrame(rows, columns=["QUARTER_DATE", "EPS", "ROE", "PER", "PBR", "NET_INCOME", "TOTAL_EQUITY"])
+            
+        df["QUARTER_DATE"] = pd.to_datetime(df["QUARTER_DATE"])
+        # 발표일 기준이 없으므로, 편의상 분기말 + 45일을 데이터 사용 가능일로 가정 (보수적 접근)
+        df["AVAIL_DATE"] = df["QUARTER_DATE"] + pd.Timedelta(days=45)
+        df.set_index("AVAIL_DATE", inplace=True)
+        return df.sort_index()
+    except Exception as e:
+        logger.warning(f"재무 데이터 로드 실패 ({stock_code}): {e}")
+        return pd.DataFrame()
+    finally:
+        cursor.close()
+
+# ---------------------------------------------------------------------------
 # 데이터 모델
 # ---------------------------------------------------------------------------
 
@@ -255,7 +324,10 @@ class ScannerLite:
         breakout_buffer_pct: float,
         bb_buffer_pct: float,
         top_n: int,
+        top_n: int,
         watchlist_cache: Dict[str, Dict] = None,  # LLM 점수 조회용
+        investor_cache: Dict[str, pd.DataFrame] = None, # [New] 수급 데이터
+        financial_cache: Dict[str, pd.DataFrame] = None, # [New] 재무 데이터
     ):
         self.price_cache = price_cache
         self.regime_detector = regime_detector
@@ -266,7 +338,9 @@ class ScannerLite:
         self.breakout_buffer_pct = breakout_buffer_pct
         self.bb_buffer_pct = bb_buffer_pct
         self.top_n = top_n
-        self.watchlist_cache = watchlist_cache or {}  # Watchlist 캐시
+        self.watchlist_cache = watchlist_cache or {}
+        self.investor_cache = investor_cache or {}
+        self.financial_cache = financial_cache or {}
 
     def detect_regime(self, kospi_slice: pd.DataFrame) -> Tuple[str, List[str]]:
         close_df = kospi_slice[["CLOSE_PRICE"]].rename(columns={"CLOSE_PRICE": "CLOSE_PRICE"})
@@ -370,7 +444,19 @@ class ScannerLite:
                 # 장중에는 당일 종가를 알 수 없으므로 전일까지의 데이터만 사용
                 df_window_for_factor = df_window.iloc[:-1] if len(df_window) > 1 else df_window
                 kospi_slice_for_factor = kospi_slice.iloc[:-1] if len(kospi_slice) > 1 else kospi_slice
-                factor_score = self._compute_factor_score(df_window_for_factor, kospi_slice_for_factor, regime)
+                
+                # [New] 추가 데이터 조회 (전일 기준)
+                investor_df = self.investor_cache.get(code)
+                financial_df = self.financial_cache.get(code)
+                
+                factor_score = self._compute_factor_score(
+                    df_window_for_factor, 
+                    kospi_slice_for_factor, 
+                    regime,
+                    investor_df,
+                    financial_df,
+                    current_date # 기준일 (이 날짜 이전 데이터만 사용)
+                )
                 llm_score = self._estimate_llm_score(code, factor_score, score, signal)
                 name = self.stock_names.get(code, code)
                 metadata = {**metadata, "name": name}
@@ -395,15 +481,71 @@ class ScannerLite:
         stock_window: pd.DataFrame,
         kospi_slice: pd.DataFrame,
         regime: str,
+        investor_df: Optional[pd.DataFrame] = None,
+        financial_df: Optional[pd.DataFrame] = None,
+        date_cursor: datetime = None
     ) -> float:
         try:
+            # 0. 데이터 준비
+            roe = None
+            per = None
+            pbr = None
+            sales_growth = None # 데이터 부족으로 제외
+            eps_growth = None
+            
+            if financial_df is not None and not financial_df.empty:
+                # date_cursor(오늘) 이전에 "이용 가능해진(AVAIL_DATE)" 가장 최신 재무 데이터 조회
+                # AVAIL_DATE는 분기말 + 45일로 설정됨
+                available_financials = financial_df.loc[:date_cursor]
+                if not available_financials.empty:
+                    latest = available_financials.iloc[-1]
+                    roe = float(latest['ROE']) if latest['ROE'] else None
+                    per = float(latest['PER']) if latest['PER'] else None
+                    pbr = float(latest['PBR']) if latest['PBR'] else None
+                    # EPS Growth 계산 (전년 동기 대비) - 여기서는 단순화하여 생략하거나 로직 추가 가능
+            
+            # 수급 데이터 (최근 5일 순매수 강도?)
+            # FactorScorer v3.5에는 명시적인 수급 인자 입력이 없으므로 Quality나 Technical에 녹이거나
+            # 혹은 별도 로직이 필요하지만, 여기서는 calculate_quality_score 등에 
+            # 전달할 sales_growth 자리에 수급 모멘텀을 대리로 넣거나 하는 트릭 대신
+            # 정석대로 FactorScorer를 호출.
+            
+            # 주의: 현재 FactorScorer.calculate_quality_score는 ROE, Sales Growth, EPS Growth를 받음
+            # 수급 데이터는 FactorScorer가 직접 받지 않음 (Technical Score 내부 로직 확인 필요)
+            # -> FactorScorer 코드를 보니 수급(Investor)은 반영되지 않음.
+            # -> 따라서 여기서는 Financial Data만이라도 제대로 반영.
+            
             kospi_window = kospi_slice.tail(len(stock_window))
             momentum, _ = self.factor_scorer.calculate_momentum_score(stock_window, kospi_window)
-            quality, _ = self.factor_scorer.calculate_quality_score(roe=None, sales_growth=None, eps_growth=None, daily_prices_df=stock_window)
-            value, _ = self.factor_scorer.calculate_value_score(pbr=None, per=None)
+            
+            quality, _ = self.factor_scorer.calculate_quality_score(
+                roe=roe, 
+                sales_growth=None, 
+                eps_growth=None, 
+                daily_prices_df=stock_window
+            )
+            
+            value, _ = self.factor_scorer.calculate_value_score(pbr=pbr, per=per)
             technical, _ = self.factor_scorer.calculate_technical_score(stock_window)
+            
+            # [보너스] 수급 가산점 (FactorScorer 외부에서 보정)
+            # 외국인/기관 쌍끌이 매수 여부 확인
+            investor_bonus = 0.0
+            if investor_df is not None and not investor_df.empty and date_cursor:
+                # 전일 ~ 5일 전 수급 확인
+                recent_inv = investor_df.loc[:date_cursor].tail(5)
+                if not recent_inv.empty:
+                    f_sum = recent_inv['FOREIGN_NET_BUY'].sum()
+                    i_sum = recent_inv['INSTITUTION_NET_BUY'].sum()
+                    if f_sum > 0 and i_sum > 0:
+                        investor_bonus = 5.0 # 쌍끌이 보너스
+                        
             final_score, _ = self.factor_scorer.calculate_final_score(momentum, quality, value, technical, regime)
-            return final_score / 10.0
+            
+            final_score += investor_bonus * 10 # 1000점 만점이므로 50점 가산
+            
+            return min(100.0, final_score / 10.0)
+            
         except Exception as exc:
             logger.debug(f"팩터 점수 계산 실패: {exc}")
             return 50.0
@@ -742,7 +884,10 @@ class BacktestGPT:
         self.regime_detector = MarketRegimeDetector()
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
+        self.factor_scorer = FactorScorer()
         self.price_cache: Dict[str, pd.DataFrame] = {}
+        self.investor_cache: Dict[str, pd.DataFrame] = {} # [New]
+        self.financial_cache: Dict[str, pd.DataFrame] = {} # [New]
         self.calendar: List[datetime] = []
         self.scanner: Optional[ScannerLite] = None
         self.portfolio: Optional[PortfolioEngine] = None
@@ -790,6 +935,11 @@ class BacktestGPT:
             if df.empty:
                 continue
             self.price_cache[code] = prepare_indicators(df)
+            
+            # [New] 추가 데이터 로드
+            self.investor_cache[code] = load_investor_trading(self.connection, code)
+            self.financial_cache[code] = load_financial_metrics(self.connection, code)
+            
         self._load_stock_metadata()
 
     def _build_calendar(self, days: Optional[int]) -> None:
@@ -833,12 +983,14 @@ class BacktestGPT:
             regime_detector=self.regime_detector,
             strategy_selector=self.strategy_selector,
             factor_scorer=self.factor_scorer,
-            stock_names=stock_names,
-            rsi_threshold=self.args.rsi_buy,
+            stock_names={k: v.get("name", k) for k, v in self.stock_metadata.items()},
+            rsi_threshold=self.args.buy_rsi,
             breakout_buffer_pct=self.args.breakout_buffer_pct,
             bb_buffer_pct=self.args.bb_buffer_pct,
-            top_n=self.args.top_n,
-            watchlist_cache=self.watchlist_cache,  # LLM 점수 조회용
+            top_n=3,
+            watchlist_cache=self.watchlist_cache,
+            investor_cache=self.investor_cache,
+            financial_cache=self.financial_cache
         )
         self.portfolio = PortfolioEngine(
             initial_capital=self.args.initial_capital,
