@@ -81,12 +81,26 @@ def get_db_config():
 
 
 def load_stock_codes(limit: int = None) -> List[str]:
-    """KOSPI 종목 코드 로드"""
-    import FinanceDataReader as fdr
-    codes = fdr.StockListing("KOSPI")["Code"].tolist()
-    if limit:
-        return codes[:limit]
-    return codes
+    """DB에서 종목 코드 로드 (KOSPI)"""
+    # [Patch] FDR 이슈로 인해 DB에서 직접 조회로 변경
+    conn = database.get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
+        if limit:
+            query += f" LIMIT {limit}"
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        codes = []
+        for row in rows:
+            if isinstance(row, dict):
+                codes.append(row['STOCK_CODE'])
+            else:
+                codes.append(row[0])
+        return codes
+    finally:
+        conn.close()
 
 
 def fetch_investor_trading_by_date(date_str: str, stock_codes: List[str]) -> List[Dict]:
