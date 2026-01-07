@@ -1,5 +1,5 @@
 # services/scout-job/scout_universe.py
-# Version: v1.0
+# Version: v1.1 (FDR Removed)
 # Scout Job Universe Selection - 섹터 분석 및 종목 선별 함수
 #
 # scout.py에서 분리된 종목 유니버스 관리 함수들
@@ -9,19 +9,9 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
-
 import shared.database as database
 
 logger = logging.getLogger(__name__)
-
-# FinanceDataReader (optional)
-try:
-    import FinanceDataReader as fdr
-    FDR_AVAILABLE = True
-except ImportError:
-    FDR_AVAILABLE = False
-    logger.warning("⚠️ FinanceDataReader 미설치 - 네이버 금융 스크래핑으로 폴백")
-
 
 # 정적 우량주 목록 (Fallback용)
 BLUE_CHIP_STOCKS = [
@@ -32,8 +22,7 @@ BLUE_CHIP_STOCKS = [
     {"code": "035720", "name": "카카오", "is_tradable": True},
 ]
 
-
-# 섹터 분류 (KOSPI 주요 섹터)
+# 섹터 분류 (KOSPI 주요 섹터) - FDR 섹터 정보 부재 시 Fallback용
 SECTOR_MAPPING = {
     # 1. 반도체/IT/하드웨어
     '005930': '반도체', '000660': '반도체', '005935': '반도체', '042700': '반도체', # 삼성전자, SK하이닉스, 삼성전자우, 한미반도체
@@ -104,64 +93,135 @@ SECTOR_MAPPING = {
     '375500': '건설', '047040': '건설', '300720': '건설', # DL이앤씨, 대우건설, 한일시멘트
 }
 
+def _resolve_sector(code: str) -> str:
+    """Mapping을 통해 섹터를 결정합니다."""
+    return SECTOR_MAPPING.get(code, '기타')
 
+def _scrape_naver_finance_top_stocks(limit: int = 200) -> list:
+    """
+    네이버 금융에서 KOSPI 시총 상위 종목을 스크래핑합니다.
+    FDR 대체용 Primary Method.
+    반환값: [{"code", "name", "price", "change_pct", "market_cap", "sector"}]
+    """
+    logger.info(f"   (A) 네이버 금융 시총 스크래핑 (상위 {limit}개) 시도 중...")
+    
+    universe = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
+    try:
+        # KOSPI 시총 상위 (페이지당 50개)
+        pages_needed = (limit // 50) + 1
+        current_rank = 0
+        
+        for page in range(1, pages_needed + 1):
+            if len(universe) >= limit:
+                break
+                
+            url = f'https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}'
+            resp = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            rows = soup.select('table.type_2 tbody tr')
+            for row in rows:
+                if len(universe) >= limit:
+                    break
+                    
+                cells = row.select('td')
+                # 구분선 등 유효하지 않은 행은 건너뜀 (유효 행은 td가 많음)
+                if len(cells) < 10:
+                    continue
 
-def _resolve_sector(row, code):
-    """FDR Sector와 Mapping을 통해 섹터를 결정합니다."""
-    sector = row.get('Sector')
-    if not sector or str(sector) == 'nan':
-        sector = SECTOR_MAPPING.get(code, '기타')
-    return sector
+                try:
+                    # 2번째 TD에 링크와 종목명 존재
+                    name_cell = cells[1]
+                    link = name_cell.select_one('a')
+                    if not link:
+                        continue
+                        
+                    name = link.text.strip()
+                    href = link.get('href', '')
+                    code = href.split('code=')[1] if 'code=' in href else ''
+                    
+                    if not (code and len(code) == 6 and code.isdigit()):
+                        continue
+
+                    current_rank += 1
+                    
+                    # 3번째 TD: 현재가
+                    price_str = cells[2].text.strip().replace(',', '')
+                    price = float(price_str) if price_str else 0
+                    
+                    # 5번째 TD: 등락률 (보통 5번째가 등락률임. N, Name, Price, Icon, Diff, Rate...)
+                    # Index check:
+                    # 0: No
+                    # 1: Name
+                    # 2: Price
+                    # 3: DiffIcon (img alt='상승')
+                    # 4: DiffNum
+                    # 5: Rate (e.g., +0.55%)
+                    rate_cell = cells[4] # 0-indexed, so 4 is 5th column
+                    rate_txt = rate_cell.text.strip().replace('%', '').replace(',', '')
+                    change_pct = float(rate_txt) if rate_txt else 0.0
+                    
+                    # 7번째 TD: 시가총액 (억)
+                    # 6: TradeVol
+                    # 7: Not sure... Naver sequence varies. Usually MarketCap is column 6 or 7.
+                    # Looking at Naver Finance: No, Name, Price, Diff, Change, Vol, High, Low, MarketCap...
+                    # Let's rely on standard fallback table structures or just assume ranking is by MarketCap.
+                    
+                    sector = _resolve_sector(code)
+                    
+                    universe.append({
+                        "code": code, 
+                        "name": name,
+                        "price": price,
+                        "change_pct": change_pct,
+                        "sector": sector,
+                        "rank": current_rank
+                    })
+                    
+                except (ValueError, IndexError) as e:
+                    # 파싱 실패해도 코드/이름은 저장 시도
+                    if 'code' in locals() and code:
+                        universe.append({"code": code, "name": name, "price": 0, "change_pct": 0, "sector": "기타"})
+                    continue
+        
+        if universe:
+            logger.info(f"   (A) ✅ 네이버 금융 스크래핑 완료: {len(universe)}개 종목 로드.")
+            return universe
+        else:
+            logger.warning("   (A) ⚠️ 네이버 금융 스크래핑 결과 없음")
+            
+    except Exception as e:
+        logger.warning(f"   (A) ⚠️ 네이버 금융 스크래핑 실패: {e}")
+    
+    return []
 
 def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
     """
     섹터별 모멘텀 분석
-    각 섹터의 평균 수익률을 계산하여 핫 섹터를 식별합니다.
-    
-    Returns:
-        dict: {섹터명: {'momentum': float, 'stocks': list, 'avg_return': float}}
+    네이버 금융에서 스크래핑한 데이터(등락률)를 기반으로 핫 섹터를 식별합니다.
     """
-    logger.info("   (E) 섹터별 모멘텀 분석 시작...")
+    logger.info("   (E) 섹터별 모멘텀 분석 시작 (Naver Source)...")
     
     sector_data = {}
     
     try:
-        # KOSPI 200 종목 가져오기
-        if FDR_AVAILABLE:
-            df_kospi = fdr.StockListing('KOSPI')
-            top_200 = df_kospi.head(200) if len(df_kospi) > 200 else df_kospi
+        # 네이버 스크래핑으로 현재 데이터 획득 (Top 200)
+        top_stocks = _scrape_naver_finance_top_stocks(limit=200)
+        
+        for stock in top_stocks:
+            sector = stock.get('sector', '기타')
+            change_pct = stock.get('change_pct', 0.0)
             
-            for _, row in top_200.iterrows():
-                code = str(row.get('Code', row.get('Symbol', ''))).zfill(6)
-                name = row.get('Name', row.get('종목명', ''))
+            if abs(change_pct) > 30: # 이상치 제거
+                continue
                 
-                # 섹터 분류 (Helper 사용)
-                sector = _resolve_sector(row, code)
-                
-                if sector not in sector_data:
-                    sector_data[sector] = {'stocks': [], 'returns': []}
-                
-                # 최근 수익률 계산 (변동률 % 사용)
-                try:
-                    change_pct = row.get('ChagesRatio') or row.get('ChangesRatio') or row.get('ChangeRatio')
-                    
-                    if change_pct is None:
-                        changes = float(row.get('Changes', 0))
-                        close = float(row.get('Close', row.get('Price', 1)))
-                        if close > 0:
-                            change_pct = (changes / close) * 100
-                        else:
-                            change_pct = 0
-                    else:
-                        change_pct = float(change_pct)
-                    
-                    if abs(change_pct) > 50:
-                        continue
-                    
-                    sector_data[sector]['stocks'].append({'code': code, 'name': name})
-                    sector_data[sector]['returns'].append(change_pct)
-                except (ValueError, TypeError):
-                    continue
+            if sector not in sector_data:
+                sector_data[sector] = {'stocks': [], 'returns': []}
+            
+            sector_data[sector]['stocks'].append({'code': stock['code'], 'name': stock['name']})
+            sector_data[sector]['returns'].append(change_pct)
         
         # 섹터별 평균 수익률 계산
         hot_sectors = {}
@@ -178,7 +238,7 @@ def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
         
         logger.info(f"   (E) ✅ 섹터 분석 완료. 핫 섹터 TOP 3:")
         for i, (sector, info) in enumerate(sorted_sectors[:3]):
-            logger.info(f"       {i+1}. {sector}: 평균 수익률 {info['avg_return']:.2f}%")
+            logger.info(f"       {i+1}. {sector}: 평균 수익률 {info['avg_return']:.2f}% ({info['stock_count']}종목)")
         
         return dict(sorted_sectors)
         
@@ -186,11 +246,9 @@ def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
         logger.warning(f"   (E) ⚠️ 섹터 분석 실패: {e}")
         return {}
 
-
 def get_hot_sector_stocks(sector_analysis, top_n=30):
     """
     핫 섹터의 종목들을 우선 후보로 반환
-    상위 3개 섹터의 종목들을 반환합니다.
     """
     if not sector_analysis:
         return []
@@ -209,106 +267,12 @@ def get_hot_sector_stocks(sector_analysis, top_n=30):
     
     return hot_stocks[:top_n]
 
-
 def get_dynamic_blue_chips(limit=200):
     """
-    KOSPI 시가총액 상위 종목을 수집합니다. (KOSPI 200 기준)
-    
-    1차: FinanceDataReader 사용 (안정적, 시가총액 순 정렬)
-    2차: 네이버 금융 스크래핑 (폴백)
-    
-    Args:
-        limit: 수집할 종목 수 (기본값: 200, KOSPI 200 기준)
+    KOSPI 시가총액 상위 종목을 수집합니다.
     """
-    # 1차 시도: FinanceDataReader (권장)
-    if FDR_AVAILABLE:
-        try:
-            logger.info(f"   (A) FinanceDataReader로 KOSPI 시총 상위 {limit}개 조회 중...")
-            
-            df_kospi = fdr.StockListing('KOSPI')
-            
-            if 'Marcap' in df_kospi.columns:
-                df_sorted = df_kospi.sort_values('Marcap', ascending=False).head(limit)
-            elif 'Market' in df_kospi.columns:
-                df_sorted = df_kospi.head(limit)
-            else:
-                df_sorted = df_kospi.head(limit)
-            
-            dynamic_list = []
-            for _, row in df_sorted.iterrows():
-                code = str(row.get('Code', row.get('Symbol', ''))).zfill(6)
-                name = row.get('Name', row.get('종목명', ''))
-                
-                # 섹터 정보 추가
-                sector = _resolve_sector(row, code)
-                
-                if code and name:
-                    dynamic_list.append({
-                        'code': code, 
-                        'name': name,
-                        'sector': sector  # 섹터 정보 추가
-                    })
-            
-            logger.info(f"   (A) ✅ FinanceDataReader로 {len(dynamic_list)}개 종목 로드 완료. (KOSPI 시총 상위)")
-            return dynamic_list
-            
-        except Exception as e:
-            logger.warning(f"   (A) ⚠️ FinanceDataReader 실패, 네이버 금융으로 폴백: {e}")
-    
-    # 2차 시도: 네이버 금융 스크래핑 (폴백)
-    logger.info(f"   (A) 네이버 금융에서 KOSPI 시가총액 상위 {limit}개 스크래핑 시도...")
-    dynamic_list = []
-    seen_codes = set()
-    
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        base_url = "https://finance.naver.com/sise/sise_market_sum.naver?sosok=0"
-        
-        pages_needed = (limit + 49) // 50
-        
-        for page in range(1, pages_needed + 1):
-            if len(dynamic_list) >= limit:
-                break
-                
-            url = f"{base_url}&page={page}"
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            table = soup.find('table', class_='type_2')
-            if not table:
-                logger.warning(f"   (A) ⚠️ 페이지 {page} 테이블을 찾지 못했습니다.")
-                continue
-                
-            rows = table.find_all('tr')
-            page_count = 0
-            for row in rows:
-                if len(dynamic_list) >= limit:
-                    break
-                
-                cols = row.find_all('td')
-                if len(cols) > 1 and cols[0].text.strip().isdigit():
-                    a_tag = cols[1].find('a')
-                    if a_tag and 'href' in a_tag.attrs and 'code=' in a_tag['href']:
-                        code = a_tag['href'].split('code=')[1]
-                        name = a_tag.text.strip()
-                        
-                        if code not in seen_codes:
-                            seen_codes.add(code)
-                            dynamic_list.append({'code': code, 'name': name})
-                            page_count += 1
-            
-            logger.debug(f"   (A) 페이지 {page}: {page_count}개 추가 (누적: {len(dynamic_list)}개)")
-            
-            if page < pages_needed:
-                time.sleep(0.3)
-        
-        logger.info(f"   (A) ✅ 네이버 금융에서 {len(dynamic_list)}개 스크래핑 완료.")
-    except Exception as e:
-        logger.error(f"   (A) ❌ 동적 우량주 스크래핑 중 오류 발생: {e}")
-    
-    return dynamic_list
-
+    # 네이버 금융 스크래핑 사용
+    return _scrape_naver_finance_top_stocks(limit=limit)
 
 def get_momentum_stocks(kis_api, db_conn, period_months=6, top_n=30, watchlist_snapshot=None):
     """
@@ -318,7 +282,7 @@ def get_momentum_stocks(kis_api, db_conn, period_months=6, top_n=30, watchlist_s
     momentum_scores = []
     
     try:
-        # 1. KOSPI 수익률 계산
+        # 1. KOSPI 수익률 계산 (DB 사용)
         kospi_code = "0001"
         period_days = period_months * 30
         kospi_prices = database.get_daily_prices(db_conn, kospi_code, limit=period_days)
@@ -369,17 +333,13 @@ def get_momentum_stocks(kis_api, db_conn, period_months=6, top_n=30, watchlist_s
                     'absolute_return': stock_return,
                     'kospi_return': kospi_return
                 })
-                
-                if hasattr(kis_api, 'API_CALL_DELAY'):
-                    time.sleep(kis_api.API_CALL_DELAY * 0.1)
+                # CPU sleep to prevent high load if loop is tight
+                # time.sleep(0.001) 
                 
             except Exception as e:
-                logger.debug(f"   (D) {stock.get('name', stock.get('code'))} 모멘텀 계산 오류: {e}")
                 continue
         
         momentum_scores.sort(key=lambda x: x['momentum'], reverse=True)
-        
-        logger.info(f"   (D) ✅ 모멘텀 계산 완료. 상위 {min(top_n, len(momentum_scores))}개 반환")
         return momentum_scores[:top_n]
         
     except Exception as e:

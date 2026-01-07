@@ -975,6 +975,46 @@ Ignore Targets (Not considered Risk Events):
 - reason is ALL Korean
 - JSON ONLY (0 characters of other text)
 
+[ONE-SHOT EXAMPLE (STRICT FORMAT)]
+Input:
+{ 
+  "items": [ 
+    { "id": 1, "title": "Samsung Electronics strikes new deal", "summary": "..." },
+    { "id": 2, "title": "Fire at SK Hynix plant", "summary": "..." } 
+  ]
+}
+Output:
+{
+  "results": [
+    {
+      "id": 1,
+      "sentiment": {
+        "score": 85,
+        "reason": "대규모 수주 계약 체결로 인한 실적 개선 기대"
+      },
+      "competitor_risk": {
+        "is_detected": false,
+        "type": "NONE",
+        "benefit_score": 0,
+        "reason": "경쟁사 악재 아님"
+      }
+    },
+    {
+      "id": 2,
+      "sentiment": {
+        "score": 10,
+        "reason": "핵심 생산 라인 화재로 인한 생산 차질 우려"
+      },
+      "competitor_risk": {
+        "is_detected": true,
+        "type": "FIRE",
+        "benefit_score": 15,
+        "reason": "SK하이닉스 공장 화재로 인한 반도체 공급 부족 및 경쟁사 반사이익 가능성"
+      }
+    }
+  ]
+}
+
 [INPUT DATA]
 {items_json}
 """

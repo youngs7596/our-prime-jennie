@@ -61,14 +61,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_goog
 warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# FinanceDataReader (KOSPI 200 Universe 조회용)
-try:
-    import FinanceDataReader as fdr
-    FDR_AVAILABLE = True
-    logger.info("✅ FinanceDataReader 모듈 로드 성공")
-except ImportError:
-    FDR_AVAILABLE = False
-    logger.warning("⚠️ FinanceDataReader 미설치 - 네이버 금융 스크래핑으로 폴백")
+
 
 # Backtest 모듈 (선택적)
 try:
@@ -105,7 +98,8 @@ from scout_cache import (
 
 # 종목 유니버스 관리 (scout_universe.py)
 from scout_universe import (
-    SECTOR_MAPPING, BLUE_CHIP_STOCKS, FDR_AVAILABLE,
+    SECTOR_MAPPING, BLUE_CHIP_STOCKS,
+
     analyze_sector_momentum, get_hot_sector_stocks,
     get_dynamic_blue_chips, get_momentum_stocks,
 )
@@ -412,27 +406,52 @@ def main():
             watchlist_snapshot = database.get_active_watchlist(session)
             
             vectorstore = None
-            try:
-                logger.info("   ... ChromaDB 클라이언트 연결 시도 (Gemini Embeddings) ...")
-                api_key = ensure_gemini_api_key()
-                embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001", 
-                    google_api_key=api_key
-                )
-                
-                chroma_client = chromadb.HttpClient( # noqa
-                    host=CHROMA_SERVER_HOST, 
-                    port=CHROMA_SERVER_PORT
-                )
-                vectorstore = Chroma(
-                    client=chroma_client, 
-                    collection_name="rag_stock_data", 
-                    embedding_function=embeddings
-                )
-                logger.info("✅ LLM 및 ChromaDB 클라이언트 초기화 완료.")
-            except Exception as e:
-                logger.warning(f"⚠️ ChromaDB 초기화 실패 (RAG 기능 비활성화): {e}")
+            # RAG 활성화 여부 확인 (기본값: True)
+            enable_rag = os.getenv("ENABLE_RAG", "true").lower() == "true"
+            rag_provider = os.getenv("RAG_EMBEDDING_PROVIDER", "local").lower()  # 기본값 local (비용 절감)
+
+            if not enable_rag:
+                logger.info("⏩ [Config] RAG 기능이 비활성화되어 있습니다 (ENABLE_RAG=false).")
                 vectorstore = None
+            else:
+                try:
+                    embeddings = None
+                    if rag_provider == "local":
+                        # Local Embedding (HuggingFace)
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Local Embeddings: jhgan/ko-sroberta-multitask) ...")
+                        try:
+                            from langchain_huggingface import HuggingFaceEmbeddings
+                            embeddings = HuggingFaceEmbeddings(
+                                model_name="jhgan/ko-sroberta-multitask",
+                                model_kwargs={"device": "cpu"},
+                                encode_kwargs={"normalize_embeddings": True}
+                            )
+                        except ImportError:
+                            logger.error("🚨 langchain_huggingface 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
+                            raise
+
+                    else:
+                        # Cloud Embedding (Gemini)
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Gemini Embeddings) ...")
+                        api_key = ensure_gemini_api_key()
+                        embeddings = GoogleGenerativeAIEmbeddings(
+                            model="models/gemini-embedding-001", 
+                            google_api_key=api_key
+                        )
+                    
+                    chroma_client = chromadb.HttpClient( # noqa
+                        host=CHROMA_SERVER_HOST, 
+                        port=CHROMA_SERVER_PORT
+                    )
+                    vectorstore = Chroma(
+                        client=chroma_client, 
+                        collection_name="rag_stock_data", 
+                        embedding_function=embeddings
+                    )
+                    logger.info(f"✅ LLM 및 ChromaDB 클라이언트 초기화 완료 (Provider: {rag_provider}).")
+                except Exception as e:
+                    logger.warning(f"⚠️ ChromaDB 초기화 실패 (RAG 기능 비활성화): {e}")
+                    vectorstore = None
 
             # Phase 1: 트리플 소스 후보 발굴 (v3.8: 섹터 분석 추가)
             logger.info("--- [Phase 1] 트리플 소스 후보 발굴 시작 ---")

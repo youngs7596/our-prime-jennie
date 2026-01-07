@@ -233,35 +233,37 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
     hunter_score = hunter_result.get('score', 0)
     hunter_reason = hunter_result.get('reason', '')
     
-    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증
-    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증
-    try:
-        # 뉴스 원문에 정량 데이터 + 스냅샷 컨텍스트를 추가하여 검증
-        snapshot_context = (
-            f"PER: {snapshot.get('per')} | PBR: {snapshot.get('pbr')} | "
-            f"시가총액: {snapshot.get('market_cap')} | "
-            f"ROE: {snapshot.get('roe')} | "
-            f"영업이익률: {snapshot.get('operating_margin')}"
-        )
-        fact_check_source = f"{news_from_chroma}\n\n[정량 분석 리포트]\n{quant_context}\n\n[재무 데이터]\n{snapshot_context}"
-        
-        fact_result = get_fact_checker().check(
-            original_news=fact_check_source,
-            llm_analysis=hunter_reason,
-            stock_name=info['name']
-        )
-        if fact_result.has_hallucination:
-            logger.warning(f"   👻 [Fact-Check] 환각 탐지: {info['name']}({code}) - 신뢰도: {fact_result.confidence:.0%}")
-            logger.warning(f"      경고: {fact_result.warnings[:2]}")
-            # 환각 탐지 시 Telegram 알림 (환경변수로 on/off 가능)
-            if _cfg.get_bool('FACT_CHECK_ALERT_ENABLED', default=False):
-                get_monitoring_alerts().notify_hallucination_detected(
-                    stock_name=info['name'],
-                    confidence=fact_result.confidence,
-                    warnings=fact_result.warnings
-                )
-    except Exception as e:
-        logger.debug(f"   ⚠️ [Fact-Check] 검증 오류 ({code}): {e}")
+    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증 (옵션)
+    if _cfg.get_bool("ENABLE_AI_AUDITOR", default=False):
+        try:
+            # 뉴스 원문에 정량 데이터 + 스냅샷 컨텍스트를 추가하여 검증
+            snapshot_context = (
+                f"PER: {snapshot.get('per')} | PBR: {snapshot.get('pbr')} | "
+                f"시가총액: {snapshot.get('market_cap')} | "
+                f"ROE: {snapshot.get('roe')} | "
+                f"영업이익률: {snapshot.get('operating_margin')}"
+            )
+            fact_check_source = f"{news_from_chroma}\n\n[정량 분석 리포트]\n{quant_context}\n\n[재무 데이터]\n{snapshot_context}"
+            
+            fact_result = get_fact_checker().check(
+                original_news=fact_check_source,
+                llm_analysis=hunter_reason,
+                stock_name=info['name']
+            )
+            if fact_result.has_hallucination:
+                logger.warning(f"   👻 [Fact-Check] 환각 탐지: {info['name']}({code}) - 신뢰도: {fact_result.confidence:.0%}")
+                logger.warning(f"      경고: {fact_result.warnings[:2]}")
+                # 환각 탐지 시 Telegram 알림 (환경변수로 on/off 가능)
+                if _cfg.get_bool('FACT_CHECK_ALERT_ENABLED', default=False):
+                    get_monitoring_alerts().notify_hallucination_detected(
+                        stock_name=info['name'],
+                        confidence=fact_result.confidence,
+                        warnings=fact_result.warnings
+                    )
+        except Exception as e:
+            logger.debug(f"   ⚠️ [Fact-Check] 검증 오류 ({code}): {e}")
+    else:
+        logger.debug(f"   ⏩ [Fact-Check] 스킵 (ENABLE_AI_AUDITOR=False)")
     
     # 경쟁사 수혜 가산점 적용 (최대 +10점)
     if competitor_bonus > 0:

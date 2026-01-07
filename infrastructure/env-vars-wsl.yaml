@@ -87,7 +87,7 @@ ENABLE_NEWS_CRAWLER_JOB_WORKER: "true"
 SCHEDULER_QUEUE_PRICE_MONITOR: "real.jobs.price-monitor"
 ENABLE_PRICE_MONITOR_JOB_WORKER: "true"
 SCHEDULER_QUEUE_SCOUT_JOB: "real.jobs.scout"
-ENABLE_SCOUT_JOB_WORKER: "true"
+ENABLE_SCOUT_JOB_WORKER: "false"
 SCHEDULER_SCOUT_JOB_ID: "scout-daily"  # jobs 테이블의 job_id와 일치해야 함
 
 # 13. 매수 기준 점수
@@ -104,8 +104,12 @@ LOCAL_MODEL_REASONING: "gemma3:27b"        # [Hunter] Speed & Adherence (2024-12
 LOCAL_MODEL_THINKING: "gemma3:27b"           # [Judge] Deep Reasoning (2024-12-24: qwen3 → gemma3로 변경)
 TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
 TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
-TIER_FAST_PROVIDER: "gemini"              # [Sentiment] Keep Gemini Flash for Speed/Free Tier
-LLM_FLASH_MODEL_NAME: "gemini-2.5-flash"  # [Config] Explicitly set Flash model for high-volume tasks
+TIER_FAST_PROVIDER: "ollama"              # [Sentiment] Switch to Local for zero cost
+LOCAL_MODEL_FAST: "gpt-oss:20b"             # [All Stages] Unified Model as per User Request
+LOCAL_MODEL_REASONING: "gpt-oss:20b"        # [All Stages] Unified Model
+LOCAL_MODEL_THINKING: "gpt-oss:20b"         # [All Stages] Unified Model
+OLLAMA_NUM_PARALLEL: "2"                    # [Optimization] Batch Priority
+# LLM_FLASH_MODEL_NAME: "gemini-2.5-flash"  # [Config] Disabled for Local switch
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)
@@ -113,5 +117,6 @@ SCOUT_UNIVERSE_SIZE: "200"
 ENABLE_NEWS_ANALYSIS: "true"
 SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화
 FACT_CHECK_ALERT_ENABLED: "true"  # LLM 환각 탐지 시 Telegram 알림 활성화
+ENABLE_AI_AUDITOR: "false" # [Config] Disable Cloud AI Verification (User Request)
 
-ENABLE_STARTUP_ONESHOT: "true"
+ENABLE_STARTUP_ONESHOT: "false"
