@@ -39,7 +39,6 @@ class BuyScanner:
     """매수 신호 스캔 클래스"""
     
     # 상수 정의
-    BB_DISTANCE_THRESHOLD_PCT = 2.0
     MOMENTUM_SIGNAL_THRESHOLD = 3.0
     RELATIVE_STRENGTH_THRESHOLD = 2.0
     
@@ -54,6 +53,9 @@ class BuyScanner:
         self.regime_detector = MarketRegimeDetector()
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
+        
+        # Config에서 임계값 로드 (기본값: 2.0)
+        self.bb_distance_threshold_pct = self.config.get_float("BUY_BB_BUFFER_PCT", default=2.0)
         
         # 캐시
         self._kospi_cache = None
@@ -676,7 +678,7 @@ class BuyScanner:
                             "bollinger_lower": float(bollinger_lower),
                             "strategy": "MEAN_REVERSION"
                         }
-                    elif bb_distance_pct <= self.BB_DISTANCE_THRESHOLD_PCT and current_regime == MarketRegimeDetector.REGIME_BULL:
+                    elif bb_distance_pct <= self.bb_distance_threshold_pct and current_regime == MarketRegimeDetector.REGIME_BULL:
                         logger.debug(f"[{stock_code}] BB_LOWER_NEAR 신호 감지 (강세장).")
                         return 'BB_LOWER_NEAR', {
                             "close_price": float(last_close_price),

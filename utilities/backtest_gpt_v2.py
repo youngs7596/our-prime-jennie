@@ -800,22 +800,31 @@ class BacktestGPT:
             start = max(start, end - timedelta(days=days))
         full_calendar = list(kospi_df.loc[start:end].index)
         
-        # Out-of-Sample 테스트: train/test 분할
-        train_ratio = getattr(self.args, 'train_ratio', 1.0)
-        if train_ratio < 1.0 and len(full_calendar) > 10:
-            split_idx = int(len(full_calendar) * train_ratio)
-            self.train_calendar = full_calendar[:split_idx]
-            self.test_calendar = full_calendar[split_idx:]
-            self.oos_start_date = self.test_calendar[0] if self.test_calendar else None
-            logger.info(f"📊 Out-of-Sample 분할: Train {len(self.train_calendar)}일 | Test {len(self.test_calendar)}일")
-            logger.info(f"   Train: {self.train_calendar[0].strftime('%Y-%m-%d')} ~ {self.train_calendar[-1].strftime('%Y-%m-%d')}")
-            logger.info(f"   Test:  {self.test_calendar[0].strftime('%Y-%m-%d')} ~ {self.test_calendar[-1].strftime('%Y-%m-%d')}")
-        else:
-            self.train_calendar = full_calendar
-            self.test_calendar = []
-            self.oos_start_date = None
+        full_calendar = list(kospi_df.loc[start:end].index)
         
-        self.calendar = full_calendar
+        # Train/Test Split Logic
+        split_ratio = self.args.train_ratio
+        split_idx = int(len(full_calendar) * split_ratio)
+        
+        if self.args.mode == "train":
+            self.calendar = full_calendar[:split_idx]
+            logger.info(f"📊 [TRAIN MODE] 전체 {len(full_calendar)}일 중 앞 {len(self.calendar)}일 시뮬레이션")
+            logger.info(f"   기간: {self.calendar[0].strftime('%Y-%m-%d')} ~ {self.calendar[-1].strftime('%Y-%m-%d')}")
+        elif self.args.mode == "test":
+            self.calendar = full_calendar[split_idx:]
+            logger.info(f"🧪 [TEST MODE] 전체 {len(full_calendar)}일 중 뒤 {len(self.calendar)}일 시뮬레이션")
+            if self.calendar:
+                logger.info(f"   기간: {self.calendar[0].strftime('%Y-%m-%d')} ~ {self.calendar[-1].strftime('%Y-%m-%d')}")
+            else:
+                logger.warning("   ⚠️ 테스트 기간이 비어 있습니다. (기간이 너무 짧거나 비율 설정 문제)")
+        else:
+            self.calendar = full_calendar
+            logger.info(f"📈 [FULL MODE] 전체 {len(self.calendar)}일 시뮬레이션")
+            
+        # OOS Reporting용 (Full 모드일 때만 의미 있음)
+        self.train_calendar = full_calendar[:split_idx]
+        self.test_calendar = full_calendar[split_idx:]
+        self.oos_start_date = self.test_calendar[0] if self.test_calendar else None
 
     def _init_components(self) -> None:
         stock_names = {code: meta.get("name", code) for code, meta in self.stock_metadata.items()}
@@ -1245,8 +1254,10 @@ class BacktestGPT:
         )
         logger.info("누적 거래 횟수: %d회 | 보유 중인 포지션: %d개", stats["trades"], stats["open_positions"])
         
-        # Out-of-Sample 기간 성과 별도 출력
-        if self.oos_start_date is not None and self.test_calendar:
+        # Out-of-Sample Reporting logic
+        # Full 모드일 때만 "Train vs Test" 비교를 위해 OOS 결과를 별도로 보여줌
+        # Train/Test 모드일 때는 위 "전체 기간" 결과가 곧 해당 모드의 결과임
+        if self.args.mode == "full" and self.oos_start_date and self.test_calendar:
             oos_eod_entries = [e for e in eod_entries if e.get("date") >= self.oos_start_date]
             if oos_eod_entries:
                 # OOS 시작 시점의 자산 (Train 기간 종료 시점)
@@ -1278,19 +1289,13 @@ class BacktestGPT:
                 stats["oos_days"] = oos_days
                 
                 logger.info("")
-                logger.info("=== 🎯 Out-of-Sample 결과 (테스트 기간) ===")
+                logger.info("=== 🎯 Out-of-Sample 결과 (테스트 구간) ===")
                 logger.info(f"테스트 기간: {self.test_calendar[0].strftime('%Y-%m-%d')} ~ {self.test_calendar[-1].strftime('%Y-%m-%d')} ({oos_days}일)")
                 logger.info(f"OOS 시작 자산: {oos_start_equity:,.0f}원 → 종료: {oos_end_equity:,.0f}원")
                 logger.info(f"OOS 수익률: {oos_return_pct:.2f}%")
                 logger.info(f"OOS MDD: {oos_mdd * 100:.2f}%")
                 logger.info(f"OOS 월간 수익률: {oos_monthly:.2f}%")
-                
-                # OOS 기간만 보고 싶은 경우 stats 교체
-                if getattr(self.args, 'oos_only', False):
-                    logger.info("⚠️ --oos-only 옵션 활성화: OOS 결과만 반환합니다.")
-                    stats["total_return_pct"] = oos_return_pct
-                    stats["mdd_pct"] = oos_mdd * 100
-                    stats["monthly_return_pct"] = oos_monthly
+
         logger.info("--- ✅ 백테스트 완료 ---")
 
         try:
@@ -1374,11 +1379,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=67, help="랜덤 시드 (기본값 67)")
     
     # Out-of-Sample 테스트 옵션
-    parser.add_argument("--train-ratio", type=float, default=1.0,
-                        help="학습 기간 비율 (0.0~1.0). 예: 0.7이면 앞 70%는 학습, 뒤 30%는 테스트. "
-                             "1.0이면 전체 기간을 학습+테스트로 사용 (기본값)")
+    parser.add_argument("--mode", type=str, choices=["full", "train", "test"], default="full",
+                        help="실행 모드: full(전체), train(학습용 앞 70%%), test(검증용 뒤 30%%)")
+    parser.add_argument("--train-ratio", type=float, default=0.7,
+                        help="학습 기간 비율 (기본값 0.7). mode가 train/test일 때 사용됨.")
     parser.add_argument("--oos-only", action="store_true",
-                        help="Out-of-Sample 기간 성과만 출력 (--train-ratio < 1.0 일 때만 유효)")
+                        help="[Deprecated] Use --mode test instead.")
     
     args = parser.parse_args()
     apply_strategy_defaults(args)
