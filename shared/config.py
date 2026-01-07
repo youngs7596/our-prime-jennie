@@ -326,7 +326,7 @@ class ConfigManager:
         symbol_key = self._symbol_override_key(stock_code, key)
 
         # 1) 런타임/운영 오버라이드(메모리/ENV/DB)
-        v = self.get(symbol_key, default=None)
+        v = self.get(symbol_key, default=None, silent=True)
         if v is not None:
             return v
 
@@ -368,7 +368,7 @@ class ConfigManager:
             return v.lower() in ("true", "1", "yes", "on")
         return bool(v)
     
-    def get(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
+    def get(self, key: str, default: Any = None, use_cache: bool = True, silent: bool = False) -> Any:
         """
         설정값 조회
         
@@ -442,7 +442,10 @@ class ConfigManager:
             logger.info(f"[Config] 내장 기본값 사용 '{key}': {default_value}")
             return default_value
         
-        logger.warning(f"[Config] 설정값 '{key}'를 찾을 수 없습니다. None 반환.")
+        if silent:
+            logger.debug(f"[Config] 설정값 '{key}'를 찾을 수 없습니다. None 반환.")
+        else:
+            logger.warning(f"[Config] 설정값 '{key}'를 찾을 수 없습니다. None 반환.")
         return None
     
     def _get_from_db(self, key: str, current_time: float, use_cache: bool) -> Optional[str]:

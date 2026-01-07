@@ -408,8 +408,8 @@ class DailyReporter:
         if isinstance(balance_data, list):
              items = balance_data
 
-        # [Manual Management] 삼성전자(005930) 등 수동 관리 종목은 동기화 제외
-        MANUAL_MANAGED_CODES = ['005930']
+        # [Manual Management] 수동 관리 종목 동기화 제외 (필요시 추가)
+        MANUAL_MANAGED_CODES = []
 
         for item in items:
             code = item.get('code') or item.get('pdno')

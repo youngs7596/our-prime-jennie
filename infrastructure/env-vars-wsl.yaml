@@ -14,8 +14,8 @@ REAL_SECRET_ID_APP_KEY: "kis-r-app-key"
 REAL_SECRET_ID_APP_SECRET: "kis-r-app-secret"
 REAL_SECRET_ID_ACCOUNT_PREFIX: "kis-r-account-no"
 
-# 2.5 제외 종목 (콤마로 구분)
-EXCLUDED_STOCKS: "005930"
+# 2.5 제외 종목 (콤마로 구분) - 현재 없음
+EXCLUDED_STOCKS: ""
 
 # 3. KIS API Base URLs
 KIS_BASE_URL_MOCK: "https://openapivts.koreainvestment.com:29443"
@@ -87,7 +87,7 @@ ENABLE_NEWS_CRAWLER_JOB_WORKER: "true"
 SCHEDULER_QUEUE_PRICE_MONITOR: "real.jobs.price-monitor"
 ENABLE_PRICE_MONITOR_JOB_WORKER: "true"
 SCHEDULER_QUEUE_SCOUT_JOB: "real.jobs.scout"
-ENABLE_SCOUT_JOB_WORKER: "false"
+ENABLE_SCOUT_JOB_WORKER: "true"
 SCHEDULER_SCOUT_JOB_ID: "scout-daily"  # jobs 테이블의 job_id와 일치해야 함
 
 # 13. 매수 기준 점수
@@ -105,7 +105,7 @@ LOCAL_MODEL_THINKING: "gemma3:27b"           # [Judge] Deep Reasoning (2024-12-2
 TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
 TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
 TIER_FAST_PROVIDER: "ollama"              # [Sentiment] Switch to Local for zero cost
-LOCAL_MODEL_FAST: "gpt-oss:20b"             # [All Stages] Unified Model as per User Request
+LOCAL_MODEL_FAST: "exaone3.5:7.8b"             # [Test] LG EXAONE 3.5 7.8B for news-crawler
 LOCAL_MODEL_REASONING: "gpt-oss:20b"        # [All Stages] Unified Model
 LOCAL_MODEL_THINKING: "gpt-oss:20b"         # [All Stages] Unified Model
 OLLAMA_NUM_PARALLEL: "2"                    # [Optimization] Batch Priority
