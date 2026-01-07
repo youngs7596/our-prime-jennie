@@ -145,7 +145,17 @@ class BuyExecutor:
             # Tier2(Scout Judge 미통과) 경로는 별도 최소 점수 적용 (품질 상향)
             base_min_llm_score = self.config.get_int('MIN_LLM_SCORE', default=60)
             tier2_min_llm_score = self.config.get_int('MIN_LLM_SCORE_TIER2', default=65)
-            recon_min_llm_score = self.config.get_int('MIN_LLM_SCORE_RECON', default=tier2_min_llm_score)
+            
+            # [Dynamic RECON Score] 시장 국면별 RECON 기준 점수 적용
+            recon_score_by_regime = {
+                MarketRegimeDetector.REGIME_STRONG_BULL: 58,
+                MarketRegimeDetector.REGIME_BULL: 62,
+                MarketRegimeDetector.REGIME_SIDEWAYS: 65,
+                MarketRegimeDetector.REGIME_BEAR: 70,
+            }
+            # 시장 국면에 따른 동적 점수 사용 (DB 오버라이드 없음)
+            recon_min_llm_score = recon_score_by_regime.get(market_regime, tier2_min_llm_score)
+            logger.info(f"📊 [Dynamic RECON] 시장 국면({market_regime}) → RECON 기준: {recon_min_llm_score}점")
 
             if trade_tier == "TIER1":
                 min_llm_score = base_min_llm_score
