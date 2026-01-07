@@ -20,6 +20,7 @@
 - **Data Collection Upgrade**: `scripts/collect_dart_filings.py` 및 `scripts/collect_investor_trading.py`를 일일(Daily) 작업으로 격상(18:30/18:45)하고 DB 기반 코드로 수정하여 오류 해결.
 - **Backtest Upgrade**: `backtest_gpt_v2.py`가 실제 재무(ROE/PER) 및 수급 데이터를 DB에서 로드하여 팩터 점수에 반영하도록 개선 (Look-Ahead Bias 방지).
 - **Optimization Deployment**: `backtest_gpt_v2.py` 실행 오류 수정 및 최적 파라미터(수익률 212%, 익절 6%, RSI 35) 실전 DB/프리셋 적용.
+- **Exaone vs GPT-OSS Test**: `scripts/test_exaone_news.py` 구현 및 비교 테스트 완료. Exaone이 속도(<1s vs 3s)와 추론 디테일 면에서 우수함을 확인 (`test_exaone_results_output.txt`).
 
 ## 2026-01-05
 - **Market Regime Bug Fix**: `shared/market_regime.py`의 `SIDEWAYS` 판단 로직 수정 (이격도 3% 이상 시 SIDEWAYS 점수 0점 강제) - "겁쟁이 봇" 문제 해결
