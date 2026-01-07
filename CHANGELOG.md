@@ -16,6 +16,7 @@
 - **LLM Stability**: `gpt-oss:20b` 모델의 JSON 파싱 오류(`Expecting ',' delimiter`)를 One-Shot Example 프롬프트 추가로 완벽 해결.
 - **Rules Update**: `rules.md`에 '주요 의사 결정(Key Decisions)' 섹션 신설 (Local LLM 모델 통일 및 성능 최적화 규칙 등재).
 - **Policy Enforcement**: Gemini 모델의 영어 답변 방지를 위한 '최우선 원칙(Critical Rule)' 언어 규정 강화 (Must use Korean).
+- **Strategy Optimization**: 백테스트 최적 파라미터(수익률 +8.35%)를 실전 DB에 적용 및 `buy-scanner` 로직(`BB_DISTANCE_THRESHOLD_PCT` Config화) 배포 완료.
 
 ## 2026-01-05
 - **Market Regime Bug Fix**: `shared/market_regime.py`의 `SIDEWAYS` 판단 로직 수정 (이격도 3% 이상 시 SIDEWAYS 점수 0점 강제) - "겁쟁이 봇" 문제 해결

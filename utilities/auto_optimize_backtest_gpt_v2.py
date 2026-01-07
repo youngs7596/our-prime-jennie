@@ -161,6 +161,7 @@ def run_single_backtest(params: Dict[str, float], args: argparse.Namespace) -> D
         "--log-dir", os.path.join("logs", "opt_runs"),
         "--universe-limit", str(args.universe_limit),
         "--top-n", str(args.top_n),
+        "--mode", "train", # 학습 데이터셋(70%)으로만 최적화 수행
     ]
 
     for key, value in params.items():
