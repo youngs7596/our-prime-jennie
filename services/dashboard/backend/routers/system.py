@@ -8,6 +8,7 @@ import os
 import json
 import logging
 import httpx
+import functools
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
@@ -63,6 +64,7 @@ def cache_response(ttl_seconds: int = 5):
     * 키 생성: router_system:{func_name}:{args}
     """
     def decorator(func):
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             r = get_redis_client()
             if not r:
@@ -127,7 +129,7 @@ async def get_system_status():
 async def get_docker_status():
     """Docker 컨테이너 상태 (WSL2 환경) - 5초 캐싱"""
     try:
-        transport = httpx.HTTPTransport(uds="/var/run/docker.sock")
+        transport = httpx.AsyncHTTPTransport(uds="/var/run/docker.sock")
         # 3초 타임아웃
         async with httpx.AsyncClient(transport=transport, base_url="http://localhost", timeout=3.0) as client:
             response = await client.get("/containers/json")
