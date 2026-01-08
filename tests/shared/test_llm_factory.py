@@ -47,7 +47,7 @@ class TestLLMFactoryHelpers:
             if "TIER_FAST_PROVIDER" in os.environ:
                 del os.environ["TIER_FAST_PROVIDER"]
             provider_type = LLMFactory._get_env_provider_type(LLMTier.FAST)
-            assert provider_type == "gemini"
+            assert provider_type == "ollama"
     
     def test_get_env_provider_type_reasoning(self):
         """REASONING tier 기본값 - openai"""
