@@ -435,26 +435,26 @@ class DailyReporter:
         table_name = database._get_table_name("Portfolio")
         
         
-        # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 수량이 있으면 좀비 데이터이므로 조회)
-        result = session.execute(text(f"SELECT STOCK_CODE, QUANTITY FROM {table_name} WHERE QUANTITY > 0"))
-        db_holdings = {row[0]: row[1] for row in result.fetchall()}
+        # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 존재하는지 확인하여 중복 Insert 방지)
+        # STOCK_CODE에 Unique Constraint가 없으므로 로직으로 처리해야 함
+        result = session.execute(text(f"SELECT STOCK_CODE FROM {table_name}"))
+        existing_codes = {row[0] for row in result.fetchall()}
         
         # 2-2. Update & Insert
         for code, info in live_holdings.items():
-            if code in db_holdings:
-                # 수량이나 평단가가 다르면 업데이트
+            if code in existing_codes:
+                # 이미 존재하는 종목 (HOLDING 또는 SOLD) -> UPDATE
+                # 중복된 행이 있을 경우 모두 업데이트됨 (데이터 정합성 유지)
                 session.execute(text(f"""
                     UPDATE {table_name}
                     SET QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, STATUS = 'HOLDING', UPDATED_AT = NOW()
                     WHERE STOCK_CODE = :code
                 """), {'qty': info['qty'], 'price': info['avg_price'], 'code': code})
             else:
-                # 신규 종목 추가 (외부 매수 등)
+                # DB에 아예 없는 신규 종목 -> INSERT
                 session.execute(text(f"""
                     INSERT INTO {table_name} (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, STATUS, CREATED_AT, UPDATED_AT)
                     VALUES (:code, :name, :qty, :price, 'HOLDING', NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE
-                    QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, STATUS = 'HOLDING', UPDATED_AT = NOW()
                 """), {'code': code, 'name': info['name'], 'qty': info['qty'], 'price': info['avg_price']})
         
         # 2-3. Delete (Mark as SOLD) - DB에는 있는데 실계좌에 없는 경우
