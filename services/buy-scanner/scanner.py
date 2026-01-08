@@ -456,7 +456,8 @@ class BuyScanner:
                         active_strategies,
                         kospi_prices_df,
                         bear_context,
-                        supply_demand_dict.get(stock_code)
+                        supply_demand_dict.get(stock_code),
+                        tier2_enabled
                     )
                     futures[future] = stock_code
             
@@ -474,7 +475,7 @@ class BuyScanner:
     
     def _analyze_stock(self, stock_code, stock_info, daily_prices_df, 
                       current_regime, active_strategies, kospi_prices_df,
-                      bear_context=None, supply_demand_df=None) -> dict:
+                      bear_context=None, supply_demand_df=None, tier2_enabled=False) -> dict:
         """
         단일 종목 분석 (실시간 가격 반영)
         

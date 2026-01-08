@@ -160,6 +160,7 @@ class TestPriceMonitor:
         """Test the polling loop execution flow"""
         # Mock dependencies for the loop
         monitor_instance.config.get_int.return_value = 0 # specific interval
+        monitor_instance.config.get_float.return_value = -5.0 # Mock float values
         
         # Mock Session and Portfolio
         with patch("monitor.session_scope"), \
@@ -289,6 +290,7 @@ class TestPriceMonitor:
     def test_start_monitoring_market_check(self, monitor_instance):
         """Test market open check prevents monitoring"""
         monitor_instance.kis.check_market_open = MagicMock(return_value=False)
+        monitor_instance.config.get_bool.return_value = False # Ensure disable_check is False
         monitor_instance._monitor_with_polling = MagicMock()
         
         monitor_instance.start_monitoring()

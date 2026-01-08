@@ -360,7 +360,7 @@ class TestBuyScanner:
             'score': 80, 'category': '수주', 'reason': 'test'
         }):
              result = scanner_instance._analyze_stock(
-                "005930", {'name': 'Samsung'}, daily_prices, 
+                "005930", {'name': 'Samsung', 'llm_score': 80}, daily_prices, 
                 MarketRegimeDetector.REGIME_BULL, [], None
              )
              

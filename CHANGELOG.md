@@ -15,6 +15,7 @@
 - **MCP 서버 설정**: MariaDB용 MCP 서버(`mysql_mcp_server`) 설정 완료 (`~/.gemini/settings.json`)
 - **Super Prime Logic Implementation**: `buy-scanner`에 RSI(<=30) & 수급(20일 평균 거래량 5% 이상 외국인 순매수) 기반의 강력 매수 신호 감지 로직 구현 및 텔레그램 알림 긴급 태그(`[🚨긴급/강력매수]`) 적용.
 - **Frontend Lint Fix**: `LogicVisualization.tsx`의 TypeScript 오류 수정 및 타입 안정성 강화.
+- **Unit Test Fix**: Jenkins 배포를 막던 `buy-scanner`(`NameError` 수정), `price-monitor`, `dashboard`의 Unit Test 오류 전수 수정 및 59개 테스트 통과 확인.
 
 
 ## 2026-01-07
