@@ -225,7 +225,24 @@ def reset_singletons():
     from shared import redis_cache
     if hasattr(redis_cache, "reset_redis_connection"):
         redis_cache.reset_redis_connection()
+
+    # 2. Database Connection
+    from shared.db import connection
+    if hasattr(connection, "dispose_engine"):
+        connection.dispose_engine()
         
-    # 2. Config (만약 Config 클래스가 싱글톤으로 인스턴스를 유지한다면 여기서 리셋)
+    # 3. Auth Cache
+    from shared import auth
+    if hasattr(auth, "clear_secret_cache"):
+        auth.clear_secret_cache()
+        
+    # 4. LLM Factory
+    try:
+        from shared.llm_factory import LLMFactory
+        LLMFactory._instance = None
+    except ImportError:
+        pass
+        
+    # 5. Config (만약 Config 클래스가 싱글톤으로 인스턴스를 유지한다면 여기서 리셋)
     # from shared.config import config
     # config._instance = None 등 필요한 조치
