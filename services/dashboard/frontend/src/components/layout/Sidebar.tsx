@@ -29,6 +29,7 @@ const navItems = [
   { path: '/visual-logic', icon: LineChart, label: 'Visual Logic' },
 
   { path: '/architecture', icon: Map, label: 'Architecture' },
+  { path: '/super-prime', icon: Target, label: 'Super Prime' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
 
