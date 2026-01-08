@@ -975,13 +975,28 @@ def update_high_watermark(
         # 최고가 대비 하락률 계산
         profit_from_high_pct = ((current_price - high_price) / high_price) * 100 if high_price > 0 else 0.0
         
-        # 저장 (TTL 30일 - 보유 기간 내 유효)
+        # Redis 저장 (TTL 30일 - 보유 기간 내 유효)
         data = {
             "high_price": high_price,
             "buy_price": buy_price,
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         r.setex(key, 2592000, json.dumps(data))  # 30일
+        
+        # [FIX] DB PORTFOLIO.CURRENT_HIGH_PRICE도 갱신
+        if updated:
+            try:
+                from shared.db.connection import session_scope
+                from sqlalchemy import text
+                with session_scope() as session:
+                    session.execute(text("""
+                        UPDATE portfolio
+                        SET CURRENT_HIGH_PRICE = :high_price, UPDATED_AT = NOW()
+                        WHERE STOCK_CODE = :code AND STATUS = 'HOLDING'
+                    """), {"high_price": high_price, "code": stock_code})
+                    session.commit()
+            except Exception as db_e:
+                logger.warning(f"⚠️ DB High Price 갱신 실패 (Redis는 성공): {db_e}")
         
         return {
             "high_price": high_price,

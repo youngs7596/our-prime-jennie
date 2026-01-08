@@ -303,9 +303,14 @@ ruff check .
 > 💡 **주요 기술적/정책적 의사 결정 사항은 반드시 이 섹션에 기록하여 팀 전체가 공유해야 합니다.**
 
 ### 1. Local LLM 표준화
-- **모델 통일**: 모든 Local LLM Tier(FAST, REASONING, THINKING)는 **`gpt-oss:20b`** 모델을 사용합니다.
-  - 이유: 한국어 성능, 논리력, 속도(양자화) 측면에서 가장 균형 잡힌 성능을 보임 (2026-01-07 기준).
-  - 참고: 이전 모델(`gemma3:27b`, `llama3.1:8b`)은 안정성 및 속도 문제로 제외되었습니다.
+- **모델 이원화 (Tier별 최적화)**:
+  - **FAST Tier (News/Sentiment)**: **`exaone3.5:7.8b`**
+    - 이유: 한국어 금융 뉴스 뉘앙스 파악 능력 탁월, 압도적인 처리 속도(0.6~0.9초), 보수적/논리적 추론.
+  - **REASONING / THINKING Tier (Strategy/Deep Logic)**: **`gpt-oss:20b`**
+    - 이유: 복잡한 전략 수립 및 심층 추론에는 여전히 더 큰 파라미터 모델이 유리.
+- **변경 이력**:
+  - 2026-01-08: 뉴스 분석(FAST)용으로 `exaone3.5:7.8b` 공식 채택 (vs `gpt-oss:20b` 비교 테스트 결과 기반).
+  - 2026-01-07: 모든 Tier를 `gpt-oss:20b`로 통일했으나, 속도 및 한국어 특화 성능 이슈로 FAST Tier 분리.
 
 ### 2. Local LLM 성능 최적화 (Batch vs Parallel)
 - **배치 처리(Batch Processing) 우선**: 로컬 환경(단일 GPU)에서는 병렬 처리보다 **순차적 배치 처리(Sequential Batch Processing)**가 훨씬 더 높은 처리량(Throughput)과 안정성을 제공합니다.

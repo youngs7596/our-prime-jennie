@@ -1,0 +1,173 @@
+2026-01-07T07:41:05.831288862Z [2026-01-07 07:41:05 +0000] [7] [INFO] Starting gunicorn 21.2.0
+2026-01-07T07:41:05.850121401Z [2026-01-07 07:41:05 +0000] [7] [INFO] Listening at: http://0.0.0.0:8082 (7)
+2026-01-07T07:41:05.850132423Z [2026-01-07 07:41:05 +0000] [7] [INFO] Using worker: sync
+2026-01-07T07:41:05.859069231Z [2026-01-07 07:41:05 +0000] [8] [INFO] Booting worker with pid: 8
+2026-01-07T07:41:06.004220124Z 2026-01-07 07:41:06,003 - shared - INFO - --- 📦 'shared' 패키지 로드 완료 ---
+2026-01-07T07:41:07.003823079Z 2026-01-07 07:41:07,003 - main - INFO - 모듈 로드 시 서비스 초기화 시작
+2026-01-07T07:41:07.003843925Z 2026-01-07 07:41:07,003 - main - INFO - === Buy Executor Service 초기화 시작 ===
+2026-01-07T07:41:07.013175151Z 2026-01-07 07:41:07,012 - shared.strategy - INFO - ✅ Rust strategy_core 가속 모듈 활성화
+2026-01-07T07:41:07.014601914Z 2026-01-07 07:41:07,014 - main - INFO - 🔧 DB Connection 초기화 중...
+2026-01-07T07:41:07.014608328Z 2026-01-07 07:41:07,014 - shared.db.connection - INFO - DB 연결 타입: MARIADB
+2026-01-07T07:41:07.014923135Z 2026-01-07 07:41:07,014 - shared.auth - INFO - ✅ secrets.json 로드 완료: /app/config/secrets.json
+2026-01-07T07:41:07.015025374Z 2026-01-07 07:41:07,014 - shared.db.connection - INFO - 🔌 [SQLAlchemy] 엔진 초기화 시작 (pool_size=5, max_overflow=20, recycle=900s)
+2026-01-07T07:41:07.042119391Z 2026-01-07 07:41:07,041 - shared.db.connection - INFO - ✅ [SQLAlchemy] 엔진 초기화 완료 (DB Type: MARIADB)
+2026-01-07T07:41:07.042136816Z 2026-01-07 07:41:07,041 - main - INFO - ✅ DB Connection 초기화 완료
+2026-01-07T07:41:07.042138674Z 2026-01-07 07:41:07,042 - main - INFO - 거래 모드: REAL, Gateway 사용: True
+2026-01-07T07:41:07.042308975Z 2026-01-07 07:41:07,042 - shared.kis.gateway_client - INFO - ✅ KIS Gateway Client 초기화: http://127.0.0.1:8080
+2026-01-07T07:41:07.042315871Z 2026-01-07 07:41:07,042 - main - INFO - ✅ KIS Gateway Client 초기화 완료
+2026-01-07T07:41:07.042317624Z 2026-01-07 07:41:07,042 - main - INFO - ✅ ConfigManager 초기화 완료
+2026-01-07T07:41:07.042426287Z 2026-01-07 07:41:07,042 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_bot_token -> telegram-bot-token
+2026-01-07T07:41:07.042434170Z 2026-01-07 07:41:07,042 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_chat_id -> telegram-chat-id
+2026-01-07T07:41:07.043915323Z 2026-01-07 07:41:07,043 - main - INFO - ✅ Telegram Bot 초기화 완료
+2026-01-07T07:41:07.062140044Z 2026-01-07 07:41:07,061 - mysql.connector - INFO - package: mysql.connector.plugins
+2026-01-07T07:41:07.062156608Z 2026-01-07 07:41:07,061 - mysql.connector - INFO - plugin_name: mysql_native_password
+2026-01-07T07:41:07.062427097Z 2026-01-07 07:41:07,062 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-01-07T07:41:07.085743929Z 2026-01-07 07:41:07,085 - shared.db.repository - INFO - ✅ DB: CONFIG 'MAX_POSITION_VALUE_PCT' 값 로드 성공.
+2026-01-07T07:41:07.086886894Z 2026-01-07 07:41:07,086 - main - INFO - ✅ Buy Executor 초기화 완료
+2026-01-07T07:41:07.086908654Z 2026-01-07 07:41:07,086 - main - INFO - === Buy Executor Service 초기화 완료 ===
+2026-01-07T07:41:07.088186130Z 2026-01-07 07:41:07,087 - shared.rabbitmq - INFO - ✅ RabbitMQ 워커 스레드를 시작했습니다. queue=buy-signals
+2026-01-07T07:41:07.106697632Z 2026-01-07 07:41:07,106 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T07:41:07.107542387Z 2026-01-07 07:41:07,107 - pika.adapters.utils.io_services_utils - INFO - Socket connected: <socket.socket fd=13, family=2, type=1, proto=6, laddr=('127.0.0.1', 47184), raddr=('127.0.0.1', 5672)>
+2026-01-07T07:41:07.108130777Z 2026-01-07 07:41:07,107 - pika.adapters.utils.connection_workflow - INFO - Streaming transport linked up: (<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x712bbefaad10>, _StreamingProtocolShim: <SelectConnection PROTOCOL transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x712bbefaad10> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>).
+2026-01-07T07:41:07.141290144Z 2026-01-07 07:41:07,140 - pika.adapters.utils.connection_workflow - INFO - AMQPConnector - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x712bbefaad10> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T07:41:07.141303160Z 2026-01-07 07:41:07,141 - pika.adapters.utils.connection_workflow - INFO - AMQPConnectionWorkflow - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x712bbefaad10> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T07:41:07.141509423Z 2026-01-07 07:41:07,141 - pika.adapters.blocking_connection - INFO - Connection workflow succeeded: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x712bbefaad10> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T07:41:07.141795006Z 2026-01-07 07:41:07,141 - pika.adapters.blocking_connection - INFO - Created channel=1
+2026-01-07T07:41:07.144096496Z 2026-01-07 07:41:07,143 - shared.rabbitmq - INFO - ✅ RabbitMQ 연결 성공 (queue=buy-signals)
+2026-01-07T23:02:55.165449183Z [2026-01-07 23:02:55 +0000] [7] [INFO] Starting gunicorn 21.2.0
+2026-01-07T23:02:55.320638615Z [2026-01-07 23:02:55 +0000] [7] [INFO] Listening at: http://0.0.0.0:8082 (7)
+2026-01-07T23:02:55.320650938Z [2026-01-07 23:02:55 +0000] [7] [INFO] Using worker: sync
+2026-01-07T23:02:55.323262124Z [2026-01-07 23:02:55 +0000] [8] [INFO] Booting worker with pid: 8
+2026-01-07T23:02:55.469199952Z 2026-01-07 23:02:55,468 - shared - INFO - --- 📦 'shared' 패키지 로드 완료 ---
+2026-01-07T23:02:56.752435490Z 2026-01-07 23:02:56,752 - main - INFO - 모듈 로드 시 서비스 초기화 시작
+2026-01-07T23:02:56.752461148Z 2026-01-07 23:02:56,752 - main - INFO - === Buy Executor Service 초기화 시작 ===
+2026-01-07T23:02:56.758430082Z 2026-01-07 23:02:56,758 - shared.strategy - INFO - ✅ Rust strategy_core 가속 모듈 활성화
+2026-01-07T23:02:56.759633388Z 2026-01-07 23:02:56,759 - main - INFO - 🔧 DB Connection 초기화 중...
+2026-01-07T23:02:56.759648607Z 2026-01-07 23:02:56,759 - shared.db.connection - INFO - DB 연결 타입: MARIADB
+2026-01-07T23:02:56.759948570Z 2026-01-07 23:02:56,759 - shared.auth - INFO - ✅ secrets.json 로드 완료: /app/config/secrets.json
+2026-01-07T23:02:56.760120114Z 2026-01-07 23:02:56,759 - shared.db.connection - INFO - 🔌 [SQLAlchemy] 엔진 초기화 시작 (pool_size=5, max_overflow=20, recycle=900s)
+2026-01-07T23:02:56.807269826Z 2026-01-07 23:02:56,807 - shared.db.connection - INFO - ✅ [SQLAlchemy] 엔진 초기화 완료 (DB Type: MARIADB)
+2026-01-07T23:02:56.807281608Z 2026-01-07 23:02:56,807 - main - INFO - ✅ DB Connection 초기화 완료
+2026-01-07T23:02:56.807283362Z 2026-01-07 23:02:56,807 - main - INFO - 거래 모드: REAL, Gateway 사용: True
+2026-01-07T23:02:56.807450268Z 2026-01-07 23:02:56,807 - shared.kis.gateway_client - INFO - ✅ KIS Gateway Client 초기화: http://127.0.0.1:8080
+2026-01-07T23:02:56.807456780Z 2026-01-07 23:02:56,807 - main - INFO - ✅ KIS Gateway Client 초기화 완료
+2026-01-07T23:02:56.807458624Z 2026-01-07 23:02:56,807 - main - INFO - ✅ ConfigManager 초기화 완료
+2026-01-07T23:02:56.807491947Z 2026-01-07 23:02:56,807 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_bot_token -> telegram-bot-token
+2026-01-07T23:02:56.807646820Z 2026-01-07 23:02:56,807 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_chat_id -> telegram-chat-id
+2026-01-07T23:02:56.808216680Z 2026-01-07 23:02:56,808 - main - INFO - ✅ Telegram Bot 초기화 완료
+2026-01-07T23:02:56.824534026Z 2026-01-07 23:02:56,824 - shared.db.repository - ERROR - ❌ DB: get_config ('RISK_PER_TRADE_PCT') 실패! (에러: (mysql.connector.errors.InterfaceError) 2003: Can't connect to MySQL server on '127.0.0.1:3307' (Errno 111: Connection refused)
+2026-01-07T23:02:56.824545197Z (Background on this error at: https://sqlalche.me/e/20/rvf5))
+2026-01-07T23:02:56.825367745Z 2026-01-07 23:02:56,825 - shared.db.repository - ERROR - ❌ DB: get_config ('ATR_MULTIPLIER') 실패! (에러: (mysql.connector.errors.InterfaceError) 2003: Can't connect to MySQL server on '127.0.0.1:3307' (Errno 111: Connection refused)
+2026-01-07T23:02:56.825375439Z (Background on this error at: https://sqlalche.me/e/20/rvf5))
+2026-01-07T23:02:56.826045999Z 2026-01-07 23:02:56,825 - shared.db.repository - ERROR - ❌ DB: get_config ('MIN_QUANTITY') 실패! (에러: (mysql.connector.errors.InterfaceError) 2003: Can't connect to MySQL server on '127.0.0.1:3307' (Errno 111: Connection refused)
+2026-01-07T23:02:56.826055697Z (Background on this error at: https://sqlalche.me/e/20/rvf5))
+2026-01-07T23:02:56.826990834Z 2026-01-07 23:02:56,826 - shared.db.repository - ERROR - ❌ DB: get_config ('MAX_QUANTITY') 실패! (에러: (mysql.connector.errors.InterfaceError) 2003: Can't connect to MySQL server on '127.0.0.1:3307' (Errno 111: Connection refused)
+2026-01-07T23:02:56.827008848Z (Background on this error at: https://sqlalche.me/e/20/rvf5))
+2026-01-07T23:02:56.828094845Z 2026-01-07 23:02:56,827 - shared.db.repository - ERROR - ❌ DB: get_config ('MAX_POSITION_VALUE_PCT') 실패! (에러: (mysql.connector.errors.InterfaceError) 2003: Can't connect to MySQL server on '127.0.0.1:3307' (Errno 111: Connection refused)
+2026-01-07T23:02:56.828118900Z (Background on this error at: https://sqlalche.me/e/20/rvf5))
+2026-01-07T23:02:56.828120353Z 2026-01-07 23:02:56,828 - main - INFO - ✅ Buy Executor 초기화 완료
+2026-01-07T23:02:56.828247549Z 2026-01-07 23:02:56,828 - main - INFO - === Buy Executor Service 초기화 완료 ===
+2026-01-07T23:02:56.828899013Z 2026-01-07 23:02:56,828 - shared.rabbitmq - INFO - ✅ RabbitMQ 워커 스레드를 시작했습니다. queue=buy-signals
+2026-01-07T23:02:56.936427083Z 2026-01-07 23:02:56,936 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T23:02:56.937006921Z 2026-01-07 23:02:56,936 - pika.adapters.utils.io_services_utils - ERROR - Socket failed to connect: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 58438)>; error=111 (Connection refused)
+2026-01-07T23:02:56.937013784Z 2026-01-07 23:02:56,936 - pika.adapters.utils.connection_workflow - ERROR - TCP Connection attempt failed: ConnectionRefusedError(111, 'Connection refused'); dest=(<AddressFamily.AF_INET: 2>, <SocketKind.SOCK_STREAM: 1>, 6, '', ('127.0.0.1', 5672))
+2026-01-07T23:02:56.937241964Z 2026-01-07 23:02:56,936 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnector - reporting failure: AMQPConnectorSocketConnectError: ConnectionRefusedError(111, 'Connection refused')
+2026-01-07T23:02:56.937274547Z 2026-01-07 23:02:56,937 - pika.adapters.utils.connection_workflow - ERROR - AMQP connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorSocketConnectError: ConnectionRefusedError(111, 'Connection refused'); first exception - None.
+2026-01-07T23:02:56.937474812Z 2026-01-07 23:02:56,937 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnectionWorkflow - reporting failure: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorSocketConnectError: ConnectionRefusedError(111, 'Connection refused'); first exception - None
+2026-01-07T23:02:56.937486544Z 2026-01-07 23:02:56,937 - pika.adapters.blocking_connection - ERROR - Connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorSocketConnectError: ConnectionRefusedError(111, 'Connection refused'); first exception - None
+2026-01-07T23:02:56.938597949Z 2026-01-07 23:02:56,937 - pika.adapters.blocking_connection - ERROR - Error in _create_connection().
+2026-01-07T23:02:56.938608349Z Traceback (most recent call last):
+2026-01-07T23:02:56.938609962Z   File "/usr/local/lib/python3.11/site-packages/pika/adapters/blocking_connection.py", line 451, in _create_connection
+2026-01-07T23:02:56.938611425Z     raise self._reap_last_connection_workflow_error(error)
+2026-01-07T23:02:56.938612297Z pika.exceptions.AMQPConnectionError
+2026-01-07T23:02:56.938640644Z 2026-01-07 23:02:56,938 - shared.rabbitmq - WARNING - ⚠️ RabbitMQ 연결 실패 (시도 #1). 5초 후 재시도합니다. 오류: 
+2026-01-07T23:03:01.969663824Z 2026-01-07 23:03:01,969 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T23:03:01.970301427Z 2026-01-07 23:03:01,969 - pika.adapters.utils.io_services_utils - INFO - Socket connected: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:01.970730585Z 2026-01-07 23:03:01,970 - pika.adapters.utils.connection_workflow - INFO - Streaming transport linked up: (<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105cb50>, _StreamingProtocolShim: <SelectConnection PROTOCOL transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105cb50> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>).
+2026-01-07T23:03:01.970938083Z 2026-01-07 23:03:01,970 - pika.adapters.utils.io_services_utils - ERROR - Socket EOF; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:01.970945477Z 2026-01-07 23:03:01,970 - pika.adapters.base_connection - ERROR - Transport indicated EOF.
+2026-01-07T23:03:01.970947260Z 2026-01-07 23:03:01,970 - pika.adapters.utils.io_services_utils - INFO - protocol.eof_received() elected to close: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804)>
+2026-01-07T23:03:01.970980593Z 2026-01-07 23:03:01,970 - pika.adapters.utils.io_services_utils - INFO - _AsyncTransportBase._initate_abort(): Initiating abrupt asynchronous transport shutdown: state=1; error=None; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804)>
+2026-01-07T23:03:01.971112794Z 2026-01-07 23:03:01,970 - pika.adapters.utils.io_services_utils - INFO - Deactivating transport: state=1; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804)>
+2026-01-07T23:03:01.971709312Z 2026-01-07 23:03:01,971 - pika.adapters.base_connection - ERROR - connection_lost: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:01.971715704Z 2026-01-07 23:03:01,971 - pika.connection - INFO - AMQP stack terminated, failed to connect, or aborted: opened=False, error-arg=StreamLostError: ('Transport indicated EOF',); pending-error=None
+2026-01-07T23:03:01.971717397Z 2026-01-07 23:03:01,971 - pika.connection - ERROR - Probably incompatible Protocol Versions
+2026-01-07T23:03:01.971718399Z 2026-01-07 23:03:01,971 - pika.connection - INFO - Connection setup terminated due to IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",)
+2026-01-07T23:03:01.971719882Z 2026-01-07 23:03:01,971 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnector - reporting failure: AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",)
+2026-01-07T23:03:01.971720934Z 2026-01-07 23:03:01,971 - pika.adapters.utils.connection_workflow - ERROR - AMQP connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None.
+2026-01-07T23:03:01.971721915Z 2026-01-07 23:03:01,971 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnectionWorkflow - reporting failure: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None
+2026-01-07T23:03:01.971729720Z 2026-01-07 23:03:01,971 - pika.adapters.utils.io_services_utils - INFO - Closing transport socket and unlinking: state=3; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 57804)>
+2026-01-07T23:03:01.971799112Z 2026-01-07 23:03:01,971 - pika.adapters.blocking_connection - ERROR - Connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None
+2026-01-07T23:03:01.972042669Z 2026-01-07 23:03:01,971 - pika.adapters.blocking_connection - ERROR - Error in _create_connection().
+2026-01-07T23:03:01.972048791Z Traceback (most recent call last):
+2026-01-07T23:03:01.972050164Z   File "/usr/local/lib/python3.11/site-packages/pika/adapters/blocking_connection.py", line 451, in _create_connection
+2026-01-07T23:03:01.972051416Z     raise self._reap_last_connection_workflow_error(error)
+2026-01-07T23:03:01.972052268Z pika.exceptions.IncompatibleProtocolError: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:01.972085632Z 2026-01-07 23:03:01,971 - shared.rabbitmq - WARNING - ⚠️ RabbitMQ 연결 실패 (시도 #2). 10초 후 재시도합니다. 오류: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:11.973697139Z 2026-01-07 23:03:11,973 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T23:03:11.974190764Z 2026-01-07 23:03:11,973 - pika.adapters.utils.io_services_utils - INFO - Socket connected: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:11.974402072Z 2026-01-07 23:03:11,974 - pika.adapters.utils.connection_workflow - INFO - Streaming transport linked up: (<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105e510>, _StreamingProtocolShim: <SelectConnection PROTOCOL transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105e510> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>).
+2026-01-07T23:03:11.974618659Z 2026-01-07 23:03:11,974 - pika.adapters.utils.io_services_utils - ERROR - Socket EOF; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:11.974630281Z 2026-01-07 23:03:11,974 - pika.adapters.base_connection - ERROR - Transport indicated EOF.
+2026-01-07T23:03:11.974632606Z 2026-01-07 23:03:11,974 - pika.adapters.utils.io_services_utils - INFO - protocol.eof_received() elected to close: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:11.974634289Z 2026-01-07 23:03:11,974 - pika.adapters.utils.io_services_utils - INFO - _AsyncTransportBase._initate_abort(): Initiating abrupt asynchronous transport shutdown: state=1; error=None; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048)>
+2026-01-07T23:03:11.974714581Z 2026-01-07 23:03:11,974 - pika.adapters.utils.io_services_utils - INFO - Deactivating transport: state=1; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048)>
+2026-01-07T23:03:11.974827525Z 2026-01-07 23:03:11,974 - pika.adapters.base_connection - ERROR - connection_lost: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:11.974852182Z 2026-01-07 23:03:11,974 - pika.connection - INFO - AMQP stack terminated, failed to connect, or aborted: opened=False, error-arg=StreamLostError: ('Transport indicated EOF',); pending-error=None
+2026-01-07T23:03:11.974857732Z 2026-01-07 23:03:11,974 - pika.connection - ERROR - Probably incompatible Protocol Versions
+2026-01-07T23:03:11.974881151Z 2026-01-07 23:03:11,974 - pika.connection - INFO - Connection setup terminated due to IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",)
+2026-01-07T23:03:11.974965446Z 2026-01-07 23:03:11,974 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnector - reporting failure: AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",)
+2026-01-07T23:03:11.974969894Z 2026-01-07 23:03:11,974 - pika.adapters.utils.connection_workflow - ERROR - AMQP connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None.
+2026-01-07T23:03:11.975051229Z 2026-01-07 23:03:11,974 - pika.adapters.utils.connection_workflow - ERROR - AMQPConnectionWorkflow - reporting failure: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None
+2026-01-07T23:03:11.975225408Z 2026-01-07 23:03:11,975 - pika.adapters.utils.io_services_utils - INFO - Closing transport socket and unlinking: state=3; <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56048)>
+2026-01-07T23:03:11.975381389Z 2026-01-07 23:03:11,975 - pika.adapters.blocking_connection - ERROR - Connection workflow failed: AMQPConnectionWorkflowFailed: 1 exceptions in all; last exception - AMQPConnectorAMQPHandshakeError: IncompatibleProtocolError: The protocol returned by the server is not supported: ("StreamLostError: ('Transport indicated EOF',)",); first exception - None
+2026-01-07T23:03:11.975635274Z 2026-01-07 23:03:11,975 - pika.adapters.blocking_connection - ERROR - Error in _create_connection().
+2026-01-07T23:03:11.975641867Z Traceback (most recent call last):
+2026-01-07T23:03:11.975643390Z   File "/usr/local/lib/python3.11/site-packages/pika/adapters/blocking_connection.py", line 451, in _create_connection
+2026-01-07T23:03:11.975644652Z     raise self._reap_last_connection_workflow_error(error)
+2026-01-07T23:03:11.975645484Z pika.exceptions.IncompatibleProtocolError: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:11.975715436Z 2026-01-07 23:03:11,975 - shared.rabbitmq - WARNING - ⚠️ RabbitMQ 연결 실패 (시도 #3). 15초 후 재시도합니다. 오류: StreamLostError: ('Transport indicated EOF',)
+2026-01-07T23:03:26.978654925Z 2026-01-07 23:03:26,978 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T23:03:26.979124976Z 2026-01-07 23:03:26,978 - pika.adapters.utils.io_services_utils - INFO - Socket connected: <socket.socket fd=12, family=2, type=1, proto=6, laddr=('127.0.0.1', 56164), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:03:26.979329122Z 2026-01-07 23:03:26,979 - pika.adapters.utils.connection_workflow - INFO - Streaming transport linked up: (<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105f190>, _StreamingProtocolShim: <SelectConnection PROTOCOL transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105f190> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>).
+2026-01-07T23:03:26.990789713Z 2026-01-07 23:03:26,990 - pika.adapters.utils.connection_workflow - INFO - AMQPConnector - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105f190> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:03:26.990818869Z 2026-01-07 23:03:26,990 - pika.adapters.utils.connection_workflow - INFO - AMQPConnectionWorkflow - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105f190> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:03:26.990879503Z 2026-01-07 23:03:26,990 - pika.adapters.blocking_connection - INFO - Connection workflow succeeded: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7e2fc105f190> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:03:26.991041910Z 2026-01-07 23:03:26,990 - pika.adapters.blocking_connection - INFO - Created channel=1
+2026-01-07T23:03:26.993229424Z 2026-01-07 23:03:26,993 - shared.rabbitmq - INFO - ✅ RabbitMQ 연결 성공 (queue=buy-signals)
+2026-01-07T23:41:57.643377105Z [2026-01-07 23:41:57 +0000] [7] [INFO] Starting gunicorn 21.2.0
+2026-01-07T23:41:57.644954566Z [2026-01-07 23:41:57 +0000] [7] [INFO] Listening at: http://0.0.0.0:8082 (7)
+2026-01-07T23:41:57.644980757Z [2026-01-07 23:41:57 +0000] [7] [INFO] Using worker: sync
+2026-01-07T23:41:57.647073717Z [2026-01-07 23:41:57 +0000] [8] [INFO] Booting worker with pid: 8
+2026-01-07T23:41:57.804448493Z 2026-01-07 23:41:57,804 - shared - INFO - --- 📦 'shared' 패키지 로드 완료 ---
+2026-01-07T23:41:58.864908280Z 2026-01-07 23:41:58,864 - main - INFO - 모듈 로드 시 서비스 초기화 시작
+2026-01-07T23:41:58.864940137Z 2026-01-07 23:41:58,864 - main - INFO - === Buy Executor Service 초기화 시작 ===
+2026-01-07T23:41:58.871147618Z 2026-01-07 23:41:58,870 - shared.strategy - INFO - ✅ Rust strategy_core 가속 모듈 활성화
+2026-01-07T23:41:58.872351586Z 2026-01-07 23:41:58,872 - main - INFO - 🔧 DB Connection 초기화 중...
+2026-01-07T23:41:58.872365251Z 2026-01-07 23:41:58,872 - shared.db.connection - INFO - DB 연결 타입: MARIADB
+2026-01-07T23:41:58.872873734Z 2026-01-07 23:41:58,872 - shared.auth - INFO - ✅ secrets.json 로드 완료: /app/config/secrets.json
+2026-01-07T23:41:58.873088955Z 2026-01-07 23:41:58,872 - shared.db.connection - INFO - 🔌 [SQLAlchemy] 엔진 초기화 시작 (pool_size=5, max_overflow=20, recycle=900s)
+2026-01-07T23:41:58.930201891Z 2026-01-07 23:41:58,929 - shared.db.connection - INFO - ✅ [SQLAlchemy] 엔진 초기화 완료 (DB Type: MARIADB)
+2026-01-07T23:41:58.930232911Z 2026-01-07 23:41:58,930 - main - INFO - ✅ DB Connection 초기화 완료
+2026-01-07T23:41:58.930234702Z 2026-01-07 23:41:58,930 - main - INFO - 거래 모드: REAL, Gateway 사용: True
+2026-01-07T23:41:58.930355300Z 2026-01-07 23:41:58,930 - shared.kis.gateway_client - INFO - ✅ KIS Gateway Client 초기화: http://127.0.0.1:8080
+2026-01-07T23:41:58.930363820Z 2026-01-07 23:41:58,930 - main - INFO - ✅ KIS Gateway Client 초기화 완료
+2026-01-07T23:41:58.930365611Z 2026-01-07 23:41:58,930 - main - INFO - ✅ ConfigManager 초기화 완료
+2026-01-07T23:41:58.930539371Z 2026-01-07 23:41:58,930 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_bot_token -> telegram-bot-token
+2026-01-07T23:41:58.930546567Z 2026-01-07 23:41:58,930 - shared.auth - INFO - 🔐 secrets.json 사용 (키 변환): telegram_chat_id -> telegram-chat-id
+2026-01-07T23:41:58.931178198Z 2026-01-07 23:41:58,931 - main - INFO - ✅ Telegram Bot 초기화 완료
+2026-01-07T23:41:58.943163715Z 2026-01-07 23:41:58,942 - mysql.connector - INFO - package: mysql.connector.plugins
+2026-01-07T23:41:58.943190698Z 2026-01-07 23:41:58,943 - mysql.connector - INFO - plugin_name: mysql_native_password
+2026-01-07T23:41:58.944137482Z 2026-01-07 23:41:58,943 - mysql.connector - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-01-07T23:41:58.964394246Z 2026-01-07 23:41:58,964 - shared.db.repository - INFO - ✅ DB: CONFIG 'MAX_POSITION_VALUE_PCT' 값 로드 성공.
+2026-01-07T23:41:58.965208727Z 2026-01-07 23:41:58,965 - main - INFO - ✅ Buy Executor 초기화 완료
+2026-01-07T23:41:58.965217910Z 2026-01-07 23:41:58,965 - main - INFO - === Buy Executor Service 초기화 완료 ===
+2026-01-07T23:41:58.965972163Z 2026-01-07 23:41:58,965 - shared.rabbitmq - INFO - ✅ RabbitMQ 워커 스레드를 시작했습니다. queue=buy-signals
+2026-01-07T23:41:58.967806128Z 2026-01-07 23:41:58,967 - pika.adapters.utils.connection_workflow - INFO - Pika version 1.3.2 connecting to ('127.0.0.1', 5672)
+2026-01-07T23:41:58.968363317Z 2026-01-07 23:41:58,967 - pika.adapters.utils.io_services_utils - INFO - Socket connected: <socket.socket fd=13, family=2, type=1, proto=6, laddr=('127.0.0.1', 59050), raddr=('127.0.0.1', 5672)>
+2026-01-07T23:41:58.968700348Z 2026-01-07 23:41:58,968 - pika.adapters.utils.connection_workflow - INFO - Streaming transport linked up: (<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7feebf466750>, _StreamingProtocolShim: <SelectConnection PROTOCOL transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7feebf466750> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>).
+2026-01-07T23:41:58.972713075Z 2026-01-07 23:41:58,972 - pika.adapters.utils.connection_workflow - INFO - AMQPConnector - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7feebf466750> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:41:58.972738191Z 2026-01-07 23:41:58,972 - pika.adapters.utils.connection_workflow - INFO - AMQPConnectionWorkflow - reporting success: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7feebf466750> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:41:58.972778144Z 2026-01-07 23:41:58,972 - pika.adapters.blocking_connection - INFO - Connection workflow succeeded: <SelectConnection OPEN transport=<pika.adapters.utils.io_services_utils._AsyncPlaintextTransport object at 0x7feebf466750> params=<URLParameters host=127.0.0.1 port=5672 virtual_host=/ ssl=False>>
+2026-01-07T23:41:58.973009441Z 2026-01-07 23:41:58,972 - pika.adapters.blocking_connection - INFO - Created channel=1
+2026-01-07T23:41:58.975465686Z 2026-01-07 23:41:58,975 - shared.rabbitmq - INFO - ✅ RabbitMQ 연결 성공 (queue=buy-signals)
