@@ -19,6 +19,7 @@
 - **Unit Test Fix**: Jenkins 배포를 막던 `buy-scanner`(`NameError` 수정), `price-monitor`, `dashboard`의 Unit Test 오류 전수 수정 및 59개 테스트 통과 확인.
 - **Frontend Build Fix**: `LogicVisualization.tsx`의 TypeScript 오류(`findDay` unused) 수정 및 컴파일 정상화.
 - **Architecture Diagram**: Dashboard 내 `PrimeJennieArchitecture` 컴포넌트 및 페이지(`/architecture`) 추가, 사이드바 연동 완료 (v2 Architecture 시각화).
+- **Frontend Build Fix (TS6133)**: `PrimeJennieArchitecture.tsx`의 미사용 `React` import 제거로 빌드 오류 해결.
 
 
 ## 2026-01-07
