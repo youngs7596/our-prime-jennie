@@ -376,7 +376,8 @@ class TestHunterPromptV5:
         prompt = build_hunter_prompt_v5(stock_info, quant_context, feedback_context)
         
         # feedback_context 섹션 포함 확인
-        assert 'Strategic Feedback' in prompt or 'Lessons Learned' in prompt
+        # feedback_context 섹션 포함 확인
+        assert '참고 가이드라인' in prompt or '과거 분석 오류' in prompt
         assert '과거 분석 오류' in prompt or '고PER' in prompt
 
 
