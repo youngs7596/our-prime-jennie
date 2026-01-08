@@ -27,7 +27,7 @@ const navItems = [
   { path: '/analyst', icon: Target, label: 'AI Analyst' },
   { path: '/logic', icon: Brain, label: 'Trading Logic' },
   { path: '/visual-logic', icon: LineChart, label: 'Visual Logic' },
-  { path: '/visual-logic', icon: LineChart, label: 'Visual Logic' },
+
   { path: '/architecture', icon: Map, label: 'Architecture' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
