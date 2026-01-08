@@ -153,7 +153,7 @@ const PrimeJennieChart: React.FC = () => {
     const flowScale = (flow: number) => 60 - (flow / flowMax) * 40;
 
     // 외국인 3일 연속 순매수 체크
-    const foreignStreaks = data.map((d, idx) => {
+    const foreignStreaks = data.map((_, idx) => {
         if (idx < 2) return false;
         return data[idx].foreignBuy > 0 && data[idx - 1].foreignBuy > 0 && data[idx - 2].foreignBuy > 0;
     });
@@ -285,11 +285,11 @@ const PrimeJennieChart: React.FC = () => {
                             </linearGradient>
                         </defs>
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!bb[idx].upper) return '';
                                 const x = xScale(idx);
                                 return `${idx === 19 ? 'M' : 'L'} ${x} ${yScale(bb[idx].upper!)}`;
-                            }).join(' ') + data.slice().reverse().map((d, idx) => {
+                            }).join(' ') + data.slice().reverse().map((_, idx) => {
                                 const origIdx = data.length - 1 - idx;
                                 if (!bb[origIdx].lower) return '';
                                 const x = xScale(origIdx);
@@ -324,7 +324,7 @@ const PrimeJennieChart: React.FC = () => {
 
                         {/* MA120 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma120[idx]) return '';
                                 return `${ma120[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma120[idx]!)}`;
                             }).join(' ')}
@@ -336,7 +336,7 @@ const PrimeJennieChart: React.FC = () => {
 
                         {/* MA20 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma20[idx]) return '';
                                 return `${ma20[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma20[idx]!)}`;
                             }).join(' ')}
@@ -347,7 +347,7 @@ const PrimeJennieChart: React.FC = () => {
 
                         {/* MA5 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma5[idx]) return '';
                                 return `${ma5[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma5[idx]!)}`;
                             }).join(' ')}
