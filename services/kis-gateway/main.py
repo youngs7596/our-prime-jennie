@@ -591,6 +591,64 @@ def get_daily_prices():
             "response_time": response_time
         }), 200
             
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ Daily Prices 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/market-data/investor-trend', methods=['POST'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def get_investor_trend():
+    """투자자별 매매동향 조회 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+    
+    try:
+        # 요청 파라미터
+        data = request.get_json() or {}
+        stock_code = data.get('stock_code')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not stock_code:
+            stats['failed_requests'] += 1
+            return jsonify({"error": "stock_code required"}), 400
+        
+        logger.info(f"📊 [Gateway] Investor Trend 요청: {stock_code}")
+
+        # KIS API 호출
+        # [Fix] Access market_data attribute directly, not via method
+        market_data_module = kis_client.market_data
+        
+        # Method: get_investor_trend(self, stock_code, start_date=None, end_date=None)
+        trends = call_kis_api_with_breaker(
+            market_data_module.get_investor_trend,
+            stock_code,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if trends is None:
+             raise Exception("Failed to fetch investor trend")
+
+        stats['successful_requests'] += 1
+        
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/investor-trend',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success',
+            'stock_code': stock_code
+        })
+        
+        return jsonify({
+            "success": True,
+            "data": trends,
+            "response_time": response_time
+        }), 200
+            
     except CircuitBreakerError as e:
         stats['failed_requests'] += 1
         logger.error(f"🚨 Circuit Breaker OPEN: {e}")
@@ -598,7 +656,7 @@ def get_daily_prices():
         
     except Exception as e:
         stats['failed_requests'] += 1
-        logger.error(f"❌ Daily Prices 오류: {e}", exc_info=True)
+        logger.error(f"❌ Investor Trend 오류: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

@@ -102,8 +102,9 @@ from scout_universe import (
 
     analyze_sector_momentum, get_hot_sector_stocks,
     get_dynamic_blue_chips, get_momentum_stocks,
+    filter_valid_stocks
 )
-
+import scout_cache
 # 파이프라인 태스크 (scout_pipeline.py)
 from scout_pipeline import (
     is_hybrid_scoring_enabled,
@@ -498,9 +499,12 @@ def main():
                         if stock_code and stock_name:
                             if stock_code not in candidate_stocks:
                                 candidate_stocks[stock_code] = {'name': stock_name, 'reasons': []}
-                            candidate_stocks[stock_code]['reasons'].append(f"RAG 포착: {doc.page_content[:20]}...")
+                            candidate_stocks[stock_code]['reasons'].append("RAG 기반 호재 검색")
                 except Exception as e:
-                    logger.warning(f"   (C) RAG 검색 실패: {e}")
+                    logger.warning(f"   (C) RAG 후보 발굴 실패: {e}")
+
+            # NEW: Filter against STOCK_MASTER (Remove ETFs and unregistered stocks)
+            candidate_stocks = filter_valid_stocks(candidate_stocks, session)
 
             # D: 모멘텀
             logger.info("   (D) 모멘텀 팩터 기반 종목 발굴 중...")
@@ -565,15 +569,37 @@ def main():
                 
             def process_flow_data(code):
                 try:
-                    # 최근 1일치(오늘/어제) 데이터만 조회하여 현재 수급 확인
-                    # 장 중이면 오늘 잠정치/확정치, 장 마감 후면 오늘 확정치
-                    trends = kis_api.get_market_data().get_investor_trend(code, start_date=None, end_date=None)
-                    if not trends:
-                        return code, None
+                    # [Tier 1] KIS API via gateway.market_data
+                    try:
+                        trends = kis_api.get_market_data().get_investor_trend(code, start_date=None, end_date=None)
+                    except (AttributeError, Exception):
+                        # [Tier 2] KIS API Direct (If method is missing or fails)
+                        try:
+                            trends = kis_api.get_investor_trend(code, start_date=None, end_date=None)
+                        except Exception:
+                            trends = None
                     
-                    # 가장 최근 데이터 (오늘)
-                    latest = trends[-1]
-                    return code, latest
+                    if trends:
+                        # 가장 최근 데이터 (오늘)
+                        return code, trends[-1]
+                    
+                    # [Tier 3] DB Fallback (Historical Data)
+                    try:
+                        from shared.database.market import get_investor_trading
+                        df = get_investor_trading(session, code, limit=1)
+                        if not df.empty:
+                            row = df.iloc[-1]
+                            return code, {
+                                'date': row['TRADE_DATE'].strftime('%Y%m%d'),
+                                'foreigner_net_buy': int(row['FOREIGN_NET_BUY']),
+                                'institution_net_buy': int(row['INSTITUTION_NET_BUY']),
+                                'individual_net_buy': int(row['INDIVIDUAL_NET_BUY']),
+                                'price': float(row['CLOSE_PRICE'])
+                            }
+                    except Exception as e:
+                        logger.debug(f"   ⚠️ [{code}] DB 수급 조회 실패: {e}")
+                        
+                    return code, None
                 except Exception as e:
                     return code, None
 

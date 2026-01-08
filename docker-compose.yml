@@ -719,7 +719,8 @@ services:
       - infrastructure/env-vars-wsl.yaml
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro
-      - ./services/scout-job:/app/services/scout-job # [Dev] 소스 코드 마운트
+      - ./services/scout-job:/app/services/scout-job
+      - ./shared:/app/shared
       - /docker_data/llm_debug_logs:/app/logs # [v1.4] LLM 디버그 로그
     environment:
       - PORT=8087
@@ -728,11 +729,10 @@ services:
       - OLLAMA_GATEWAY_URL=http://localhost:11500
       - ENABLE_RAG=true
       - RAG_EMBEDDING_PROVIDER=local
-      - LLM_DEBUG_ENABLED=false # [v1.5] 로깅 옵션 (기본값: false)
-      - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl # [v1.4] 디버그 로깅
-      - LLM_DEBUG_ENABLED=false # [v1.5] 로깅 옵션 (기본값: false)
-      - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl # [v1.4] 디버그 로깅
-    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
+      - LLM_DEBUG_ENABLED=true # [v1.5] 디버그 로깅 활성화
+      - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl
+      - ENABLE_SCOUT_JOB_WORKER=false # API 서버에서는 워커 비활성화
+      - ENABLE_STARTUP_ONESHOT=false
     network_mode: host
     restart: unless-stopped
     labels:
@@ -746,7 +746,38 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 20s
+
+  scout-worker:
+    build:
+      context: .
+      dockerfile: services/scout-job/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - ./services/scout-job:/app/services/scout-job
+      - ./shared:/app/shared
+      - /docker_data/llm_debug_logs:/app/logs
+    environment:
+      - SECRETS_FILE=/app/config/secrets.json
+      - USE_OLLAMA_GATEWAY=true
+      - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - ENABLE_RAG=true
+      - LLM_DEBUG_ENABLED=true
+      - LLM_DEBUG_LOG_PATH=/app/logs/llm_interactions.jsonl
+      - ENABLE_SCOUT_JOB_WORKER=true # 전용 워커 프로세스
+      - ENABLE_STARTUP_ONESHOT=false
+    network_mode: host
+    restart: unless-stopped
+    command: [ "python", "main.py" ] # Gunicorn 없이 직접 실행 (포트 바인딩 필요 없음)
+    labels:
+      - app=scout-worker
+      - stack=my-prime-jennie
+    depends_on:
+      scout-job:
+        condition: service_healthy
 
   scout-job-mock:
     build:

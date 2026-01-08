@@ -28,6 +28,7 @@ sys.path.append(PROJECT_ROOT)
 
 import shared.database as database
 from shared.hybrid_scoring.schema import execute_upsert
+from shared.kis import KISGatewayClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -103,111 +104,58 @@ def load_stock_codes(limit: int = None) -> List[str]:
         conn.close()
 
 
-def fetch_investor_trading_by_date(date_str: str, stock_codes: List[str]) -> List[Dict]:
+def fetch_investor_trading_by_date(kis_api, date_str: str, stock_codes: List[str]) -> List[Dict]:
     """
-    특정 날짜의 투자자별 매매 데이터 조회 (pykrx 사용)
-    
-    Args:
-        date_str: 날짜 (YYYYMMDD 형식)
-        stock_codes: 종목 코드 리스트
-    
-    Returns:
-        [{'stock_code': ..., 'foreign_buy': ..., ...}]
+    특정 날짜의 투자자별 매매 데이터 조회 (KIS Gateway 사용)
+    참고: KIS API는 전 종목 통계보다 종목별 조회가 더 정확하고 게이트웨이에도 구현됨.
+    날짜별 모드에서도 내부적으로 종목별 loop 호출을 수행합니다.
     """
-    from pykrx import stock as pykrx_stock
-    
     results = []
-    
-    try:
-        # 전체 종목의 투자자별 순매수 데이터
-        df = pykrx_stock.get_market_net_purchases_of_equities_by_ticker(
-            date_str, date_str, market="KOSPI"
-        )
-        
-        if df.empty:
-            return results
-        
-        for code in stock_codes:
-            if code not in df.index:
-                continue
-            
-            row = df.loc[code]
-            
-            # 컬럼명이 버전마다 다를 수 있어 try-except
-            try:
-                results.append({
-                    'trade_date': datetime.strptime(date_str, "%Y%m%d").date(),
-                    'stock_code': code,
-                    'stock_name': row.get('종목명', ''),
-                    'foreign_buy': int(row.get('외국인_매수', row.get('외국인합계_매수', 0)) or 0),
-                    'foreign_sell': int(row.get('외국인_매도', row.get('외국인합계_매도', 0)) or 0),
-                    'foreign_net_buy': int(row.get('외국인_순매수', row.get('외국인합계_순매수', 0)) or 0),
-                    'institution_buy': int(row.get('기관_매수', row.get('기관합계_매수', 0)) or 0),
-                    'institution_sell': int(row.get('기관_매도', row.get('기관합계_매도', 0)) or 0),
-                    'institution_net_buy': int(row.get('기관_순매수', row.get('기관합계_순매수', 0)) or 0),
-                    'individual_buy': int(row.get('개인_매수', 0) or 0),
-                    'individual_sell': int(row.get('개인_매도', 0) or 0),
-                    'individual_net_buy': int(row.get('개인_순매수', 0) or 0),
-                    'close_price': 0,  # 별도 조회 필요
-                    'volume': 0,
-                })
-            except Exception as e:
-                logger.debug(f"   ⚠️ {code} 파싱 실패: {e}")
-                continue
-    
-    except Exception as e:
-        logger.warning(f"   ⚠️ {date_str} 데이터 조회 실패: {e}")
-    
+    for code in stock_codes:
+        res = fetch_investor_trading_by_stock(kis_api, code, date_str, date_str)
+        results.extend(res)
+        time.sleep(0.05) # 추가 딜레이
     return results
 
 
-def fetch_investor_trading_by_stock(stock_code: str, start_date: str, end_date: str) -> List[Dict]:
+def fetch_investor_trading_by_stock(kis_api, stock_code: str, start_date: str, end_date: str) -> List[Dict]:
     """
-    특정 종목의 기간별 투자자 매매 데이터 조회
-    
-    Args:
-        stock_code: 종목 코드
-        start_date: 시작일 (YYYYMMDD)
-        end_date: 종료일 (YYYYMMDD)
-    
-    Returns:
-        [{'trade_date': ..., 'foreign_net_buy': ..., ...}]
+    특정 종목의 기간별 투자자 매매 데이터 조회 (KIS Gateway 사용)
     """
-    from pykrx import stock as pykrx_stock
-    
     results = []
     
     try:
-        # 종목별 투자자 매매 동향
-        df = pykrx_stock.get_market_trading_value_by_date(
-            start_date, end_date, stock_code, detail=True
-        )
+        # KIS API를 통해 투자자별 매매동향 조회
+        # gateway_client.get_market_data().get_investor_trend() 반환 형식:
+        # [{'date': '20260108', 'price': 50000.0, 'individual_net_buy': 100, 'foreigner_net_buy': -50, 'institution_net_buy': -50, ...}, ...]
+        trends = kis_api.get_market_data().get_investor_trend(stock_code, start_date, end_date)
         
-        if df.empty:
+        if not trends:
             return results
         
-        for date_idx, row in df.iterrows():
+        for item in trends:
             try:
-                trade_date = date_idx.date() if hasattr(date_idx, 'date') else date_idx
+                trade_date_str = item['date']
+                trade_date = datetime.strptime(trade_date_str, "%Y%m%d").date()
                 
                 results.append({
                     'trade_date': trade_date,
                     'stock_code': stock_code,
-                    'stock_name': '',
-                    'foreign_buy': int(row.get('외국인', {}).get('매수', 0) or 0) if isinstance(row.get('외국인'), dict) else 0,
-                    'foreign_sell': int(row.get('외국인', {}).get('매도', 0) or 0) if isinstance(row.get('외국인'), dict) else 0,
-                    'foreign_net_buy': int(row.get('외국인', 0) or 0) if not isinstance(row.get('외국인'), dict) else 0,
+                    'stock_name': '',  # 후속 처리에서 채워질 수도 있음
+                    'foreign_buy': 0,   # KIS 상세 수량은 별도 tr_id 필요할 수 있음. 일단 순매수 중심.
+                    'foreign_sell': 0,
+                    'foreign_net_buy': int(item.get('foreigner_net_buy', 0)),
                     'institution_buy': 0,
                     'institution_sell': 0,
-                    'institution_net_buy': int(row.get('기관합계', row.get('기관', 0)) or 0),
+                    'institution_net_buy': int(item.get('institution_net_buy', 0)),
                     'individual_buy': 0,
                     'individual_sell': 0,
-                    'individual_net_buy': int(row.get('개인', 0) or 0),
-                    'close_price': 0,
+                    'individual_net_buy': int(item.get('individual_net_buy', 0)),
+                    'close_price': int(item.get('price', 0)),
                     'volume': 0,
                 })
             except Exception as e:
-                logger.debug(f"   ⚠️ {stock_code} {date_idx} 파싱 실패: {e}")
+                logger.debug(f"   ⚠️ {stock_code} {item.get('date')} 파싱 실패: {e}")
                 continue
     
     except Exception as e:
@@ -276,7 +224,7 @@ def save_trading_data(connection, data_list: List[Dict]) -> int:
 def parse_args():
     parser = argparse.ArgumentParser(description="외국인/기관 투자자 매매 데이터 수집기")
     parser.add_argument("--days", type=int, default=365, help="수집 기간(일)")
-    parser.add_argument("--codes", type=int, default=100, help="수집할 종목 수 (KOSPI 상위)")
+    parser.add_argument("--codes", type=int, default=200, help="수집할 종목 수 (KOSPI 상위)")
     parser.add_argument("--mode", type=str, default="by_stock", 
                         choices=["by_stock", "by_date"],
                         help="수집 모드: by_stock(종목별), by_date(날짜별)")
@@ -299,13 +247,6 @@ def main():
     logger.info(f"   - 모드: {args.mode}")
     logger.info("=" * 60)
     
-    # pykrx 설치 확인
-    try:
-        from pykrx import stock as pykrx_stock
-    except ImportError:
-        logger.error("❌ pykrx 라이브러리가 필요합니다. (pip install pykrx)")
-        return
-    
     # DB 연결
     # DB 연결
     # shared.database.get_db_connection handles config internally or via env vars
@@ -326,6 +267,11 @@ def main():
     start_str = start_date.strftime("%Y%m%d")
     end_str = end_date.strftime("%Y%m%d")
     
+    # KIS Gateway 클라이언트 초기화
+    # 로컬에서 실행되므로 localhost:8080 시도
+    gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    kis_api = KISGatewayClient(gateway_url=gateway_url)
+    
     total_saved = 0
     
     if args.mode == "by_stock":
@@ -334,7 +280,7 @@ def main():
             try:
                 logger.info(f"[{idx}/{len(stock_codes)}] {code} 수급 데이터 수집 ({start_str} ~ {end_str})")
                 
-                data_list = fetch_investor_trading_by_stock(code, start_str, end_str)
+                data_list = fetch_investor_trading_by_stock(kis_api, code, start_str, end_str)
                 saved = save_trading_data(conn, data_list)
                 total_saved += saved
                 
@@ -357,13 +303,12 @@ def main():
             try:
                 logger.info(f"📅 {date_str} 수급 데이터 수집")
                 
-                data_list = fetch_investor_trading_by_date(date_str, stock_codes)
+                data_list = fetch_investor_trading_by_date(kis_api, date_str, stock_codes)
                 saved = save_trading_data(conn, data_list)
                 total_saved += saved
                 
                 logger.info(f"   ↳ {len(data_list)}건 조회, {saved}건 저장 (누적: {total_saved})")
                 
-                time.sleep(args.sleep)
             except Exception as e:
                 logger.error(f"   ❌ {date_str} 수집 실패: {e}")
             

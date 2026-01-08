@@ -38,6 +38,20 @@ def register_custom_jobs():
                  "python_path": "python3"
             }
         },
+        # [NEW] Daily Prices (일봉 가격 데이터) - 매일 18:15
+        {
+            "job_id": "collect-daily-prices",
+            "description": "Daily Stock Price Data (18:15)",
+            "queue": f"{SCOPE}.jobs.data.trading", # worker.py가 듣고 있는 기존 큐(trading용) 활용 가능하나 명확성을 위해
+            "cron_expr": "15 18 * * 1-5", 
+            "enabled": True,
+            "reschedule_mode": "scheduler",
+            "timeout_sec": 1800,
+            "default_params": {
+                "python_path": "python3",
+                "script": "scripts/collect_full_market_data_parallel.py"
+            }
+        },
         # [NEW] Investor Trading (외국인/기관 수급) - 매일 18:30
         {
             "job_id": "collect-trading",
@@ -47,8 +61,7 @@ def register_custom_jobs():
             "enabled": True,
             "default_params": {
                 "python_path": "python3",
-                "script": "scripts/collect_investor_trading.py",
-                "args": ["--days", "3", "--codes", "200"]
+                "script": "scripts/collect_investor_trading.py"
             }
         },
         # [NEW] DART Disclosures (공시) - 매일 18:45
