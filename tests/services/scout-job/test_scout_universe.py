@@ -21,40 +21,46 @@ def mock_session():
     return MagicMock()
 
 class TestScoutUniverse:
-    @patch('services.scout_job_module.scout_universe.fdr')
-    def test_get_dynamic_blue_chips_fdr(self, mock_fdr):
-        """Test getting blue chips using FinanceDataReader"""
-        # Mock FDR return value: DataFrame with Code, Name, Marcap
-        mock_df = pd.DataFrame({
-            'Code': ['005930', '000660'],
-            'Name': ['Samsung', 'SK Hynix'],
-            'Marcap': [1000, 500] 
-        })
-        mock_fdr.StockListing.return_value = mock_df
-        
-        result = scout_universe.get_dynamic_blue_chips(limit=2)
-        
-        assert len(result) == 2
-        assert result[0]['code'] == '005930'
-        # '005930' is mapped to '반도체' in SECTOR_MAPPING
-        assert result[0]['sector'] == '반도체'
-
-    @patch('services.scout_job_module.scout_universe.fdr', None) 
     @patch('services.scout_job_module.scout_universe.requests.get')
-    def test_get_dynamic_blue_chips_fallback(self, mock_get):
-        """Test fallback to Naver Finance scraping when FDR is missing"""
-        # Mock Naver Finance HTML response (Must match table structure with rank td)
+    def test_get_dynamic_blue_chips_naver(self, mock_get):
+        """Test scanning blue chips via Naver Finance scraping"""
+        # Mock Naver Finance HTML response
+        # scrapper looks for table.type_2 tbody tr -> td
+        # Needs at least 10 columns (len(cells) < 10 continue)
+        # Column 1 (index 1): Name/Link
+        # Column 2 (index 2): Price
+        # Column 4 (index 4): Rate (5th col)
+        
         html = """
+        <html>
+        <body>
         <table class="type_2">
-            <tr>
-                <td>1</td>
-                <td><a href="/item/main.naver?code=005930" class="tltle">Samsung</a></td>
-            </tr>
-            <tr>
-                <td>2</td>
-                <td><a href="/item/main.naver?code=000660" class="tltle">SK Hynix</a></td>
-            </tr>
+            <tbody>
+                <tr></tr> <!-- Invalid row -->
+                <tr>
+                    <td>1</td>
+                    <td><a href="/item/main.naver?code=005930" class="tltle">Samsung</a></td>
+                    <td>80,000</td>
+                    <td><img src="up.gif" alt="상승"></td>
+                    <td>+1.25%</td>
+                    <td>1000</td>
+                    <td>5000000</td>
+                    <td></td><td></td><td></td><td></td>
+                </tr>
+                <tr>
+                    <td>2</td>
+                    <td><a href="/item/main.naver?code=000660" class="tltle">SK Hynix</a></td>
+                    <td>120,000</td>
+                    <td><img src="down.gif" alt="하락"></td>
+                    <td>-0.5%</td>
+                    <td>2000</td>
+                    <td>3000000</td>
+                    <td></td><td></td><td></td><td></td>
+                </tr>
+            </tbody>
         </table>
+        </body>
+        </html>
         """
         mock_get.return_value.text = html
         
@@ -63,6 +69,10 @@ class TestScoutUniverse:
         assert len(result) == 2
         assert result[0]['code'] == '005930'
         assert result[0]['name'] == 'Samsung'
+        assert result[0]['price'] == 80000.0
+        assert result[0]['change_pct'] == 1.25
+        # 005930 maps to '반도체'
+        assert result[0]['sector'] == '반도체'
 
     def test_get_momentum_stocks(self, mock_kis_api, mock_session):
         """Test get_momentum_stocks logic"""
