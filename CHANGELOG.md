@@ -1,5 +1,11 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-08
+- **Portfolio 중복 버그 수정**: `execute_trade_and_log`가 호출자 세션을 무시하고 새 세션을 생성하여 PORTFOLIO에 중복 HOLDING 레코드가 생성되던 버그 수정 (`shared/database/trading.py`)
+- **CURRENT_HIGH_PRICE 초기화 추가**: 신규 매수 시 `CURRENT_HIGH_PRICE`를 매수가로 초기화하도록 INSERT 쿼리 수정
+- **최고가 DB 동기화 추가**: `price-monitor`의 최고가 갱신 시 Redis뿐 아니라 DB `PORTFOLIO.CURRENT_HIGH_PRICE`도 함께 업데이트 (`shared/redis_cache.py`)
+- **MCP 서버 설정**: MariaDB용 MCP 서버(`mysql_mcp_server`) 설정 완료 (`~/.gemini/settings.json`)
+
 ## 2026-01-07
 - **Dynamic RECON Score**: 시장 국면별 동적 RECON 점수 적용 (STRONG_BULL=58, BULL=62, SIDEWAYS=65, BEAR=70)
 - **Privacy Rule 추가**: `rules.md`에 세션 파일 개인정보 보호 규칙 추가

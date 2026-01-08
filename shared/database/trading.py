@@ -483,10 +483,10 @@ def _execute_trade_and_log_sqlalchemy(
                 session.execute(text(f"""
                     INSERT INTO {portfolio_table}
                     (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
-                     STATUS, CREATED_AT, UPDATED_AT, STOP_LOSS_PRICE)
+                     STATUS, CREATED_AT, UPDATED_AT, STOP_LOSS_PRICE, CURRENT_HIGH_PRICE)
                     VALUES 
                     (:code, :name, :qty, :price, :total, 
-                     'HOLDING', :now, :now, :stop_loss)
+                     'HOLDING', :now, :now, :stop_loss, :high_price)
                 """), {
                     "code": stock_info['code'],
                     "name": stock_info['name'],
@@ -494,7 +494,8 @@ def _execute_trade_and_log_sqlalchemy(
                     "price": price,
                     "total": total_amount,
                     "now": now,
-                    "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0
+                    "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
+                    "high_price": price  # 초기 최고가 = 매수가
                 })
                 
         elif trade_type == 'SELL':
@@ -544,14 +545,27 @@ def execute_trade_and_log(
 ):
     """
     거래 실행 및 로깅 (SQLAlchemy)
+    
+    Args:
+        connection: 호출자의 SQLAlchemy 세션. 제공되면 해당 세션을 재사용하여
+                   동일 트랜잭션 내에서 PORTFOLIO UPSERT를 실행합니다.
+                   None이면 새 세션을 생성합니다.
     """
     if _is_sqlalchemy_ready():
         try:
-            with sa_connection.session_scope() as session:
+            # [FIX] 호출자의 세션이 제공되면 재사용 (동일 트랜잭션 유지 = 중복 INSERT 방지)
+            if connection is not None:
                 return _execute_trade_and_log_sqlalchemy(
-                    session, trade_type, stock_info, quantity, price, llm_decision,
+                    connection, trade_type, stock_info, quantity, price, llm_decision,
                     initial_stop_loss_price, strategy_signal, key_metrics_dict, market_context_dict
                 )
+            else:
+                # Fallback: 세션이 제공되지 않으면 새로 생성
+                with sa_connection.session_scope() as session:
+                    return _execute_trade_and_log_sqlalchemy(
+                        session, trade_type, stock_info, quantity, price, llm_decision,
+                        initial_stop_loss_price, strategy_signal, key_metrics_dict, market_context_dict
+                    )
         except Exception as e:
             logger.error(f"❌ [SQLAlchemy] execute_trade_and_log 실패: {e}", exc_info=True)
             return False
