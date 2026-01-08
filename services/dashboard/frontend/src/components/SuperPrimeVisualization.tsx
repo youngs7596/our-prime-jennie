@@ -1,83 +1,21 @@
 import React, { useState } from 'react';
+import legendaryData from '../assets/legendary_case.json';
 
-// 60일 가상 데이터 생성
-const generateMockData = () => {
-    const data = [];
-    let basePrice = 60000;
-    let rsi = 50;
+// 데이터 인터페이스 정의
+// 데이터 인터페이스 정의 (JSON Source)
+interface RawDataPoint {
+    date: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    rsi: number | null;
+    foreign_net: number;
+    institution_net: number;
+}
 
-    for (let i = 60; i >= 0; i--) {
-        const day = i;
-        let open, high, low, close, volume, foreignBuy, institutionBuy;
-
-        // 스토리라인에 따른 가격 시뮬레이션
-        if (day >= 40) {
-            // D-60 ~ D-40: 상승 추세
-            const progress = (60 - day) / 20;
-            basePrice = 60000 + progress * 15000;
-            rsi = 50 + progress * 15;
-            foreignBuy = Math.random() * 50000 + 10000;
-            institutionBuy = Math.random() * 30000;
-        } else if (day >= 25) {
-            // D-40 ~ D-25: 조정 국면
-            const progress = (40 - day) / 15;
-            basePrice = 75000 - progress * 10000;
-            rsi = 65 - progress * 40;
-            if (day === 32) {
-                rsi = 28; // RSI 과매도
-                foreignBuy = 150000; // 외국인 순매수 급증
-            } else {
-                foreignBuy = Math.random() * 20000 - 10000;
-            }
-            institutionBuy = Math.random() * 20000 - 10000;
-        } else if (day >= 15) {
-            // D-25 ~ D-15: 바닥 다지기
-            basePrice = 65000 + (Math.random() - 0.5) * 2000;
-            rsi = 35 + Math.random() * 10;
-            foreignBuy = Math.random() * 30000;
-            institutionBuy = Math.random() * 20000;
-        } else {
-            // D-15 ~ D-Day: 재상승
-            const progress = (15 - day) / 15;
-            basePrice = 65000 + progress * 7000;
-            rsi = 40 + progress * 20;
-            foreignBuy = Math.random() * 60000 + 20000;
-            institutionBuy = Math.random() * 40000 + 10000;
-        }
-
-        const volatility = basePrice * 0.02;
-        open = basePrice + (Math.random() - 0.5) * volatility;
-        close = basePrice + (Math.random() - 0.5) * volatility;
-        high = Math.max(open, close) + Math.random() * volatility * 0.5;
-        low = Math.min(open, close) - Math.random() * volatility * 0.5;
-
-        // 특수 이벤트 날짜
-        if (day === 20) {
-            low = 63500; // BB 하단 터치
-        }
-
-        volume = 500000 + Math.random() * 300000;
-        if (day === 10 || day === 32) {
-            volume = 1200000; // 거래량 급증
-        }
-
-        data.push({
-            day: -day,
-            date: `D${day === 0 ? '' : '-' + day}`,
-            open: Math.round(open),
-            high: Math.round(high),
-            low: Math.round(low),
-            close: Math.round(close),
-            volume: Math.round(volume),
-            rsi: Math.min(70, Math.max(25, rsi + (Math.random() - 0.5) * 5)),
-            foreignBuy: Math.round(foreignBuy),
-            institutionBuy: Math.round(institutionBuy),
-        });
-    }
-
-    return data.reverse();
-};
-
+// 데이터 인터페이스 정의 (Internal)
 interface MockDataPoint {
     day: number;
     date: string;
@@ -91,24 +29,64 @@ interface MockDataPoint {
     institutionBuy: number;
 }
 
+interface BollingerBand {
+    upper: number | null;
+    lower: number | null;
+    middle: number | null;
+}
+
+// Data Loading from JSON
+const loadRealData = (): MockDataPoint[] => {
+    const rawData = legendaryData.data as RawDataPoint[];
+    const totalPoints = rawData.length;
+
+    // We want the visualization to focus on the event window.
+    // The JSON has ~54+ points. Let's map them so the last point is D-Day (or near end).
+    // Or just map all of them.
+
+    return rawData.map((d: RawDataPoint, idx: number) => {
+        // Calculate D-Day relative to the end or specific event?
+        // Let's make the last date D-0? Or use index.
+        const day = idx - (totalPoints - 1); // Last point is 0, previous are negative
+
+        return {
+            day: day,
+            date: d.date.slice(5), // Remove Year 'MM-DD'
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+            volume: d.volume,
+            rsi: d.rsi || 50, // Fallback if null
+            foreignBuy: d.foreign_net,
+            institutionBuy: d.institution_net,
+        };
+    });
+};
+
 // 이동평균 계산
 const calculateMA = (data: MockDataPoint[], period: number): (number | null)[] => {
-    return data.map((_, idx) => {
+    return data.map((_: MockDataPoint, idx: number) => {
         if (idx < period - 1) return null;
         const slice = data.slice(idx - period + 1, idx + 1);
-        return slice.reduce((sum, d) => sum + d.close, 0) / period;
+        return slice.reduce((sum: number, d: MockDataPoint) => sum + d.close, 0) / period;
     });
 };
 
 // 볼린저 밴드 계산
-const calculateBB = (data: MockDataPoint[], period: number = 20) => {
+const calculateBB = (data: MockDataPoint[], period: number = 20): BollingerBand[] => {
     const ma = calculateMA(data, period);
-    return data.map((_, idx) => {
+    return data.map((_: MockDataPoint, idx: number) => {
         if (idx < period - 1) return { upper: null, lower: null, middle: null };
         const slice = data.slice(idx - period + 1, idx + 1);
+        // Use standard deviation of population or sample? Usually sample.
         const avg = ma[idx];
         if (avg === null) return { upper: null, lower: null, middle: null };
-        const variance = slice.reduce((sum, d) => sum + Math.pow(d.close - avg, 2), 0) / period;
+
+        const variance = slice.reduce((sum: number, d: MockDataPoint) => {
+            const currentAvg = avg;
+            return sum + Math.pow(d.close - currentAvg, 2);
+        }, 0) / period;
         const stdDev = Math.sqrt(variance);
         return {
             upper: avg + stdDev * 2,
@@ -118,19 +96,36 @@ const calculateBB = (data: MockDataPoint[], period: number = 20) => {
     });
 };
 
-const PrimeJennieChart: React.FC = () => {
-    const [data] = useState<MockDataPoint[]>(generateMockData());
+const SuperPrimeVisualization: React.FC = () => {
+    // const [data] = useState<MockDataPoint[]>(generateMockData());
+    const [data] = useState<MockDataPoint[]>(loadRealData());
+
+    // Recalculate indicators based on loaded data purely for visualization consistency
+    // (Though we essentially imported them, calculating here ensures they match the drawing logic)
     const ma5 = calculateMA(data, 5);
     const ma20 = calculateMA(data, 20);
     const ma120 = calculateMA(data, 120);
     const bb = calculateBB(data, 20);
-    const avgVolume = data.reduce((sum, d) => sum + d.volume, 0) / data.length;
+    const avgVolume = data.reduce((sum: number, d: MockDataPoint) => sum + d.volume, 0) / data.length;
 
-    // 매수 시그널 정의
+    // 매수 시그널 정의 (Real Case Based)
+    // 2025-11-28 (Trigger) -> Index needed.
+    // 2025-12-08 (GC)
+    // We need to find the specific days in the loaded data to place icons.
+
+
+
+    // Dates from report: 11-28 (Trigger), 12-08 (GC)
+    // Let's hardcode relative days if findDay is complex to render inside functional component (it's fine)
+
+    const triggerDay = data.find((d: MockDataPoint) => d.date === '11-28')?.day || -20;
+    const gcDay = data.find((d: MockDataPoint) => d.date === '12-08')?.day || -10;
+
     const signals = [
-        { day: 32, type: 'RSI_FOREIGN', label: 'RSI+외인', color: '#FF9500', icon: '◆', stars: 4 },
-        { day: 20, type: 'BB_LOWER', label: 'BB 하단', color: '#007AFF', icon: '●', stars: 2 },
-        { day: 10, type: 'GOLDEN_CROSS', label: '골든크로스', color: '#34C759', icon: '▲', stars: 3 },
+        { day: -triggerDay, type: 'RSI_FOREIGN', label: 'RSI+외인 (Trigger)', color: '#FF9500', icon: '◆', stars: 5 },
+        { day: -gcDay, type: 'GOLDEN_CROSS', label: '골든크로스 (Confirm)', color: '#34C759', icon: '▲', stars: 4 },
+        { day: -triggerDay - 2, type: 'BB_LOWER', label: 'BB 하단 지지', color: '#007AFF', icon: '●', stars: 2 },
+        // BB Lower touch roughly happened before/around trigger
     ];
 
     // 차트 영역 설정
@@ -139,21 +134,22 @@ const PrimeJennieChart: React.FC = () => {
     const panelHeight = 120;
     const margin = { top: 40, right: 80, bottom: 30, left: 80 };
 
-    const priceMin = Math.min(...data.map(d => d.low)) * 0.98;
-    const priceMax = Math.max(...data.map(d => d.high)) * 1.02;
+    const priceMin = Math.min(...data.map((d: MockDataPoint) => d.low)) * 0.98;
+    const priceMax = Math.max(...data.map((d: MockDataPoint) => d.high)) * 1.02;
 
     const xScale = (idx: number) => margin.left + (idx / (data.length - 1)) * (chartWidth - margin.left - margin.right);
     const yScale = (price: number) => margin.top + ((priceMax - price) / (priceMax - priceMin)) * (mainChartHeight - margin.top - margin.bottom);
 
     const rsiScale = (rsi: number) => 20 + ((70 - rsi) / 50) * 80;
-    const volumeMax = Math.max(...data.map(d => d.volume));
+    const volumeMax = Math.max(...data.map((d: MockDataPoint) => d.volume));
     const volumeScale = (vol: number) => 100 - (vol / volumeMax) * 80;
 
-    const flowMax = Math.max(...data.map(d => Math.max(Math.abs(d.foreignBuy), Math.abs(d.institutionBuy))));
+    const flowMax = Math.max(...data.map((d: MockDataPoint) => Math.max(Math.abs(d.foreignBuy), Math.abs(d.institutionBuy))));
     const flowScale = (flow: number) => 60 - (flow / flowMax) * 40;
 
     // 외국인 3일 연속 순매수 체크
-    const foreignStreaks = data.map((d, idx) => {
+    // 외국인 3일 연속 순매수 체크
+    const foreignStreaks = data.map((_: MockDataPoint, idx: number) => {
         if (idx < 2) return false;
         return data[idx].foreignBuy > 0 && data[idx - 1].foreignBuy > 0 && data[idx - 2].foreignBuy > 0;
     });
@@ -175,15 +171,15 @@ const PrimeJennieChart: React.FC = () => {
                     marginBottom: '12px',
                 }}>
                     <div style={{
-                        background: 'linear-gradient(135deg, #FF6B35 0%, #FF9500 100%)',
+                        background: 'linear-gradient(135deg, #FF3B30 0%, #FF9500 100%)',
                         borderRadius: '12px',
                         padding: '12px 16px',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
                     }}>
-                        <span style={{ fontSize: '24px' }}>🤖</span>
-                        <span style={{ fontWeight: '700', fontSize: '18px', color: '#fff' }}>Prime Jennie</span>
+                        <span style={{ fontSize: '24px' }}>🏆</span>
+                        <span style={{ fontWeight: '700', fontSize: '18px', color: '#fff' }}>Super Prime Case</span>
                     </div>
                     <div>
                         <h1 style={{
@@ -194,10 +190,10 @@ const PrimeJennieChart: React.FC = () => {
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent',
                         }}>
-                            매수 조건 시각화 차트
+                            Legendary Pattern: Real Case
                         </h1>
                         <p style={{ margin: '4px 0 0', color: '#8E8E93', fontSize: '14px' }}>
-                            AI Trading System Buy Signal Analysis
+                            Verified Historical Data (2025.10 ~ 2026.01)
                         </p>
                     </div>
                 </div>
@@ -208,28 +204,28 @@ const PrimeJennieChart: React.FC = () => {
                     gap: '24px',
                     marginBottom: '32px',
                     padding: '20px 24px',
-                    background: 'rgba(255,255,255,0.03)',
+                    background: 'rgba(255,59,48,0.1)',
                     borderRadius: '16px',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,59,48,0.2)',
                 }}>
                     <div>
                         <span style={{ color: '#8E8E93', fontSize: '12px' }}>종목명</span>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>테크프라임</div>
-                        <span style={{ color: '#636366', fontSize: '13px' }}>007070</span>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>삼성제약</div>
+                        <span style={{ color: '#636366', fontSize: '13px' }}>001360</span>
                     </div>
                     <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '24px' }}>
-                        <span style={{ color: '#8E8E93', fontSize: '12px' }}>현재가</span>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#FF3B30' }}>72,000원</div>
-                        <span style={{ color: '#FF3B30', fontSize: '13px' }}>+1.41%</span>
+                        <span style={{ color: '#8E8E93', fontSize: '12px' }}>수익률 (20일 최고)</span>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#FF3B30' }}>+66.9%</div>
+                        <span style={{ color: '#FF3B30', fontSize: '13px' }}>Super Breakout</span>
                     </div>
                     <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '24px' }}>
                         <span style={{ color: '#8E8E93', fontSize: '12px' }}>섹터</span>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>IT/반도체</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>의약품</div>
                     </div>
                     <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '24px' }}>
-                        <span style={{ color: '#8E8E93', fontSize: '12px' }}>분석 기간</span>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>60일</div>
-                        <span style={{ color: '#636366', fontSize: '13px' }}>D-60 ~ D-Day</span>
+                        <span style={{ color: '#8E8E93', fontSize: '12px' }}>검증 기간</span>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: '#fff' }}>55일</div>
+                        <span style={{ color: '#636366', fontSize: '13px' }}>10-15 ~ 12-31</span>
                     </div>
                 </div>
 
@@ -285,11 +281,11 @@ const PrimeJennieChart: React.FC = () => {
                             </linearGradient>
                         </defs>
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!bb[idx].upper) return '';
                                 const x = xScale(idx);
                                 return `${idx === 19 ? 'M' : 'L'} ${x} ${yScale(bb[idx].upper!)}`;
-                            }).join(' ') + data.slice().reverse().map((d, idx) => {
+                            }).join(' ') + data.slice().reverse().map((_, idx) => {
                                 const origIdx = data.length - 1 - idx;
                                 if (!bb[origIdx].lower) return '';
                                 const x = xScale(origIdx);
@@ -299,32 +295,36 @@ const PrimeJennieChart: React.FC = () => {
                         />
 
                         {/* 가격 Y축 그리드 */}
-                        {[60000, 65000, 70000, 75000, 80000].map(price => (
-                            <g key={price}>
-                                <line
-                                    x1={margin.left}
-                                    y1={yScale(price)}
-                                    x2={chartWidth - margin.right}
-                                    y2={yScale(price)}
-                                    stroke="rgba(255,255,255,0.05)"
-                                    strokeDasharray="4,4"
-                                />
-                                <text
-                                    x={margin.left - 10}
-                                    y={yScale(price)}
-                                    textAnchor="end"
-                                    alignmentBaseline="middle"
-                                    fill="#636366"
-                                    fontSize="11"
-                                >
-                                    {(price / 1000).toFixed(0)}K
-                                </text>
-                            </g>
-                        ))}
+                        {/* 가격 Y축 그리드 (Dynamic) */}
+                        {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                            const p = priceMin + (priceMax - priceMin) * ratio;
+                            return (
+                                <g key={ratio}>
+                                    <line
+                                        x1={margin.left}
+                                        y1={yScale(p)}
+                                        x2={chartWidth - margin.right}
+                                        y2={yScale(p)}
+                                        stroke="rgba(255,255,255,0.05)"
+                                        strokeDasharray="4,4"
+                                    />
+                                    <text
+                                        x={margin.left - 10}
+                                        y={yScale(p)}
+                                        textAnchor="end"
+                                        alignmentBaseline="middle"
+                                        fill="#636366"
+                                        fontSize="11"
+                                    >
+                                        {p.toLocaleString()}
+                                    </text>
+                                </g>
+                            );
+                        })}
 
                         {/* MA120 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma120[idx]) return '';
                                 return `${ma120[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma120[idx]!)}`;
                             }).join(' ')}
@@ -336,7 +336,7 @@ const PrimeJennieChart: React.FC = () => {
 
                         {/* MA20 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma20[idx]) return '';
                                 return `${ma20[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma20[idx]!)}`;
                             }).join(' ')}
@@ -347,7 +347,7 @@ const PrimeJennieChart: React.FC = () => {
 
                         {/* MA5 */}
                         <path
-                            d={data.map((d, idx) => {
+                            d={data.map((_, idx) => {
                                 if (!ma5[idx]) return '';
                                 return `${ma5[idx - 1] ? 'L' : 'M'} ${xScale(idx)} ${yScale(ma5[idx]!)}`;
                             }).join(' ')}
@@ -474,10 +474,12 @@ const PrimeJennieChart: React.FC = () => {
                             <rect x={margin.left} y={rsiScale(70)} width={chartWidth - margin.left - margin.right} height={rsiScale(30) - rsiScale(70)} fill="rgba(175,82,222,0.05)" />
 
                             {/* 과매도 구간 강조 */}
+                            {/* 과매도 구간 강조 */}
                             {data.map((d, idx) => {
                                 if (d.rsi > 30) return null;
                                 const x = xScale(idx);
                                 const width = (chartWidth - margin.left - margin.right) / data.length;
+                                // d is used for condition, idx is used for x
                                 return (
                                     <rect
                                         key={idx}
@@ -611,164 +613,6 @@ const PrimeJennieChart: React.FC = () => {
                     </div>
                 </div>
 
-                {/* 시스템 단계별 설명 */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '20px',
-                    marginBottom: '32px',
-                }}>
-                    {/* Scout 단계 */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, rgba(255,107,53,0.1) 0%, rgba(255,149,0,0.05) 100%)',
-                        borderRadius: '16px',
-                        padding: '24px',
-                        border: '1px solid rgba(255,107,53,0.2)',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>🔍</span>
-                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#FF6B35' }}>Scout 단계</h3>
-                        </div>
-                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#8E8E93' }}>종목 발굴</p>
-                        <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '12px', lineHeight: '1.8', color: '#C7C7CC' }}>
-                            <li><strong style={{ color: '#FF9500' }}>Hunter AI</strong>: 뉴스/공시 기반 정성 점수</li>
-                            <li><strong style={{ color: '#FF9500' }}>Judge AI</strong>: 최종 거래 승인 결정</li>
-                            <li>Hunter Score ≥ 70점: 매수 대상</li>
-                            <li>Hunter Score ≥ 90점: Super Prime (+15%)</li>
-                            <li>Trade Tier: TIER1, TIER2, RECON, BLOCKED</li>
-                        </ul>
-                    </div>
-
-                    {/* buy-scanner 단계 */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, rgba(0,122,255,0.1) 0%, rgba(90,200,250,0.05) 100%)',
-                        borderRadius: '16px',
-                        padding: '24px',
-                        border: '1px solid rgba(0,122,255,0.2)',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>📡</span>
-                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#007AFF' }}>buy-scanner 단계</h3>
-                        </div>
-                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#8E8E93' }}>신호 탐지</p>
-                        <div style={{ fontSize: '12px', lineHeight: '1.8', color: '#C7C7CC' }}>
-                            <div style={{ marginBottom: '8px' }}>
-                                <strong style={{ color: '#5AC8FA' }}>신호 종류:</strong>
-                            </div>
-                            <ul style={{ margin: 0, padding: '0 0 0 16px' }}>
-                                <li>GOLDEN_CROSS: 5일 MA {'>'} 20일 MA</li>
-                                <li>RSI_OVERSOLD: RSI ≤ 30</li>
-                                <li>BB_LOWER: 볼린저 밴드 하단 터치</li>
-                                <li>MOMENTUM: 5일 모멘텀 ≥ 3%</li>
-                            </ul>
-                            <div style={{ marginTop: '8px' }}>
-                                <strong style={{ color: '#34C759' }}>Tier2 안전장치:</strong> 최소 3개 조건
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* buy-executor 단계 */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, rgba(52,199,89,0.1) 0%, rgba(48,209,88,0.05) 100%)',
-                        borderRadius: '16px',
-                        padding: '24px',
-                        border: '1px solid rgba(52,199,89,0.2)',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '24px' }}>⚡</span>
-                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: '#34C759' }}>buy-executor 단계</h3>
-                        </div>
-                        <p style={{ margin: '0 0 12px', fontSize: '13px', color: '#8E8E93' }}>주문 실행</p>
-                        <div style={{ fontSize: '12px', lineHeight: '1.8', color: '#C7C7CC' }}>
-                            <div style={{ marginBottom: '8px' }}>
-                                <strong style={{ color: '#30D158' }}>안전장치:</strong>
-                            </div>
-                            <ul style={{ margin: 0, padding: '0 0 0 16px' }}>
-                                <li>일일 최대 매수: 3회</li>
-                                <li>최대 포지션 비중: 15%</li>
-                                <li>섹터 비중 제한: 30%</li>
-                                <li>현금 비중 유지: 10%</li>
-                                <li>중복 매수 방지 (Redis Lock)</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Factor Score 가중치 */}
-                <div style={{
-                    background: 'rgba(0,0,0,0.4)',
-                    borderRadius: '16px',
-                    padding: '24px',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    marginBottom: '32px',
-                }}>
-                    <h3 style={{ margin: '0 0 20px', fontSize: '16px', fontWeight: '700' }}>
-                        🎯 Factor Score 가중치
-                    </h3>
-                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        {[
-                            { name: '모멘텀', score: 25, color: '#FF3B30' },
-                            { name: '품질', score: 20, color: '#FF9500' },
-                            { name: '가치', score: 15, color: '#FFD60A' },
-                            { name: '기술적', score: 10, color: '#34C759' },
-                            { name: '수급/뉴스', score: 5, color: '#007AFF' },
-                            { name: '복합조건', score: 5, color: '#AF52DE', bonus: true },
-                        ].map((factor, idx) => (
-                            <div key={idx} style={{
-                                flex: '1 1 calc(16.66% - 12px)',
-                                minWidth: '120px',
-                                background: `${factor.color}15`,
-                                border: `1px solid ${factor.color}40`,
-                                borderRadius: '12px',
-                                padding: '16px',
-                                textAlign: 'center',
-                            }}>
-                                <div style={{ fontSize: '24px', fontWeight: '800', color: factor.color }}>
-                                    {factor.bonus ? '+' : ''}{factor.score}점
-                                </div>
-                                <div style={{ fontSize: '13px', color: '#C7C7CC', marginTop: '4px' }}>
-                                    {factor.name} {factor.bonus && '보너스'}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* 시스템 철학 */}
-                <div style={{
-                    background: 'linear-gradient(135deg, rgba(175,82,222,0.1) 0%, rgba(191,90,242,0.05) 100%)',
-                    borderRadius: '16px',
-                    padding: '24px',
-                    border: '1px solid rgba(175,82,222,0.2)',
-                }}>
-                    <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700', color: '#BF5AF2' }}>
-                        💡 Prime Jennie 핵심 철학
-                    </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-                        {[
-                            { icon: '🛡️', title: '보수적 접근', desc: '여러 조건이 복합적으로 충족될 때만 매수' },
-                            { icon: '💹', title: '수급 중시', desc: '외국인 순매수는 55.5% 승률의 핵심 지표' },
-                            { icon: '🤖', title: '기술적 + AI 융합', desc: '정량 지표(RSI, MA)와 LLM 뉴스 분석 조합' },
-                            { icon: '⚖️', title: '리스크 관리', desc: '포지션 분산, 상관관계 체크, 역신호 필터링' },
-                        ].map((item, idx) => (
-                            <div key={idx} style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: '12px',
-                                padding: '12px',
-                                background: 'rgba(0,0,0,0.2)',
-                                borderRadius: '10px',
-                            }}>
-                                <span style={{ fontSize: '24px' }}>{item.icon}</span>
-                                <div>
-                                    <div style={{ fontWeight: '600', marginBottom: '4px' }}>{item.title}</div>
-                                    <div style={{ fontSize: '12px', color: '#8E8E93' }}>{item.desc}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
                 {/* 푸터 */}
                 <div style={{
                     marginTop: '32px',
@@ -788,4 +632,4 @@ const PrimeJennieChart: React.FC = () => {
     );
 };
 
-export default PrimeJennieChart;
+export default SuperPrimeVisualization;
