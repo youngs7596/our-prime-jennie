@@ -182,17 +182,19 @@ class TestPriceMonitor:
             # Mock market check to always be open inside this test
             monitor_instance.kis.check_market_open = MagicMock(return_value=True)
 
-            # Control Loop: Run once then stop
-            # is_set() is called:
-            # 1. while not is_set(): (False -> enter)
-            # 2. inside loop "if is_set(): break" (False -> continue)
-            # 3. next iteration while check (True -> exit)
-            # Provide enough values
-            monitor_instance.stop_event.is_set = MagicMock(side_effect=[False, False, True, True, True])
+            # Ensure TRADING_MODE is MOCK so it uses database mock prices
+            with patch.dict(os.environ, {"TRADING_MODE": "MOCK"}):
+                # Control Loop: Run once then stop
+                # is_set() is called:
+                # 1. while not is_set(): (False -> enter)
+                # 2. inside loop "if is_set(): break" (False -> continue)
+                # 3. next iteration while check (True -> exit)
+                # Provide extra False just in case
+                monitor_instance.stop_event.is_set = MagicMock(side_effect=[False, False, False, True, True])
 
-            # Patch time.sleep to avoid waiting
-            with patch("time.sleep"):
-                monitor_instance._monitor_with_polling(dry_run=True)
+                # Patch time.sleep to avoid waiting
+                with patch("time.sleep"):
+                    monitor_instance._monitor_with_polling(dry_run=True)
             
             # Verify Flow
             # Verify Flow
