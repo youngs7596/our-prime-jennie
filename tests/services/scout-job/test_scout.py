@@ -112,7 +112,8 @@ class TestScoutMainFlow:
     @patch('services.scout_job_module.scout.ensure_gemini_api_key')
     @patch('services.scout_job_module.scout.BLUE_CHIP_STOCKS', [])
     @patch('services.scout_job_module.scout.ensure_engine_initialized')
-    def test_scout_main_flow(self, mock_ensure_engine, mock_ensure_api_key, mock_embeddings, mock_chroma_cls, mock_http_client,
+    @patch('services.scout_job_module.scout.filter_valid_stocks')
+    def test_scout_main_flow(self, mock_filter_valid, mock_ensure_engine, mock_ensure_api_key, mock_embeddings, mock_chroma_cls, mock_http_client,
                             mock_enrich, mock_prefetch, 
                             mock_process_judge, mock_process_hunter, mock_process_quant,
                             mock_get_momentum, mock_get_hot, mock_sector_analysis, mock_get_bluechips,
@@ -137,6 +138,9 @@ class TestScoutMainFlow:
         mock_kis.authenticate.return_value = True
         
         mock_brain = mock_brain_cls.return_value
+
+        # Mock filter_valid_stocks to pass everything
+        mock_filter_valid.side_effect = lambda candidates, session: candidates
         
         # Database Session
         mock_session = MagicMock()
