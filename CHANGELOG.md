@@ -25,6 +25,7 @@
 - **Feature (Super Prime)**: `SuperPrime.tsx` 신규 페이지 추가 및 `/super-prime` 라우팅, 사이드바 메뉴('🏆') 추가 (Samsung Pharm Legendary Pattern 시각화).
 - **Portfolio Upsert Fix**: `reporter.py` 동기화 로직 수정 — 매도(SOLD) 종목 재매수 시 중복 INSERT 방지 (기존 행 UPDATE로 처리), `sync_portfolio_from_account.py` 유틸리티도 동일 패턴 적용.
 - **Chart Swap**: Visual Logic 페이지에 원본 PrimeJennieChart(가상 데이터) 복원, Super Prime 페이지에 삼성제약 Legendary Pattern 차트(실데이터) 이동.
+- **Signal Explanation Cards**: 매수 시그널 차트에 골든크로스/BB하단/RSI+외인 조건별 상세 설명 카드 추가 (비전문가도 이해 가능하도록).
 
 
 ## 2026-01-07
