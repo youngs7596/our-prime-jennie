@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Target,
+  LineChart,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -24,6 +25,7 @@ const navItems = [
   { path: '/news', icon: Newspaper, label: 'News & Sentiment' },
   { path: '/analyst', icon: Target, label: 'AI Analyst' },
   { path: '/logic', icon: Brain, label: 'Trading Logic' },
+  { path: '/visual-logic', icon: LineChart, label: 'Visual Logic' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
 

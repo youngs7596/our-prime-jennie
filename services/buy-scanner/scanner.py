@@ -30,6 +30,7 @@ from shared.strategy_presets import (
     apply_preset_to_config,
     resolve_preset_for_regime,
 )
+from shared.db.factor_repository import FactorRepository
 from strategy import bear_strategies
 
 logger = logging.getLogger(__name__)
@@ -433,6 +434,11 @@ class BuyScanner:
         with session_scope(readonly=True) as db_session:
             daily_prices_dict = database.get_daily_prices_batch(db_session, stock_codes_to_scan, limit=120, table_name="STOCK_DAILY_PRICES_3Y")
             kospi_prices_df = database.get_daily_prices(db_session, "0001", limit=120, table_name="STOCK_DAILY_PRICES_3Y")
+            
+            # [Super Prime] 수급 데이터 일괄 조회 by FactorRepository
+            factor_repo = FactorRepository(db_session)
+            # 최근 30일치만 조회해도 충분 (20일 체크)
+            supply_demand_dict = factor_repo.get_supply_demand_data(stock_codes_to_scan, days=30)
         
         # 5. 병렬 스캔
         max_workers = min(10, len(stock_codes_to_scan))
@@ -449,7 +455,8 @@ class BuyScanner:
                         current_regime,
                         active_strategies,
                         kospi_prices_df,
-                        bear_context
+                        bear_context,
+                        supply_demand_dict.get(stock_code)
                     )
                     futures[future] = stock_code
             
@@ -467,7 +474,7 @@ class BuyScanner:
     
     def _analyze_stock(self, stock_code, stock_info, daily_prices_df, 
                       current_regime, active_strategies, kospi_prices_df,
-                      bear_context=None) -> dict:
+                      bear_context=None, supply_demand_df=None) -> dict:
         """
         단일 종목 분석 (실시간 가격 반영)
         
@@ -579,10 +586,20 @@ class BuyScanner:
                     stock_code, daily_prices_df, last_close_price, rsi_value, 
                     current_regime, active_strategies, kospi_prices_df, is_tradable
                 )
-                # Project Recon: key_metrics에 tier 정보를 남겨 Executor/텔레그램/로그에서 가시성 확보
+            # Project Recon: key_metrics에 tier 정보를 남겨 Executor/텔레그램/로그에서 가시성 확보
                 if key_metrics_dict is None:
                     key_metrics_dict = {}
                 key_metrics_dict["trade_tier"] = trade_tier
+                
+                # [Super Prime] Legendary Pattern Check
+                # 조건: 골든크로스 발생 시 + 과거 Trigger 패턴 존재 여부 확인
+                if buy_signal_type == 'GOLDEN_CROSS':
+                    is_legendary = self._check_legendary_pattern(stock_code, daily_prices_df, supply_demand_df)
+                    if is_legendary:
+                        buy_signal_type = 'GOLDEN_CROSS_SUPER_PRIME' # 신호 타입 변경으로 명확히 구분
+                        key_metrics_dict["is_super_prime"] = True
+                        factors['is_super_prime'] = True
+                        logger.info(f"🚨 [{stock_code}] SUPER PRIME 신호 감지! (Golden Cross + Legendary Trigger)")
             
             if not buy_signal_type:
                 return None
@@ -619,6 +636,14 @@ class BuyScanner:
                 factor_score += boost
                 logger.info(f"🚀 [{stock_code}] Hunter Score({hunter_score}) 초우량 신호: +{boost:.1f}점 (Super Prime)")
                 factors['hunter_score_bonus'] = boost
+            
+            # [Super Prime] Boosting
+            # Super Prime이면 점수 대폭 가산 (예: +20점)
+            if factors.get('is_super_prime'):
+                boost = 20.0
+                factor_score += boost
+                logger.info(f"🚨 [{stock_code}] Super Prime 보너스 적용: +{boost}점 (최종: {factor_score:.1f})")
+                factors['super_prime_bonus'] = boost
             
             # [New] 실시간 뉴스 감성 점수 반영
             sentiment_data = database.get_sentiment_score(stock_code)
@@ -669,12 +694,73 @@ class BuyScanner:
                 'factors': factors,
                 'current_price': float(last_close_price),
                 # Project Recon
-                'trade_tier': (key_metrics_dict or {}).get("trade_tier")
+                'trade_tier': (key_metrics_dict or {}).get("trade_tier"),
+                'is_super_prime': factors.get('is_super_prime', False)
             }
             
         except Exception as e:
             logger.error(f"[{stock_code}] 분석 오류: {e}")
             return None
+
+    def _check_legendary_pattern(self, stock_code, daily_prices_df, supply_demand_df) -> bool:
+        """
+        [Super Prime] 전설의 타이밍 패턴 여부 확인
+        조건: 최근 20일 이내에 (RSI <= 30 AND 외국인 순매수 >= 20일 평균 거래량의 5%) 발생
+        """
+        try:
+            if supply_demand_df is None or supply_demand_df.empty:
+                return False
+                
+            if daily_prices_df.empty:
+                return False
+
+            # 데이터 병합 (Date 기준)
+            # supply_demand_df: TRADE_DATE, FOREIGN_NET_BUY
+            # daily_prices_df: PRICE_DATE, VOLUME, CLOSE_PRICE
+            
+            # 날짜 형식 통일 및 인덱스 설정
+            df_price = daily_prices_df.copy()
+            df_price['date_str'] = df_price['PRICE_DATE'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)[:10])
+            
+            df_supply = supply_demand_df.copy()
+            df_supply['date_str'] = df_supply['TRADE_DATE'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)[:10])
+            
+            merged = pd.merge(df_price, df_supply, on='date_str', how='inner')
+            merged = merged.sort_values('date_str')
+            
+            # RSI 계산 (이미 계산된 값이 있을 수 있지만 안전하게 다시 계산하거나 매핑)
+            # daily_prices_df에 RSI가 없으므로 계산 필요
+            delta = merged['CLOSE_PRICE'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            merged['RSI'] = 100 - (100 / (1 + rs))
+            
+            # 20일 평균 거래량 계산
+            merged['VOL_MA20'] = merged['VOLUME'].rolling(window=20).mean()
+            
+            # 최근 20일 데이터 확인
+            recent_20 = merged.tail(20)
+            
+            for idx, row in recent_20.iterrows():
+                rsi = row['RSI']
+                foreign_buy = row['FOREIGN_NET_BUY']
+                vol_ma20 = row['VOL_MA20']
+                
+                if pd.isna(rsi) or pd.isna(vol_ma20) or vol_ma20 == 0:
+                    continue
+                    
+                # 조건: RSI <= 30 AND Foreign Buy >= 5% of Vol MA20
+                if rsi <= 30 and foreign_buy >= (vol_ma20 * 0.05):
+                    logger.info(f"✨ [{stock_code}] Legendary Pattern Trigger Found on {row['date_str']}! "
+                                f"(RSI: {rsi:.1f}, ForeignBuy: {foreign_buy}, VolMA20: {vol_ma20:.0f})")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            logger.warning(f"[{stock_code}] Legendary Pattern Check Failed: {e}")
+            return False
     
     def _detect_signals(self, stock_code, daily_prices_df, last_close_price, rsi_value, 
                        current_regime, active_strategies, kospi_prices_df, 

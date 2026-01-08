@@ -518,6 +518,7 @@ class BuyExecutor:
                     else:
                         approval_status = "⚡ TIER2 (Judge 미통과, 기술적 신호로 매수)"
                     
+                    # Super Prime Tag
                     tier2_extra = ""
                     if trade_tier != "TIER1":
                         km = selected_candidate.get('key_metrics_dict') or {}
@@ -525,7 +526,11 @@ class BuyExecutor:
                         if conds:
                             tier2_extra = f"\n🛡️ *Tier2 조건*: {', '.join(conds[:4])}"
                     
-                    message = f"""{mode_indicator}💰 *매수 체결*
+                    header_tag = "💰 *매수 체결*"
+                    if selected_candidate.get('is_super_prime') or selected_candidate.get('buy_signal_type') == 'GOLDEN_CROSS_SUPER_PRIME':
+                        header_tag = "🚨 *[긴급/강력매수] SUPER PRIME 체결* 🚨"
+                    
+                    message = f"""{mode_indicator}{header_tag}
 
 📈 *종목*: {stock_name} ({stock_code})
 💵 *가격*: {current_price:,}원
