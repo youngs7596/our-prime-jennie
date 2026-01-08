@@ -257,6 +257,75 @@ const PrimeJennieChart: React.FC = () => {
                     ))}
                 </div>
 
+                {/* 매수 시그널 상세 설명 */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '16px',
+                    marginBottom: '24px',
+                }}>
+                    {/* 골든크로스 설명 */}
+                    <div style={{
+                        background: 'rgba(52,199,89,0.1)',
+                        border: '1px solid rgba(52,199,89,0.3)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <span style={{ color: '#34C759', fontSize: '20px', fontWeight: '700' }}>▲</span>
+                            <span style={{ color: '#34C759', fontWeight: '700', fontSize: '14px' }}>골든크로스</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.6', color: '#C7C7CC' }}>
+                            <strong style={{ color: '#34C759' }}>단기(5일) 이동평균선</strong>이
+                            <strong style={{ color: '#FF9500' }}> 중기(20일) 이동평균선</strong>을
+                            <strong style={{ color: '#fff' }}> 아래에서 위로 돌파</strong>하는 순간.
+                            <br /><br />
+                            이는 <strong style={{ color: '#fff' }}>상승 추세 전환 신호</strong>로,
+                            최근 주가 흐름이 과거 평균보다 강해지고 있음을 의미합니다.
+                        </p>
+                    </div>
+
+                    {/* BB 하단 설명 */}
+                    <div style={{
+                        background: 'rgba(0,122,255,0.1)',
+                        border: '1px solid rgba(0,122,255,0.3)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <span style={{ color: '#007AFF', fontSize: '20px', fontWeight: '700' }}>●</span>
+                            <span style={{ color: '#007AFF', fontWeight: '700', fontSize: '14px' }}>BB 하단 터치</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.6', color: '#C7C7CC' }}>
+                            주가가 <strong style={{ color: '#5AC8FA' }}>볼린저 밴드 하단선</strong>에 닿거나
+                            그 아래로 내려간 상태.
+                            <br /><br />
+                            통계적으로 주가가 <strong style={{ color: '#fff' }}>과도하게 하락</strong>했음을 의미하며,
+                            <strong style={{ color: '#34C759' }}> 반등 가능성</strong>이 높아지는 구간입니다.
+                        </p>
+                    </div>
+
+                    {/* RSI+외인 설명 */}
+                    <div style={{
+                        background: 'rgba(255,149,0,0.1)',
+                        border: '1px solid rgba(255,149,0,0.3)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                            <span style={{ color: '#FF9500', fontSize: '20px', fontWeight: '700' }}>◆</span>
+                            <span style={{ color: '#FF9500', fontWeight: '700', fontSize: '14px' }}>RSI 과매도 + 외국인 매수</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.6', color: '#C7C7CC' }}>
+                            <strong style={{ color: '#AF52DE' }}>RSI 지표가 30 이하</strong>(과매도 구간)이면서
+                            동시에 <strong style={{ color: '#007AFF' }}>외국인이 순매수</strong>하는 상황.
+                            <br /><br />
+                            시장이 공포에 빠져있지만, <strong style={{ color: '#fff' }}>스마트머니(외국인)</strong>는
+                            오히려 매수하는 <strong style={{ color: '#FFD60A' }}>역발상 투자</strong> 기회입니다.
+                        </p>
+                    </div>
+                </div>
+
                 {/* 메인 캔들 차트 */}
                 <div style={{
                     background: 'rgba(0,0,0,0.4)',
