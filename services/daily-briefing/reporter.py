@@ -458,7 +458,7 @@ class DailyReporter:
                 """), {'code': code, 'name': info['name'], 'qty': info['qty'], 'price': info['avg_price']})
         
         # 2-3. Delete (Mark as SOLD) - DB에는 있는데 실계좌에 없는 경우
-        for db_code in db_holdings:
+        for db_code in existing_codes:
             if db_code in MANUAL_MANAGED_CODES:
                 continue
                 
