@@ -23,6 +23,8 @@
 - **Menu Fix**: 사이드바 내 중복된 `Visual Logic` 메뉴 항목 제거.
 - **Super Prime Strategy Verified**: `scanner.py`의 Super Prime 로직(RSI <= 30 & Volume) Unit Test(`test_super_prime.py`) 작성 및 검증 완료. `pandas` import 누락 수정.
 - **Feature (Super Prime)**: `SuperPrime.tsx` 신규 페이지 추가 및 `/super-prime` 라우팅, 사이드바 메뉴('🏆') 추가 (Samsung Pharm Legendary Pattern 시각화).
+- **Portfolio Upsert Fix**: `reporter.py` 동기화 로직 수정 — 매도(SOLD) 종목 재매수 시 중복 INSERT 방지 (기존 행 UPDATE로 처리), `sync_portfolio_from_account.py` 유틸리티도 동일 패턴 적용.
+- **Chart Swap**: Visual Logic 페이지에 원본 PrimeJennieChart(가상 데이터) 복원, Super Prime 페이지에 삼성제약 Legendary Pattern 차트(실데이터) 이동.
 
 
 ## 2026-01-07
