@@ -243,6 +243,12 @@ def reset_singletons():
     except ImportError:
         pass
         
-    # 5. Config (만약 Config 클래스가 싱글톤으로 인스턴스를 유지한다면 여기서 리셋)
-    # from shared.config import config
-    # config._instance = None 등 필요한 조치
+    # 5. Config
+    try:
+        from shared import config
+        if hasattr(config, "reset_global_config"):
+            config.reset_global_config()
+        elif hasattr(config, "_global_config"):
+            config._global_config = None
+    except ImportError:
+        pass
