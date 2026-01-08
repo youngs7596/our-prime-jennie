@@ -117,7 +117,8 @@ class TestDetectSourceNonSensitiveKeys:
 
         from services.dashboard.backend.routers.configs import _detect_source
 
-        result = _detect_source("MIN_LLM_SCORE", mock_config_manager, mock_session)
+        with patch('services.dashboard.backend.routers.configs.repository.get_config', return_value=None):
+            result = _detect_source("MIN_LLM_SCORE", mock_config_manager, mock_session)
 
         assert result.key == "MIN_LLM_SCORE"
         assert result.value == 75
