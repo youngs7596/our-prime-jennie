@@ -644,15 +644,20 @@ async def get_market_regime_api(payload: dict = Depends(verify_token)):
 # =============================================================================
 
 @app.get("/api/analyst/performance")
-async def get_analyst_performance_api(payload: dict = Depends(verify_token)):
-    """AI Analyst 성과 분석 데이터"""
+async def get_analyst_performance_api(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    lookback_days: int = Query(30, ge=7, le=90),
+    payload: dict = Depends(verify_token)
+):
+    """AI Analyst 성과 분석 데이터 (페이징 지원)"""
     try:
         from shared.analysis.ai_performance import analyze_performance
         import pandas as pd
         import numpy as np
         
         with get_session() as session:
-            df = analyze_performance(session)
+            df = analyze_performance(session, lookback_days=lookback_days)
             
             if df is None or df.empty:
                 return {
@@ -723,10 +728,13 @@ async def get_analyst_performance_api(payload: dict = Depends(verify_token)):
                         "avg_return": safe_serialize(valid_group.mean() * 100)
                     })
             
-            # 4. Recent Decisions (limit 20) - 다기간 수익률 포함 (퀀트 트레이딩용)
+            # 4. Recent Decisions (페이징 지원) - 다기간 수익률 포함 (퀀트 트레이딩용)
             recent = []
-            # Sort by timestamp desc
-            for _, row in df.sort_values(by='timestamp', ascending=False).head(20).iterrows():
+            total_decisions_count = len(df)
+            # Sort by timestamp desc and apply pagination
+            sorted_df = df.sort_values(by='timestamp', ascending=False)
+            paginated_df = sorted_df.iloc[offset:offset + limit]
+            for _, row in paginated_df.iterrows():
                 recent.append({
                     "timestamp": row['timestamp'].isoformat() if row['timestamp'] else None,
                     "stock_name": row['stock_name'],
@@ -745,7 +753,10 @@ async def get_analyst_performance_api(payload: dict = Depends(verify_token)):
                 "overall": overall,
                 "by_regime": by_regime,
                 "by_score": by_score,
-                "recent_decisions": recent
+                "recent_decisions": recent,
+                "total_count": total_decisions_count,
+                "limit": limit,
+                "offset": offset
             }
             
     except Exception as e:

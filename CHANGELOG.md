@@ -2,6 +2,7 @@
 
 ## 2026-01-08
 - **Portfolio 중복 버그 수정**: `execute_trade_and_log`가 호출자 세션을 무시하고 새 세션을 생성하여 PORTFOLIO에 중복 HOLDING 레코드가 생성되던 버그 수정 (`shared/database/trading.py`)
+- **Hunter Score Strategy Integration**: AI Analyst 성과 분석(승률 72%) 기반 전략 고도화 — `buy-scanner`에서 Hunter Score 90+ 종목 가산점(+15%) 및 70- 필터링 적용, `buy-executor`에서 Hunter Score 90+ 종목 안전장치 프리패스(Double Check 면제) 예외 처리 구현.
 - **CURRENT_HIGH_PRICE 초기화 추가**: 신규 매수 시 `CURRENT_HIGH_PRICE`를 매수가로 초기화하도록 INSERT 쿼리 수정
 - **최고가 DB 동기화 추가**: `price-monitor`의 최고가 갱신 시 Redis뿐 아니라 DB `PORTFOLIO.CURRENT_HIGH_PRICE`도 함께 업데이트 (`shared/redis_cache.py`)
 - **MCP 서버 설정**: MariaDB용 MCP 서버(`mysql_mcp_server`) 설정 완료 (`~/.gemini/settings.json`)

@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, BarChart2, CheckCircle, Target } from 'lucide-react'
+import { TrendingUp, BarChart2, CheckCircle, Target, ChevronLeft, ChevronRight } from 'lucide-react'
 import { analystApi } from '@/lib/api'
 
 // Helper for conditional classes
@@ -38,6 +38,9 @@ interface AnalystData {
         tags?: string[]
         score_history?: number[]
     }>
+    total_count?: number
+    limit?: number
+    offset?: number
 }
 
 const Sparkline = ({ data, color = "#8884d8" }: { data: number[], color?: string }) => {
@@ -73,22 +76,38 @@ export function AnalystPage() {
     const [data, setData] = useState<AnalystData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [offset, setOffset] = useState(0)
+    const [limit] = useState(50)
+    const [totalCount, setTotalCount] = useState(0)
 
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [offset])
 
     const fetchData = async () => {
         try {
             setLoading(true)
-            const res = await analystApi.getPerformance()
+            const res = await analystApi.getPerformance(limit, offset, 30)
             setData(res)
+            setTotalCount(res.total_count || 0)
             setError(null)
         } catch (err: any) {
             console.error(err)
             setError('Failed to load analyst performance data.')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const goToPrevPage = () => {
+        if (offset >= limit) {
+            setOffset(offset - limit)
+        }
+    }
+
+    const goToNextPage = () => {
+        if (offset + limit < totalCount) {
+            setOffset(offset + limit)
         }
     }
 
@@ -340,6 +359,28 @@ export function AnalystPage() {
                             )}
                         </tbody>
                     </table>
+                </div>
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between p-4 border-t border-white/10">
+                    <span className="text-sm text-muted-foreground">
+                        Showing {offset + 1} - {Math.min(offset + limit, totalCount)} of {totalCount}
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={goToPrevPage}
+                            disabled={offset === 0}
+                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                        >
+                            <ChevronLeft className="w-4 h-4" /> Prev
+                        </button>
+                        <button
+                            onClick={goToNextPage}
+                            disabled={offset + limit >= totalCount}
+                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                        >
+                            Next <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

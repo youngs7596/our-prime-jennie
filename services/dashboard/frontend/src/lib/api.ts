@@ -194,8 +194,8 @@ export const councilApi = {
 }
 
 export const analystApi = {
-  getPerformance: async () => {
-    const response = await api.get('/analyst/performance')
+  getPerformance: async (limit = 50, offset = 0, lookbackDays = 30) => {
+    const response = await api.get(`/analyst/performance?limit=${limit}&offset=${offset}&lookback_days=${lookbackDays}`)
     return response.data
   },
 }

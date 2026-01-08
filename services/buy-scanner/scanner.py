@@ -587,10 +587,38 @@ class BuyScanner:
             if not buy_signal_type:
                 return None
             
+            # [Strategy Refinement] Hunter Score Based Filtering & Boosting
+            # 메타데이터에서 순수 Hunter Score 추출 (없으면 기존 llm_score 사용)
+            metadata = stock_info.get('llm_metadata') or {}
+            hunter_score = metadata.get('hunter_score')
+            
+            if hunter_score is None:
+                # Fallback: 메타데이터에 없으면 llm_score(Hybrid) 사용
+                hunter_score = stock_info.get('llm_score', 0)
+            
+            # ensure float
+            try:
+                hunter_score = float(hunter_score)
+            except (ValueError, TypeError):
+                hunter_score = 0.0
+            
+            # 1. Low Score Filtering (70점 미만 제외)
+            # Tier 2(비주력) 모드이거나 Bear 전략인 경우는 예외
+            if hunter_score < 70 and not tier2_enabled and not bear_signal_payload:
+                logger.warning(f"📉 [{stock_code}] Hunter Score 미달({hunter_score}점 < 70점) - 매수 제외")
+                return None
+
             # 팩터 점수 계산
             factor_score, factors = self._calculate_factor_score(
                 stock_code, stock_info, daily_prices_df, kospi_prices_df, current_regime
             )
+
+            # 2. High Score Boosting (90점 이상 가산점)
+            if hunter_score >= 90:
+                boost = factor_score * 0.15  # 15% 가산
+                factor_score += boost
+                logger.info(f"🚀 [{stock_code}] Hunter Score({hunter_score}) 초우량 신호: +{boost:.1f}점 (Super Prime)")
+                factors['hunter_score_bonus'] = boost
             
             # [New] 실시간 뉴스 감성 점수 반영
             sentiment_data = database.get_sentiment_score(stock_code)
@@ -939,6 +967,7 @@ class BuyScanner:
             'eps_growth': stock_info.get('eps_growth'),
             'llm_score': stock_info.get('llm_score', 0),
             'llm_reason': stock_info.get('llm_reason', ''),
+            'llm_metadata': stock_info.get('llm_metadata', {}),
             'bear_strategy': stock_info.get('bear_strategy'),
             # Project Recon
             'trade_tier': (
