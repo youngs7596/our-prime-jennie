@@ -345,3 +345,44 @@ def get_momentum_stocks(kis_api, db_conn, period_months=6, top_n=30, watchlist_s
     except Exception as e:
         logger.error(f"   (D) ❌ 모멘텀 팩터 계산 중 오류 발생: {e}", exc_info=True)
         return []
+
+def filter_valid_stocks(candidate_stocks: dict, session) -> dict:
+    """
+    후보군 중 STOCK_MASTER에 존재하고 ETF가 아닌 종목만 필터링합니다.
+    """
+    if not candidate_stocks:
+        return {}
+        
+    from sqlalchemy import text
+    
+    stock_codes = list(candidate_stocks.keys())
+    # KOSPI 지수 등 특수 코드 제외
+    stock_codes = [c for c in stock_codes if c != '0001']
+    
+    placeholders = ','.join([f"'{code}'" for code in stock_codes])
+    
+    query = text(f"""
+        SELECT STOCK_CODE 
+        FROM STOCK_MASTER 
+        WHERE STOCK_CODE IN ({placeholders})
+        AND IS_ETF = 0
+    """)
+    
+    try:
+        rows = session.execute(query).fetchall()
+        valid_codes = {row[0] for row in rows}
+        
+        filtered = {
+            code: info 
+            for code, info in candidate_stocks.items() 
+            if code in valid_codes
+        }
+        
+        removed_count = len(candidate_stocks) - len(filtered)
+        if removed_count > 0:
+            logger.info(f"   (Filter) 🚫 {removed_count}개 종목 제외 (ETF 또는 시스템 미등록 종목)")
+            
+        return filtered
+    except Exception as e:
+        logger.warning(f"   (Filter) ⚠️ 종목 필터링 중 오류 발생: {e}")
+        return candidate_stocks

@@ -27,7 +27,7 @@ from shared.db.connection import init_engine, session_scope  # [Patch]
 
 import shared.auth as auth
 import shared.database as database
-from shared.kis.client import KISClient
+from shared.kis import KISGatewayClient
 from shared.kis.market_data import MarketData
 
 # 로깅 설정
@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 # 전역 설정
 # [Patch] KIS Rate Limit 준수를 위해 1로 축소 (모의투자 초당 2건 제한)
 MAX_WORKERS = 1
-# [Patch] 사용자 요청: 2주치 데이터 복구 (여유있게 21일)
-DAYS_TO_COLLECT = 21
+# [Patch] QuantScorer 요구사항(30일) 충족을 위해 100일로 상향
+DAYS_TO_COLLECT = 100
 
 def _is_mariadb() -> bool:
     """단일화: MariaDB만 사용"""
@@ -61,8 +61,12 @@ def collect_stock_data(code, kis_client):
         end_date = datetime.now().strftime("%Y%m%d")
         start_date = (datetime.now() - timedelta(days=DAYS_TO_COLLECT)).strftime("%Y%m%d")
         
-        # 데이터 조회 (페이지네이션 적용됨)
-        rows = market_data.get_stock_history_by_chart(code, start_date=start_date, end_date=end_date)
+        # 데이터 조회 (KIS Gateway 프록시 사용)
+        rows = kis_client.get_stock_daily_prices(code, num_days_to_fetch=DAYS_TO_COLLECT)
+        
+        # rows가 DataFrame인 경우 list(dict)로 변환
+        if hasattr(rows, 'to_dict'):
+            rows = rows.to_dict('records')
         
         if not rows:
             logger.warning(f"⚠️ [{code}] 데이터 없음")
@@ -88,6 +92,9 @@ def collect_stock_data(code, kis_client):
         
         conn.commit()
         cur.close()
+        
+        # Rate Limit 방지를 위한 추가 대기
+        time.sleep(0.2)
         return True
         
     except Exception as e:
@@ -102,59 +109,40 @@ def collect_stock_data(code, kis_client):
 def main():
     load_dotenv()
     
-    # KIS Client 초기화 (공유)
-    project_id = os.getenv("GCP_PROJECT_ID")
-    trading_mode = os.getenv("TRADING_MODE", "MOCK")
+    # 200개 종목 우선 순위 (필요 시 인자로 받을 수 있음)
+    CODE_LIMIT = 200
+
+    # KIS Gateway 초기화 (로컬 우선)
+    gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    kis_api = KISGatewayClient(gateway_url=gateway_url)
     
-    if trading_mode == "REAL":
-        app_key = auth.get_secret(os.getenv("REAL_SECRET_ID_APP_KEY"), project_id)
-        app_secret = auth.get_secret(os.getenv("REAL_SECRET_ID_APP_SECRET"), project_id)
-        account_prefix = auth.get_secret(os.getenv("REAL_SECRET_ID_ACCOUNT_PREFIX"), project_id)
-        base_url = os.getenv("KIS_BASE_URL_REAL")
-    else:
-        app_key = auth.get_secret(os.getenv("MOCK_SECRET_ID_APP_KEY"), project_id)
-        app_secret = auth.get_secret(os.getenv("MOCK_SECRET_ID_APP_SECRET"), project_id)
-        account_prefix = auth.get_secret(os.getenv("MOCK_SECRET_ID_ACCOUNT_PREFIX"), project_id)
-        base_url = os.getenv("KIS_BASE_URL_MOCK")
-        
-    account_suffix = os.getenv("KIS_ACCOUNT_SUFFIX")
-    
-    kis_client = KISClient(
-        app_key=app_key,
-        app_secret=app_secret,
-        base_url=base_url,
-        account_prefix=account_prefix,
-        account_suffix=account_suffix,
-        trading_mode=trading_mode
-    )
-    
-    if not kis_client.authenticate():
-        logger.error("KIS API 인증 실패")
-        return
+    logger.info(f"🚀 KIS Gateway 기반 가격 데이터 수집 시작: {gateway_url}")
+    logger.info(f"📅 수집 기간: 최근 {DAYS_TO_COLLECT}일")
 
     # DB 설정: MariaDB 단일화로 스레드에 별도 설정을 전달하지 않습니다.
 
     # KOSPI 종목 리스트 가져오기
-    # [Patch] FinanceDataReader 오류(JSONDecodeError) 회피를 위해 DB에서 기존 종목 로드
-    logger.info("DB(STOCK_DAILY_PRICES_3Y)에서 관리 중인 종목 리스트를 로드합니다... (FDR 우회)")
+    logger.info("DB(STOCK_MASTER)에서 종목 리스트를 로드합니다...")
     
     # DB 엔진 초기화 (메인 스레드용)
     init_engine()
     
     codes = []
     try:
-        with session_scope() as session:
-            # 3년치 테이블에 데이터가 있는 종목만 대상으로 함 (기존 유니버스 유지)
-            # distinct stock_code 조회
-            result = session.execute(text("SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y"))
-            codes = [row[0] for row in result.fetchall()]
+        # DB 연결
+        conn = database.get_db_connection()
+        codes = database.get_all_stock_codes(conn)
+        conn.close()
+        
+        # 200개로 제한 (유니버스 유지)
+        if len(codes) > CODE_LIMIT:
+            codes = codes[:CODE_LIMIT]
+            
     except Exception as e:
         logger.error(f"❌ DB 종목 리스트 조회 실패: {e}")
         return
 
-    # df_krx = fdr.StockListing('KOSPI')
-    # codes = df_krx['Code'].tolist()
-    logger.info(f"✅ KOSPI 종목 {len(codes)}개 확보 완료.")
+    logger.info(f"✅ 대상 종목 {len(codes)}개 확보 완료.")
     
     logger.info(f"=== KOSPI 전 종목({len(codes)}개) 병렬 수집 시작 (Workers: {MAX_WORKERS}) ===")
     
@@ -162,7 +150,7 @@ def main():
     fail_count = 0
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_code = {executor.submit(collect_stock_data, code, kis_client): code for code in codes}
+        future_to_code = {executor.submit(collect_stock_data, code, kis_api): code for code in codes}
         
         for i, future in enumerate(as_completed(future_to_code)):
             code = future_to_code[future]

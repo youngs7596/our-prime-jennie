@@ -470,7 +470,7 @@ class JennieBrain:
             return {
                 'score': hunter_score, 
                 'grade': self._calculate_grade(hunter_score), 
-                'reason': f"Hunter Score({hunter_score}) failed to meet Judge Threshold({JUDGE_THRESHOLD}). Auto-Rejected."
+                'reason': f"Hunter({hunter_score}점) < TIER1 기준({JUDGE_THRESHOLD}) → Judge 스킵 (RECON tier로 정찰매수 가능)"
             }
 
         provider = self._get_provider(LLMTier.THINKING)

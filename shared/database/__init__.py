@@ -45,7 +45,8 @@ from .core import (
     _get_table_name,
     _is_sqlalchemy_ready,
     pool,
-    close_pool
+    close_pool,
+    get_db_connection_context
 )
 
 from .market import (
