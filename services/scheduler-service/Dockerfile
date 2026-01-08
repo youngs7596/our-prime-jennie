@@ -14,6 +14,9 @@ COPY shared/ /app/shared/
 # Copy service code
 COPY services/scheduler-service/ /app/
 
+# Copy scripts (for worker)
+COPY scripts/ /app/scripts/
+
 # Install deps
 RUN pip install --no-cache-dir -r requirements.txt
 

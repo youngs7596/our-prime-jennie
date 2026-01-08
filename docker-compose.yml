@@ -196,6 +196,30 @@ services:
       retries: 3
       start_period: 30s
 
+  scheduler-worker:
+    build:
+      context: .
+      dockerfile: services/scheduler-service/Dockerfile
+    profiles: [ "real" ]
+    network_mode: host
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/
+      - SCHEDULER_SCOPE=real
+      - PYTHONPATH=/app
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - /docker_data/scheduler_data:/app/data
+    command: [ "python3", "worker.py" ]
+    labels:
+      - app=scheduler-worker
+      - stack=my-prime-jennie
+    depends_on:
+      scheduler-service:
+        condition: service_healthy
+    restart: unless-stopped
+
   scheduler-service-mock:
     build:
       context: .
