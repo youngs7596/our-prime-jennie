@@ -10,6 +10,7 @@ import { AnalystPage } from '@/pages/Analyst'
 import FactorsPage from '@/pages/Factors'
 import VisualLogic from '@/pages/VisualLogic'
 import { SettingsPage } from '@/pages/Settings'
+import { ArchitecturePage } from '@/pages/Architecture'
 import { useAuthStore } from '@/store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -49,6 +50,7 @@ function App() {
           <Route path="logic" element={<FactorsPage />} />
           <Route path="visual-logic" element={<VisualLogic />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="architecture" element={<ArchitecturePage />} />
         </Route>
 
         {/* Fallback */}

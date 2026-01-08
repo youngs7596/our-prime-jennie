@@ -113,14 +113,7 @@ const LogicVisualization: React.FC = () => {
     // 2025-12-08 (GC)
     // We need to find the specific days in the loaded data to place icons.
 
-    // Helper to find relative day by date string
-    const findDay = (dateStr: string) => {
-        const pt = data.find((p: MockDataPoint) => p.date === dateStr);
-        return pt ? -pt.day : 0; // The signal uses positive day for "D-XX" logic or just index?
-        // The original code used: signals.map ... const dataIdx = data.findIndex(d => d.day === -sig.day);
-        // So sig.day should be positive integer representing "How many days ago".
-        // If data.day is negative (e.g. -10), then -sig.day = -10 => sig.day = 10.
-    };
+
 
     // Dates from report: 11-28 (Trigger), 12-08 (GC)
     // Let's hardcode relative days if findDay is complex to render inside functional component (it's fine)
