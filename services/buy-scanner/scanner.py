@@ -9,6 +9,7 @@ import os
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+import pandas as pd
 
 # shared 패키지 임포트
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
