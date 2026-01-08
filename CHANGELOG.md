@@ -1,6 +1,11 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-08
+- **Scout Job 아키텍처 분리**: `scout-job`(API) ↔ `scout-worker`(RabbitMQ) 서비스 분리로 Unhealthy 문제 해결, `/scout` 엔드포인트 비동기 트리거 방식 전환
+- **LLM 프롬프트 버그 수정**: 0점 점수 방지(Strategic Feedback 방어 문구), Debate 환각 방지 강화, 중복 return 버그 수정
+- **tradelog REASON 개선**: "Auto-Rejected" → "RECON tier로 정찰매수 가능" 문구 명확화
+- **투자자 매매동향 API 전환**: `pykrx` → KIS Gateway 전환, 수급 조회 3-tier fallback 구현
+- **ETF 필터링**: `filter_valid_stocks()` 함수 추가로 ETF/미등록 종목 후보군 제외
 - **RabbitMQ Backlog Fix**: `scheduler-service`의 큐(`real.jobs.data.intraday`) 적체 문제를 해결하기 위해 메시지 소비 전용 `scheduler-worker` 서비스를 신규 구현 및 배포 (Docker 이미지 재생성 및 의존성 추가)
 - **Dynamic Tier 2 Threshold & Rebuild Fix**: `buy-executor`가 `STRONG_BULL` 시장에서 Tier 2 종목 매수 기준을 58점으로 완화하도록 로직을 수정하고, Docker 이미지 Rebuild(No-Cache)를 통해 코드 변경 사항을 실시간 반영하여 `한국전력` 매수 체결 성공.
 - **Portfolio 중복 버그 수정**: `execute_trade_and_log`가 호출자 세션을 무시하고 새 세션을 생성하여 PORTFOLIO에 중복 HOLDING 레코드가 생성되던 버그 수정 (`shared/database/trading.py`)
