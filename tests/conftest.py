@@ -221,26 +221,45 @@ def reset_singletons():
     """
     알려진 싱글톤/전역 상태를 리셋하여 테스트 간 격리를 강화합니다.
     """
+    import logging
     # 1. Redis Cache
-    from shared import redis_cache
-    if hasattr(redis_cache, "reset_redis_connection"):
-        redis_cache.reset_redis_connection()
+    try:
+        from shared import redis_cache
+        if hasattr(redis_cache, "reset_redis_connection"):
+            redis_cache.reset_redis_connection()
+    except Exception:
+        pass
 
     # 2. Database Connection
-    from shared.db import connection
-    if hasattr(connection, "dispose_engine"):
-        connection.dispose_engine()
+    try:
+        from shared.db import connection
+        # Try graceful dispose
+        if hasattr(connection, "dispose_engine"):
+            try:
+                connection.dispose_engine()
+            except Exception:
+                pass
+        # Force Reset
+        if hasattr(connection, "_engine"):
+            connection._engine = None
+        if hasattr(connection, "_session_factory"):
+            connection._session_factory = None
+    except Exception:
+        pass
         
     # 3. Auth Cache
-    from shared import auth
-    if hasattr(auth, "clear_secret_cache"):
-        auth.clear_secret_cache()
+    try:
+        from shared import auth
+        if hasattr(auth, "clear_secret_cache"):
+            auth.clear_secret_cache()
+    except Exception:
+        pass
         
     # 4. LLM Factory
     try:
         from shared.llm_factory import LLMFactory
         LLMFactory._instance = None
-    except ImportError:
+    except Exception:
         pass
         
     # 5. Config
@@ -250,5 +269,5 @@ def reset_singletons():
             config.reset_global_config()
         elif hasattr(config, "_global_config"):
             config._global_config = None
-    except ImportError:
+    except Exception:
         pass
