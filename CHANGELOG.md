@@ -13,6 +13,9 @@
 - **CURRENT_HIGH_PRICE 초기화 추가**: 신규 매수 시 `CURRENT_HIGH_PRICE`를 매수가로 초기화하도록 INSERT 쿼리 수정
 - **최고가 DB 동기화 추가**: `price-monitor`의 최고가 갱신 시 Redis뿐 아니라 DB `PORTFOLIO.CURRENT_HIGH_PRICE`도 함께 업데이트 (`shared/redis_cache.py`)
 - **MCP 서버 설정**: MariaDB용 MCP 서버(`mysql_mcp_server`) 설정 완료 (`~/.gemini/settings.json`)
+- **Super Prime Logic Implementation**: `buy-scanner`에 RSI(<=30) & 수급(20일 평균 거래량 5% 이상 외국인 순매수) 기반의 강력 매수 신호 감지 로직 구현 및 텔레그램 알림 긴급 태그(`[🚨긴급/강력매수]`) 적용.
+- **Frontend Lint Fix**: `LogicVisualization.tsx`의 TypeScript 오류 수정 및 타입 안정성 강화.
+
 
 ## 2026-01-07
 - **Dynamic RECON Score**: 시장 국면별 동적 RECON 점수 적용 (STRONG_BULL=58, BULL=62, SIDEWAYS=65, BEAR=70)
