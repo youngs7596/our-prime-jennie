@@ -1,6 +1,7 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-08
+- **Dynamic Tier 2 Threshold & Rebuild Fix**: `buy-executor`가 `STRONG_BULL` 시장에서 Tier 2 종목 매수 기준을 58점으로 완화하도록 로직을 수정하고, Docker 이미지 Rebuild(No-Cache)를 통해 코드 변경 사항을 실시간 반영하여 `한국전력` 매수 체결 성공.
 - **Portfolio 중복 버그 수정**: `execute_trade_and_log`가 호출자 세션을 무시하고 새 세션을 생성하여 PORTFOLIO에 중복 HOLDING 레코드가 생성되던 버그 수정 (`shared/database/trading.py`)
 - **Hunter Score Strategy Integration**: AI Analyst 성과 분석(승률 72%) 기반 전략 고도화 — `buy-scanner`에서 Hunter Score 90+ 종목 가산점(+15%) 및 70- 필터링 적용, `buy-executor`에서 Hunter Score 90+ 종목 안전장치 프리패스(Double Check 면제) 예외 처리 구현.
 - **CURRENT_HIGH_PRICE 초기화 추가**: 신규 매수 시 `CURRENT_HIGH_PRICE`를 매수가로 초기화하도록 INSERT 쿼리 수정

@@ -162,7 +162,17 @@ class BuyExecutor:
             elif trade_tier == "RECON":
                 min_llm_score = recon_min_llm_score
             else:
-                min_llm_score = tier2_min_llm_score
+                # TIER2: 비주력 종목도 강세장(STRONG_BULL)에서는 적극 매수 (RECON 기준 적용)
+                # 그 외에는 기본 TIER2 점수(65)와 비교하여 더 유연한 쪽 적용 가능하나, 여기서는 단순화
+                if market_regime == MarketRegimeDetector.REGIME_STRONG_BULL:
+                     # 강세장 버프: Tier 2 기준을 58점까지 획기적으로 완화 (물 들어올 때 노 젓기)
+                     min_llm_score = 58 
+                elif market_regime == MarketRegimeDetector.REGIME_BULL:
+                     # 상승장 버프: 62점까지 완화
+                     min_llm_score = 62
+                else:
+                     min_llm_score = tier2_min_llm_score
+
             if current_score < min_llm_score: 
                 # [Strategy Refinement] Hunter Score 90+ (Super Prime) Check
                 # 스캐너에서 Hunter Score가 높아 추천된 경우, Executor의 최소 점수 기준을 우회
