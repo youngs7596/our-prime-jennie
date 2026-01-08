@@ -164,10 +164,30 @@ class BuyExecutor:
             else:
                 min_llm_score = tier2_min_llm_score
             if current_score < min_llm_score: 
-                c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
-                tier_label = trade_tier
-                logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
-                return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
+                # [Strategy Refinement] Hunter Score 90+ (Super Prime) Check
+                # 스캐너에서 Hunter Score가 높아 추천된 경우, Executor의 최소 점수 기준을 우회
+                stock_info_data = selected_candidate.get('stock_info') or {}
+                metadata = stock_info_data.get('llm_metadata') or {}
+                hunter_score = metadata.get('hunter_score')
+                
+                # Fallback: 키 위치가 다를 경우 대비
+                if hunter_score is None:
+                    hunter_score = selected_candidate.get('llm_metadata', {}).get('hunter_score')
+                
+                try:
+                    hunter_score_val = float(hunter_score)
+                except (ValueError, TypeError):
+                    hunter_score_val = 0.0
+                
+                is_super_prime = hunter_score_val >= 90.0
+
+                if is_super_prime:
+                     logger.info(f"🔓 [Super Prime] Hunter Score({hunter_score_val}) 우수로 점수 미달({current_score} < {min_llm_score}) 예외 통과")
+                else:
+                    c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
+                    tier_label = trade_tier
+                    logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
+                    return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
 
             stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
             stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))

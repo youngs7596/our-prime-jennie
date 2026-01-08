@@ -72,13 +72,13 @@ def fetch_score_history(session, stock_code, limit=5):
     result = [r[0] for r in query.all()]
     return result[::-1] if result else []
 
-def analyze_performance(session):
+def analyze_performance(session, lookback_days=DEFAULT_LOOKBACK_DAYS):
     """
     Main analysis logic.
     Returns a DataFrame with performance metrics for each decision.
     """
-    logger.info("🔍 Fetching AI Decisions...")
-    decisions = fetch_ai_decisions(session)
+    logger.info(f"🔍 Fetching AI Decisions (lookback: {lookback_days} days)...")
+    decisions = fetch_ai_decisions(session, lookback_days=lookback_days)
     
     if decisions.empty:
         logger.warning("⚠️ No AI decisions found in LLM_DECISION_LEDGER.")
