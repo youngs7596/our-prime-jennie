@@ -151,7 +151,8 @@ class TestWebSocketBuyFlow:
                 'signal_reason': 'Test signal',
                 'current_price': 70000,
                 'llm_score': 75,
-                'market_regime': 'BULL'
+                'market_regime': 'BULL',
+                'timestamp': '2026-01-09T12:00:00+00:00'
             }
             
             result = watcher.publish_signal(signal)
