@@ -24,7 +24,7 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.12-slim'
-                    args '-v $PWD:/app -w /app'
+                    args '-v $PWD:/app -w /app -v pip-cache:/root/.cache/pip'
                     reuseNode true
                 }
             }
@@ -54,7 +54,7 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.12-slim'
-                    args '-v $PWD:/app -w /app'
+                    args '-v $PWD:/app -w /app -v pip-cache:/root/.cache/pip'
                     reuseNode true
                 }
             }
