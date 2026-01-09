@@ -24,6 +24,9 @@ from shared.db.connection import session_scope
 from shared.db import repository as repo
 from shared.notification import TelegramBot
 
+# OpportunityWatcher (Hot Watchlist 매수 기회 감지)
+from opportunity_watcher import OpportunityWatcher
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,6 +54,10 @@ class PriceMonitor:
         logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_WEBSOCKET={self.use_websocket}")
         
         self.portfolio_cache = {}
+        
+        # Hot Watchlist 매수 기회 감시 (Phase 2)
+        self.buy_signals_publisher = None  # 별도 설정 필요
+        self.opportunity_watcher = None
     
     def start_monitoring(self, dry_run: bool = True):
         logger.info("=== 가격 모니터링 시작 ===")
@@ -108,8 +115,19 @@ class PriceMonitor:
                 portfolio_codes = list(set(item['code'] for item in portfolio))
                 self.portfolio_cache = {item['id']: item for item in portfolio}
                 
+                # Hot Watchlist 종목 추가 (OpportunityWatcher)
+                hot_codes = []
+                if self.opportunity_watcher:
+                    self.opportunity_watcher.load_hot_watchlist()
+                    hot_codes = self.opportunity_watcher.get_watchlist_codes()
+                    # 중복 제거
+                    hot_codes = [c for c in hot_codes if c not in portfolio_codes]
+                    logger.info(f"   (WS) Hot Watchlist 추가: {len(hot_codes)}개 종목")
+                
+                all_codes = portfolio_codes + hot_codes
+                
                 self.kis.websocket.start_realtime_monitoring(
-                    portfolio_codes=portfolio_codes,
+                    portfolio_codes=all_codes,
                     on_price_func=self._on_websocket_price_update
                 )
                 
@@ -342,9 +360,9 @@ class PriceMonitor:
     def _on_websocket_price_update(self, stock_code, current_price, current_high):
         try:
             # logger.debug(f"   (WS) [{stock_code}] {current_price}")
-            holdings = [h for h in self.portfolio_cache.values() if h['code'] == stock_code]
-            if not holdings: return
             
+            # 1. 보유 종목 매도 신호 체크
+            holdings = [h for h in self.portfolio_cache.values() if h['code'] == stock_code]
             for h in holdings:
                 with session_scope(readonly=True) as session:
                     signal = self._check_sell_signal(session,
@@ -356,6 +374,15 @@ class PriceMonitor:
                     self._publish_sell_order(signal, h, current_price)
                     # 중복 매도 방지 위해 캐시 제거
                     self.portfolio_cache.pop(h['id'], None)
+            
+            # 2. Hot Watchlist 매수 신호 체크 (Phase 2)
+            if self.opportunity_watcher:
+                buy_signal = self.opportunity_watcher.on_price_update(
+                    stock_code, current_price, volume=0
+                )
+                if buy_signal:
+                    self.opportunity_watcher.publish_signal(buy_signal)
+                    
         except Exception as e:
             logger.error(f"❌ (WS) 오류: {e}")
 

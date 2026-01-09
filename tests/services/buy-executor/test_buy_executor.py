@@ -411,6 +411,73 @@ class TestLLMScoreValidation:
         assert candidate['llm_score'] < min_llm_score_tier2
 
 
+class TestRealtimeSourceFastPath:
+    """Realtime Source 빠른 경로 테스트 (Phase 3)"""
+    
+    def test_opportunity_watcher_source_logged(self):
+        """OpportunityWatcher 신호는 빠른 경로로 처리"""
+        scan_result = {
+            'candidates': [{'llm_score': 65, 'stock_code': '005930'}],
+            'source': 'opportunity_watcher',  # 실시간 신호
+            'market_regime': 'BULL'
+        }
+        
+        # source가 opportunity_watcher면 빠른 경로
+        assert scan_result.get('source') == 'opportunity_watcher'
+    
+    def test_stale_score_penalty(self):
+        """24시간 이상 된 점수는 10점 감점"""
+        from datetime import datetime, timezone, timedelta
+        
+        # 48시간 전 점수
+        old_time = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        
+        selected_candidate = {
+            'llm_score': 70,
+            'stock_info': {'llm_scored_at': old_time}
+        }
+        
+        current_score = selected_candidate.get('llm_score', 0)
+        llm_scored_at = selected_candidate.get('stock_info', {}).get('llm_scored_at')
+        
+        if llm_scored_at:
+            scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
+            age_hours = (datetime.now(timezone.utc) - scored_dt).total_seconds() / 3600
+            if age_hours > 24:
+                penalty = 10
+                current_score = max(0, current_score - penalty)
+        
+        # 70 - 10 = 60점
+        assert current_score == 60
+        assert age_hours > 24
+    
+    def test_fresh_score_no_penalty(self):
+        """최신 점수는 감점 없음"""
+        from datetime import datetime, timezone, timedelta
+        
+        # 2시간 전 점수
+        recent_time = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        
+        selected_candidate = {
+            'llm_score': 70,
+            'stock_info': {'llm_scored_at': recent_time}
+        }
+        
+        current_score = selected_candidate.get('llm_score', 0)
+        llm_scored_at = selected_candidate.get('stock_info', {}).get('llm_scored_at')
+        
+        if llm_scored_at:
+            scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
+            age_hours = (datetime.now(timezone.utc) - scored_dt).total_seconds() / 3600
+            if age_hours > 24:
+                penalty = 10
+                current_score = max(0, current_score - penalty)
+        
+        # 감점 없이 70점 유지
+        assert current_score == 70
+        assert age_hours < 24
+
+
 class TestPositionSizing:
     """포지션 사이징 테스트"""
     

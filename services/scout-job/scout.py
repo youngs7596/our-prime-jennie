@@ -83,6 +83,7 @@ from scout_cache import (
     REDIS_URL,
     # Redis 함수
     _get_redis, _utcnow, update_pipeline_status, save_pipeline_results,
+    save_hot_watchlist,
     # CONFIG 테이블 함수
     _get_scope, _make_state_key, _load_json_config, _save_json_config,
     _get_last_llm_run_at, _save_last_llm_run_at,
@@ -878,6 +879,34 @@ def main():
             # 공통 Phase 3: 최종 Watchlist 저장
             logger.info(f"--- [Phase 3] 최종 Watchlist {len(final_approved_list)}개 저장 ---")
             database.save_to_watchlist(session, final_approved_list)
+            
+            # Hot Watchlist 저장 (Price Monitor WebSocket 구독용)
+            # 시장 국면별 score_threshold 계산
+            recon_score_by_regime = {
+                "STRONG_BULL": 58,
+                "BULL": 62,
+                "SIDEWAYS": 65,
+                "BEAR": 70,
+            }
+            hot_score_threshold = recon_score_by_regime.get(
+                current_regime if 'current_regime' in locals() else 'SIDEWAYS', 
+                65
+            )
+            hot_regime = current_regime if 'current_regime' in locals() else 'UNKNOWN'
+            
+            # LLM Score 기준 이상인 종목만 Hot Watchlist로 저장
+            hot_candidates = [
+                s for s in final_approved_list 
+                if s.get('llm_score', 0) >= hot_score_threshold and s.get('code') != '0001'
+            ]
+            # LLM Score 내림차순 정렬 + 상위 15개 제한
+            hot_candidates = sorted(hot_candidates, key=lambda x: x.get('llm_score', 0), reverse=True)[:15]
+            
+            save_hot_watchlist(
+                stocks=hot_candidates,
+                market_regime=hot_regime,
+                score_threshold=hot_score_threshold
+            )
             
             with ThreadPoolExecutor(max_workers=10) as executor:
                 if hasattr(kis_api, 'API_CALL_DELAY'):

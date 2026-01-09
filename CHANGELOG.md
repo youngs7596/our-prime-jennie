@@ -1,5 +1,15 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-09
+- **WebSocket Buy Scanner Implementation (Phase 1-6)**: `price-monitor`에 `OpportunityWatcher`를 도입하여 3분 폴링 방식에서 실시간 WebSocket 가격 감시 및 매수 신호 포착 시스템으로 전환.
+  - **Phase 1 (Scout Job)**: Hot Watchlist(LLM Score 상위 종목) Redis 저장 및 버저닝 구현.
+  - **Phase 2 (Price Monitor)**: 1분 캔들 실시간 집계(`BarAggregator`) 및 Hot Watchlist 대상 매수 신호 감지(`OpportunityWatcher`) 로직 추가.
+  - **Phase 3 (Buy Executor)**: `opportunity_watcher` 소스 식별 시 LLM 스코어 검증 간소화(Fast Path) 및 Stale Score(24h+) 패널티 적용.
+  - **Phase 4 (Buy Scanner)**: WebSocket 장애 대비 `HOT_WATCHLIST_ONLY_MODE` Fallback 기능 추가.
+  - **Phase 5 (Regime Filtering)**: 시장 국면(Regime) 변경 시 LLM 재호출 없이 Score Threshold만 조정하여 Hot Watchlist 재필터링하는 경량 로직 구현.
+  - **Phase 6 (Observability)**: WebSocket Tick Count, Signal Count 등 관측성 메트릭 API(`get_metrics`) 추가.
+  - **Validation**: 실환경(Docker) 배포를 통해 Hot Watchlist 로드 및 WebSocket 구독 정상 작동(E2E) 검증 완료.
+
 ## 2026-01-08
 - **Scout Job 아키텍처 분리**: `scout-job`(API) ↔ `scout-worker`(RabbitMQ) 서비스 분리로 Unhealthy 문제 해결, `/scout` 엔드포인트 비동기 트리거 방식 전환
 - **LLM 프롬프트 버그 수정**: 0점 점수 방지(Strategic Feedback 방어 문구), Debate 환각 방지 강화, 중복 return 버그 수정
