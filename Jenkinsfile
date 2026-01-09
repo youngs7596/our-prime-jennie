@@ -31,13 +31,13 @@ pipeline {
             steps {
                 echo '🧪 Running Unit Tests...'
                 sh '''
-                    # Install dependencies normally (allow cache if available)
-                    # We rely on requirements.txt for correct versions
-                    pip install -r requirements.txt
+                    # Force fresh install to avoid cache issues
+                    pip install --no-cache-dir -r requirements.txt
                     
                     # Verify key library versions for debugging
                     python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
                     python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
+                    python -c "import flask_limiter; print(f'Flask-Limiter version: {flask_limiter.__version__}')"
                     
                     # Run pytest for services tests (pytest fixtures are required)
                     pytest tests/services/ tests/shared/ -v --tb=short
