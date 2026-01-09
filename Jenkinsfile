@@ -40,7 +40,7 @@ pipeline {
                     python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
                     
                     # Run pytest for services tests (pytest fixtures are required)
-                    pytest tests/services/ -v --tb=short
+                    pytest tests/services/ tests/shared/ -v --tb=short
                 '''
             }
             post {
