@@ -1,5 +1,3 @@
-import unittest
-
 # tests/services/daily-briefing/test_reporter.py
 
 import pytest
@@ -62,8 +60,7 @@ def mock_bot():
 def mock_session():
     return MagicMock()
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDailyReporter(unittest.TestCase):
+class TestDailyReporter:
     
     def test_init(self, mock_kis_client, mock_bot):
         """Test initialization"""

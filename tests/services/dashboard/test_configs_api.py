@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/services/dashboard/test_configs_api.py - Config API 라우터 테스트
 =======================================================================
@@ -27,8 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
 pytest.importorskip("fastapi", reason="fastapi not installed, skipping dashboard API tests")
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDetectSourceSensitiveKeys(unittest.TestCase):
+class TestDetectSourceSensitiveKeys:
     """_detect_source()의 민감 키 처리 테스트"""
 
     @pytest.fixture
@@ -96,8 +93,7 @@ class TestDetectSourceSensitiveKeys(unittest.TestCase):
             assert result.sensitive is True
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDetectSourceNonSensitiveKeys(unittest.TestCase):
+class TestDetectSourceNonSensitiveKeys:
     """_detect_source()의 일반 키 처리 테스트"""
 
     @pytest.fixture
@@ -165,8 +161,7 @@ class TestDetectSourceNonSensitiveKeys(unittest.TestCase):
             assert result.sensitive is False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigUpdateRequest(unittest.TestCase):
+class TestConfigUpdateRequest:
     """설정 업데이트 API 테스트"""
 
     def test_update_sensitive_key_rejected(self):
@@ -222,8 +217,7 @@ class TestConfigUpdateRequest(unittest.TestCase):
                 assert "Unknown config key" in response.json()["detail"]
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigItem(unittest.TestCase):
+class TestConfigItem:
     """ConfigItem 모델 테스트"""
 
     def test_config_item_fields(self):

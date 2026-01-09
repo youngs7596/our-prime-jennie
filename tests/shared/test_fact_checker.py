@@ -1,5 +1,3 @@
-import unittest
-
 # tests/shared/test_fact_checker.py
 # AI Auditor (Fact-Checker) 유닛 테스트
 
@@ -8,8 +6,7 @@ from unittest.mock import Mock, patch, MagicMock
 from shared.fact_checker import FactChecker, FactCheckResult, get_fact_checker
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactChecker(unittest.TestCase):
+class TestFactChecker:
     """FactChecker 테스트"""
     
     @pytest.fixture
@@ -159,8 +156,7 @@ class TestFactChecker(unittest.TestCase):
         assert checker1 is checker2
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactCheckResult(unittest.TestCase):
+class TestFactCheckResult:
     """FactCheckResult 테스트"""
     
     def test_has_hallucination_low_confidence(self):

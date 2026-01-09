@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_config.py - 설정 관리 테스트
 =============================================
@@ -36,8 +34,7 @@ def reset_global_config():
 # Tests: ConfigManager 초기화
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigManagerInit(unittest.TestCase):
+class TestConfigManagerInit:
     """ConfigManager 초기화 테스트"""
     
     def test_init_default(self, config_manager):
@@ -58,8 +55,7 @@ class TestConfigManagerInit(unittest.TestCase):
 # Tests: get() 메서드
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigManagerGet(unittest.TestCase):
+class TestConfigManagerGet:
     """ConfigManager.get() 메서드 테스트"""
     
     def test_get_from_defaults(self, config_manager):
@@ -119,8 +115,7 @@ class TestConfigManagerGet(unittest.TestCase):
 # Tests: set() 메서드
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigManagerSet(unittest.TestCase):
+class TestConfigManagerSet:
     """ConfigManager.set() 메서드 테스트"""
     
     def test_set_in_memory_cache(self, config_manager):
@@ -154,8 +149,7 @@ class TestConfigManagerSet(unittest.TestCase):
 # Tests: 타입별 getter
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTypedGetters(unittest.TestCase):
+class TestTypedGetters:
     """타입별 getter 메서드 테스트"""
     
     def test_get_int(self, config_manager):
@@ -211,8 +205,7 @@ class TestTypedGetters(unittest.TestCase):
 # Tests: 종목별(per-symbol) getter
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestPerSymbolGetters(unittest.TestCase):
+class TestPerSymbolGetters:
     """ConfigManager 종목별 getter 메서드 테스트"""
 
     def test_get_for_symbol_prefers_symbol_key(self, config_manager):
@@ -267,8 +260,7 @@ class TestPerSymbolGetters(unittest.TestCase):
 # Tests: 캐시 관리
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCacheManagement(unittest.TestCase):
+class TestCacheManagement:
     """캐시 관리 테스트"""
     
     def test_clear_cache_specific_key(self, config_manager):
@@ -297,8 +289,7 @@ class TestCacheManagement(unittest.TestCase):
 # Tests: 타입 자동 변환
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTypeConversion(unittest.TestCase):
+class TestTypeConversion:
     """타입 자동 변환 테스트"""
     
     def test_convert_to_int_based_on_default(self, config_manager):
@@ -336,8 +327,7 @@ class TestTypeConversion(unittest.TestCase):
 # Tests: 전역 ConfigManager
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGlobalConfig(unittest.TestCase):
+class TestGlobalConfig:
     """전역 ConfigManager 테스트"""
     
     def test_get_global_config_singleton(self, reset_global_config):
@@ -364,8 +354,7 @@ class TestGlobalConfig(unittest.TestCase):
 # Tests: get_all()
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetAll(unittest.TestCase):
+class TestGetAll:
     """get_all() 메서드 테스트"""
     
     def test_get_all_returns_defaults(self, config_manager):

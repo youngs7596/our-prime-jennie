@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_factor_scoring.py - 팩터 스코어링 테스트
 ========================================================
@@ -62,8 +60,7 @@ def sample_kospi_prices():
 # Tests: calculate_momentum_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMomentumScore(unittest.TestCase):
+class TestMomentumScore:
     """모멘텀 점수 계산 테스트"""
     
     def test_momentum_score_with_full_data(self, scorer, sample_daily_prices, sample_kospi_prices):
@@ -105,8 +102,7 @@ class TestMomentumScore(unittest.TestCase):
 # Tests: calculate_quality_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestQualityScore(unittest.TestCase):
+class TestQualityScore:
     """품질 점수 계산 테스트"""
     
     def test_quality_score_with_full_data(self, scorer, sample_daily_prices):
@@ -165,8 +161,7 @@ class TestQualityScore(unittest.TestCase):
 # Tests: calculate_value_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestValueScore(unittest.TestCase):
+class TestValueScore:
     """가치 점수 계산 테스트"""
     
     def test_value_score_low_valuations(self, scorer):
@@ -209,8 +204,7 @@ class TestValueScore(unittest.TestCase):
 # Tests: calculate_technical_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTechnicalScore(unittest.TestCase):
+class TestTechnicalScore:
     """기술적 점수 계산 테스트"""
     
     def test_technical_score_with_volume(self, scorer, sample_daily_prices):
@@ -263,8 +257,7 @@ class TestTechnicalScore(unittest.TestCase):
 # Tests: calculate_final_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFinalScore(unittest.TestCase):
+class TestFinalScore:
     """최종 점수 계산 테스트"""
     
     def test_final_score_strong_bull(self, scorer):
@@ -358,8 +351,7 @@ class TestFinalScore(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_extreme_roe(self, scorer, sample_daily_prices):

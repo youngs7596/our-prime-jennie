@@ -192,7 +192,6 @@ class TestPriceMonitor(unittest.TestCase):
             self.mock_publisher.publish.assert_called()
             self.assertNotIn(1, self.monitor.portfolio_cache)
 
-    @unittest.skip("CI Stabilization: Logic mismatch with 3% profit fix")
     def test_check_sell_signal_rsi_overbought(self):
         """Test RSI Overbought Scale-out"""
         def config_side_effect(key, default=None):
@@ -216,7 +215,7 @@ class TestPriceMonitor(unittest.TestCase):
              patch("monitor.get_scale_out_level", return_value=0):
             
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 110, {} # Buy 100, Current 110 (+10% > 3%)
+                self.mock_db_session, "005930", "Samsung", 100, 110, {}
             )
             
             self.assertIsNotNone(result)
@@ -274,7 +273,6 @@ class TestPriceMonitor(unittest.TestCase):
         self.monitor.stop_monitoring()
         self.assertTrue(self.monitor.stop_event.is_set())
 
-    @unittest.skip("CI Stabilization: Skip timing-sensitive websocket stall test")
     def test_monitor_websocket_silent_stall(self):
         """Test Silent Stall Detection in WebSocket mode"""
         with patch("monitor.session_scope"), \

@@ -1,5 +1,3 @@
-import unittest
-
 
 import pytest
 from shared.news_classifier import (
@@ -13,8 +11,7 @@ from shared.news_classifier import (
     format_classification_for_logging
 )
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNewsClassifier(unittest.TestCase):
+class TestNewsClassifier:
     @pytest.fixture
     def classifier(self):
         return NewsClassifier()

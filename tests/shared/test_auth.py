@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_auth.py - 인증 및 시크릿 관리 테스트
 ===================================================
@@ -51,8 +49,7 @@ def temp_secrets_file():
 # Tests: get_secret 기본 동작
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetSecret(unittest.TestCase):
+class TestGetSecret:
     """get_secret 함수 테스트"""
     
     def test_get_secret_from_json_file(self, temp_secrets_file, monkeypatch):
@@ -151,8 +148,7 @@ class TestGetSecret(unittest.TestCase):
 # Tests: 환경 변수 매핑
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEnvMapping(unittest.TestCase):
+class TestEnvMapping:
     """환경 변수 매핑 테스트"""
     
     def test_local_env_mapping_gemini(self, monkeypatch):
@@ -172,8 +168,7 @@ class TestEnvMapping(unittest.TestCase):
 # Tests: secrets.json 로딩
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLoadLocalSecrets(unittest.TestCase):
+class TestLoadLocalSecrets:
     """_load_local_secrets 함수 테스트"""
     
     def test_load_valid_json(self, temp_secrets_file, monkeypatch):
@@ -238,8 +233,7 @@ class TestLoadLocalSecrets(unittest.TestCase):
 # Tests: clear_secret_cache
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestClearSecretCache(unittest.TestCase):
+class TestClearSecretCache:
     """clear_secret_cache 함수 테스트"""
     
     def test_clears_all_caches(self, temp_secrets_file, monkeypatch):
@@ -266,8 +260,7 @@ class TestClearSecretCache(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_secret_value_with_whitespace(self, monkeypatch):
@@ -325,8 +318,7 @@ class TestEdgeCases(unittest.TestCase):
 # Tests: Additional Coverage (미커버 라인)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestAdditionalCoverage(unittest.TestCase):
+class TestAdditionalCoverage:
     """미커버 라인 추가 테스트"""
     
     def test_load_secrets_docker_path_fallback(self, monkeypatch):

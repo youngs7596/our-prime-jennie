@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_llm_providers.py - LLM Provider Mock 테스트 (2단계)
 ====================================================================
@@ -47,8 +45,7 @@ def sample_response_schema():
 # Tests: GeminiLLMProvider
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGeminiLLMProvider(unittest.TestCase):
+class TestGeminiLLMProvider:
     """Gemini LLM Provider 테스트"""
     
     @patch('shared.auth.get_secret')
@@ -176,8 +173,7 @@ class TestGeminiLLMProvider(unittest.TestCase):
 # Tests: OpenAILLMProvider
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestOpenAILLMProvider(unittest.TestCase):
+class TestOpenAILLMProvider:
     """OpenAI LLM Provider 테스트"""
     
     @patch('shared.auth.get_secret')
@@ -273,8 +269,7 @@ class TestOpenAILLMProvider(unittest.TestCase):
 # Tests: ClaudeLLMProvider
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestClaudeLLMProvider(unittest.TestCase):
+class TestClaudeLLMProvider:
     """Claude LLM Provider 테스트"""
     
     @patch('shared.auth.get_secret')
@@ -355,8 +350,7 @@ class TestClaudeLLMProvider(unittest.TestCase):
 # Tests: OllamaLLMProvider
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestOllamaLLMProvider(unittest.TestCase):
+class TestOllamaLLMProvider:
     """Ollama LLM Provider 테스트"""
     
     @pytest.fixture
@@ -505,8 +499,7 @@ class TestOllamaLLMProvider(unittest.TestCase):
 # Tests: Provider Properties
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestProviderProperties(unittest.TestCase):
+class TestProviderProperties:
     """Provider 속성 테스트"""
     
     @patch('shared.auth.get_secret')

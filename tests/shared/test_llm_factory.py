@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_llm_factory.py
 
@@ -12,8 +10,7 @@ from unittest.mock import patch, MagicMock
 from shared.llm_factory import LLMTier, ModelStateManager, LLMFactory
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestModelStateManager(unittest.TestCase):
+class TestModelStateManager:
     """ModelStateManager Singleton 및 상태 관리 테스트"""
     
     def test_singleton_pattern(self):
@@ -40,8 +37,7 @@ class TestModelStateManager(unittest.TestCase):
         assert manager.is_model_loaded("qwen3:32b") is False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLLMFactoryHelpers(unittest.TestCase):
+class TestLLMFactoryHelpers:
     """LLMFactory 헬퍼 메서드 테스트"""
     
     def test_get_env_provider_type_fast(self):
@@ -99,8 +95,7 @@ class TestLLMFactoryHelpers(unittest.TestCase):
             assert model_name == "qwen3:32b"
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLLMFactoryGetProvider(unittest.TestCase):
+class TestLLMFactoryGetProvider:
     """LLMFactory.get_provider() 테스트"""
     
     @patch('shared.llm_providers.OllamaLLMProvider')
@@ -172,8 +167,7 @@ class TestLLMFactoryGetProvider(unittest.TestCase):
                 LLMFactory.get_provider(LLMTier.FAST)
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLLMFactoryFallback(unittest.TestCase):
+class TestLLMFactoryFallback:
     """LLMFactory.get_fallback_provider() 테스트"""
     
     @patch('shared.llm_providers.GeminiLLMProvider')

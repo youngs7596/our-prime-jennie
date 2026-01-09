@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_utils.py - 유틸리티 함수 테스트
 =================================================
@@ -23,8 +21,7 @@ from shared.utils import (
 # ============================================================================
 
 @pytest.mark.unit
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRetryWithBackoff(unittest.TestCase):
+class TestRetryWithBackoff:
     """retry_with_backoff 데코레이터 테스트"""
     
     def test_success_first_try(self):
@@ -173,8 +170,7 @@ class TestRetryWithBackoff(unittest.TestCase):
 # Tests: log_execution_time 데코레이터
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLogExecutionTime(unittest.TestCase):
+class TestLogExecutionTime:
     """log_execution_time 데코레이터 테스트"""
     
     def test_logs_execution_time(self, caplog):
@@ -221,8 +217,7 @@ class TestLogExecutionTime(unittest.TestCase):
 # Tests: handle_errors 데코레이터
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHandleErrors(unittest.TestCase):
+class TestHandleErrors:
     """handle_errors 데코레이터 테스트"""
     
     def test_returns_result_on_success(self):
@@ -306,8 +301,7 @@ class TestHandleErrors(unittest.TestCase):
 # Tests: RetryableError / NonRetryableError
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCustomExceptions(unittest.TestCase):
+class TestCustomExceptions:
     """커스텀 예외 클래스 테스트"""
     
     def test_retryable_error(self):
@@ -329,8 +323,7 @@ class TestCustomExceptions(unittest.TestCase):
 # Tests: 데코레이터 조합
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDecoratorComposition(unittest.TestCase):
+class TestDecoratorComposition:
     """데코레이터 조합 테스트"""
     
     def test_retry_with_log_and_error_handling(self, caplog):
@@ -358,8 +351,7 @@ class TestDecoratorComposition(unittest.TestCase):
 # Tests: is_operating_hours 함수
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestIsOperatingHours(unittest.TestCase):
+class TestIsOperatingHours:
     """is_operating_hours 함수 테스트"""
     
     def test_weekday_operating_hours(self):
@@ -479,8 +471,7 @@ class TestIsOperatingHours(unittest.TestCase):
 # Tests: safe_db_operation 데코레이터
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSafeDbOperation(unittest.TestCase):
+class TestSafeDbOperation:
     """safe_db_operation 데코레이터 테스트"""
     
     @pytest.fixture(autouse=True)
@@ -565,8 +556,7 @@ class TestSafeDbOperation(unittest.TestCase):
 # Tests: safe_api_call 데코레이터
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSafeApiCall(unittest.TestCase):
+class TestSafeApiCall:
     """safe_api_call 데코레이터 테스트"""
     
     def test_success_first_try(self):
@@ -671,8 +661,7 @@ class TestSafeApiCall(unittest.TestCase):
 # Tests: _get_reporter 함수
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetReporter(unittest.TestCase):
+class TestGetReporter:
     """_get_reporter 함수 테스트"""
     
     def test_get_reporter_success(self):
@@ -714,8 +703,7 @@ class TestGetReporter(unittest.TestCase):
                 sys.modules.pop('shared.failure_reporter', None)
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRetryCallbackError(unittest.TestCase):
+class TestRetryCallbackError:
     """on_retry 콜백 에러 테스트 (라인 103-104 커버)"""
     
     def test_callback_exception_is_caught(self, caplog):
@@ -747,8 +735,7 @@ class TestRetryCallbackError(unittest.TestCase):
         assert "콜백 실행 중 오류" in caplog.text
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRetryLoopExhaustion(unittest.TestCase):
+class TestRetryLoopExhaustion:
     """루프 종료 후 예외 발생 테스트 (라인 128-136 커버)"""
     
     def test_loop_exhaustion_raises_last_exception(self):
@@ -779,8 +766,7 @@ class TestRetryLoopExhaustion(unittest.TestCase):
 # Tests: RetryStrategy Enum
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRetryStrategy(unittest.TestCase):
+class TestRetryStrategy:
     """RetryStrategy Enum 테스트"""
     
     def test_enum_values(self):

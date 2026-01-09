@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/hybrid_scoring/test_hybrid_scorer.py - HybridScorer 테스트
 =====================================================================
@@ -62,8 +60,7 @@ def scorer():
 # Tests: HybridScoreResult 데이터클래스
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHybridScoreResult(unittest.TestCase):
+class TestHybridScoreResult:
     """HybridScoreResult 데이터클래스 테스트"""
     
     def test_create_result(self):
@@ -109,8 +106,7 @@ class TestHybridScoreResult(unittest.TestCase):
 # Tests: HybridScorer 초기화
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHybridScorerInit(unittest.TestCase):
+class TestHybridScorerInit:
     """HybridScorer 초기화 테스트"""
     
     def test_init_bull_market(self):
@@ -142,8 +138,7 @@ class TestHybridScorerInit(unittest.TestCase):
 # Tests: calculate_hybrid_score
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCalculateHybridScore(unittest.TestCase):
+class TestCalculateHybridScore:
     """하이브리드 점수 계산 테스트"""
     
     def test_basic_calculation(self, scorer, mock_quant_result):
@@ -210,8 +205,7 @@ class TestCalculateHybridScore(unittest.TestCase):
 # Tests: 최소 품질 기준
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMinimumQualityThreshold(unittest.TestCase):
+class TestMinimumQualityThreshold:
     """최소 품질 기준 테스트"""
     
     def test_below_minimum_threshold(self, scorer):
@@ -247,8 +241,7 @@ class TestMinimumQualityThreshold(unittest.TestCase):
 # Tests: 시장 국면별 가중치
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMarketRegimeWeights(unittest.TestCase):
+class TestMarketRegimeWeights:
     """시장 국면별 가중치 테스트"""
     
     def test_bull_market_weights(self, mock_quant_result):
@@ -276,8 +269,7 @@ class TestMarketRegimeWeights(unittest.TestCase):
 # Tests: format_quant_score_for_prompt
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFormatQuantScoreForPrompt(unittest.TestCase):
+class TestFormatQuantScoreForPrompt:
     """정량 점수 프롬프트 포맷 테스트"""
     
     def test_format_basic(self, mock_quant_result):
@@ -319,8 +311,7 @@ class TestFormatQuantScoreForPrompt(unittest.TestCase):
 # Tests: Batch Processing
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBatchProcessing(unittest.TestCase):
+class TestBatchProcessing:
     """배치 처리 테스트"""
 
     def test_batch_calculation_empty(self, scorer):
@@ -371,8 +362,7 @@ class TestBatchProcessing(unittest.TestCase):
 # Tests: Candidate Selection
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSelectCandidates(unittest.TestCase):
+class TestSelectCandidates:
     """후보 선정 테스트"""
 
     def test_select_top_basic(self, scorer):
@@ -408,8 +398,7 @@ class TestSelectCandidates(unittest.TestCase):
 # Tests: Summary Report
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSummaryReport(unittest.TestCase):
+class TestSummaryReport:
     """리포트 생성 테스트"""
 
     def test_generate_report_format(self, scorer):
@@ -443,8 +432,7 @@ class TestSummaryReport(unittest.TestCase):
 # Tests: Pipeline
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRunHybridScoringPipeline(unittest.TestCase):
+class TestRunHybridScoringPipeline:
     """파이프라인 통합 테스트"""
     
     def test_pipeline_exists(self):
@@ -568,8 +556,7 @@ class TestRunHybridScoringPipeline(unittest.TestCase):
         assert "1차 필터링 통과 종목 없음" in report
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSafetyLockDetails(unittest.TestCase):
+class TestSafetyLockDetails:
     """안전장치 상세 로직 테스트"""
 
     def test_safety_lock_logging(self, scorer):

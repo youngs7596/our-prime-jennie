@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/hybrid_scoring/test_factor_analyzer.py - FactorAnalyzer 테스트
 ==========================================================================
@@ -114,8 +112,7 @@ def sample_stocks(in_memory_db):
 # Tests: FactorAnalyzer 초기화
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactorAnalyzerInit(unittest.TestCase):
+class TestFactorAnalyzerInit:
     """FactorAnalyzer 초기화 테스트"""
     
     def test_init_with_repository(self, repo):
@@ -145,8 +142,7 @@ class TestFactorAnalyzerInit(unittest.TestCase):
 # Tests: classify_stock_group
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestClassifyStockGroup(unittest.TestCase):
+class TestClassifyStockGroup:
     """종목 그룹 분류 테스트"""
     
     def test_large_cap(self, analyzer, sample_stocks):
@@ -190,8 +186,7 @@ class TestClassifyStockGroup(unittest.TestCase):
 # Tests: get_stock_sector
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetStockSector(unittest.TestCase):
+class TestGetStockSector:
     """섹터 분류 테스트"""
     
     def test_from_db(self, analyzer, sample_stocks):
@@ -218,8 +213,7 @@ class TestGetStockSector(unittest.TestCase):
 # Tests: _get_historical_prices
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetHistoricalPrices(unittest.TestCase):
+class TestGetHistoricalPrices:
     """주가 데이터 조회 테스트"""
     
     def test_get_prices_via_repository(self, analyzer, sample_prices):
@@ -244,8 +238,7 @@ class TestGetHistoricalPrices(unittest.TestCase):
 # Tests: 팩터 계산 함수들
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactorCalculations(unittest.TestCase):
+class TestFactorCalculations:
     """팩터 계산 함수 테스트"""
     
     def test_calc_momentum_6m(self, analyzer):
@@ -291,8 +284,7 @@ class TestFactorCalculations(unittest.TestCase):
 # Tests: _calculate_forward_returns
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCalculateForwardReturns(unittest.TestCase):
+class TestCalculateForwardReturns:
     """미래 수익률 계산 테스트"""
     
     def test_forward_returns_5d(self, analyzer):
@@ -322,8 +314,7 @@ class TestCalculateForwardReturns(unittest.TestCase):
 # Tests: calculate_ic
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCalculateIC(unittest.TestCase):
+class TestCalculateIC:
     """IC (Information Coefficient) 계산 테스트"""
     
     def test_ic_positive_correlation(self, analyzer):
@@ -363,8 +354,7 @@ class TestCalculateIC(unittest.TestCase):
 # Tests: group_stocks_by_sector
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGroupStocksBySector(unittest.TestCase):
+class TestGroupStocksBySector:
     """섹터별 종목 그룹화 테스트"""
     
     def test_group_by_sector(self, analyzer, sample_stocks):
@@ -384,8 +374,7 @@ class TestGroupStocksBySector(unittest.TestCase):
 # Tests: save_factor_metadata (Repository 모드)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSaveFactorMetadata(unittest.TestCase):
+class TestSaveFactorMetadata:
     """팩터 메타데이터 저장 테스트"""
     
     def test_save_via_repository(self, repo, in_memory_db):
@@ -414,8 +403,7 @@ class TestSaveFactorMetadata(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_empty_stock_list(self, analyzer):
@@ -460,8 +448,7 @@ class TestEdgeCases(unittest.TestCase):
 # Tests: FactorAnalysisResult / ConditionPerformance
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDataClasses(unittest.TestCase):
+class TestDataClasses:
     """데이터클래스 테스트"""
     
     def test_factor_analysis_result(self):

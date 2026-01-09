@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_notification.py - 알림 모듈 테스트
 ===================================================
@@ -33,8 +31,7 @@ def telegram_bot_no_credentials():
 # Tests: TelegramBot 초기화
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTelegramBotInit(unittest.TestCase):
+class TestTelegramBotInit:
     """TelegramBot 초기화 테스트"""
     
     def test_init_with_credentials(self, telegram_bot):
@@ -65,8 +62,7 @@ class TestTelegramBotInit(unittest.TestCase):
 # Tests: send_message
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSendMessage(unittest.TestCase):
+class TestSendMessage:
     """send_message 메서드 테스트"""
     
     @patch('shared.notification.requests.post')
@@ -154,8 +150,7 @@ class TestSendMessage(unittest.TestCase):
 # Tests: 메시지 포맷
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMessageFormat(unittest.TestCase):
+class TestMessageFormat:
     """메시지 포맷 테스트"""
     
     @patch('shared.notification.requests.post')
@@ -191,8 +186,7 @@ class TestMessageFormat(unittest.TestCase):
 # Tests: 타임아웃
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTimeout(unittest.TestCase):
+class TestTimeout:
     """타임아웃 테스트"""
     
     @patch('shared.notification.requests.post')
@@ -214,8 +208,7 @@ class TestTimeout(unittest.TestCase):
 # Tests: 로깅
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestLogging(unittest.TestCase):
+class TestLogging:
     """로깅 테스트"""
     
     @patch('shared.notification.requests.post')
@@ -252,8 +245,7 @@ class TestLogging(unittest.TestCase):
 # Tests: parse_command
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestParseCommand(unittest.TestCase):
+class TestParseCommand:
     """parse_command 메서드 테스트"""
     
     def test_parse_valid_command(self, telegram_bot):
@@ -323,8 +315,7 @@ class TestParseCommand(unittest.TestCase):
 # Tests: is_authorized
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestIsAuthorized(unittest.TestCase):
+class TestIsAuthorized:
     """is_authorized 메서드 테스트"""
     
     def test_authorized_default_chat_id(self, telegram_bot):
@@ -366,8 +357,7 @@ class TestIsAuthorized(unittest.TestCase):
 # Tests: get_updates
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetUpdates(unittest.TestCase):
+class TestGetUpdates:
     """get_updates 메서드 테스트"""
     
     @patch('shared.notification.requests.get')
@@ -443,8 +433,7 @@ class TestGetUpdates(unittest.TestCase):
 # Tests: get_pending_commands
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetPendingCommands(unittest.TestCase):
+class TestGetPendingCommands:
     """get_pending_commands 메서드 테스트"""
     
     @patch('shared.notification.requests.get')
@@ -560,8 +549,7 @@ class TestGetPendingCommands(unittest.TestCase):
 # Tests: reply
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestReply(unittest.TestCase):
+class TestReply:
     """reply 메서드 테스트"""
     
     @patch('shared.notification.requests.post')
@@ -594,8 +582,7 @@ class TestReply(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge case 테스트"""
     
     @patch('shared.notification.requests.post')

@@ -1,5 +1,3 @@
-import unittest
-
 # tests/services/kis-gateway/test_gateway.py
 
 import pytest
@@ -45,8 +43,7 @@ def mock_kis_client():
     gateway_main.kis_client = mock_client
     return mock_client
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestKISGateway(unittest.TestCase):
+class TestKISGateway:
     
     def test_health(self, client):
         """Test /health endpoint"""
