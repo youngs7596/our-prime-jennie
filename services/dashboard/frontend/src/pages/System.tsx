@@ -89,6 +89,13 @@ export function SystemPage() {
     refetchInterval: 30000,
   })
 
+  // Realterm Monitor Query
+  const { data: realtimeDetails, isLoading: realtimeLoading, refetch: refetchRealtime } = useQuery({
+    queryKey: ['realtime-monitor'],
+    queryFn: systemApi.getRealtimeMonitor,
+    refetchInterval: 5000,
+  })
+
   const { data: containerLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
     queryKey: ['container-logs', selectedContainer],
     queryFn: () => selectedContainer ? systemApi.getContainerLogs(selectedContainer) : null,
@@ -128,6 +135,7 @@ export function SystemPage() {
     refetchSystemStatus()
     refetchDocker()
     refetchRabbitMQ()
+    refetchRealtime()
   }
 
   // 스케줄러 작업 제어 핸들러
@@ -264,6 +272,54 @@ export function SystemPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Real-time Watcher Status (New) */}
+      <motion.div variants={itemVariants}>
+        <Card className="border-jennie-gold/30 bg-jennie-gold/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-jennie-gold">
+              <Activity className="w-5 h-5 animate-pulse" />
+              Real-time Watcher Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {realtimeLoading ? (
+              <div className="h-12 w-full bg-white/5 animate-pulse rounded" />
+            ) : (!realtimeDetails || realtimeDetails.status === 'offline') ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <p>⚠️ 모니터링 데이터 없음 (Price Monitor가 실행 중인지 확인하세요)</p>
+                {realtimeDetails?.message && <p className="text-xs mt-1">{realtimeDetails.message}</p>}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">🔥 Hot Watchlist</p>
+                  <p className="text-lg font-bold text-white">{realtimeDetails.metrics?.hot_watchlist_size ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">📶 Tick Count</p>
+                  <p className="text-lg font-bold text-white">{realtimeDetails.metrics?.tick_count ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">🔔 Signals</p>
+                  <p className="text-lg font-bold text-jennie-gold">{realtimeDetails.metrics?.signal_count ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">📊 Market Regime</p>
+                  <p className="text-lg font-bold text-jennie-blue">{realtimeDetails.metrics?.market_regime ?? 'UNK'}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">⏱️ Last Active</p>
+                  <p className="text-xs font-mono mt-1 text-white">
+                    {realtimeDetails.metrics?.updated_at ?
+                      formatRelativeTime(realtimeDetails.metrics.updated_at) : '-'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* Docker Containers */}
       <motion.div variants={itemVariants}>
