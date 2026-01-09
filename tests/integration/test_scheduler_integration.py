@@ -1,5 +1,3 @@
-import unittest
-
 """
 Scheduler Service Integration Tests
 
@@ -12,8 +10,7 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSchedulerIntegration(unittest.TestCase):
+class TestSchedulerIntegration:
     """Test scheduler service integration with database and job execution."""
     
     @pytest.fixture

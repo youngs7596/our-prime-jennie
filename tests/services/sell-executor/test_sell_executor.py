@@ -1,5 +1,3 @@
-import unittest
-
 # tests/services/sell-executor/test_sell_executor.py
 # SellExecutor 유닛 테스트
 # 작업 LLM: Claude Opus 4
@@ -42,8 +40,7 @@ def executor_module():
 # def load_executor_module(): ... REMOVED
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class MockConfig(unittest.TestCase):
+class MockConfig:
     """테스트용 ConfigManager Mock"""
     def __init__(self, overrides: dict = None):
         self._values = {
@@ -108,8 +105,7 @@ def sample_holding():
     }
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSellExecutorBasicFlow(unittest.TestCase):
+class TestSellExecutorBasicFlow:
     """execute_sell_order 기본 흐름 테스트"""
     
     def test_successful_sell_order_dry_run(self, executor_module, mock_kis, mock_config, mock_telegram, sample_holding):
@@ -194,8 +190,7 @@ class TestSellExecutorBasicFlow(unittest.TestCase):
             assert 'Not in portfolio' in result['reason']
     
     
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestIdempotency(unittest.TestCase):
+class TestIdempotency:
     """Idempotency (중복 실행 방지) 테스트"""
     
     def test_duplicate_sell_blocked(self, executor_module, mock_kis, mock_config, sample_holding):
@@ -233,8 +228,7 @@ class TestIdempotency(unittest.TestCase):
             assert 'Duplicate' in result['reason']
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestProfitCalculation(unittest.TestCase):
+class TestProfitCalculation:
     """수익률 계산 테스트"""
     
     def test_profit_calculation_positive(self):
@@ -274,8 +268,7 @@ class TestProfitCalculation(unittest.TestCase):
         assert profit_amount == 0
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHoldingDaysCalculation(unittest.TestCase):
+class TestHoldingDaysCalculation:
     """보유 일수 계산 테스트"""
     
     def test_holding_days_calculation(self):
@@ -293,8 +286,7 @@ class TestHoldingDaysCalculation(unittest.TestCase):
         assert holding_days == 0
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRealOrderExecution(unittest.TestCase):
+class TestRealOrderExecution:
     """실제 주문 실행 테스트"""
     
     def test_real_order_calls_kis_api(self, executor_module, mock_kis, mock_config, sample_holding):
@@ -386,8 +378,7 @@ class TestRealOrderExecution(unittest.TestCase):
             assert 'Order failed' in result['reason']
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTelegramNotification(unittest.TestCase):
+class TestTelegramNotification:
     """텔레그램 알림 테스트"""
     
     def test_telegram_notification_sent_on_success(self, executor_module, mock_kis, mock_config, mock_telegram, sample_holding):
@@ -435,8 +426,7 @@ class TestTelegramNotification(unittest.TestCase):
                 mock_telegram.send_message.assert_called()
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestKeyMetricsRecording(unittest.TestCase):
+class TestKeyMetricsRecording:
     """복기용 지표 기록 테스트"""
     
     def test_key_metrics_structure(self, sample_holding):
@@ -475,8 +465,7 @@ class TestKeyMetricsRecording(unittest.TestCase):
         assert isinstance(key_metrics_dict['profit_pct'], float)
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMockModePrice(unittest.TestCase):
+class TestMockModePrice:
     """Mock 모드 가격 조회 테스트"""
     
     def test_mock_mode_uses_db_price(self, executor_module, mock_kis, mock_config, sample_holding):

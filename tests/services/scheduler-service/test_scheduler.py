@@ -1,5 +1,3 @@
-import unittest
-
 # tests/services/scheduler-service/test_scheduler.py
 
 import pytest
@@ -67,8 +65,7 @@ def client(db_session):
         yield c
     app.dependency_overrides.clear()
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSchedulerService(unittest.TestCase):
+class TestSchedulerService:
 
     def test_health_check(self, client):
         """Test /health endpoint"""

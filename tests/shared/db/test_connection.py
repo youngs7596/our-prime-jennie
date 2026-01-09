@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/db/test_connection.py - DB 연결 모듈 Unit Tests
 =============================================================
@@ -18,8 +16,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBuildConnectionUrl(unittest.TestCase):
+class TestBuildConnectionUrl:
     """_build_connection_url 함수 테스트"""
     
     def test_build_url_from_env_vars(self, monkeypatch):
@@ -85,8 +82,7 @@ class TestBuildConnectionUrl(unittest.TestCase):
             connection._build_connection_url()
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetDbType(unittest.TestCase):
+class TestGetDbType:
     """_get_db_type 함수 테스트"""
     
     def test_get_db_type_returns_mariadb(self):
@@ -98,8 +94,7 @@ class TestGetDbType(unittest.TestCase):
         assert result == "MARIADB"
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestInitEngine(unittest.TestCase):
+class TestInitEngine:
     """init_engine 함수 테스트"""
     
     def test_init_engine_returns_existing_engine(self, mocker):
@@ -184,8 +179,7 @@ class TestInitEngine(unittest.TestCase):
             connection.dispose_engine()
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEnsureEngineInitialized(unittest.TestCase):
+class TestEnsureEngineInitialized:
     """ensure_engine_initialized 함수 테스트"""
     
     def test_ensure_returns_existing_engine(self, mocker):
@@ -262,8 +256,7 @@ class TestEnsureEngineInitialized(unittest.TestCase):
             connection.dispose_engine()
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestIsEngineInitialized(unittest.TestCase):
+class TestIsEngineInitialized:
     """is_engine_initialized 함수 테스트"""
     
     def test_returns_false_when_not_initialized(self):
@@ -287,8 +280,7 @@ class TestIsEngineInitialized(unittest.TestCase):
             connection._engine = None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetEngine(unittest.TestCase):
+class TestGetEngine:
     """get_engine 함수 테스트"""
     
     def test_raises_when_not_initialized(self):
@@ -314,8 +306,7 @@ class TestGetEngine(unittest.TestCase):
             connection._engine = None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetSession(unittest.TestCase):
+class TestGetSession:
     """get_session 함수 테스트"""
     
     def test_raises_when_factory_not_initialized(self):
@@ -343,8 +334,7 @@ class TestGetSession(unittest.TestCase):
             connection._session_factory = None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSessionScope(unittest.TestCase):
+class TestSessionScope:
     """session_scope 컨텍스트 매니저 테스트"""
     
     def test_session_scope_commit_on_success(self, mocker):
@@ -404,8 +394,7 @@ class TestSessionScope(unittest.TestCase):
             connection._session_factory = None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDisposeEngine(unittest.TestCase):
+class TestDisposeEngine:
     """dispose_engine 함수 테스트"""
     
     def test_dispose_cleans_up_all(self, mocker):

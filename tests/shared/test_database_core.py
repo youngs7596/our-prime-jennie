@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_database_core.py
 
@@ -13,8 +11,7 @@ from unittest.mock import patch, MagicMock
 from shared.database import core
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDatabaseHelpers(unittest.TestCase):
+class TestDatabaseHelpers:
     """DB Helper 함수 테스트"""
 
     def test_is_mariadb(self):
@@ -46,8 +43,7 @@ class TestDatabaseHelpers(unittest.TestCase):
             assert core._get_table_name("NEWS_SENTIMENT") == "NEWS_SENTIMENT"
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConnectionPool(unittest.TestCase):
+class TestConnectionPool:
     """DB 연결 풀 관리 테스트"""
 
     @patch('shared.database.core.sa_connection.ensure_engine_initialized')
@@ -96,8 +92,7 @@ class TestConnectionPool(unittest.TestCase):
         mock_engine.raw_connection.assert_called_once()
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfigFunctions(unittest.TestCase):
+class TestConfigFunctions:
     """Config 테이블 관리 함수 테스트"""
 
     @patch('shared.database.core.get_session')
@@ -173,8 +168,7 @@ class TestConfigFunctions(unittest.TestCase):
         assert result is False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestAdditionalUtils(unittest.TestCase):
+class TestAdditionalUtils:
     """추가 유틸리티 함수 테스트"""
     
     @patch('shared.database.core.sa_connection.is_engine_initialized')

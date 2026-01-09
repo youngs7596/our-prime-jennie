@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_llm_prompts.py - LLM 프롬프트 빌더 함수 Unit Tests (1단계)
 ==========================================================================
@@ -132,8 +130,7 @@ def sample_ranking_candidates():
 # Tests: 순수 함수 (_parse_llm_reason은 repository.py에서 테스트)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBuyPromptMeanReversion(unittest.TestCase):
+class TestBuyPromptMeanReversion:
     """평균 회귀 매수 프롬프트 테스트"""
     
     def test_build_buy_prompt_bb_lower(self, sample_stock_snapshot):
@@ -181,8 +178,7 @@ class TestBuyPromptMeanReversion(unittest.TestCase):
         assert 'AI 반도체' in prompt  # RAG 컨텍스트 내용
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBuyPromptGoldenCross(unittest.TestCase):
+class TestBuyPromptGoldenCross:
     """추세 돌파 매수 프롬프트 테스트"""
     
     def test_build_buy_prompt_golden_cross(self, sample_stock_snapshot):
@@ -226,8 +222,7 @@ class TestBuyPromptGoldenCross(unittest.TestCase):
         assert '저항선 돌파' in prompt or '고점' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSellPrompt(unittest.TestCase):
+class TestSellPrompt:
     """매도 프롬프트 테스트"""
     
     def test_build_sell_prompt(self, sample_portfolio_item):
@@ -242,8 +237,7 @@ class TestSellPrompt(unittest.TestCase):
         assert 'RSI' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestAddWatchlistPrompt(unittest.TestCase):
+class TestAddWatchlistPrompt:
     """관심 종목 편입 프롬프트 테스트"""
     
     def test_build_add_watchlist_prompt(self, sample_watchlist_candidate):
@@ -257,8 +251,7 @@ class TestAddWatchlistPrompt(unittest.TestCase):
         assert 'HBM' in prompt or '골든크로스' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBuyPromptRanking(unittest.TestCase):
+class TestBuyPromptRanking:
     """Top-N 랭킹 결재 프롬프트 테스트"""
     
     def test_build_buy_prompt_ranking(self, sample_ranking_candidates):
@@ -305,8 +298,7 @@ class TestBuyPromptRanking(unittest.TestCase):
         assert '최신 뉴스 없음' in prompt  # RAG 없을 때
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestAnalysisPrompt(unittest.TestCase):
+class TestAnalysisPrompt:
     """종목 분석 프롬프트 테스트"""
     
     def test_build_analysis_prompt(self, sample_analysis_info):
@@ -334,8 +326,7 @@ class TestAnalysisPrompt(unittest.TestCase):
         assert '특별한 뉴스 없음' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHunterPromptV5(unittest.TestCase):
+class TestHunterPromptV5:
     """v5 Hunter 프롬프트 테스트 (정량 컨텍스트 포함)"""
     
     def test_build_hunter_prompt_v5_with_quant_context(self):
@@ -390,8 +381,7 @@ class TestHunterPromptV5(unittest.TestCase):
         assert '과거 분석 오류' in prompt or '고PER' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestParameterVerificationPrompt(unittest.TestCase):
+class TestParameterVerificationPrompt:
     """파라미터 변경 검증 프롬프트 테스트"""
     
     def test_build_parameter_verification_prompt(self):
@@ -423,8 +413,7 @@ class TestParameterVerificationPrompt(unittest.TestCase):
 
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFormatHelpers(unittest.TestCase):
+class TestFormatHelpers:
     """포맷 헬퍼 함수 테스트 (프롬프트 내부)"""
     
     def test_format_market_cap_trillion(self, sample_stock_snapshot):
@@ -478,8 +467,7 @@ class TestFormatHelpers(unittest.TestCase):
         assert prompt is not None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBuyPromptRankingWithFeedback(unittest.TestCase):
+class TestBuyPromptRankingWithFeedback:
     """feedback_context 포함 랭킹 프롬프트 테스트 (라인 203 커버)"""
     
     def test_build_buy_prompt_ranking_with_feedback(self, sample_ranking_candidates):
@@ -493,8 +481,7 @@ class TestBuyPromptRankingWithFeedback(unittest.TestCase):
         assert '종목' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_empty_stock_info(self):
@@ -540,8 +527,7 @@ class TestEdgeCases(unittest.TestCase):
 # 추가 테스트: 누락 함수들 (커버리지 100% 달성을 위함)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNewsSentimentPrompt(unittest.TestCase):
+class TestNewsSentimentPrompt:
     """뉴스 감성 분석 프롬프트 테스트"""
     
     def test_build_news_sentiment_prompt(self):
@@ -560,8 +546,7 @@ class TestNewsSentimentPrompt(unittest.TestCase):
         assert '호재' in prompt or '악재' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDebatePrompt(unittest.TestCase):
+class TestDebatePrompt:
     """Debate 프롬프트 테스트"""
     
     def test_build_debate_prompt_bullish(self):
@@ -619,8 +604,7 @@ class TestDebatePrompt(unittest.TestCase):
         assert 'General Market' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestJudgePrompt(unittest.TestCase):
+class TestJudgePrompt:
     """Judge 판결 프롬프트 테스트"""
     
     def test_build_judge_prompt(self):
@@ -648,8 +632,7 @@ class TestJudgePrompt(unittest.TestCase):
         assert 'grade' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestJudgePromptV5(unittest.TestCase):
+class TestJudgePromptV5:
     """Judge v5 프롬프트 테스트 (정량 컨텍스트 포함)"""
     
     def test_build_judge_prompt_v5_with_quant(self):
@@ -715,8 +698,7 @@ class TestJudgePromptV5(unittest.TestCase):
         assert 'Feedback' in prompt or '피드백' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestContextAnalysisPrompt(unittest.TestCase):
+class TestContextAnalysisPrompt:
     """HybridScorer용 컨텍스트 분석 프롬프트 테스트"""
     
     def test_build_context_analysis_prompt(self):
@@ -752,8 +734,7 @@ class TestContextAnalysisPrompt(unittest.TestCase):
         assert '최근 뉴스 없음' in prompt
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCompetitorBenefitPrompt(unittest.TestCase):
+class TestCompetitorBenefitPrompt:
     """경쟁사 수혜 분석 프롬프트 테스트"""
     
     def test_build_competitor_benefit_prompt(self):

@@ -1,5 +1,3 @@
-import unittest
-
 # tests/shared/test_strategy.py
 # 전략 계산 모듈 유닛 테스트
 # 작업 LLM: Claude Opus 4
@@ -106,8 +104,7 @@ def death_cross_df():
 # calculate_cumulative_return 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCumulativeReturn(unittest.TestCase):
+class TestCumulativeReturn:
     """7일 누적 수익률 계산 테스트"""
     
     def test_positive_return(self):
@@ -160,8 +157,7 @@ class TestCumulativeReturn(unittest.TestCase):
 # calculate_moving_average 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMovingAverage(unittest.TestCase):
+class TestMovingAverage:
     """이동평균 계산 테스트"""
     
     def test_simple_ma(self, simple_price_list):
@@ -199,8 +195,7 @@ class TestMovingAverage(unittest.TestCase):
 # calculate_rsi 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestRSI(unittest.TestCase):
+class TestRSI:
     """RSI 계산 테스트"""
     
     def test_rsi_uptrend(self, uptrend_prices):
@@ -253,8 +248,7 @@ class TestRSI(unittest.TestCase):
 # calculate_atr 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestATR(unittest.TestCase):
+class TestATR:
     """ATR 계산 테스트"""
     
     def test_atr_basic(self, daily_prices_df):
@@ -318,8 +312,7 @@ class TestATR(unittest.TestCase):
 # calculate_bollinger_bands 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBollingerBands(unittest.TestCase):
+class TestBollingerBands:
     """볼린저 밴드 계산 테스트"""
     
     def test_lower_band_basic(self, daily_prices_df):
@@ -353,8 +346,7 @@ class TestBollingerBands(unittest.TestCase):
 # check_golden_cross 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGoldenCross(unittest.TestCase):
+class TestGoldenCross:
     """골든 크로스 감지 테스트"""
     
     def test_golden_cross_detected(self, golden_cross_df):
@@ -393,8 +385,7 @@ class TestGoldenCross(unittest.TestCase):
 # check_death_cross 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDeathCross(unittest.TestCase):
+class TestDeathCross:
     """데드 크로스 감지 테스트"""
     
     def test_death_cross_detected(self, death_cross_df):
@@ -423,8 +414,7 @@ class TestDeathCross(unittest.TestCase):
 # 엣지 케이스 및 예외 처리 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """엣지 케이스 테스트"""
     
     def test_empty_dataframe(self):
@@ -461,8 +451,7 @@ class TestEdgeCases(unittest.TestCase):
         assert result is not None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestPrepareSequence(unittest.TestCase):
+class TestPrepareSequence:
     """_prepare_sequence 헬퍼 함수 테스트"""
     
     def test_none_input(self):
@@ -500,8 +489,7 @@ class TestPrepareSequence(unittest.TestCase):
 # 볼린저밴드 스퀴즈 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBollingerSqueeze(unittest.TestCase):
+class TestBollingerSqueeze:
     """볼린저밴드 스퀴즈 테스트"""
     
     def test_squeeze_detected(self):
@@ -554,8 +542,7 @@ class TestBollingerSqueeze(unittest.TestCase):
 # MACD 테스트
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMACD(unittest.TestCase):
+class TestMACD:
     """MACD 지표 테스트"""
     
     def test_macd_calculation(self):
@@ -606,8 +593,7 @@ class TestMACD(unittest.TestCase):
         assert result is None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMACDDivergence(unittest.TestCase):
+class TestMACDDivergence:
     """MACD 다이버전스 테스트"""
     
     def test_bearish_divergence(self):

@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/db/test_repository.py - SQLAlchemy Repository Unit Tests
 ======================================================================
@@ -210,8 +208,7 @@ def session_with_config(db_session):
 # Tests: _parse_llm_reason (순수 함수)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestParseLlmReason(unittest.TestCase):
+class TestParseLlmReason:
     """LLM Reason 파싱 테스트"""
     
     def test_parse_reason_with_metadata(self):
@@ -271,8 +268,7 @@ class TestParseLlmReason(unittest.TestCase):
 # Tests: WatchList
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestWatchList(unittest.TestCase):
+class TestWatchList:
     """WatchList 관련 테스트"""
     
     def test_get_active_watchlist(self, session_with_watchlist):
@@ -334,8 +330,7 @@ class TestWatchList(unittest.TestCase):
 # Tests: Portfolio
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestPortfolio(unittest.TestCase):
+class TestPortfolio:
     """Portfolio 관련 테스트"""
     
     def test_get_active_portfolio(self, session_with_portfolio):
@@ -399,8 +394,7 @@ class TestPortfolio(unittest.TestCase):
 # Tests: TradeLog
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTradeLog(unittest.TestCase):
+class TestTradeLog:
     """TradeLog 관련 테스트"""
     
     def test_get_today_total_buy_amount(self, session_with_trade_logs):
@@ -504,8 +498,7 @@ class TestTradeLog(unittest.TestCase):
 # Tests: Config CRUD
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestConfig(unittest.TestCase):
+class TestConfig:
     """CONFIG 테이블 CRUD 테스트"""
     
     def test_get_config_existing(self, session_with_config):
@@ -578,8 +571,7 @@ class TestConfig(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_portfolio_with_null_values(self, db_session):
@@ -657,8 +649,7 @@ class TestEdgeCases(unittest.TestCase):
 # Tests: KIS Gateway API (Mock)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestKisGatewayApi(unittest.TestCase):
+class TestKisGatewayApi:
     """KIS Gateway API 관련 테스트 (mocked)"""
     
     def test_fetch_current_prices_empty_list(self):
@@ -779,8 +770,7 @@ class TestKisGatewayApi(unittest.TestCase):
 # Tests: Dashboard V2 API (추가)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDashboardV2Api(unittest.TestCase):
+class TestDashboardV2Api:
     """Dashboard V2 API 함수 테스트"""
     
     def test_get_portfolio_with_current_prices_empty(self, db_session):
@@ -902,8 +892,7 @@ class TestDashboardV2Api(unittest.TestCase):
 # Tests: Additional Coverage (미커버 라인)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestAdditionalCoverage(unittest.TestCase):
+class TestAdditionalCoverage:
     """미커버 라인 추가 테스트"""
     
     def test_fetch_current_prices_single_stock_failure(self, monkeypatch):

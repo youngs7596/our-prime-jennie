@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/hybrid_scoring/test_schema.py - Schema 순수 함수 테스트
 ===================================================================
@@ -15,8 +13,7 @@ from unittest.mock import MagicMock, patch
 # Tests: get_confidence_level
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetConfidenceLevel(unittest.TestCase):
+class TestGetConfidenceLevel:
     """get_confidence_level 함수 테스트"""
     
     def test_high_confidence(self):
@@ -48,8 +45,7 @@ class TestGetConfidenceLevel(unittest.TestCase):
 # Tests: get_confidence_weight
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetConfidenceWeight(unittest.TestCase):
+class TestGetConfidenceWeight:
     """get_confidence_weight 함수 테스트"""
     
     def test_full_weight(self):
@@ -95,8 +91,7 @@ class TestGetConfidenceWeight(unittest.TestCase):
 # Tests: get_default_factor_weights
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetDefaultFactorWeights(unittest.TestCase):
+class TestGetDefaultFactorWeights:
     """get_default_factor_weights 함수 테스트"""
     
     def test_returns_dict(self):
@@ -144,8 +139,7 @@ class TestGetDefaultFactorWeights(unittest.TestCase):
 # Tests: is_oracle / _is_mariadb (MariaDB 단일화)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDbTypeDetection(unittest.TestCase):
+class TestDbTypeDetection:
     """DB 타입 감지 함수 테스트 (MariaDB 단일화)"""
     
     def test_is_mariadb_always_true(self):
@@ -165,8 +159,7 @@ class TestDbTypeDetection(unittest.TestCase):
 # Tests: execute_upsert
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestExecuteUpsert(unittest.TestCase):
+class TestExecuteUpsert:
     """execute_upsert 함수 테스트"""
     
     def test_mariadb_upsert(self, monkeypatch):
@@ -223,8 +216,7 @@ class TestExecuteUpsert(unittest.TestCase):
 # Tests: create_hybrid_scoring_tables
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCreateHybridScoringTables(unittest.TestCase):
+class TestCreateHybridScoringTables:
     """create_hybrid_scoring_tables 함수 테스트"""
     
     def test_mariadb_tables(self, monkeypatch):

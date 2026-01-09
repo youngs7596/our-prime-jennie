@@ -1,5 +1,3 @@
-import unittest
-
 # tests/shared/test_circuit_breaker.py
 # Circuit Breaker 유닛 테스트
 
@@ -15,8 +13,7 @@ from shared.kis.circuit_breaker import (
 )
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCircuitBreaker(unittest.TestCase):
+class TestCircuitBreaker:
     """CircuitBreaker 테스트"""
     
     @pytest.fixture
@@ -181,8 +178,7 @@ class TestCircuitBreaker(unittest.TestCase):
         assert status['name'] == "TEST_CB"
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCircuitBreakerSingleton(unittest.TestCase):
+class TestCircuitBreakerSingleton:
     """KIS Circuit Breaker 싱글톤 테스트"""
     
     def test_singleton_instance(self):

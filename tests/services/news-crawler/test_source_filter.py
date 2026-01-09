@@ -1,5 +1,3 @@
-import unittest
-
 """
 뉴스 소스 필터링 유틸 함수 단위 테스트
 직접 함수 정의하여 독립 테스트
@@ -70,8 +68,7 @@ def compute_news_hash(title: str) -> str:
 
 # ===== 테스트 케이스 =====
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHostnameExtraction(unittest.TestCase):
+class TestHostnameExtraction:
     def test_get_hostname_hankyung(self):
         url = "https://www.hankyung.com/economy/article/2025010212345"
         assert get_hostname(url) == "www.hankyung.com"
@@ -85,8 +82,7 @@ class TestHostnameExtraction(unittest.TestCase):
         assert get_hostname("invalid") == ""
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestTrustedHostname(unittest.TestCase):
+class TestTrustedHostname:
     def test_trusted_hankyung(self):
         assert is_trusted_hostname("www.hankyung.com") == True
         assert is_trusted_hostname("hankyung.com") == True
@@ -104,8 +100,7 @@ class TestTrustedHostname(unittest.TestCase):
         assert is_trusted_hostname("hankyung.com.evil.com") == False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestWrapperDomain(unittest.TestCase):
+class TestWrapperDomain:
     def test_naver_news_is_wrapper(self):
         assert is_wrapper_domain("news.naver.com") == True
         assert is_wrapper_domain("n.news.naver.com") == True
@@ -120,8 +115,7 @@ class TestWrapperDomain(unittest.TestCase):
         assert is_wrapper_domain("hankyung.com") == False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDateExtraction(unittest.TestCase):
+class TestDateExtraction:
     def test_extract_date_hankyung(self):
         url = "https://www.hankyung.com/economy/article/2025010212345"
         assert extract_date_from_url(url) == date(2025, 1, 2)
@@ -135,8 +129,7 @@ class TestDateExtraction(unittest.TestCase):
         assert extract_date_from_url(url) is None
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNoiseFilter(unittest.TestCase):
+class TestNoiseFilter:
     def test_noise_title(self):
         assert is_noise_title("[특징주] 삼성전자 3% 급등") == True
         assert is_noise_title("오전 시황: 코스피 상승세") == True
@@ -146,8 +139,7 @@ class TestNoiseFilter(unittest.TestCase):
         assert is_noise_title("SK하이닉스 기록적 분기 실적 발표") == False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNewsHash(unittest.TestCase):
+class TestNewsHash:
     def test_same_title_same_hash(self):
         h1 = compute_news_hash("삼성전자, 실적 발표")
         h2 = compute_news_hash("삼성전자, 실적 발표")

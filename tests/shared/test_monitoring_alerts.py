@@ -1,5 +1,3 @@
-import unittest
-
 # tests/shared/test_monitoring_alerts.py
 # Monitoring Alerts 유닛 테스트
 
@@ -8,8 +6,7 @@ from unittest.mock import MagicMock
 from shared.monitoring_alerts import MonitoringAlerts, get_monitoring_alerts, init_monitoring_alerts
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMonitoringAlerts(unittest.TestCase):
+class TestMonitoringAlerts:
     """MonitoringAlerts 테스트"""
     
     @pytest.fixture
@@ -92,8 +89,7 @@ class TestMonitoringAlerts(unittest.TestCase):
         assert result is False
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestMonitoringAlertsSingleton(unittest.TestCase):
+class TestMonitoringAlertsSingleton:
     """싱글톤 테스트"""
     
     def test_init_monitoring_alerts(self):

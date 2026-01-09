@@ -1,5 +1,3 @@
-import unittest
-
 # tests/shared/test_portfolio_diversification.py
 # 포트폴리오 분산 검증 모듈 유닛 테스트
 # 작업 LLM: Claude Opus 4
@@ -26,8 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from shared.portfolio_diversification import DiversificationChecker
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class MockConfig(unittest.TestCase):
+class MockConfig:
     """테스트용 ConfigManager Mock"""
     def __init__(self, overrides: dict = None):
         self._values = {
@@ -41,8 +38,7 @@ class MockConfig(unittest.TestCase):
         return float(self._values.get(key, default))
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class MockSectorClassifier(unittest.TestCase):
+class MockSectorClassifier:
     """테스트용 SectorClassifier Mock"""
     def __init__(self, sector_map: dict = None):
         self._sector_map = sector_map or {}
@@ -73,8 +69,7 @@ def diversification_checker(mock_config, mock_sector_classifier):
     return DiversificationChecker(mock_config, mock_sector_classifier)
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestBasicDiversification(unittest.TestCase):
+class TestBasicDiversification:
     """기본 분산 검증 테스트"""
     
     def test_empty_portfolio_passes(self, diversification_checker):
@@ -133,8 +128,7 @@ class TestBasicDiversification(unittest.TestCase):
         assert result['concentration_risk'] == 'UNKNOWN'
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSectorConcentration(unittest.TestCase):
+class TestSectorConcentration:
     """섹터 집중도 검증 테스트"""
     
     def test_sector_limit_exceeded(self, mock_config, mock_sector_classifier):
@@ -235,8 +229,7 @@ class TestSectorConcentration(unittest.TestCase):
         assert result['approved'] == True
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestStockConcentration(unittest.TestCase):
+class TestStockConcentration:
     """단일 종목 집중도 검증 테스트"""
     
     def test_stock_limit_exceeded(self, mock_config, mock_sector_classifier):
@@ -284,8 +277,7 @@ class TestStockConcentration(unittest.TestCase):
         assert result['approved'] == True
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestOverrideParameters(unittest.TestCase):
+class TestOverrideParameters:
     """Override 파라미터 테스트"""
     
     def test_override_max_sector_pct(self, mock_config, mock_sector_classifier):
@@ -358,8 +350,7 @@ class TestOverrideParameters(unittest.TestCase):
         assert result_override['approved'] == True
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSectorExposureCalculation(unittest.TestCase):
+class TestSectorExposureCalculation:
     """섹터 비중 계산 테스트"""
     
     def test_sector_exposure_returned(self, diversification_checker):
@@ -431,8 +422,7 @@ class TestSectorExposureCalculation(unittest.TestCase):
         assert abs(sector_exposure['Communication'] - 5.0) < 1.0
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestCurrentSectorExposure(unittest.TestCase):
+class TestCurrentSectorExposure:
     """매수 전 섹터 비중 계산 테스트"""
     
     def test_current_sector_exposure_calculated(self, mock_config, mock_sector_classifier):
@@ -469,8 +459,7 @@ class TestCurrentSectorExposure(unittest.TestCase):
         assert abs(result['current_sector_exposure'] - 20.0) < 2.0  # 20% ± 2%
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestExceptionHandling(unittest.TestCase):
+class TestExceptionHandling:
     """예외 처리 테스트"""
     
     def test_exception_returns_approved(self, mock_config):
@@ -500,8 +489,7 @@ class TestExceptionHandling(unittest.TestCase):
         assert result['concentration_risk'] == 'UNKNOWN'
 
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """엣지 케이스 테스트"""
     
     def test_very_small_position(self, diversification_checker):

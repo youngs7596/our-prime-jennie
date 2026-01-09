@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/hybrid_scoring/test_factor_repository.py - FactorRepository 테스트
 ==============================================================================
@@ -140,8 +138,7 @@ def sample_financials(in_memory_db):
 # Tests: 주가 데이터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestHistoricalPrices(unittest.TestCase):
+class TestHistoricalPrices:
     """주가 데이터 조회 테스트"""
     
     def test_get_historical_prices(self, repo, sample_stock_prices):
@@ -196,8 +193,7 @@ class TestHistoricalPrices(unittest.TestCase):
 # Tests: 종목 마스터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestStockMaster(unittest.TestCase):
+class TestStockMaster:
     """종목 마스터 조회 테스트"""
     
     def test_get_market_cap(self, repo, sample_stock_master):
@@ -231,8 +227,7 @@ class TestStockMaster(unittest.TestCase):
 # Tests: 재무 데이터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFinancialData(unittest.TestCase):
+class TestFinancialData:
     """재무 데이터 조회 테스트"""
     
     def test_get_financial_data(self, repo, sample_financials):
@@ -266,8 +261,7 @@ class TestFinancialData(unittest.TestCase):
 # Tests: 수급 데이터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSupplyDemandData(unittest.TestCase):
+class TestSupplyDemandData:
     """수급 데이터 조회 테스트"""
     
     def test_get_supply_demand_data(self, repo, in_memory_db):
@@ -301,8 +295,7 @@ class TestSupplyDemandData(unittest.TestCase):
 # Tests: 뉴스 감성 데이터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNewsSentimentHistory(unittest.TestCase):
+class TestNewsSentimentHistory:
     """뉴스 감성 데이터 조회 테스트"""
     
     def test_get_news_sentiment_history(self, repo, in_memory_db):
@@ -328,8 +321,7 @@ class TestNewsSentimentHistory(unittest.TestCase):
 # Tests: 공시 데이터 조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestDisclosures(unittest.TestCase):
+class TestDisclosures:
     """공시 데이터 조회 테스트"""
     
     def test_get_disclosures(self, repo, in_memory_db):
@@ -353,8 +345,7 @@ class TestDisclosures(unittest.TestCase):
 # Tests: 팩터 메타데이터 저장/조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactorMetadata(unittest.TestCase):
+class TestFactorMetadata:
     """팩터 메타데이터 CRUD 테스트"""
     
     def test_save_factor_metadata_insert(self, repo, in_memory_db):
@@ -418,8 +409,7 @@ class TestFactorMetadata(unittest.TestCase):
 # Tests: 팩터 성과 저장/조회
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestFactorPerformance(unittest.TestCase):
+class TestFactorPerformance:
     """팩터 성과 CRUD 테스트"""
     
     def test_save_factor_performance(self, repo, in_memory_db):
@@ -479,8 +469,7 @@ class TestFactorPerformance(unittest.TestCase):
 # Tests: 뉴스 팩터 통계 저장
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNewsFactorStats(unittest.TestCase):
+class TestNewsFactorStats:
     """뉴스 팩터 통계 CRUD 테스트"""
     
     def test_save_news_factor_stats(self, repo, in_memory_db):
@@ -505,8 +494,7 @@ class TestNewsFactorStats(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_empty_stock_codes(self, repo):

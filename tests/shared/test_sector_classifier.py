@@ -1,5 +1,3 @@
-import unittest
-
 """
 tests/shared/test_sector_classifier.py - 섹터 분류 테스트
 ========================================================
@@ -39,8 +37,7 @@ def classifier_with_db(mock_kis):
 # Tests: 종목명 기반 섹터 추론
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestInferSectorFromName(unittest.TestCase):
+class TestInferSectorFromName:
     """종목명 기반 섹터 추론 테스트"""
     
     def test_infer_samsung_electronics(self, classifier_no_db):
@@ -113,8 +110,7 @@ class TestInferSectorFromName(unittest.TestCase):
 # Tests: get_sector (DB 없음)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetSectorNoDb(unittest.TestCase):
+class TestGetSectorNoDb:
     """DB 없이 섹터 조회 테스트"""
     
     def test_get_sector_from_name(self, classifier_no_db):
@@ -151,8 +147,7 @@ class TestGetSectorNoDb(unittest.TestCase):
 # Tests: get_sector (DB 있음)
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestGetSectorWithDb(unittest.TestCase):
+class TestGetSectorWithDb:
     """DB와 함께 섹터 조회 테스트"""
     
     @patch('shared.sector_classifier.session_scope')
@@ -209,8 +204,7 @@ class TestGetSectorWithDb(unittest.TestCase):
 # Tests: _normalize_sector
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestNormalizeSector(unittest.TestCase):
+class TestNormalizeSector:
     """섹터 정규화 테스트"""
     
     def test_normalize_electronics(self, classifier_no_db):
@@ -243,8 +237,7 @@ class TestNormalizeSector(unittest.TestCase):
 # Tests: SECTOR_KEYWORDS
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestSectorKeywords(unittest.TestCase):
+class TestSectorKeywords:
     """섹터 키워드 정의 테스트"""
     
     def test_sector_keywords_exist(self, classifier_no_db):
@@ -271,8 +264,7 @@ class TestSectorKeywords(unittest.TestCase):
 # Tests: Edge Cases
 # ============================================================================
 
-@unittest.skip("CI Stabilization: Skip pytest-dependent test")
-class TestEdgeCases(unittest.TestCase):
+class TestEdgeCases:
     """Edge Cases 테스트"""
     
     def test_empty_stock_name(self, classifier_no_db):

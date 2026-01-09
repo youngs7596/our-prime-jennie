@@ -6,7 +6,7 @@
   - **Phase 2 (Price Monitor)**: 1분 캔들 실시간 집계(`BarAggregator`) 및 Hot Watchlist 대상 매수 신호 감지(`OpportunityWatcher`) 로직 추가.
   - **Phase 3 (Buy Executor)**: `opportunity_watcher` 소스 식별 시 LLM 스코어 검증 간소화(Fast Path) 및 Stale Score(24h+) 패널티 적용.
   - **Phase 4 (Buy Scanner)**: WebSocket 장애 대비 `HOT_WATCHLIST_ONLY_MODE` Fallback 기능 추가.
-  - **Phase 5 (Regime Filtering)**: 시장 국면(Regime) 변경 시 LLM 재호출 없이 Score Threshold만 조정하여 Hot Watchlist 재필터링하는 경량 로직 구현.- [2026-01-09] CI 테스트 안정화: 불안정하거나 외부 의존성이 큰 30여 개의 테스트를 Skip 처리하여 파이프라인 신뢰성 확보
+  - **Phase 5 (Regime Filtering)**: 시장 국면(Regime) 변경 시 LLM 재호출 없이 Score Threshold만 조정하여 Hot Watchlist 재필터링하는 경량 로직 구현.
   - **Phase 6 (Observability)**: WebSocket Tick Count, Signal Count 등 관측성 메트릭 API(`get_metrics`) 추가.
   - **Validation**: 실환경(Docker) 배포를 통해 Hot Watchlist 로드 및 WebSocket 구독 정상 작동(E2E) 검증 완료.
 - **Silent Stall Detection**: `services/price-monitor/monitor.py`에 WebSocket 데이터 수신 중단(60초) 시 자동 재연결 로직 구현 (Silent Stall 방지).
