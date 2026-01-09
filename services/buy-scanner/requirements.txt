@@ -19,6 +19,7 @@ pyarrow==16.1.0
 # HTTP Requests & WebSocket
 requests==2.31.0
 websocket-client==1.8.0
+python-socketio[client]>=5.0.0
 
 # Utils
 pytz

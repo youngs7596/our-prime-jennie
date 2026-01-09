@@ -1,6 +1,13 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-09
+- **WebSocket E2E 테스트 환경 구축**: Mock WebSocket 서버 구현 및 테스트 API 추가로 완전한 E2E 테스트 파이프라인 구성.
+  - `docker/kis-mock/mock_server.py`: Flask-SocketIO 기반 WebSocket 기능 추가, 테스트용 API (`/api/trigger-buy-signal`, `/api/trigger-price-burst`) 구현
+  - `docker/kis-mock/Dockerfile`: `flask-socketio`, `python-socketio` 의존성 추가
+  - `services/buy-scanner/main.py`: Mock WebSocket 모드 지원 (`MOCK_SKIP_TIME_CHECK=true`), `buy_signal` 이벤트 핸들러 추가
+  - `services/buy-scanner/requirements.txt`: `python-socketio[client]` 의존성 추가
+  - `docker-compose.yml`: buy-scanner-mock에 Mock WebSocket 환경변수 추가, buy-scanner(Real)에 `USE_WEBSOCKET_MODE=true` 적용
+  - `tests/integration/test_websocket_buy_flow.py`: WebSocket 기반 매수 흐름 E2E 테스트 파일 생성
 - **WebSocket 듀얼 세션 아키텍처 재정립**: buy-scanner(매수용 WebSocket)와 price-monitor(매도용 WebSocket) 역할 분리 완료.
   - `services/buy-scanner/opportunity_watcher.py`: `BuyOpportunityWatcher` 클래스 신규 생성 (Hot Watchlist 실시간 매수 신호 감지)
   - `services/buy-scanner/main.py`: `USE_WEBSOCKET_MODE=true` 환경변수 기반 WebSocket 상시 실행 모드 추가

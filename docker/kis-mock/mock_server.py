@@ -2,15 +2,25 @@
 # -*- coding: utf-8 -*-
 """
 KIS API Mock Server
-로컬 테스트용 가짜 KIS API 서버 (HTTP REST API)
+로컬 테스트용 가짜 KIS API 서버 (HTTP REST API + WebSocket)
+
+WebSocket 기능:
+- '/socket.io' 네임스페이스로 연결
+- 'subscribe' 이벤트: 종목 구독
+- 'price_update' 이벤트: 실시간 가격 전송
 """
 
 from flask import Flask, request, jsonify
+from flask_socketio import SocketIO, emit
 import random
 import time
+import threading
 from datetime import datetime
 
 app = Flask(__name__)
+
+# SocketIO 초기화 (CORS 허용)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Mock 데이터
 STOCK_DATA = {
@@ -24,9 +34,19 @@ STOCK_DATA = {
 # 토큰 저장소
 tokens = {}
 
+# WebSocket 구독 상태
+subscribed_clients = {}  # sid -> list of stock codes
+streaming_threads = {}   # sid -> thread
+stop_events = {}         # sid -> Event
+
+
+# =============================================================================
+# HTTP REST API Endpoints
+# =============================================================================
+
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok", "service": "kis-mock"}), 200
+    return jsonify({"status": "ok", "service": "kis-mock", "websocket": True}), 200
 
 @app.route('/oauth2/tokenP', methods=['POST'])
 def token():
@@ -185,9 +205,216 @@ def inquire_daily_price():
         "output": output
     }), 200
 
+
+# =============================================================================
+# 테스트용 API (E2E 테스트 지원)
+# =============================================================================
+
+@app.route('/api/trigger-buy-signal', methods=['POST'])
+def trigger_buy_signal():
+    """
+    테스트용: 매수 신호 직접 발행
+    
+    사용법:
+    curl -X POST http://localhost:9443/api/trigger-buy-signal \
+         -H "Content-Type: application/json" \
+         -d '{"stock_code": "005930", "signal_type": "GOLDEN_CROSS"}'
+    """
+    data = request.json or {}
+    stock_code = data.get('stock_code', '005930')
+    signal_type = data.get('signal_type', 'TEST_SIGNAL')
+    
+    stock = STOCK_DATA.get(stock_code, {"name": "테스트종목", "base_price": 50000})
+    current_price = int(stock["base_price"] * random.uniform(0.98, 1.02))
+    
+    # 매수 신호 메시지 생성
+    buy_signal = {
+        'stock_code': stock_code,
+        'stock_name': stock.get('name', '테스트종목'),
+        'signal_type': signal_type,
+        'signal_reason': f'[TEST] {signal_type} 신호 발생',
+        'current_price': current_price,
+        'llm_score': 80,
+        'market_regime': 'BULL',
+        'source': 'mock_test_api',
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # 모든 구독 클라이언트에게 buy_signal 이벤트 발행
+    socketio.emit('buy_signal', buy_signal)
+    print(f"[TEST API] 🎯 매수 신호 발행: {stock_code} ({signal_type})")
+    
+    return jsonify({
+        "success": True,
+        "message": f"매수 신호 발행 완료: {stock_code}",
+        "signal": buy_signal
+    }), 200
+
+
+@app.route('/api/trigger-price-burst', methods=['POST'])
+def trigger_price_burst():
+    """
+    테스트용: 특정 종목에 빠른 가격 업데이트 발행 (캔들 완성 시뮬레이션)
+    
+    사용법:
+    curl -X POST http://localhost:9443/api/trigger-price-burst \
+         -H "Content-Type: application/json" \
+         -d '{"stock_code": "005930", "count": 60, "interval_ms": 100}'
+    """
+    data = request.json or {}
+    stock_code = data.get('stock_code', '005930')
+    count = min(data.get('count', 60), 120)  # 최대 120회
+    interval_ms = max(data.get('interval_ms', 100), 50)  # 최소 50ms
+    
+    stock = STOCK_DATA.get(stock_code, {"name": "테스트종목", "base_price": 50000})
+    
+    def send_burst():
+        for i in range(count):
+            price_change = random.uniform(-0.02, 0.02)
+            current_price = int(stock["base_price"] * (1 + price_change))
+            
+            socketio.emit('price_update', {
+                'stock_code': stock_code,
+                'stock_name': stock.get('name', '테스트종목'),
+                'current_price': current_price,
+                'high': int(current_price * 1.01),
+                'low': int(current_price * 0.99),
+                'volume': random.randint(10000, 100000),
+                'timestamp': datetime.now().isoformat()
+            })
+            time.sleep(interval_ms / 1000.0)
+        print(f"[TEST API] 💰 가격 버스트 완료: {stock_code} ({count}회)")
+    
+    thread = threading.Thread(target=send_burst, daemon=True)
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": f"가격 버스트 시작: {stock_code} ({count}회, {interval_ms}ms 간격)",
+        "stock_code": stock_code,
+        "count": count,
+        "interval_ms": interval_ms
+    }), 200
+
+
+# =============================================================================
+# WebSocket (SocketIO) Events
+# =============================================================================
+
+@socketio.on('connect')
+def handle_connect():
+    """클라이언트 연결"""
+    from flask import request as flask_request
+    sid = flask_request.sid
+    print(f"[WS] 클라이언트 연결: {sid}")
+    subscribed_clients[sid] = []
+    stop_events[sid] = threading.Event()
+    emit('connected', {'message': 'Mock KIS WebSocket 연결 성공', 'sid': sid})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """클라이언트 연결 해제"""
+    from flask import request as flask_request
+    sid = flask_request.sid
+    print(f"[WS] 클라이언트 연결 해제: {sid}")
+    
+    # 스트리밍 중지
+    if sid in stop_events:
+        stop_events[sid].set()
+        del stop_events[sid]
+    
+    if sid in subscribed_clients:
+        del subscribed_clients[sid]
+    
+    if sid in streaming_threads:
+        del streaming_threads[sid]
+
+
+@socketio.on('subscribe')
+def handle_subscribe(data):
+    """종목 구독 요청"""
+    from flask import request as flask_request
+    sid = flask_request.sid
+    codes = data.get('codes', [])
+    
+    # 등록된 종목만 구독
+    valid_codes = [c for c in codes if c in STOCK_DATA]
+    
+    subscribed_clients[sid] = valid_codes
+    print(f"[WS] 종목 구독: {valid_codes} (클라이언트: {sid})")
+    
+    emit('subscribed', {
+        'total': len(valid_codes),
+        'codes': valid_codes,
+        'invalid': [c for c in codes if c not in STOCK_DATA]
+    })
+    
+    # 가격 스트리밍 시작
+    if valid_codes:
+        start_price_streaming(sid, valid_codes)
+
+
+def start_price_streaming(sid, codes):
+    """가격 스트리밍 스레드 시작"""
+    stop_event = stop_events.get(sid)
+    if not stop_event:
+        return
+    
+    def stream_prices():
+        print(f"[WS] 가격 스트리밍 시작: {codes}")
+        tick_count = 0
+        
+        while not stop_event.is_set():
+            for code in codes:
+                if stop_event.is_set():
+                    break
+                
+                stock = STOCK_DATA.get(code)
+                if not stock:
+                    continue
+                
+                # 랜덤 가격 생성 (기준가 ± 5%)
+                price_change = random.uniform(-0.05, 0.05)
+                current_price = int(stock["base_price"] * (1 + price_change))
+                high_price = int(current_price * random.uniform(1.00, 1.03))
+                low_price = int(current_price * random.uniform(0.97, 1.00))
+                volume = random.randint(10000, 500000)
+                
+                # 가격 업데이트 전송
+                socketio.emit('price_update', {
+                    'stock_code': code,
+                    'stock_name': stock["name"],
+                    'current_price': current_price,
+                    'high': high_price,
+                    'low': low_price,
+                    'volume': volume,
+                    'timestamp': datetime.now().isoformat()
+                }, room=sid)
+                
+                tick_count += 1
+                if tick_count % 10 == 0:
+                    print(f"[WS] 가격 업데이트 #{tick_count}: {code} = {current_price:,}원")
+            
+            # 5초마다 가격 업데이트 (테스트용으로 빠르게)
+            time.sleep(5)
+        
+        print(f"[WS] 가격 스트리밍 종료: {codes}")
+    
+    thread = threading.Thread(target=stream_prices, daemon=True)
+    thread.start()
+    streaming_threads[sid] = thread
+
+
+# =============================================================================
+# Main
+# =============================================================================
+
 if __name__ == '__main__':
-    print("🚀 KIS Mock Server 시작...")
+    print("🚀 KIS Mock Server 시작 (REST + WebSocket)...")
     print("   포트: 9443")
     print("   Health Check: http://localhost:9443/health")
-    app.run(host='0.0.0.0', port=9443, debug=True)
-
+    print("   WebSocket: ws://localhost:9443/socket.io")
+    
+    # SocketIO로 실행 (일반 Flask run 대신)
+    socketio.run(app, host='0.0.0.0', port=9443, debug=True, allow_unsafe_werkzeug=True)

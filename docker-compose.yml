@@ -351,8 +351,9 @@ services:
       - ./secrets.json:/app/config/secrets.json:ro
     environment:
       - PORT=8081
-      - PORT=8081
       - SECRETS_FILE=/app/config/secrets.json
+      # WebSocket 모드 활성화 (실제 KIS WebSocket 연결)
+      - USE_WEBSOCKET_MODE=true
 
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
@@ -384,12 +385,18 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - KIS_GATEWAY_URL=http://localhost:9080
       - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+      # WebSocket 모드 활성화
+      - USE_WEBSOCKET_MODE=true
+      - MOCK_SKIP_TIME_CHECK=true
+      - KIS_BASE_URL_MOCK=http://localhost:9443
     network_mode: host
     labels:
       - app=buy-scanner-mock
       - stack=my-prime-jennie
     depends_on:
       scheduler-service-mock:
+        condition: service_healthy
+      kis-mock:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

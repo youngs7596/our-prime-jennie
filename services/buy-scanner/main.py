@@ -95,12 +95,13 @@ def initialize_service():
         trading_mode = os.getenv("TRADING_MODE", "MOCK")
         use_gateway = os.getenv("USE_KIS_GATEWAY", "true").lower() == "true"
         is_websocket_mode = os.getenv("USE_WEBSOCKET_MODE", "true").lower() == "true"
+        is_mock_websocket = os.getenv("MOCK_SKIP_TIME_CHECK", "false").lower() == "true"
         
-        if use_gateway and not is_websocket_mode:
-            kis = KISGatewayClient()
-            logger.info("✅ KIS Gateway Client 초기화 완료")
-        else:
-            # WebSocket 모드는 반드시 KIS_API 직접 연결 필요
+        # [수정] WebSocket 모드에서도 Gateway 사용 가능 (Mock 환경)
+        # Mock WebSocket 모드: Gateway + Mock SocketIO 서버
+        # Real WebSocket 모드: 직접 KIS API 연결 + 실 WebSocket
+        if is_websocket_mode and not is_mock_websocket:
+            # 실제 KIS WebSocket 사용 시 직접 연결 필요
             kis = KIS_API(
                 app_key=auth.get_secret(os.getenv(f"{trading_mode}_SECRET_ID_APP_KEY")),
                 app_secret=auth.get_secret(os.getenv(f"{trading_mode}_SECRET_ID_APP_SECRET")),
@@ -112,7 +113,11 @@ def initialize_service():
             )
             kis.authenticate()
             kis_client = kis  # WebSocket용 저장
-            logger.info("✅ KIS API 초기화 완료 (WebSocket 모드: %s)", is_websocket_mode)
+            logger.info("✅ KIS API 초기화 완료 (Real WebSocket 모드)")
+        else:
+            # Gateway 사용 (폴링 모드 또는 Mock WebSocket 모드)
+            kis = KISGatewayClient()
+            logger.info("✅ KIS Gateway Client 초기화 완료")
         
         # 3. ConfigManager 초기화
         config_manager = ConfigManager(db_conn=None, cache_ttl=300)
@@ -135,7 +140,7 @@ def initialize_service():
                 tasks_publisher=rabbitmq_publisher,
                 redis_url=redis_url
             )
-            logger.info("✅ BuyOpportunityWatcher 초기화 완료")
+            logger.info("✅ BuyOpportunityWatcher 초기화 완료 (Mock WebSocket: %s)", is_mock_websocket)
             
             # WebSocket 감시 시작
             _start_websocket_monitoring()
@@ -167,6 +172,8 @@ def _start_websocket_monitoring():
     """WebSocket 기반 실시간 감시 시작"""
     global websocket_thread
     
+    is_mock_websocket = os.getenv("MOCK_SKIP_TIME_CHECK", "false").lower() == "true"
+    
     def websocket_loop():
         logger.info("=== WebSocket 매수 신호 감시 시작 ===")
         last_heartbeat_time = 0
@@ -184,43 +191,146 @@ def _start_websocket_monitoring():
                 
                 logger.info(f"   (WS) {len(hot_codes)}개 종목 WebSocket 구독 시작...")
                 
-                # WebSocket 구독 시작
-                kis_client.websocket.start_realtime_monitoring(
-                    portfolio_codes=hot_codes,
-                    on_price_func=_on_price_update
-                )
-                
-                if not kis_client.websocket.connection_event.wait(timeout=15):
-                    logger.error("   (WS) ❌ WebSocket 연결 타임아웃! 재시도합니다.")
-                    time.sleep(5)
-                    continue
-                
-                logger.info("   (WS) ✅ WebSocket 연결 성공! 실시간 감시 중.")
-                
-                # 연결 유지 루프
-                while kis_client.websocket.connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
-                    time.sleep(1)
-                    now = time.time()
+                if is_mock_websocket:
+                    # [Mock 모드] python-socketio로 Mock 서버 연결
+                    _start_mock_websocket_loop(hot_codes, last_heartbeat_time)
+                else:
+                    # [Real 모드] KIS WebSocket 연결
+                    if kis_client is None:
+                        logger.error("   (WS) ❌ KIS Client가 초기화되지 않았습니다!")
+                        time.sleep(60)
+                        continue
                     
-                    # Heartbeat 발행 (5초마다)
-                    if now - last_heartbeat_time >= 5:
-                        opportunity_watcher.publish_heartbeat()
-                        last_heartbeat_time = now
-                
-                if opportunity_watcher.stop_event.is_set():
-                    break
-                
-                logger.warning("   (WS) WebSocket 연결 끊김. 재연결 시도.")
+                    kis_client.websocket.start_realtime_monitoring(
+                        portfolio_codes=hot_codes,
+                        on_price_func=_on_price_update
+                    )
+                    
+                    if not kis_client.websocket.connection_event.wait(timeout=15):
+                        logger.error("   (WS) ❌ WebSocket 연결 타임아웃! 재시도합니다.")
+                        time.sleep(5)
+                        continue
+                    
+                    logger.info("   (WS) ✅ WebSocket 연결 성공! 실시간 감시 중.")
+                    
+                    # 연결 유지 루프
+                    while kis_client.websocket.connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
+                        time.sleep(1)
+                        now = time.time()
+                        
+                        # Heartbeat 발행 (5초마다)
+                        if now - last_heartbeat_time >= 5:
+                            opportunity_watcher.publish_heartbeat()
+                            last_heartbeat_time = now
+                    
+                    if opportunity_watcher.stop_event.is_set():
+                        break
+                    
+                    logger.warning("   (WS) WebSocket 연결 끊김. 재연결 시도.")
                 
             except Exception as e:
                 logger.error(f"❌ (WS) 감시 루프 오류: {e}", exc_info=True)
                 time.sleep(60)
         
-        kis_client.websocket.stop()
+        if not is_mock_websocket and kis_client:
+            kis_client.websocket.stop()
         logger.info("=== WebSocket 매수 신호 감시 종료 ===")
     
     websocket_thread = threading.Thread(target=websocket_loop, daemon=True)
     websocket_thread.start()
+
+
+def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
+    """Mock WebSocket 서버 연결 및 가격 수신 루프"""
+    try:
+        import socketio
+    except ImportError:
+        logger.error("❌ (Mock WS) python-socketio 라이브러리가 설치되지 않았습니다!")
+        return
+    
+    mock_ws_url = os.getenv('KIS_BASE_URL_MOCK', 'http://localhost:9443')
+    logger.info(f"   (Mock WS) Mock 서버 연결 시도: {mock_ws_url}")
+    
+    sio = socketio.Client(logger=False, engineio_logger=False)
+    connection_event = threading.Event()
+    price_update_count = 0  # 가격 업데이트 카운터
+    
+    @sio.event
+    def connect():
+        logger.info("   (Mock WS) ✅ SocketIO 연결 성공!")
+        connection_event.set()
+        # 종목 구독 요청
+        sio.emit('subscribe', {'codes': hot_codes})
+    
+    @sio.on('connected')
+    def on_connected(data):
+        logger.info(f"   (Mock WS) 서버 환영 메시지: {data.get('message', '')}")
+    
+    @sio.on('subscribed')
+    def on_subscribed(data):
+        logger.info(f"   (Mock WS) ✅ 구독 완료: {data.get('total', 0)}개 종목")
+    
+    @sio.on('price_update')
+    def on_price_update(data):
+        nonlocal price_update_count
+        price_update_count += 1
+        
+        stock_code = data.get('stock_code')
+        current_price = float(data.get('current_price', 0))
+        
+        # 로그 출력 (처음 5회 + 이후 10회마다 1회)
+        if price_update_count <= 5 or price_update_count % 10 == 0:
+            logger.info(f"   (Mock WS) 💰 가격 #{price_update_count}: {stock_code} = {current_price:,.0f}원")
+        
+        if stock_code and current_price > 0:
+            # BuyOpportunityWatcher에 가격 업데이트 전달
+            signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+            if signal:
+                logger.info(f"   (Mock WS) 🎯 매수 신호 발생! {stock_code}")
+                opportunity_watcher.publish_signal(signal)
+    
+    @sio.on('buy_signal')
+    def on_buy_signal(data):
+        """테스트 API에서 발행된 매수 신호 직접 수신"""
+        stock_code = data.get('stock_code')
+        signal_type = data.get('signal_type', 'TEST')
+        
+        logger.info(f"   (Mock WS) 🎯 테스트 매수 신호 수신: {stock_code} ({signal_type})")
+        
+        # RabbitMQ로 즉시 발행
+        if opportunity_watcher and opportunity_watcher.tasks_publisher:
+            opportunity_watcher.tasks_publisher.publish(data)
+            logger.info(f"   (Mock WS) ✅ RabbitMQ 발행 완료: {stock_code}")
+    
+    @sio.event
+    def disconnect():
+        logger.warning("   (Mock WS) ⚠️ 연결 해제됨")
+        connection_event.clear()
+    
+    try:
+        sio.connect(mock_ws_url, wait_timeout=10)
+        
+        if connection_event.wait(timeout=10):
+            logger.info("   (Mock WS) ✅ 실시간 감시 시작!")
+            
+            # 연결 유지 루프
+            while connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
+                time.sleep(1)
+                now = time.time()
+                
+                # Heartbeat 발행 (5초마다)
+                if now - last_heartbeat_time >= 5:
+                    opportunity_watcher.publish_heartbeat()
+                    last_heartbeat_time = now
+        else:
+            logger.error("   (Mock WS) ❌ 연결 타임아웃!")
+    except Exception as e:
+        logger.error(f"   (Mock WS) ❌ 연결 오류: {e}")
+    finally:
+        try:
+            sio.disconnect()
+        except:
+            pass
 
 
 def _on_price_update(stock_code: str, current_price: float, current_high: float):
