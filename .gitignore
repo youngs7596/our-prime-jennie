@@ -82,3 +82,16 @@ scout_logs.txt
 docker/mariadb/data
 docker/mariadb/data_v2
 docker/init/init_dump.sql
+
+# Temporary/Debug files in root
+debug_*.py
+*_output.txt
+*_logs.txt
+*_results.txt
+coverage*.txt
+coverage*.json
+daily_packet.json
+temp_*.txt
+local_test_*.log
+htmlcov/
+coverage_report/

@@ -8,6 +8,7 @@
   - `services/buy-scanner/requirements.txt`: `python-socketio[client]` 의존성 추가
   - `docker-compose.yml`: buy-scanner-mock에 Mock WebSocket 환경변수 추가, buy-scanner(Real)에 `USE_WEBSOCKET_MODE=true` 적용
   - `tests/integration/test_websocket_buy_flow.py`: WebSocket 기반 매수 흐름 E2E 테스트 파일 생성
+- **Codebase Cleanup (50+ Files Removed)**: 사용되지 않는 디버그 스크립트(`debug_*.py`), 임시 파일, 테스트 코드, 미사용 Shared 모듈(`gemini.py`, `fact_checker.py`), 중복 서비스 래퍼 삭제 및 `.gitignore` 설정 강화를 통해 프로젝트 유지보수성 향상.
 - **WebSocket 듀얼 세션 아키텍처 재정립**: buy-scanner(매수용 WebSocket)와 price-monitor(매도용 WebSocket) 역할 분리 완료.
   - `services/buy-scanner/opportunity_watcher.py`: `BuyOpportunityWatcher` 클래스 신규 생성 (Hot Watchlist 실시간 매수 신호 감지)
   - `services/buy-scanner/main.py`: `USE_WEBSOCKET_MODE=true` 환경변수 기반 WebSocket 상시 실행 모드 추가
