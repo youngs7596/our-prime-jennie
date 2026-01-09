@@ -1,12 +1,13 @@
 # tests/services/price-monitor/test_opportunity_watcher.py
-# OpportunityWatcher 유닛 테스트 (unittest 변환)
+# BuyOpportunityWatcher 유닛 테스트 (buy-scanner로 이관됨)
 
 """
-OpportunityWatcher 클래스의 핵심 기능을 테스트합니다.
+BuyOpportunityWatcher 클래스의 핵심 기능을 테스트합니다.
+(Phase: WebSocket 역할 분리 - buy-scanner가 매수 담당)
 
 테스트 범위:
 - BarAggregator: 틱 → 1분 캔들 집계
-- OpportunityWatcher: Hot Watchlist 로드, 매수 신호 감지
+- BuyOpportunityWatcher: Hot Watchlist 로드, 매수 신호 감지
 - Cooldown 로직
 - 관측성 메트릭
 """
@@ -20,9 +21,10 @@ from datetime import datetime, timezone, timedelta
 # Project root setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'price-monitor'))
+# buy-scanner로 경로 변경 (BuyOpportunityWatcher가 이관됨)
+sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
 
-from opportunity_watcher import BarAggregator, OpportunityWatcher
+from opportunity_watcher import BarAggregator, BuyOpportunityWatcher
 
 
 class TestBarAggregator(unittest.TestCase):
@@ -76,8 +78,8 @@ class TestBarAggregator(unittest.TestCase):
         self.assertEqual(recent[-1]['close'], 50200)
 
 
-class TestOpportunityWatcher(unittest.TestCase):
-    """OpportunityWatcher 테스트"""
+class TestBuyOpportunityWatcher(unittest.TestCase):
+    """BuyOpportunityWatcher 테스트"""
     
     def setUp(self):
         self.mock_config = MagicMock()
@@ -95,7 +97,7 @@ class TestOpportunityWatcher(unittest.TestCase):
         self.mock_redis_cls.return_value = self.mock_redis
         self.mock_redis.ping.return_value = True
 
-        self.watcher = OpportunityWatcher(
+        self.watcher = BuyOpportunityWatcher(
             config=self.mock_config,
             tasks_publisher=self.mock_publisher,
             redis_url="redis://localhost:6379/0"
@@ -184,7 +186,7 @@ class TestOpportunityWatcher(unittest.TestCase):
     def test_publish_signal_no_publisher(self):
         """Publisher 없을 때"""
         # 별도 인스턴스 생성
-        watcher = OpportunityWatcher(
+        watcher = BuyOpportunityWatcher(
             config=self.mock_config,
             tasks_publisher=None,
             redis_url="redis://localhost:6379/0"
@@ -210,7 +212,7 @@ class TestCooldown(unittest.TestCase):
         self.mock_redis.exists.return_value = False
         mock_redis_cls.return_value = self.mock_redis
         
-        self.watcher = OpportunityWatcher(
+        self.watcher = BuyOpportunityWatcher(
             config=mock_config,
             tasks_publisher=mock_publisher,
             redis_url="redis://localhost:6379/0"
@@ -271,7 +273,7 @@ class TestHotWatchlistLoad(unittest.TestCase):
             '{"stocks": [{"code": "005930", "name": "삼성전자", "llm_score": 72}], "market_regime": "BULL", "score_threshold": 62}'
         ]
         
-        watcher = OpportunityWatcher(
+        watcher = BuyOpportunityWatcher(
             config=self.mock_config,
             tasks_publisher=self.mock_publisher,
             redis_url="redis://localhost:6379/0"

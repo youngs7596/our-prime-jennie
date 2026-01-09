@@ -439,7 +439,7 @@ class ConfigManager:
                 default_value = default_entry
                 
             # 초기화 시에는 INFO 레벨로 로그 (설정값이 제대로 적용되는지 확인)
-            logger.info(f"[Config] 내장 기본값 사용 '{key}': {default_value}")
+            #logger.info(f"[Config] 내장 기본값 사용 '{key}': {default_value}")
             return default_value
         
         if silent:
