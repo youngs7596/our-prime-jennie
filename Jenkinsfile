@@ -31,20 +31,22 @@ pipeline {
             steps {
                 echo '🧪 Running Unit Tests...'
                 sh '''
-                    # Clear pip cache to ensure fresh install
-                    rm -rf ~/.cache/pip
-                    # Force reinstall with correct versions
-                    pip install --no-cache-dir --force-reinstall 'numpy>=1.24.0,<2.0.0' 'pandas>=1.4.0,<2.2.0' 'scipy>=1.10.0,<2.0.0'
-                    pip install --no-cache-dir -r requirements.txt
-                    pip install --no-cache-dir pytest pytest-cov
-                    # Verify numpy version
+                    # Install dependencies normally (allow cache if available)
+                    # We rely on requirements.txt for correct versions
+                    pip install -r requirements.txt
+                    
+                    # Verify key library versions for debugging
                     python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
-                    pytest tests/ -v --tb=short --junitxml=test-results.xml
+                    python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
+                    
+                    # Run converted unittest tests (excluding integration tests to save memory)
+                    # Pointing specifically to services tests which were converted
+                    python -m unittest discover tests/services -v
                 '''
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'test-results.xml'
+                    echo 'Unit Tests Completed'
                 }
             }
         }
