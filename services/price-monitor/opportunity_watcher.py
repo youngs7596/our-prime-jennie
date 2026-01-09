@@ -143,11 +143,18 @@ class OpportunityWatcher:
             'tick_count': 0,          # 수신한 틱 수
             'bar_count': 0,           # 완료된 캔들 수
             'signal_count': 0,        # 발행된 신호 수
+            'shadow_signal_count': 0, # [Shadow] 발행된 섀도우 신호 수
             'cooldown_blocked': 0,    # Cooldown으로 차단된 수
             'watchlist_loads': 0,     # Watchlist 로드 횟수
             'last_tick_time': None,   # 마지막 틱 수신 시간
             'last_signal_time': None, # 마지막 신호 발행 시간
         }
+        
+        # [Phase 3] Shadow Mode (기본값 False - 실전 투입)
+        # Config에서 'MONITOR_SHADOW_MODE' 키를 읽어옴.
+        self.shadow_mode = self.config.get_bool('MONITOR_SHADOW_MODE', default=False)
+        if self.shadow_mode:
+            logger.warning("👻 OpportunityWatcher started in SHADOW MODE (No actual trades)")
         
     def load_hot_watchlist(self) -> bool:
         """
@@ -176,6 +183,8 @@ class OpportunityWatcher:
                     'llm_score': s.get('llm_score', 0),
                     'rank': s.get('rank', 99),
                     'is_tradable': s.get('is_tradable', True),
+                    'strategies': s.get('strategies', []), # [Phase 2] 전략 리스트 로드
+                    'trade_tier': s.get('trade_tier'), # [Phase 2] Tier 정보 로드
                 }
                 for s in stocks
             }
@@ -198,6 +207,13 @@ class OpportunityWatcher:
         # 주기적 갱신
         if time.time() - self.last_watchlist_load > self.watchlist_refresh_interval:
             self.load_hot_watchlist()
+            
+            # [Dynamic Config] 런타임에 Shadow Mode 변경 감지 지원
+            new_shadow_mode = self.config.get_bool('MONITOR_SHADOW_MODE', default=True)
+            if new_shadow_mode != self.shadow_mode:
+                self.shadow_mode = new_shadow_mode
+                mode_str = "SHADOW MODE" if self.shadow_mode else "LIVE TRADING MODE"
+                logger.warning(f"🔄 Mode switched to: {mode_str}")
         
         return list(self.hot_watchlist.keys())
     
@@ -230,54 +246,71 @@ class OpportunityWatcher:
                           completed_bar: dict) -> Optional[dict]:
         """
         매수 신호 체크 (1분 캔들 완료 시)
-        
-        간소화된 신호 로직:
-        - 5분/20분 이동평균 골든크로스
-        - RSI 30 이하
+        [Phase 2] 동적 전략 실행 (The Brain)
         """
-        recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=25)
+        stock_info = self.hot_watchlist.get(stock_code, {})
+        strategies = stock_info.get('strategies', [])
         
+        # 전략이 없으면 기본 전략(Golden Cross + RSI) 적용 (하위 호환성)
+        if not strategies:
+            strategies = [
+                {"id": "GOLDEN_CROSS", "params": {"short_window": 5, "long_window": 20}},
+                {"id": "RSI_OVERSOLD", "params": {"threshold": 30}}
+            ]
+
+        # 데이터 조회 (최대 30개)
+        recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
         if len(recent_bars) < 20:
-            # 데이터 부족 - 20개 이상 캔들 필요
-            return None
-        
-        # Cooldown 체크 (준호 제안: 중복 시그널 방지)
+             return None
+
+        # Cooldown 체크
         if not self._check_cooldown(stock_code):
-            logger.debug(f"[{stock_code}] Cooldown 중 - 신호 무시")
             return None
-        
-        # 이동평균 계산
-        closes = [b['close'] for b in recent_bars]
-        ma5 = sum(closes[-5:]) / 5
-        ma20 = sum(closes[-20:]) / 20
-        
-        # 골든크로스 체크 (5MA > 20MA 상향 돌파)
-        prev_ma5 = sum(closes[-6:-1]) / 5 if len(closes) >= 6 else ma5
-        is_golden_cross = (prev_ma5 <= ma20) and (ma5 > ma20)
-        
-        # RSI 계산 (간소화)
-        rsi = self._calculate_simple_rsi(closes, period=14)
-        
+            
         signal_type = None
         signal_reason = ""
         
-        if is_golden_cross:
-            signal_type = "GOLDEN_CROSS"
-            signal_reason = f"5MA({ma5:.0f}) crossed above 20MA({ma20:.0f})"
-            logger.info(f"🔔 [{stock_code}] 골든크로스 감지: {signal_reason}")
-        elif rsi and rsi <= 30:
-            signal_type = "RSI_OVERSOLD"
-            signal_reason = f"RSI={rsi:.1f} (oversold)"
-            logger.info(f"🔔 [{stock_code}] RSI 과매도 감지: {signal_reason}")
-        
+        # 전략 순회 및 실행
+        for strat in strategies:
+            strat_id = strat.get('id')
+            params = strat.get('params', {})
+            
+            if strat_id == "GOLDEN_CROSS":
+                triggered, reason = self._check_golden_cross(recent_bars, params)
+                if triggered:
+                    signal_type = "GOLDEN_CROSS"
+                    signal_reason = reason
+                    break
+            
+            elif strat_id == "RSI_OVERSOLD":
+                triggered, reason = self._check_rsi_oversold(recent_bars, params)
+                if triggered:
+                    signal_type = "RSI_OVERSOLD"
+                    signal_reason = reason
+                    break
+                    
+            elif strat_id == "BB_LOWER":
+                triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
+                if triggered:
+                    signal_type = "BB_LOWER"
+                    signal_reason = reason
+                    break
+            
+            elif strat_id == "MOMENTUM":
+                triggered, reason = self._check_momentum(recent_bars, params)
+                if triggered:
+                    signal_type = "MOMENTUM"
+                    signal_reason = reason
+                    break
+
         if not signal_type:
             return None
         
-        # Cooldown 설정
         self._set_cooldown(stock_code)
+        # [Shadow Mode] 로그 접두어
+        prefix = "[SHADOW] 👻 " if self.shadow_mode else "🔔 "
+        logger.info(f"{prefix}[{stock_code}] {signal_type} 신호 감지: {signal_reason}")
         
-        # 매수 신호 발행
-        stock_info = self.hot_watchlist.get(stock_code, {})
         signal = {
             'stock_code': stock_code,
             'stock_name': stock_info.get('name', stock_code),
@@ -288,10 +321,69 @@ class OpportunityWatcher:
             'market_regime': self.market_regime,
             'source': 'opportunity_watcher',
             'timestamp': datetime.now(timezone.utc).isoformat(),
+            'trade_tier': stock_info.get('trade_tier', 'TIER1'),
         }
         
         return signal
-    
+
+    def _check_golden_cross(self, bars: List[dict], params: dict) -> (bool, str):
+        closes = [b['close'] for b in bars]
+        short_w = params.get('short_window', 5)
+        long_w = params.get('long_window', 20)
+        
+        if len(closes) < long_w:
+            return False, ""
+            
+        ma_short = sum(closes[-short_w:]) / short_w
+        ma_long = sum(closes[-long_w:]) / long_w
+        
+        # 직전 MA (Cross 감지용)
+        prev_closes = closes[:-1]
+        prev_ma_short = sum(prev_closes[-short_w:]) / short_w if len(prev_closes) >= short_w else ma_short
+        
+        if (prev_ma_short <= ma_long) and (ma_short > ma_long):
+            return True, f"MA({short_w}) crossed above MA({long_w})"
+        return False, ""
+
+    def _check_rsi_oversold(self, bars: List[dict], params: dict) -> (bool, str):
+        closes = [b['close'] for b in bars]
+        threshold = params.get('threshold', 30)
+        rsi = self._calculate_simple_rsi(closes, period=14)
+        
+        if rsi and rsi <= threshold:
+            return True, f"RSI={rsi:.1f} <= {threshold}"
+        return False, ""
+
+    def _check_bb_lower(self, bars: List[dict], params: dict, current_price: float) -> (bool, str):
+        closes = [b['close'] for b in bars]
+        period = params.get('period', 20)
+        # buffer_pct = params.get('buffer_pct', 2.0) # 현재 사용 안함 (직접 터치만 체크)
+        
+        if len(closes) < period:
+            return False, ""
+            
+        # BB 계산 (표준편차)
+        recent = closes[-period:]
+        ma = sum(recent) / period
+        variance = sum([(x - ma) ** 2 for x in recent]) / period
+        std_dev = variance ** 0.5
+        lower_band = ma - (2 * std_dev)
+        
+        if current_price <= lower_band:
+            return True, f"Price({current_price}) <= BB_Lower({lower_band:.1f})"
+        return False, ""
+
+    def _check_momentum(self, bars: List[dict], params: dict) -> (bool, str):
+        closes = [b['close'] for b in bars]
+        threshold = params.get('threshold', 3.0)
+        if len(closes) < 2:
+            return False, ""
+            
+        momentum = ((closes[-1] - closes[0]) / closes[0]) * 100
+        if momentum >= threshold:
+            return True, f"Momentum={momentum:.1f}% >= {threshold}%"
+        return False, ""
+
     def _calculate_simple_rsi(self, prices: List[float], period: int = 14) -> Optional[float]:
         """간소화된 RSI 계산"""
         if len(prices) < period + 1:
@@ -348,6 +440,12 @@ class OpportunityWatcher:
         """
         매수 신호 RabbitMQ 발행
         """
+        if self.shadow_mode:
+            logger.info(f"👻 [SHADOW MODE] Signal generated but NOT published: {signal['stock_code']} - {signal['signal_type']}")
+            self.metrics['shadow_signal_count'] += 1
+            # Shadow Mode 결과도 관측 가능하도록 별도 로깅 등을 추가할 수 있음
+            return True
+
         if not self.tasks_publisher:
             logger.warning("RabbitMQ Publisher 없음 - 신호 발행 불가")
             return False

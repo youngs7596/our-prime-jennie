@@ -83,7 +83,8 @@ from scout_cache import (
     REDIS_URL,
     # Redis 함수
     _get_redis, _utcnow, update_pipeline_status, save_pipeline_results,
-    save_hot_watchlist,
+    start_scanner_job, # if existing
+    # save_hot_watchlist removed from here
     # CONFIG 테이블 함수
     _get_scope, _make_state_key, _load_json_config, _save_json_config,
     _get_last_llm_run_at, _save_last_llm_run_at,
@@ -106,6 +107,7 @@ from scout_universe import (
     filter_valid_stocks
 )
 import scout_cache
+from shared.watchlist import save_hot_watchlist
 # 파이프라인 태스크 (scout_pipeline.py)
 from scout_pipeline import (
     is_hybrid_scoring_enabled,
