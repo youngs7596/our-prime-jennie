@@ -15,6 +15,11 @@ import os
 import json
 import importlib.util
 
+# ⭐ Flask와 flask_limiter를 먼저 import하여 패키지 경로 확보
+# (동적 import 시 sys.path 조작으로 인한 충돌 방지)
+import flask
+import flask_limiter
+
 # Disable auto-init in main.py
 os.environ['WERKZEUG_RUN_MAIN'] = 'true'
 
@@ -29,8 +34,6 @@ MAIN_PATH = os.path.join(GATEWAY_DIR, 'main.py')
 spec = importlib.util.spec_from_file_location("kis_gateway_main", MAIN_PATH)
 gateway_main = importlib.util.module_from_spec(spec)
 sys.modules["kis_gateway_main"] = gateway_main
-spec.loader.exec_module(gateway_main)
-
 spec.loader.exec_module(gateway_main)
 
 from kis_gateway_main import app, kis_client, limiter
