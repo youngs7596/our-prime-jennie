@@ -11,6 +11,10 @@ Fixtures:
 - mock_db_connection: DB 연결 mock
 """
 
+# ⭐ 중요: flask를 다른 모듈보다 먼저 import하여 sys.path 오염 방지
+# import flask
+# import flask_limiter
+
 import os
 import sys
 import pytest
@@ -18,7 +22,8 @@ import pytest
 # 프로젝트 루트를 sys.path에 추가 (shared 모듈 import 가능하게)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 
 # ============================================================================

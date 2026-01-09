@@ -29,7 +29,8 @@ from unittest.mock import MagicMock, patch
 # 프로젝트 루트 추가
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+    # sys.path.insert(0, str(PROJECT_ROOT))
+    pass
 
 # fastapi 없으면 전체 모듈 스킵
 pytest.importorskip("fastapi", reason="fastapi not installed, skipping dashboard API tests")

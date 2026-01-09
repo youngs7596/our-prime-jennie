@@ -4,7 +4,7 @@ import sys
 import os
 
 # Adjust path to import services/buy-scanner
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
 
 # Mock external dependencies
 sys.modules['shared.database'] = MagicMock()
@@ -24,7 +24,20 @@ mock_watchlist_module = MagicMock()
 sys.modules['shared.watchlist'] = mock_watchlist_module
 
 # Import Scanner
-from scanner import BuyScanner, StrategySelector
+import importlib.util
+
+def load_scanner_module():
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'scanner.py')
+    spec = importlib.util.spec_from_file_location("scanner", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["scanner"] = module
+    spec.loader.exec_module(module)
+    return module
+
+scanner_mod = load_scanner_module()
+BuyScanner = scanner_mod.BuyScanner
+StrategySelector = scanner_mod.StrategySelector
 
 class TestStrategyInjection(unittest.TestCase):
     

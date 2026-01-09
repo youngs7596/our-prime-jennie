@@ -29,7 +29,7 @@ import importlib.util
 
 # 프로젝트 루트 추가
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
-sys.path.insert(0, PROJECT_ROOT)
+# sys.path.insert(0, PROJECT_ROOT)
 
 # Fix: Ensure shared.database is imported before patching
 import shared.database
@@ -41,7 +41,10 @@ def executor_module():
     spec = importlib.util.spec_from_file_location("sell_executor", module_path)
     module = importlib.util.module_from_spec(spec)
     
-    with patch.dict(sys.modules, {'sell_executor': module}):
+    with patch.dict(sys.modules, {'sell_executor': module}), \
+         patch('shared.strategy_presets.resolve_preset_for_regime', return_value=('TEST_PRESET', {})), \
+         patch('shared.strategy_presets.apply_preset_to_config'), \
+         patch('shared.database'):
         spec.loader.exec_module(module)
         yield module, sys.modules['sell_executor']
 

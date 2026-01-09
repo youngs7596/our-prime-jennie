@@ -40,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 # 공용 라이브러리 임포트를 위한 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # /app
-if PROJECT_ROOT not in sys.path:
+try:
+    import shared
+except ImportError:
     sys.path.insert(0, PROJECT_ROOT)
 
 import shared.auth as auth

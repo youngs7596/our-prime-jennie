@@ -20,11 +20,24 @@ from datetime import datetime, timezone, timedelta
 
 # Project root setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
-sys.path.insert(0, PROJECT_ROOT)
+# sys.path.insert(0, PROJECT_ROOT)
 # buy-scanner로 경로 변경 (BuyOpportunityWatcher가 이관됨)
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
+# sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
 
-from opportunity_watcher import BarAggregator, BuyOpportunityWatcher
+import importlib.util
+
+# Import via importlib to avoid sys.path hacks for hyphenated dirs
+def load_opportunity_watcher_module():
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'opportunity_watcher.py')
+    spec = importlib.util.spec_from_file_location("opportunity_watcher", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["opportunity_watcher"] = module
+    spec.loader.exec_module(module)
+    return module
+
+opportunity_watcher_mod = load_opportunity_watcher_module()
+BarAggregator = opportunity_watcher_mod.BarAggregator
+BuyOpportunityWatcher = opportunity_watcher_mod.BuyOpportunityWatcher
 
 
 class TestBarAggregator(unittest.TestCase):

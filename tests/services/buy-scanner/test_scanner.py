@@ -12,24 +12,29 @@ import importlib.util
 # Project Root Setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 # Add service directory to path to allow imports
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
+# sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
 
 # Standard import
+# Standard import handled via importlib to avoid sys.path hacks
+def load_scanner_module():
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'scanner.py')
+    spec = importlib.util.spec_from_file_location("scanner", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules['scanner'] = module
+    spec.loader.exec_module(module)
+    return module
+
 try:
-    import scanner
-    from scanner import BuyScanner
+    scanner = load_scanner_module()
+    BuyScanner = scanner.BuyScanner
     from shared.market_regime import MarketRegimeDetector, StrategySelector
 except ImportError as e:
-    # If standard import fails (e.g. env issues), try to mock sys.modules for deps?
-    # shared is already in path.
     raise e
 
-# Make sure scanner is registered if not already (it should be)
-if 'scanner' not in sys.modules:
-    sys.modules['scanner'] = scanner
 
 
 class TestBuyScanner(unittest.TestCase):
@@ -57,10 +62,22 @@ class TestBuyScanner(unittest.TestCase):
         self.sel_patcher = patch("scanner.StrategySelector")
         self.score_patcher = patch("scanner.FactorScorer")
         
+        # DB dependencies patching
+        self.session_scope_patcher = patch("scanner.session_scope")
+        self.database_patcher = patch("scanner.database")
+        self.factor_repo_patcher = patch("scanner.FactorRepository")
+        
         self.mock_detector_cls = self.det_patcher.start()
         self.mock_selector_cls = self.sel_patcher.start()
         self.mock_scorer_cls = self.score_patcher.start()
         
+        self.mock_session_scope = self.session_scope_patcher.start()
+        self.mock_database = self.database_patcher.start()
+        self.mock_factor_repo = self.factor_repo_patcher.start()
+        
+        # Configure session scope mock
+        self.mock_session_scope.return_value.__enter__.return_value = self.mock_db_session
+
         self.scanner = BuyScanner(self.mock_kis, self.mock_config)
         self.scanner.regime_detector = self.mock_detector_cls.return_value
         self.scanner.strategy_selector = self.mock_selector_cls.return_value
@@ -70,6 +87,10 @@ class TestBuyScanner(unittest.TestCase):
         self.det_patcher.stop()
         self.sel_patcher.stop()
         self.score_patcher.stop()
+        self.session_scope_patcher.stop()
+        self.database_patcher.stop()
+        self.factor_repo_patcher.stop()
+
 
     @unittest.skip("Fixing mock issues")
     def test_detect_signals_golden_cross(self):

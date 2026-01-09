@@ -4,13 +4,25 @@ import sys
 import os
 
 # Adjust path to import services/buy-scanner (OpportunityWatcher 이관됨)
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
 
 # Mock external dependencies before importing
 sys.modules['redis'] = MagicMock()
 sys.modules['shared.database'] = MagicMock()
 
-from opportunity_watcher import BuyOpportunityWatcher
+import importlib.util
+
+def load_opportunity_watcher_module():
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'opportunity_watcher.py')
+    spec = importlib.util.spec_from_file_location("opportunity_watcher", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["opportunity_watcher"] = module
+    spec.loader.exec_module(module)
+    return module
+
+opportunity_watcher_mod = load_opportunity_watcher_module()
+BuyOpportunityWatcher = opportunity_watcher_mod.BuyOpportunityWatcher
 
 class TestDynamicStrategies(unittest.TestCase):
     

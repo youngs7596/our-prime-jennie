@@ -12,7 +12,7 @@ from threading import Lock
 import pandas as pd
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
 import shared.auth as auth

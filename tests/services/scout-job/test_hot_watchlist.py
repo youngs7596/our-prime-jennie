@@ -18,8 +18,18 @@ import json
 
 # Project root setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
-sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'scout-job'))
+# sys.path.insert handled by conftest.py
+
+import importlib.util
+
+def load_scout_cache_module():
+    """하이픈이 있는 디렉토리에서 scout_cache 모듈 로드"""
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'scout-job', 'scout_cache.py')
+    spec = importlib.util.spec_from_file_location("scout_cache", module_path)
+    module = importlib.util.module_from_spec(spec)
+    # sys.modules['scout_cache'] = module # Optional: avoid polluting global modules if possible, but might be needed for internal imports
+    spec.loader.exec_module(module)
+    return module
 
 
 @unittest.skip("CI Stabilization: Mock pollution in module cache")
@@ -38,16 +48,8 @@ class TestSaveHotWatchlist(unittest.TestCase):
 
     def test_save_hot_watchlist_success(self):
         """Hot Watchlist 저장 성공"""
-        from scout_cache import save_hot_watchlist
-        
-        self.mock_r.get.return_value = None  # 이전 active 버전 없음
-        
-        stocks = [
-            {'code': '005930', 'name': '삼성전자', 'llm_score': 72, 'is_tradable': True},
-            {'code': '000660', 'name': 'SK하이닉스', 'llm_score': 68, 'is_tradable': True},
-        ]
-        
-        result = save_hot_watchlist(
+        scout_cache = load_scout_cache_module()
+        result = scout_cache.save_hot_watchlist(
             stocks=stocks,
             market_regime='STRONG_BULL',
             score_threshold=58
@@ -60,22 +62,15 @@ class TestSaveHotWatchlist(unittest.TestCase):
     def test_save_hot_watchlist_no_redis(self):
         """Redis 연결 없을 때 실패"""
         self.mock_get_redis.return_value = None
-        from scout_cache import save_hot_watchlist
-        
-        result = save_hot_watchlist([], 'BULL', 62)
+        scout_cache = load_scout_cache_module()
+        result = scout_cache.save_hot_watchlist([], 'BULL', 62)
         
         self.assertFalse(result)
     
     def test_save_hot_watchlist_excludes_kospi(self):
         """KOSPI 지수(0001)는 제외"""
-        from scout_cache import save_hot_watchlist
-        
-        stocks = [
-            {'code': '0001', 'name': 'KOSPI', 'llm_score': 0, 'is_tradable': False},
-            {'code': '005930', 'name': '삼성전자', 'llm_score': 72, 'is_tradable': True},
-        ]
-        
-        result = save_hot_watchlist(
+        scout_cache = load_scout_cache_module()
+        result = scout_cache.save_hot_watchlist(
             stocks=stocks,
             market_regime='BULL',
             score_threshold=62
@@ -137,9 +132,8 @@ class TestGetHotWatchlist(unittest.TestCase):
         mock_get_redis.return_value = mock_r
         mock_r.get.return_value = None  # active 포인터 없음
         
-        from scout_cache import get_hot_watchlist
-        
-        result = get_hot_watchlist()
+        scout_cache = load_scout_cache_module()
+        result = scout_cache.get_hot_watchlist()
         
         self.assertIsNone(result)
     
@@ -171,9 +165,8 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
                 'score_threshold': 62
             }
             
-            from scout_cache import refilter_hot_watchlist_by_regime
-            
-            result = refilter_hot_watchlist_by_regime('BULL')  # 동일 국면
+            scout_cache = load_scout_cache_module()
+            result = scout_cache.refilter_hot_watchlist_by_regime('BULL')  # 동일 국면
             
             self.assertTrue(result)
             mock_save.assert_not_called()
@@ -197,9 +190,8 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
             }
             mock_save.return_value = True
             
-            from scout_cache import refilter_hot_watchlist_by_regime
-            
-            result = refilter_hot_watchlist_by_regime('BEAR')  # BEAR = 70점 기준
+            scout_cache = load_scout_cache_module()
+            result = scout_cache.refilter_hot_watchlist_by_regime('BEAR')  # BEAR = 70점 기준
             
             self.assertTrue(result)
             # save_hot_watchlist 호출 확인
@@ -215,9 +207,8 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
             mock_get_redis.return_value = mock_r
             mock_get_list.return_value = None  # 빈 리스트
             
-            from scout_cache import refilter_hot_watchlist_by_regime
-            
-            result = refilter_hot_watchlist_by_regime('BULL')
+            scout_cache = load_scout_cache_module()
+            result = scout_cache.refilter_hot_watchlist_by_regime('BULL')
             
             self.assertTrue(result)
 
