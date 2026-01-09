@@ -19,8 +19,10 @@ from shared.redis_cache import (
     delete_high_watermark,
     get_scale_out_level,
     set_scale_out_level,
+    delete_scale_out_level,
     get_rsi_overbought_sold,
     set_rsi_overbought_sold,
+    delete_rsi_overbought_sold,
 )
 from shared.db.connection import session_scope
 from shared.db import repository as repo
@@ -413,9 +415,9 @@ class PriceMonitor:
                         self.portfolio_cache.pop(h['id'], None)
                         
                         # Redis 상태 초기화 (다음 매매를 위해)
-                        redis_cache.delete_rsi_overbought_sold(stock_code)
-                        redis_cache.delete_high_watermark(stock_code)
-                        redis_cache.delete_scale_out_level(stock_code)
+                        delete_rsi_overbought_sold(stock_code)
+                        delete_high_watermark(stock_code)
+                        delete_scale_out_level(stock_code)
                     else:
                         # 분할 매도인 경우 수량만 업데이트하고 모니터링 유지
                         old_qty = h['quantity']
