@@ -39,9 +39,8 @@ pipeline {
                     python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
                     python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
                     
-                    # Run converted unittest tests (excluding integration tests to save memory)
-                    # Pointing specifically to services tests which were converted
-                    python -m unittest discover tests/services -v
+                    # Run pytest for services tests (pytest fixtures are required)
+                    pytest tests/services/ -v --tb=short
                 '''
             }
             post {
