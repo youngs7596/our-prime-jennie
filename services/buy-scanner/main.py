@@ -197,21 +197,61 @@ def _perform_scan(trigger_source: str = "manual") -> dict:
         logger.info("매수 후보가 없습니다.")
         return {"status": "no_candidates", "dry_run": dry_run}
 
-    message_id = rabbitmq_publisher.publish(scan_result)
-    if not message_id:
-        raise RuntimeError("Failed to publish buy signal to RabbitMQ")
+    # [Phase 1] Safety Separation Logic
+    # 1. Config Check
+    disable_direct_buy = scanner.config.get_bool("DISABLE_DIRECT_BUY", default=True)
+    
+    # 2. Monitor Heartbeat Check (Auto-Fallback)
+    monitor_alive = False
+    try:
+        # DB Facade를 통해 Redis 연결 (shared.rabbitmq가 아님)
+        # NOTE: ConfigManager 인스턴스(scanner.config)가 있지만, 여기서는 직접 Connection이 필요
+        redis_client = database.get_redis_connection()
+        if redis_client:
+            # OpportunityWatcher Heartbeat Key
+            heartbeat_data = redis_client.get("monitoring:opportunity_watcher")
+            if heartbeat_data:
+                monitor_alive = True
+            else:
+                logger.warning("⚠️ OpportunityWatcher Heartbeat 없음 - Monitor가 죽은 것으로 판단")
+    except Exception as e:
+        logger.warning(f"Heartbeat 체크 실패: {e}")
+        # Redis 오류 등 불확실할 때는 안전하게(alive=False) 간주하여 Fallback? 
+        # 아니면 중복 방지 우선? -> 안전하게 Fallback(직접 발송)을 활성화하는 것이 맞음.
+        monitor_alive = False
 
-    logger.info(
-        "✅ 매수 신호 발행 완료 (ID: %s, 후보 %d개)",
-        message_id,
-        len(scan_result["candidates"]),
-    )
+    message_id = None
+    should_publish = True
+    
+    if disable_direct_buy:
+        if monitor_alive:
+            should_publish = False
+            logger.info("🛡️ [Safety Mode] Monitor 정상작동 중이므로 직접 매수 신호 발송을 건너뜁니다.")
+            # Shadow Mode (Log Only)
+            logger.info(f"👻 [Shadow] 매수 신호 내용: {scan_result}")
+        else:
+            logger.warning("🚨 [Fallback Mode] Monitor 비정상 감지! 직접 매수 신호를 발송합니다.")
+            should_publish = True
+    
+    if should_publish:
+        message_id = rabbitmq_publisher.publish(scan_result)
+        if not message_id:
+            raise RuntimeError("Failed to publish buy signal to RabbitMQ")
+
+        logger.info(
+            "✅ 매수 신호 발행 완료 (ID: %s, 후보 %d개)",
+            message_id,
+            len(scan_result["candidates"]),
+        )
+    
     return {
         "status": "success",
         "message_id": message_id,
         "candidates_count": len(scan_result["candidates"]),
         "market_regime": scan_result.get("market_regime"),
         "dry_run": dry_run,
+        "direct_buy_disabled": disable_direct_buy,
+        "fallback_active": (disable_direct_buy and not monitor_alive)
     }
 
 

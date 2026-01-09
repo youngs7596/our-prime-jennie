@@ -245,6 +245,42 @@ class BuyScanner:
                 
                 logger.info(f"스캔 대상: {len(watchlist)}개 종목 (보유: {len(owned_codes)}개 제외)")
                 
+                # [Phase 2] Strategy Manager: Redis Hot Watchlist에 "전략" 주입
+                # Scout Job이 생성한 Watchlist에 현재 시장 국면(Active Strategies)에 맞는 구체적 감시 전략을 추가
+                try:
+                    from shared.watchlist import get_hot_watchlist, save_hot_watchlist, StrategyConfig
+                    
+                    # 1. Redis에서 현재 Hot Watchlist 로드
+                    hot_list_data = get_hot_watchlist()
+                    
+                    if hot_list_data and hot_list_data.get('stocks'):
+                        stocks = hot_list_data['stocks']
+                        
+                        # 2. 시장 국면 전략 -> 구체적 감시 설정(Config) 매핑
+                        # active_strategies는 ["MEAN_REVERSION"] 같은 고수준 이름임
+                        strategy_configs = self._map_strategies_to_configs(active_strategies)
+                        
+                        # 3. 모든 종목에 전략 주입
+                        # (추후 고도화: 종목별 특성에 따라 다른 전략 주입 가능)
+                        for stock in stocks:
+                            # 기존 전략 보존 여부는 정책 결정 필요. 여기서는 덮어쓰기(새 국면 반영)
+                            stock['strategies'] = strategy_configs
+                            
+                            # [Super Prime] Legendary Pattern Trigger 감시 추가
+                            # RSI 과매도 + 외국인 수급 감시
+                            # 모든 종목에 대해 감시하되, 조건 충족 시에만 발동
+                            # 하지만 리소스 절약을 위해 기본 전략에 포함시키는 것이 나음
+                            
+                        # 4. Redis 업데이트
+                        save_hot_watchlist(
+                            stocks=stocks,
+                            market_regime=hot_list_data.get('market_regime', current_regime),
+                            score_threshold=hot_list_data.get('score_threshold', 0)
+                        )
+                        logger.info(f"🧠 [Brain] Hot Watchlist 업데이트 완료: {len(stocks)}개 종목에 전략 {len(strategy_configs)}개 주입")
+                except Exception as e:
+                    logger.error(f"🧠 [Brain] Strategy Injection 실패: {e}", exc_info=True)
+
                 # 4. 종목 스캔 (병렬 처리)
                 buy_candidates = self._scan_stocks_parallel(
                     watchlist, owned_codes, current_regime, active_strategies, session, tier2_enabled, bear_context
@@ -1096,3 +1132,72 @@ class BuyScanner:
         serialized['trade_tier'] = serialized['stock_info'].get('trade_tier')
         
         return serialized
+
+    def _map_strategies_to_configs(self, active_strategies: list) -> list:
+        """
+        시장 국면 전략 이름을 구체적인 감시 설정(StrategyConfig)으로 변환
+        
+        Args:
+            active_strategies: ["MEAN_REVERSION", "TREND_FOLLOWING", ...]
+        
+        Returns:
+            [{"id": "BB_LOWER", "params": {...}}, ...]
+        """
+        configs = []
+        
+        # 1. 공통 설정
+        # Super Prime (Legendary Pattern) 감시는 항상 포함 (조건 충족 시만 발동되므로)
+        # 2026-01-09: 리소스 최적화를 위해 별도 Strategy ID로 관리하지 않고 
+        # Price Monitor가 RSI/수급 데이터 수신 시 내부적으로 체크하도록 함.
+        # 다만, 명시적으로 "SUPER_PRIME" 전략을 주입하여 우선순위를 높일 수 있음.
+        
+        for strategy_type in active_strategies:
+            if strategy_type == StrategySelector.STRATEGY_MEAN_REVERSION:
+                # 1) BB 하단
+                configs.append({
+                    "id": "BB_LOWER",
+                    "params": {
+                        "period": self.config.get_int('BUY_BOLLINGER_PERIOD', default=20),
+                        "buffer_pct": self.config.get_float('BUY_BB_BUFFER_PCT', default=2.0)
+                    }
+                })
+                # 2) RSI 과매도
+                configs.append({
+                    "id": "RSI_OVERSOLD",
+                    "params": {
+                        "threshold": self.config.get_int('BUY_RSI_OVERSOLD_THRESHOLD', default=30),
+                        "bull_threshold": self.config.get_int('BUY_RSI_OVERSOLD_BULL_THRESHOLD', default=40)
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_TREND_FOLLOWING:
+                # 1) 골든 크로스
+                configs.append({
+                    "id": "GOLDEN_CROSS",
+                    "params": {
+                        "short_window": self.config.get_int('BUY_GOLDEN_CROSS_SHORT', default=5),
+                        "long_window": self.config.get_int('BUY_GOLDEN_CROSS_LONG', default=20)
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_MOMENTUM:
+                # 1) 모멘텀
+                configs.append({
+                    "id": "MOMENTUM",
+                    "params": {
+                        "period": 5,
+                        "threshold": self.MOMENTUM_SIGNAL_THRESHOLD
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_RELATIVE_STRENGTH:
+                # 1) 상대 강도
+                configs.append({
+                    "id": "RELATIVE_STRENGTH",
+                    "params": {
+                        "period": 5,
+                        "threshold": self.RELATIVE_STRENGTH_THRESHOLD
+                    }
+                })
+        
+        return configs
