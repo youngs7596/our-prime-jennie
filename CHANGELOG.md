@@ -11,6 +11,9 @@
   - **Validation**: 실환경(Docker) 배포를 통해 Hot Watchlist 로드 및 WebSocket 구독 정상 작동(E2E) 검증 완료.
 - **Silent Stall Detection**: `services/price-monitor/monitor.py`에 WebSocket 데이터 수신 중단(60초) 시 자동 재연결 로직 구현 (Silent Stall 방지).
 - **Dashboard Real-time Monitoring**: `PriceMonitor` 상태(Tick Count, Hot Watchlist 등)를 Redis(`monitoring:opportunity_watcher`)에 5초마다 발행하고 대시보드 System 페이지에서 실시간 시각화.
+- **Sell Logic & CI Stabilization**: RSI 과열 매도 시 3% 최소 수익률 가드라인 추가 및 분할 매도 후 모니터링 누락 버그 수정.
+- **Improved Partial Sell Handling**: 분할 매도 시 종목을 모니터링 캐시에서 제거하지 않고 남은 수량을 계속 감시하도록 `monitor.py` 수정. DB의 `PARTIAL` 상태 종목도 대시보드 및 모니터링에 포함시키고, Redis를 통해 동일 세션 내 RSI 중복 매도를 방지하는 상태 관리 로직 구현.
+- **Jenkins CI Optimization**: `unittest discover`용 `__init__.py` 누락 문제 해결 및 Python 3.12-slim 표준화, 의존성 설치 최적화로 빌드 속도 및 안정성 확보.
 - **Bug Fix (BuyExecutor)**: `services/buy-executor/executor.py`의 `datetime` local import가 global import를 가려 `DRY_RUN` 모드에서 발생하던 `UnboundLocalError` 수정 (datetime 전역 import로 변경).
 
 ## 2026-01-08
