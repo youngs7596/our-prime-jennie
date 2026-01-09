@@ -19,27 +19,28 @@ if PROJECT_ROOT not in sys.path:
 # sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
 
 # Standard import
-# Standard import handled via importlib to avoid sys.path hacks
-def load_scanner_module():
-    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'scanner.py')
-    spec = importlib.util.spec_from_file_location("scanner", module_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules['scanner'] = module
-    spec.loader.exec_module(module)
-    return module
-
-try:
-    scanner = load_scanner_module()
-    BuyScanner = scanner.BuyScanner
-    from shared.market_regime import MarketRegimeDetector, StrategySelector
-except ImportError as e:
-    raise e
-
-
+from shared.market_regime import MarketRegimeDetector, StrategySelector
 
 class TestBuyScanner(unittest.TestCase):
     
     def setUp(self):
+        # Create a patcher for sys.modules
+        self.modules_patcher = patch.dict(sys.modules)
+        self.modules_patcher.start()
+
+        # Load Scanner Module Safely
+        module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'scanner.py')
+        spec = importlib.util.spec_from_file_location("scanner_test_mod", module_path)
+        self.scanner_module = importlib.util.module_from_spec(spec)
+        
+        # Inject into sys.modules so patch('scanner.X') works
+        sys.modules['scanner'] = self.scanner_module
+        
+        # Execute module
+        spec.loader.exec_module(self.scanner_module)
+        
+        self.BuyScanner = self.scanner_module.BuyScanner
+
         self.mock_kis = MagicMock()
         
         self.mock_config = MagicMock()
@@ -57,7 +58,6 @@ class TestBuyScanner(unittest.TestCase):
         self.mock_db_session = MagicMock()
         
         # Patch dependencies inside scanner instance creation
-        # Important: Since we registered 'scanner' in sys.modules, patch('scanner.X') works
         self.det_patcher = patch("scanner.MarketRegimeDetector")
         self.sel_patcher = patch("scanner.StrategySelector")
         self.score_patcher = patch("scanner.FactorScorer")
@@ -78,10 +78,19 @@ class TestBuyScanner(unittest.TestCase):
         # Configure session scope mock
         self.mock_session_scope.return_value.__enter__.return_value = self.mock_db_session
 
-        self.scanner = BuyScanner(self.mock_kis, self.mock_config)
+        self.scanner = self.BuyScanner(self.mock_kis, self.mock_config)
         self.scanner.regime_detector = self.mock_detector_cls.return_value
         self.scanner.strategy_selector = self.mock_selector_cls.return_value
         self.scanner.factor_scorer = self.mock_scorer_cls.return_value
+
+    def tearDown(self):
+        self.det_patcher.stop()
+        self.sel_patcher.stop()
+        self.score_patcher.stop()
+        self.session_scope_patcher.stop()
+        self.database_patcher.stop()
+        self.factor_repo_patcher.stop()
+        self.modules_patcher.stop()
 
     def tearDown(self):
         self.det_patcher.stop()

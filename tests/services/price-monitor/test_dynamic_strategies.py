@@ -2,40 +2,43 @@ import unittest
 from unittest.mock import MagicMock, patch
 import sys
 import os
+import importlib.util
 
 # Adjust path to import services/buy-scanner (OpportunityWatcher 이관됨)
 # sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
 
 # Mock external dependencies before importing
-sys.modules['redis'] = MagicMock()
-sys.modules['shared.database'] = MagicMock()
-
-import importlib.util
-
-def load_opportunity_watcher_module():
-    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
-    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'opportunity_watcher.py')
-    spec = importlib.util.spec_from_file_location("opportunity_watcher", module_path)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["opportunity_watcher"] = module
-    spec.loader.exec_module(module)
-    return module
-
-opportunity_watcher_mod = load_opportunity_watcher_module()
-BuyOpportunityWatcher = opportunity_watcher_mod.BuyOpportunityWatcher
-
 class TestDynamicStrategies(unittest.TestCase):
     
     def setUp(self):
+        # Create a patcher for sys.modules
+        self.modules_patcher = patch.dict(sys.modules, {
+            'redis': MagicMock(),
+            'shared.database': MagicMock()
+        })
+        self.modules_patcher.start()
+
+        # Load Opportunity Watcher Module Safely
+        PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+        module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'opportunity_watcher.py')
+        spec = importlib.util.spec_from_file_location("opportunity_watcher_dynamic", module_path)
+        self.watcher_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.watcher_module)
+        
+        self.BuyOpportunityWatcher = self.watcher_module.BuyOpportunityWatcher
+
         self.mock_config = MagicMock()
         self.mock_publisher = MagicMock()
-        self.watcher = BuyOpportunityWatcher(self.mock_config, self.mock_publisher)
+        self.watcher = self.BuyOpportunityWatcher(self.mock_config, self.mock_publisher)
         
         # Mock BarAggregator
         self.watcher.bar_aggregator = MagicMock()
         
         # Set default regime
         self.watcher.market_regime = "BULL"
+
+    def tearDown(self):
+        self.modules_patcher.stop()
     
     def test_check_buy_signal_executes_only_assigned_strategies(self):
         # Setup specific strategies for stock "005930"

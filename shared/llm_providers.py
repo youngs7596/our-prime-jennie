@@ -472,7 +472,7 @@ class GeminiLLMProvider(BaseLLMProvider):
         
         api_key = auth.get_secret(gemini_api_key_secret, project_id)
         if not api_key:
-            raise RuntimeError(f"GCP Secret '{gemini_api_key_secret}' 로드 실패")
+            raise RuntimeError(f"Secret '{gemini_api_key_secret}' not found in configuration (secrets.json or env vars)")
 
         # google.genai는 Client/GenerativeModel에 직접 키를 전달하므로 전역 configure 불필요
         self._genai = genai

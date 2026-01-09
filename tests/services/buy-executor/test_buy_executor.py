@@ -32,19 +32,23 @@ PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
 # sys.path.insert(0, PROJECT_ROOT)
 
 
+_executor_module_cache = None
+
 def load_executor_module():
-    """하이픈이 있는 디렉토리에서 executor 모듈 로드"""
+    """하이픈이 있는 디렉토리에서 executor 모듈 로드 (Singleton Pattern)"""
+    global _executor_module_cache
+    if _executor_module_cache:
+        return _executor_module_cache
+
     module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-executor', 'executor.py')
     spec = importlib.util.spec_from_file_location("buy_executor", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules['buy_executor'] = module
     
-    # 전략 프리셋 및 DB 의존성 모킹
-    with patch('shared.strategy_presets.resolve_preset_for_regime', return_value=('TEST_PRESET', {})), \
-         patch('shared.strategy_presets.apply_preset_to_config'), \
-         patch('shared.db.repository'), \
-         patch('shared.db.connection'):
-        spec.loader.exec_module(module)
+    # 전략 프리셋 및 DB 의존성 모킹 제거 (테스트 메서드에서 제어)
+    spec.loader.exec_module(module)
+    
+    _executor_module_cache = module
     return module
 
 
@@ -175,26 +179,26 @@ class TestBuyExecutorSignalProcessing:
 
     def test_safety_check_blocks_execution(self, mock_kis, mock_config, mock_telegram):
         """안전장치 발동 시 실행 차단"""
+        # Load module first to get the correct namespace
+        executor = load_executor_module()
+        
         with patch('shared.db.connection.session_scope') as mock_session, \
-             patch('shared.db.repository.get_today_buy_count') as mock_buy_count, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch.object(executor.repo, 'get_today_buy_count', return_value=5) as mock_buy_count, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[]) as mock_portfolio, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'), \
              patch('shared.database') as mock_db:
             
-            # 오늘 매수 횟수가 최대치 도달
-            mock_buy_count.return_value = 5
-            mock_portfolio.return_value = []
+            # mock_buy_count.return_value = 5 # Set in patch.object
+            # mock_portfolio.return_value = [] # Set in patch.object
             mock_db.get_market_regime_cache.return_value = None
             mock_sector.return_value.get_sector.return_value = "IT"
             
             mock_ctx = MagicMock()
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
-            
-            executor = load_executor_module()
             
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
@@ -222,18 +226,18 @@ class TestSafetyConstraints:
     
     def test_daily_buy_limit_exceeded(self, mock_config):
         """일일 매수 한도 초과"""
-        with patch('shared.db.repository.get_today_buy_count') as mock_count, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+        executor = load_executor_module()
+        
+        with patch.object(executor.repo, 'get_today_buy_count', return_value=5) as mock_count, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[]) as mock_portfolio, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'):
             
-            mock_count.return_value = 5  # 최대치
-            mock_portfolio.return_value = []
+            # mock_count.return_value = 5  # 최대치
+            # mock_portfolio.return_value = []
             mock_sector.return_value.get_sector.return_value = "IT"
-            
-            executor = load_executor_module()
             
             mock_kis = MagicMock()
             buy_exec = executor.BuyExecutor(
@@ -250,19 +254,19 @@ class TestSafetyConstraints:
     
     def test_portfolio_size_limit_exceeded(self, mock_config):
         """포트폴리오 사이즈 한도 초과"""
-        with patch('shared.db.repository.get_today_buy_count') as mock_count, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+        executor = load_executor_module()
+
+        with patch.object(executor.repo, 'get_today_buy_count', return_value=0) as mock_count, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[{'code': f'00{i}930'} for i in range(10)]) as mock_portfolio, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'):
             
-            mock_count.return_value = 0
+            # mock_count.return_value = 0
             # 10개 종목 보유 (최대치)
-            mock_portfolio.return_value = [{'code': f'00{i}930'} for i in range(10)]
+            # mock_portfolio.return_value = [{'code': f'00{i}930'} for i in range(10)]
             mock_sector.return_value.get_sector.return_value = "IT"
-            
-            executor = load_executor_module()
             
             mock_kis = MagicMock()
             buy_exec = executor.BuyExecutor(
@@ -279,18 +283,18 @@ class TestSafetyConstraints:
     
     def test_safety_check_passes(self, mock_config):
         """안전 체크 통과"""
-        with patch('shared.db.repository.get_today_buy_count') as mock_count, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+        executor = load_executor_module()
+
+        with patch.object(executor.repo, 'get_today_buy_count', return_value=2) as mock_count, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[{'code': '005930'}]) as mock_portfolio, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'):
             
-            mock_count.return_value = 2
-            mock_portfolio.return_value = [{'code': '005930'}]  # 1개 보유
+            # mock_count.return_value = 2
+            # mock_portfolio.return_value = [{'code': '005930'}]  # 1개 보유
             mock_sector.return_value.get_sector.return_value = "IT"
-            
-            executor = load_executor_module()
             
             mock_kis = MagicMock()
             buy_exec = executor.BuyExecutor(
@@ -311,8 +315,10 @@ class TestDiversificationCheck:
     
     def test_sector_concentration_rejected(self, mock_config):
         """섹터 집중도 초과 거부"""
+        executor = load_executor_module()
+        
         with patch('shared.position_sizing.PositionSizer'), \
-             patch('shared.portfolio_diversification.DiversificationChecker') as mock_div, \
+             patch.object(executor, 'DiversificationChecker') as mock_div, \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'):
             
@@ -324,7 +330,7 @@ class TestDiversificationCheck:
                 'concentration_risk': 'HIGH'
             }
             
-            executor = load_executor_module()
+            # executor = load_executor_module()
             
             mock_kis = MagicMock()
             buy_exec = executor.BuyExecutor(
@@ -354,8 +360,10 @@ class TestDiversificationCheck:
     
     def test_diversification_passes(self, mock_config):
         """분산 규칙 통과"""
+        executor = load_executor_module()
+
         with patch('shared.position_sizing.PositionSizer'), \
-             patch('shared.portfolio_diversification.DiversificationChecker') as mock_div, \
+             patch.object(executor, 'DiversificationChecker') as mock_div, \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'):
             
@@ -366,7 +374,7 @@ class TestDiversificationCheck:
                 'concentration_risk': 'LOW'
             }
             
-            executor = load_executor_module()
+            # executor = load_executor_module()
             
             mock_kis = MagicMock()
             buy_exec = executor.BuyExecutor(
@@ -598,10 +606,12 @@ class TestIdempotency:
     
     def test_duplicate_order_blocked(self, mock_kis, mock_config):
         """최근 주문이 있을 때 중복 실행 차단"""
+        executor = load_executor_module()
+        
         with patch('shared.db.connection.session_scope') as mock_session, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
-             patch('shared.db.repository.get_today_buy_count') as mock_count, \
-             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[]) as mock_portfolio, \
+             patch.object(executor.repo, 'get_today_buy_count', return_value=0) as mock_count, \
+             patch.object(executor.repo, 'was_traded_recently', return_value=True) as mock_traded, \
              patch('shared.database') as mock_db, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
@@ -609,16 +619,16 @@ class TestIdempotency:
              patch('shared.market_regime.MarketRegimeDetector'):
             
             mock_db.get_market_regime_cache.return_value = None
-            mock_portfolio.return_value = []
-            mock_count.return_value = 0
-            mock_traded.return_value = True  # 최근에 거래됨
+            # mock_portfolio.return_value = []
+            # mock_count.return_value = 0
+            # mock_traded.return_value = True  # 최근에 거래됨
             mock_sector.return_value.get_sector.return_value = "IT"
             
             mock_ctx = MagicMock()
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            # executor = load_executor_module()
             
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
@@ -641,10 +651,12 @@ class TestIdempotency:
     
     def test_already_held_stock_filtered(self, mock_kis, mock_config):
         """이미 보유한 종목 필터링"""
+        executor = load_executor_module()
+
         with patch('shared.db.connection.session_scope') as mock_session, \
-             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
-             patch('shared.db.repository.get_today_buy_count') as mock_count, \
-             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch.object(executor.repo, 'get_active_portfolio', return_value=[{'code': '005930', 'name': '삼성전자'}]) as mock_portfolio, \
+             patch.object(executor.repo, 'get_today_buy_count', return_value=0) as mock_count, \
+             patch.object(executor.repo, 'was_traded_recently', return_value=False) as mock_traded, \
              patch('shared.database') as mock_db, \
              patch('shared.position_sizing.PositionSizer'), \
              patch('shared.portfolio_diversification.DiversificationChecker'), \
@@ -653,16 +665,16 @@ class TestIdempotency:
             
             mock_db.get_market_regime_cache.return_value = None
             # 이미 삼성전자 보유 중
-            mock_portfolio.return_value = [{'code': '005930', 'name': '삼성전자'}]
-            mock_count.return_value = 0
-            mock_traded.return_value = False
+            # mock_portfolio.return_value = [{'code': '005930', 'name': '삼성전자'}]
+            # mock_count.return_value = 0
+            # mock_traded.return_value = False
             mock_sector.return_value.get_sector.return_value = "IT"
             
             mock_ctx = MagicMock()
             mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             mock_session.return_value.__exit__ = MagicMock(return_value=False)
             
-            executor = load_executor_module()
+            # executor = load_executor_module()
             
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,

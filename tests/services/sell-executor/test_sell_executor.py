@@ -34,7 +34,7 @@ PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
 # Fix: Ensure shared.database is imported before patching
 import shared.database
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def executor_module():
     """Load executor module safely and clean up"""
     module_path = os.path.join(PROJECT_ROOT, 'services', 'sell-executor', 'executor.py')
