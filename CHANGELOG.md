@@ -11,6 +11,7 @@
   - **Validation**: 실환경(Docker) 배포를 통해 Hot Watchlist 로드 및 WebSocket 구독 정상 작동(E2E) 검증 완료.
 - **Silent Stall Detection**: `services/price-monitor/monitor.py`에 WebSocket 데이터 수신 중단(60초) 시 자동 재연결 로직 구현 (Silent Stall 방지).
 - **Dashboard Real-time Monitoring**: `PriceMonitor` 상태(Tick Count, Hot Watchlist 등)를 Redis(`monitoring:opportunity_watcher`)에 5초마다 발행하고 대시보드 System 페이지에서 실시간 시각화.
+- **Bug Fix (BuyExecutor)**: `services/buy-executor/executor.py`의 `datetime` local import가 global import를 가려 `DRY_RUN` 모드에서 발생하던 `UnboundLocalError` 수정 (datetime 전역 import로 변경).
 
 ## 2026-01-08
 - **Scout Job 아키텍처 분리**: `scout-job`(API) ↔ `scout-worker`(RabbitMQ) 서비스 분리로 Unhealthy 문제 해결, `/scout` 엔드포인트 비동기 트리거 방식 전환
