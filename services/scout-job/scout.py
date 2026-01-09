@@ -83,7 +83,6 @@ from scout_cache import (
     REDIS_URL,
     # Redis 함수
     _get_redis, _utcnow, update_pipeline_status, save_pipeline_results,
-    start_scanner_job, # if existing
     # save_hot_watchlist removed from here
     # CONFIG 테이블 함수
     _get_scope, _make_state_key, _load_json_config, _save_json_config,
