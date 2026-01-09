@@ -54,7 +54,7 @@ pipeline {
         stage('Integration Test') {
             agent {
                 docker {
-                    image 'python:3.11-slim'
+                    image 'python:3.12-slim'
                     args '-v $PWD:/app -w /app'
                     reuseNode true
                 }
@@ -62,8 +62,8 @@ pipeline {
             steps {
                 echo '🔗 Running Integration Tests...'
                 sh '''
-                    pip install --quiet -r requirements.txt
-                    pip install --quiet pytest pytest-cov
+                    pip install -r requirements.txt
+                    # pytest is included in requirements.txt
                     pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml
                 '''
             }
