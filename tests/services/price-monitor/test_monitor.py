@@ -310,7 +310,7 @@ class TestPriceMonitor(unittest.TestCase):
                  # Sequence of time.time() calls in the loop
                  
                 # Mock stop event
-                self.monitor.stop_event.is_set = MagicMock(side_effect=[False, False, True])
+                self.monitor.stop_event.is_set = MagicMock(side_effect=[False, False, True, True, True])
                 
                 self.monitor._monitor_with_websocket(dry_run=True)
                 

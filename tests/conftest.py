@@ -18,6 +18,9 @@ Fixtures:
 import os
 import sys
 import pytest
+# Pre-load pandas and numpy to prevent C-extension reload errors when sys.modules is patched
+import pandas as pd
+import numpy as np
 
 # 프로젝트 루트를 sys.path에 추가 (shared 모듈 import 가능하게)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

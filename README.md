@@ -892,6 +892,15 @@ pytest tests/shared/ --cov=shared --cov-report=html
 pytest tests/shared/hybrid_scoring/ -v
 ```
 
+### ⚠️ 대규모 테스트 주의사항 (Troubleshooting)
+
+`tests/services/`와 `tests/shared/`를 통합 실행할 때 발생하는 문제는 다음과 같이 해결했습니다.
+
+1.  **전역 모듈 오염 방지**: `sys.modules` 수정은 반드시 `setUp`/`tearDown` 또는 `patch.dict`로 격리해야 합니다. (규칙 위반 시 다른 테스트에 영향을 줌)
+2.  **NumPy/Pandas 재로드 문제**: `conftest.py`에서 `pandas`, `numpy`를 미리 임포트하여, 테스트 중 모듈이 언로드/재로드되어 발생하는 C-Extension 에러를 방지했습니다.
+3.  **Mocking 주의**: 동적 로드 모듈 테스트 시 `patch.object`를 사용하여 실제 로드된 인스턴스를 모킹해야 합니다.
+
+
 ### 테스트 커버리지
 
 | 모듈 | 테스트 수 | 커버리지 | 설명 |

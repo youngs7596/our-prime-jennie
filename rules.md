@@ -322,3 +322,19 @@ ruff check .
 ---
 
 
+
+## 테스트 모범 사례 (Testing Best Practices)
+
+대규모 테스트(통합 테스트) 실행 시 충돌 및 오염을 방지하기 위한 핵심 규칙입니다.
+
+### 1. 전역 모듈 오염 방지 (No Global Pollution)
+- **절대 금지**: 테스트 파일 최상단(Top-level)에서 `sys.modules`를 수정하지 마세요.
+- **권장**: `setUp(self)` / `tearDown(self)` 또는 `unittest.mock.patch.dict` 컨텍스트 매니저를 사용하여 격리합니다.
+
+### 2. C-Extension 재로드 방지 (NumPy/Pandas)
+- `sys.modules`를 패치할 때 `numpy`나 `pandas` 같은 C-Extension 라이브러리가 언로드/재로드되면 `ImportError: cannot load module more than once` 에러가 발생합니다.
+- **해결**: `tests/conftest.py` 등에서 해당 라이브러리를 **미리 임포트(Pre-load)** 하여 전역 상태에 고정시킵니다.
+
+### 3. Split-Brain Mocking 방지
+- 객체가 동적으로 로드되는 모듈을 테스트할 때, `patch('string.path')`가 엉뚱한 객체를 모킹할 수 있습니다.
+- **권장**: 로드된 모듈 인스턴스를 확보한 뒤 `patch.object(instance, 'attribute')`를 사용하여 **확실한 타겟**을 모킹하세요.
