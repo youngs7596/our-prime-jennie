@@ -1,5 +1,5 @@
 # tests/services/price-monitor/test_opportunity_watcher.py
-# OpportunityWatcher 유닛 테스트
+# OpportunityWatcher 유닛 테스트 (unittest 변환)
 
 """
 OpportunityWatcher 클래스의 핵심 기능을 테스트합니다.
@@ -11,7 +11,7 @@ OpportunityWatcher 클래스의 핵심 기능을 테스트합니다.
 - 관측성 메트릭
 """
 
-import pytest
+import unittest
 from unittest.mock import MagicMock, patch
 import sys
 import os
@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'price-monitor'))
 from opportunity_watcher import BarAggregator, OpportunityWatcher
 
 
-class TestBarAggregator:
+class TestBarAggregator(unittest.TestCase):
     """BarAggregator 테스트"""
     
     def test_first_tick_creates_new_bar(self):
@@ -34,14 +34,14 @@ class TestBarAggregator:
         result = aggregator.update("005930", 50000.0, volume=100)
         
         # 첫 틱은 None 반환 (캔들 미완료)
-        assert result is None
-        assert "005930" in aggregator.current_bars
+        self.assertIsNone(result)
+        self.assertIn("005930", aggregator.current_bars)
         bar = aggregator.current_bars["005930"]
-        assert bar['open'] == 50000.0
-        assert bar['high'] == 50000.0
-        assert bar['low'] == 50000.0
-        assert bar['close'] == 50000.0
-        assert bar['tick_count'] == 1
+        self.assertEqual(bar['open'], 50000.0)
+        self.assertEqual(bar['high'], 50000.0)
+        self.assertEqual(bar['low'], 50000.0)
+        self.assertEqual(bar['close'], 50000.0)
+        self.assertEqual(bar['tick_count'], 1)
     
     def test_tick_updates_ohlcv(self):
         """틱이 OHLCV 업데이트"""
@@ -52,11 +52,11 @@ class TestBarAggregator:
         aggregator.update("005930", 50200.0)  # Close
         
         bar = aggregator.current_bars["005930"]
-        assert bar['open'] == 50000.0
-        assert bar['high'] == 50500.0
-        assert bar['low'] == 49500.0
-        assert bar['close'] == 50200.0
-        assert bar['tick_count'] == 4
+        self.assertEqual(bar['open'], 50000.0)
+        self.assertEqual(bar['high'], 50500.0)
+        self.assertEqual(bar['low'], 49500.0)
+        self.assertEqual(bar['close'], 50200.0)
+        self.assertEqual(bar['tick_count'], 4)
     
     def test_get_recent_bars(self):
         """최근 캔들 조회"""
@@ -64,7 +64,7 @@ class TestBarAggregator:
         
         # 완료된 캔들이 없으면 빈 리스트
         recent = aggregator.get_recent_bars("005930", count=5)
-        assert recent == []
+        self.assertEqual(recent, [])
         
         # 수동으로 완료된 캔들 추가 (테스트용)
         aggregator.completed_bars["005930"] = [
@@ -72,99 +72,96 @@ class TestBarAggregator:
         ]
         
         recent = aggregator.get_recent_bars("005930", count=2)
-        assert len(recent) == 2
-        assert recent[-1]['close'] == 50200
+        self.assertEqual(len(recent), 2)
+        self.assertEqual(recent[-1]['close'], 50200)
 
 
-class TestOpportunityWatcher:
+class TestOpportunityWatcher(unittest.TestCase):
     """OpportunityWatcher 테스트"""
     
-    @pytest.fixture
-    def mock_config(self):
-        config = MagicMock()
-        config.get_bool.return_value = False
-        config.get_int.return_value = 60
-        config.get_float.return_value = 0.0
-        return config
+    def setUp(self):
+        self.mock_config = MagicMock()
+        self.mock_config.get_bool.return_value = False
+        self.mock_config.get_int.return_value = 60
+        self.mock_config.get_float.return_value = 0.0
+        
+        self.mock_publisher = MagicMock()
+        self.mock_publisher.publish.return_value = "msg-123"
+
+        # mock redis patcher
+        self.redis_patcher = patch('opportunity_watcher.redis.from_url')
+        self.mock_redis_cls = self.redis_patcher.start()
+        self.mock_redis = MagicMock()
+        self.mock_redis_cls.return_value = self.mock_redis
+        self.mock_redis.ping.return_value = True
+
+        self.watcher = OpportunityWatcher(
+            config=self.mock_config,
+            tasks_publisher=self.mock_publisher,
+            redis_url="redis://localhost:6379/0"
+        )
+
+    def tearDown(self):
+        self.redis_patcher.stop()
     
-    @pytest.fixture
-    def mock_publisher(self):
-        publisher = MagicMock()
-        publisher.publish.return_value = "msg-123"
-        return publisher
-    
-    @pytest.fixture
-    def watcher(self, mock_config, mock_publisher):
-        """OpportunityWatcher 인스턴스"""
-        with patch('opportunity_watcher.redis.from_url') as mock_redis:
-            mock_redis.return_value = MagicMock()
-            mock_redis.return_value.ping.return_value = True
-            
-            watcher = OpportunityWatcher(
-                config=mock_config,
-                tasks_publisher=mock_publisher,
-                redis_url="redis://localhost:6379/0"
-            )
-            return watcher
-    
-    def test_init_metrics(self, watcher):
+    def test_init_metrics(self):
         """초기화 시 메트릭 딕셔너리 생성"""
-        assert 'tick_count' in watcher.metrics
-        assert 'bar_count' in watcher.metrics
-        assert 'signal_count' in watcher.metrics
-        assert watcher.metrics['tick_count'] == 0
+        self.assertIn('tick_count', self.watcher.metrics)
+        self.assertIn('bar_count', self.watcher.metrics)
+        self.assertIn('signal_count', self.watcher.metrics)
+        self.assertEqual(self.watcher.metrics['tick_count'], 0)
     
-    def test_on_price_update_not_in_watchlist(self, watcher):
+    def test_on_price_update_not_in_watchlist(self):
         """Hot Watchlist에 없는 종목은 무시"""
-        watcher.hot_watchlist = {}
+        self.watcher.hot_watchlist = {}
         
-        result = watcher.on_price_update("005930", 50000.0)
+        result = self.watcher.on_price_update("005930", 50000.0)
         
-        assert result is None
-        assert watcher.metrics['tick_count'] == 1
+        self.assertIsNone(result)
+        self.assertEqual(self.watcher.metrics['tick_count'], 1)
     
-    def test_on_price_update_in_watchlist(self, watcher):
+    def test_on_price_update_in_watchlist(self):
         """Hot Watchlist에 있는 종목은 처리"""
-        watcher.hot_watchlist = {
+        self.watcher.hot_watchlist = {
             "005930": {"name": "삼성전자", "llm_score": 72}
         }
         
-        result = watcher.on_price_update("005930", 50000.0)
+        result = self.watcher.on_price_update("005930", 50000.0)
         
         # 첫 틱이라 캔들 미완료 → None
-        assert result is None
-        assert watcher.metrics['tick_count'] == 1
+        self.assertIsNone(result)
+        self.assertEqual(self.watcher.metrics['tick_count'], 1)
     
-    def test_calculate_simple_rsi(self, watcher):
+    def test_calculate_simple_rsi(self):
         """RSI 계산 테스트"""
         # 상승 추세
         prices = [100, 102, 104, 106, 108, 110, 112, 114, 116, 118, 
                   120, 122, 124, 126, 128, 130]
-        rsi = watcher._calculate_simple_rsi(prices, period=14)
+        rsi = self.watcher._calculate_simple_rsi(prices, period=14)
         
-        assert rsi is not None
-        assert rsi > 50  # 상승 추세라 RSI > 50
+        self.assertIsNotNone(rsi)
+        self.assertGreater(rsi, 50)  # 상승 추세라 RSI > 50
     
-    def test_calculate_simple_rsi_insufficient_data(self, watcher):
+    def test_calculate_simple_rsi_insufficient_data(self):
         """데이터 부족 시 RSI None"""
         prices = [100, 101, 102]
-        rsi = watcher._calculate_simple_rsi(prices, period=14)
+        rsi = self.watcher._calculate_simple_rsi(prices, period=14)
         
-        assert rsi is None
+        self.assertIsNone(rsi)
     
-    def test_get_metrics(self, watcher):
+    def test_get_metrics(self):
         """메트릭 조회"""
-        watcher.hot_watchlist = {"005930": {}}
-        watcher.market_regime = "BULL"
-        watcher.metrics['tick_count'] = 100
+        self.watcher.hot_watchlist = {"005930": {}}
+        self.watcher.market_regime = "BULL"
+        self.watcher.metrics['tick_count'] = 100
         
-        metrics = watcher.get_metrics()
+        metrics = self.watcher.get_metrics()
         
-        assert metrics['tick_count'] == 100
-        assert metrics['hot_watchlist_size'] == 1
-        assert metrics['market_regime'] == "BULL"
+        self.assertEqual(metrics['tick_count'], 100)
+        self.assertEqual(metrics['hot_watchlist_size'], 1)
+        self.assertEqual(metrics['market_regime'], "BULL")
     
-    def test_publish_signal(self, watcher, mock_publisher):
+    def test_publish_signal(self):
         """신호 발행 테스트"""
         signal = {
             'stock_code': '005930',
@@ -177,104 +174,116 @@ class TestOpportunityWatcher:
             'timestamp': datetime.now(timezone.utc).isoformat(),
         }
         
-        result = watcher.publish_signal(signal)
+        result = self.watcher.publish_signal(signal)
         
-        assert result is True
-        mock_publisher.publish.assert_called_once()
-        assert watcher.metrics['signal_count'] == 1
-        assert watcher.metrics['last_signal_time'] is not None
+        self.assertTrue(result)
+        self.mock_publisher.publish.assert_called_once()
+        self.assertEqual(self.watcher.metrics['signal_count'], 1)
+        self.assertIsNotNone(self.watcher.metrics['last_signal_time'])
     
-    def test_publish_signal_no_publisher(self, mock_config):
+    def test_publish_signal_no_publisher(self):
         """Publisher 없을 때"""
-        with patch('opportunity_watcher.redis.from_url'):
-            watcher = OpportunityWatcher(
-                config=mock_config,
-                tasks_publisher=None,
-                redis_url="redis://localhost:6379/0"
-            )
-            
-            result = watcher.publish_signal({})
-            assert result is False
+        # 별도 인스턴스 생성
+        watcher = OpportunityWatcher(
+            config=self.mock_config,
+            tasks_publisher=None,
+            redis_url="redis://localhost:6379/0"
+        )
+        
+        result = watcher.publish_signal({})
+        self.assertFalse(result)
 
 
-class TestCooldown:
+class TestCooldown(unittest.TestCase):
     """Cooldown 로직 테스트"""
     
-    @pytest.fixture
-    def watcher_with_redis(self):
+    def setUp(self):
         mock_config = MagicMock()
+        mock_config.get_bool.return_value = False
         mock_publisher = MagicMock()
         
-        mock_redis = MagicMock()
-        mock_redis.ping.return_value = True
-        mock_redis.exists.return_value = False
+        self.redis_patcher = patch('opportunity_watcher.redis.from_url')
+        mock_redis_cls = self.redis_patcher.start()
         
-        with patch('opportunity_watcher.redis.from_url') as mock_from_url:
-            mock_from_url.return_value = mock_redis
-            
-            watcher = OpportunityWatcher(
-                config=mock_config,
-                tasks_publisher=mock_publisher,
-                redis_url="redis://localhost:6379/0"
-            )
-            watcher._mock_redis = mock_redis
-            return watcher
-    
-    def test_check_cooldown_no_exists(self, watcher_with_redis):
+        self.mock_redis = MagicMock()
+        self.mock_redis.ping.return_value = True
+        self.mock_redis.exists.return_value = False
+        mock_redis_cls.return_value = self.mock_redis
+        
+        self.watcher = OpportunityWatcher(
+            config=mock_config,
+            tasks_publisher=mock_publisher,
+            redis_url="redis://localhost:6379/0"
+        )
+        # 내부 redis 참조도 mock으로
+        
+    def tearDown(self):
+        self.redis_patcher.stop()
+
+    def test_check_cooldown_no_exists(self):
         """Cooldown 키 없으면 True (발행 가능)"""
-        watcher_with_redis._mock_redis.exists.return_value = False
+        self.mock_redis.exists.return_value = False
         
-        result = watcher_with_redis._check_cooldown("005930")
+        result = self.watcher._check_cooldown("005930")
         
-        assert result is True
+        self.assertTrue(result)
     
-    def test_check_cooldown_exists(self, watcher_with_redis):
+    def test_check_cooldown_exists(self):
         """Cooldown 키 있으면 False (발행 불가)"""
-        watcher_with_redis._mock_redis.exists.return_value = True
+        self.mock_redis.exists.return_value = True
         
-        result = watcher_with_redis._check_cooldown("005930")
+        result = self.watcher._check_cooldown("005930")
         
-        assert result is False
-        assert watcher_with_redis.metrics['cooldown_blocked'] == 1
+        self.assertFalse(result)
+        self.assertEqual(self.watcher.metrics['cooldown_blocked'], 1)
     
-    def test_set_cooldown(self, watcher_with_redis):
+    def test_set_cooldown(self):
         """Cooldown 설정"""
-        watcher_with_redis._set_cooldown("005930")
+        self.watcher._set_cooldown("005930")
         
-        watcher_with_redis._mock_redis.setex.assert_called_once()
-        call_args = watcher_with_redis._mock_redis.setex.call_args
-        assert call_args[0][0] == "buy_signal_cooldown:005930"
-        assert call_args[0][1] == 180  # cooldown_seconds
+        self.mock_redis.setex.assert_called_once()
+        call_args = self.mock_redis.setex.call_args
+        self.assertEqual(call_args[0][0], "buy_signal_cooldown:005930")
+        self.assertEqual(call_args[0][1], 180)  # cooldown_seconds
 
 
-class TestHotWatchlistLoad:
+class TestHotWatchlistLoad(unittest.TestCase):
     """Hot Watchlist 로드 테스트"""
     
+    def setUp(self):
+        self.mock_config = MagicMock()
+        self.mock_config.get_bool.return_value = False
+        self.mock_publisher = MagicMock()
+        
+        self.redis_patcher = patch('opportunity_watcher.redis.from_url')
+        self.mock_redis_cls = self.redis_patcher.start()
+        self.mock_redis = MagicMock()
+        self.mock_redis.ping.return_value = True
+        self.mock_redis_cls.return_value = self.mock_redis
+
+    def tearDown(self):
+        self.redis_patcher.stop()
+
     def test_load_hot_watchlist_success(self):
         """Hot Watchlist 로드 성공"""
-        mock_config = MagicMock()
-        mock_publisher = MagicMock()
-        
-        mock_redis = MagicMock()
-        mock_redis.ping.return_value = True
-        mock_redis.get.side_effect = [
+        self.mock_redis.get.side_effect = [
             "hot_watchlist:v12345",  # active key
             '{"stocks": [{"code": "005930", "name": "삼성전자", "llm_score": 72}], "market_regime": "BULL", "score_threshold": 62}'
         ]
         
-        with patch('opportunity_watcher.redis.from_url') as mock_from_url:
-            mock_from_url.return_value = mock_redis
-            
-            watcher = OpportunityWatcher(
-                config=mock_config,
-                tasks_publisher=mock_publisher,
-                redis_url="redis://localhost:6379/0"
-            )
-            
-            result = watcher.load_hot_watchlist()
-            
-            assert result is True
-            assert "005930" in watcher.hot_watchlist
-            assert watcher.market_regime == "BULL"
-            assert watcher.score_threshold == 62
-            assert watcher.metrics['watchlist_loads'] == 1
+        watcher = OpportunityWatcher(
+            config=self.mock_config,
+            tasks_publisher=self.mock_publisher,
+            redis_url="redis://localhost:6379/0"
+        )
+        
+        result = watcher.load_hot_watchlist()
+        
+        self.assertTrue(result)
+        self.assertIn("005930", watcher.hot_watchlist)
+        self.assertEqual(watcher.market_regime, "BULL")
+        self.assertEqual(watcher.score_threshold, 62)
+        self.assertEqual(watcher.metrics['watchlist_loads'], 1)
+
+if __name__ == '__main__':
+    unittest.main()
