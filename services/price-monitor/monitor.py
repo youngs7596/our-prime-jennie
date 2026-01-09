@@ -19,6 +19,8 @@ from shared.redis_cache import (
     delete_high_watermark,
     get_scale_out_level,
     set_scale_out_level,
+    get_rsi_overbought_sold,
+    set_rsi_overbought_sold,
 )
 from shared.db.connection import session_scope
 from shared.db import repository as repo
@@ -346,7 +348,12 @@ class PriceMonitor:
                 # [Jennie's Fix] 최소 수익률 조건 추가 (사용자 요청: 3%)
                 min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
                 
-                if rsi and rsi >= threshold and profit_pct >= min_rsi_profit:
+                # 이미 RSI 분할 매도를 했는지 확인
+                rsi_already_sold = get_rsi_overbought_sold(stock_code)
+
+                if rsi and rsi >= threshold and profit_pct >= min_rsi_profit and not rsi_already_sold:
+                    # Redis에 매도 상태 기록
+                    set_rsi_overbought_sold(stock_code, True)
                     return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f}, Profit: {profit_pct:.1f}%)", "quantity_pct": 50.0}
 
             # =====================================================================
@@ -398,8 +405,23 @@ class PriceMonitor:
                 if signal:
                     logger.info(f"🔔 (WS) 매도 신호: {h.get('name', stock_code)}")
                     self._publish_sell_order(signal, h, current_price)
-                    # 중복 매도 방지 위해 캐시 제거
-                    self.portfolio_cache.pop(h['id'], None)
+                    
+                    # [Jennie's Fix] 전량 매도인 경우에만 캐시 제거 및 Redis 초기화
+                    q_pct = signal.get('quantity_pct', 100.0)
+                    if q_pct >= 100.0:
+                        logger.info(f"   (WS) 전량 매도로 모니터링 캐시 제거: {stock_code}")
+                        self.portfolio_cache.pop(h['id'], None)
+                        
+                        # Redis 상태 초기화 (다음 매매를 위해)
+                        redis_cache.delete_rsi_overbought_sold(stock_code)
+                        redis_cache.delete_high_watermark(stock_code)
+                        redis_cache.delete_scale_out_level(stock_code)
+                    else:
+                        # 분할 매도인 경우 수량만 업데이트하고 모니터링 유지
+                        old_qty = h['quantity']
+                        sell_qty = int(old_qty * (q_pct / 100.0)) or 1
+                        h['quantity'] -= sell_qty
+                        logger.info(f"   (WS) 분할 매도({q_pct}%): {old_qty} -> {h['quantity']} (모니터링 유지)")
             
             # 2. Hot Watchlist 매수 신호 체크 (Phase 2)
             if self.opportunity_watcher:

@@ -1158,3 +1158,62 @@ def delete_scale_out_level(stock_code: str, redis_client=None) -> bool:
     except Exception as e:
         logger.error(f"❌ [Redis] Scale-out 상태 삭제 실패: {e}")
         return False
+
+
+# ============================================================================
+# RSI 과열 매도 상태 추적
+# ============================================================================
+
+RSI_SOLD_PREFIX = "rsi_sold:"
+
+
+def get_rsi_overbought_sold(
+    stock_code: str,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 분할 매도 진행 여부를 조회합니다.
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    key = f"{RSI_SOLD_PREFIX}{stock_code}"
+    try:
+        val = r.get(key)
+        return val == "1"
+    except Exception as e:
+        logger.error(f"❌ [Redis] RSI 매도 상태 조회 실패: {e}")
+        return False
+
+
+def set_rsi_overbought_sold(
+    stock_code: str,
+    is_sold: bool = True,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 분할 매도 상태를 설정합니다.
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    key = f"{RSI_SOLD_PREFIX}{stock_code}"
+    try:
+        if is_sold:
+            r.setex(key, 2592000, "1")  # 30일 TTL
+        else:
+            r.delete(key)
+        logger.debug(f"✅ [Redis] RSI 매도 상태 설정: {stock_code} → {is_sold}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] RSI 매도 상태 설정 실패: {e}")
+        return False
+
+
+def delete_rsi_overbought_sold(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 매도 상태를 삭제합니다. (전량 매도 시 호출)
+    """
+    return set_rsi_overbought_sold(stock_code, is_sold=False, redis_client=redis_client)

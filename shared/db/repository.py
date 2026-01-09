@@ -140,7 +140,7 @@ def get_active_portfolio(session: Session) -> List[dict]:
     """
     query = (
         select(models.Portfolio)
-        .where(models.Portfolio.status == "HOLDING")
+        .where(models.Portfolio.status.in_(["HOLDING", "PARTIAL"]))
         .order_by(models.Portfolio.id.asc())
     )
     rows = session.execute(query).scalars().all()
