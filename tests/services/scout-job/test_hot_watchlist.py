@@ -32,7 +32,7 @@ def load_scout_cache_module():
     return module
 
 
-@unittest.skip("CI Stabilization: Mock pollution in module cache")
+
 class TestSaveHotWatchlist(unittest.TestCase):
     """save_hot_watchlist 테스트"""
     
@@ -48,6 +48,9 @@ class TestSaveHotWatchlist(unittest.TestCase):
 
     def test_save_hot_watchlist_success(self):
         """Hot Watchlist 저장 성공"""
+        stocks = [
+            {'code': '005930', 'name': '삼성전자', 'llm_score': 72}
+        ]
         scout_cache = load_scout_cache_module()
         result = scout_cache.save_hot_watchlist(
             stocks=stocks,
@@ -69,6 +72,9 @@ class TestSaveHotWatchlist(unittest.TestCase):
     
     def test_save_hot_watchlist_excludes_kospi(self):
         """KOSPI 지수(0001)는 제외"""
+        stocks = [
+            {'code': '005930', 'name': '삼성전자', 'llm_score': 72}
+        ]
         scout_cache = load_scout_cache_module()
         result = scout_cache.save_hot_watchlist(
             stocks=stocks,
@@ -97,7 +103,7 @@ class TestSaveHotWatchlist(unittest.TestCase):
         self.assertTrue(found, "Versioned key push not found")
 
 
-@unittest.skip("CI Stabilization: Mock pollution in module cache")
+
 class TestGetHotWatchlist(unittest.TestCase):
     """get_hot_watchlist 테스트"""
 
@@ -117,9 +123,9 @@ class TestGetHotWatchlist(unittest.TestCase):
             json.dumps(payload)
         ]
         
-        from scout_cache import get_hot_watchlist
+        scout_cache = load_scout_cache_module()
         
-        result = get_hot_watchlist()
+        result = scout_cache.get_hot_watchlist()
         
         self.assertIsNotNone(result)
         self.assertEqual(result['market_regime'], 'BULL')
@@ -141,9 +147,9 @@ class TestGetHotWatchlist(unittest.TestCase):
     def test_get_hot_watchlist_no_redis(self, mock_get_redis):
         """Redis 연결 없을 때"""
         mock_get_redis.return_value = None
-        from scout_cache import get_hot_watchlist
+        scout_cache = load_scout_cache_module()
         
-        result = get_hot_watchlist()
+        result = scout_cache.get_hot_watchlist()
         
         self.assertIsNone(result)
 
@@ -171,7 +177,7 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
             self.assertTrue(result)
             mock_save.assert_not_called()
 
-    @unittest.skip("Investigate mock call duplication")
+
     def test_refilter_bear_higher_threshold(self):
         """BEAR 전환 시 더 높은 threshold 적용"""
         with patch('shared.watchlist.get_redis_connection') as mock_get_redis, \
@@ -197,7 +203,7 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
             # save_hot_watchlist 호출 확인
             # mock_save.assert_called_once()
     
-    @unittest.skip("Investigate mock call duplication")
+
     def test_refilter_empty_watchlist(self):
         """빈 Hot Watchlist는 스킵"""
         with patch('shared.watchlist.get_redis_connection') as mock_get_redis, \

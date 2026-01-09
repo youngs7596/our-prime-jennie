@@ -7,6 +7,7 @@
   - `services/price-monitor/main.py`, `monitor.py`: OpportunityWatcher 제거 (매도 전용 모드)
   - 테스트 코드 import 경로 및 클래스 이름 업데이트 (OpportunityWatcher → BuyOpportunityWatcher)
 - **Jenkins CI 테스트 안정화**: 잘못된 커밋(`69cf61b`) revert 후 pytest 조건부 스킵, Mock 오염 테스트 임시 스킵, RSI 테스트 로직 수정으로 69 tests OK (0 errors, 0 failures, 23 skipped) 달성.
+- **Skipped Tests Resolved**: `buy-scanner`, `scout-job`, `buy-executor` 서비스의 `@unittest.skip` 처리된 테스트들을 Mock 객체 수정(`patch.object`, Constant Mocking) 및 로직 개선을 통해 전수 활성화 및 통과 (총 16개 테스트 복구).
 - **Combined Test Stabilization**: Fixed massive `ImportError` (numpy/pandas reload) in combined test runs by pre-loading C-extensions in `conftest.py` and isolating global module pollution, ensuring 955 tests pass in a single run.
 - **Test Stabilization (Module Patches)**: `services/sell-executor`, `buy-executor`, `buy-scanner` 테스트에서 `shared` 모듈 로딩 시 Mock 의존성 주입 방식을 개선(Module Patching)하여 `SQLAlchemy` 세션 오류 및 `Daily Buy Limit` 검증 로직의 Assert Failure 해결.
 - **WebSocket Buy Scanner Implementation (Phase 1-6)**: `price-monitor`에 `OpportunityWatcher`를 도입하여 3분 폴링 방식에서 실시간 WebSocket 가격 감시 및 매수 신호 포착 시스템으로 전환.

@@ -1,95 +1,209 @@
 ============================= test session starts ==============================
-platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/youngs75/projects/my-prime-jennie/venv/bin/python3
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/youngs75/projects/my-prime-jennie/.venv/bin/python
 cachedir: .pytest_cache
 rootdir: /home/youngs75/projects/my-prime-jennie
-plugins: langsmith-0.5.0, anyio-4.12.0, asyncio-1.3.0, mock-3.15.1, cov-7.0.0
+configfile: pyproject.toml
+plugins: anyio-4.12.0, asyncio-1.3.0, xdist-3.8.0, mock-3.15.1, cov-7.0.0, langsmith-0.5.2
 asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 9 items
+collecting ... collected 16 items
 
-tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_insufficient_data PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestProcessQuantScoringTask::test_successful_scoring PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_low_quant_score PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_skip_high_rsi PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestSmartSkipFilter::test_competitor_benefit_override PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_pass PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_fail_and_shadow_log 
-DEBUG: result={'code': '005930', 'name': 'Samsung Electronics', 'info': {'name': 'Samsung Electronics', 'sentiment_score': 80, 'sector': 'Technology', 'reasons': ['Good fundamentals']}, 'snapshot': None, 'quant_result': <MagicMock id='137653105763648'>, 'hunter_score': 0, 'hunter_reason': '스냅샷 조회 실패', 'passed': False, 'competitor_bonus': 0}
-DEBUG: passed=False
-DEBUG: hunter_score=0
-DEBUG: call_count=0
-FAILED
-tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_approval PASSED
-tests/services/scout-job/test_scout_pipeline.py::TestPhase23JudgeV5Task::test_judge_reject_safety_lock PASSED
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_market_regime_success PASSED [  6%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_bear_strategies FAILED [ 12%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update PASSED [ 18%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_realtime_update_existing_row PASSED [ 25%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_reverse_signal PASSED [ 31%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_calculate_factor_score PASSED [ 37%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_golden_cross FAILED [ 43%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_momentum FAILED [ 50%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_relative_strength FAILED [ 56%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_rsi_oversold FAILED [ 62%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_buy_opportunities_bear_market FAILED [ 68%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_buy_opportunities_full_flow PASSED [ 75%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_redis_lock_failure PASSED [ 81%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_stocks_parallel_flow PASSED [ 87%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_serialize_candidate PASSED [ 93%]
+tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_tier2_safety_check_pass PASSED [100%]
 
 =================================== FAILURES ===================================
-____________ TestPhase1HunterV5Task.test_hunter_fail_and_shadow_log ____________
+______________ TestBuyScanner.test_analyze_stock_bear_strategies _______________
 
-self = <MagicMock name='mock.log_shadow_radar' id='137653105705568'>
+self = <test_scanner.TestBuyScanner testMethod=test_analyze_stock_bear_strategies>
 
-    def assert_called_once(self):
-        """assert that the mock was called only once.
-        """
-        if not self.call_count == 1:
-            msg = ("Expected '%s' to have been called once. Called %s times.%s"
-                   % (self._mock_name or 'mock',
-                      self.call_count,
-                      self._calls_repr()))
->           raise AssertionError(msg)
-E           AssertionError: Expected 'log_shadow_radar' to have been called once. Called 0 times.
-
-/usr/lib/python3.12/unittest/mock.py:923: AssertionError
-
-During handling of the above exception, another exception occurred:
-
-self = <test_scout_pipeline.TestPhase1HunterV5Task object at 0x7d31dc7525a0>
-mock_fmt_quant = <MagicMock name='format_quant_score_for_prompt' id='137653105767776'>
-mock_get_benefit = <MagicMock name='get_competitor_benefit_score' id='137653105760096'>
-sample_stock_info = {'code': '005930', 'info': {'name': 'Samsung Electronics', 'reasons': ['Good fundamentals'], 'sector': 'Technology', 'sentiment_score': 80}, 'snapshot': {'market_cap': 500000000, 'pbr': 1.2, 'per': 10.5}}
-mock_brain = <MagicMock id='137653105767728'>
-mock_archivist = <MagicMock id='137653105804304'>
-
-    @patch('shared.database.get_competitor_benefit_score')
-    @patch('shared.hybrid_scoring.format_quant_score_for_prompt')
-    def test_hunter_fail_and_shadow_log(self, mock_fmt_quant, mock_get_benefit,
-                                        sample_stock_info, mock_brain, mock_archivist):
-        """Test Hunter Phase failing and logging to Shadow Radar"""
-        mock_get_benefit.return_value = {'score': 0}
-        mock_fmt_quant.return_value = "Quant Context"
+    def test_analyze_stock_bear_strategies(self):
+        """Test specific Bear strategies (Snipe Dip)"""
+        daily_prices = pd.DataFrame({
+            'CLOSE_PRICE': [100.0]*30,
+            'HIGH_PRICE': [105.0]*30,
+            'LOW_PRICE': [95.0]*30,
+            'OPEN_PRICE': [100.0]*30,
+            'VOLUME': [1000.0]*30,
+            'PRICE_DATE': pd.date_range(end='2025-01-01', periods=30, freq='D')
+        })
     
-        # FIX: Set float values for all score attributes used in logging
-        quant_result = MagicMock()
-        quant_result.total_score = 60.0
-        quant_result.momentum_score = 15.0
-        quant_result.quality_score = 10.0
-        quant_result.value_score = 10.0
-        quant_result.technical_score = 5.0
-        quant_result.news_stat_score = 10.0
-        quant_result.supply_demand_score = 10.0
-        quant_result.details = {}
+        self.scanner.kis.get_stock_snapshot.return_value = None
     
-        snapshot_cache = {'005930': {}}
-    
-        # Mock Brain response (Low Score)
-        mock_brain.get_jennies_analysis_score_v5.return_value = {
-            'score': 40, 'reason': 'Weak'
+        bear_context = {'bear_mode': True}
+        stock_info = {
+            'bear_strategy': {
+                'market_regime_strategy': {'strategy_type': 'BEAR_SNIPE_DIP'}
+            }
         }
     
-        result = scout_pipeline.process_phase1_hunter_v5_task(
-            sample_stock_info, mock_brain, quant_result,
-            snapshot_cache, {}, mock_archivist
-        )
+        self.scanner.strategy_selector.map_llm_strategy.return_value = StrategySelector.STRATEGY_BEAR_SNIPE_DIP
+        self.scanner._calculate_factor_score = MagicMock(return_value=(80.0, {}))
     
-        print(f"\nDEBUG: result={result}")
-        print(f"DEBUG: passed={result.get('passed')}")
-        print(f"DEBUG: hunter_score={result.get('hunter_score')}")
-        print(f"DEBUG: call_count={mock_archivist.log_shadow_radar.call_count}")
+        with patch("scanner.bear_strategies.evaluate_snipe_dip", return_value={'signal': 'BEAR_DIP_BUY', 'key_metrics': {}}) as mock_eval, \
+             patch("scanner.database.get_sentiment_score", return_value={'score': 50}):
     
-        assert result['passed'] is False
-        # Verify Shadow Radar Logging called
->       mock_archivist.log_shadow_radar.assert_called_once()
-E       AssertionError: Expected 'log_shadow_radar' to have been called once. Called 0 times.
+            result = self.scanner._analyze_stock(
+                "005930", stock_info, daily_prices,
+                MarketRegimeDetector.REGIME_BEAR, [], None,
+                bear_context=bear_context
+            )
+    
+>           self.assertIsNotNone(result)
+E           AssertionError: unexpectedly None
 
-tests/services/scout-job/test_scout_pipeline.py:205: AssertionError
+tests/services/buy-scanner/test_scanner.py:475: AssertionError
+_______________ TestBuyScanner.test_detect_signals_golden_cross ________________
+
+self = <test_scanner.TestBuyScanner testMethod=test_detect_signals_golden_cross>
+
+    def test_detect_signals_golden_cross(self):
+        """Test Golden Cross signal detection"""
+        print(f"DEBUG: Active Strategies: {self.scanner.strategy_selector.__class__}")
+        print(f"DEBUG: scanner.strategy: {self.scanner_module.strategy}")
+    
+        with patch("scanner.strategy.check_golden_cross", return_value=True) as mock_gc:
+            print(f"DEBUG: Mock setup. checking strategy.check_golden_cross: {self.scanner_module.strategy.check_golden_cross}")
+    
+            daily_prices = pd.DataFrame({'CLOSE_PRICE': [100]*20})
+            last_price = 100
+            rsi = 50
+            regime = MarketRegimeDetector.REGIME_BULL
+            # Use raw string just in case constant mismatch
+            active_strategies = ['TREND_FOLLOWING']
+    
+            signal_type, metrics = self.scanner._detect_signals(
+                "005930", daily_prices, last_price, rsi, regime, active_strategies, kospi_prices_df=None
+            )
+    
+            print(f"DEBUG: Result signal: {signal_type}, metrics: {metrics}")
+            print(f"DEBUG: Mock called? {mock_gc.called}")
+    
+>           self.assertEqual(signal_type, 'GOLDEN_CROSS')
+E           AssertionError: None != 'GOLDEN_CROSS'
+
+tests/services/buy-scanner/test_scanner.py:127: AssertionError
+----------------------------- Captured stdout call -----------------------------
+DEBUG: Active Strategies: <class 'unittest.mock.MagicMock'>
+DEBUG: scanner.strategy: <module 'shared.strategy' from '/home/youngs75/projects/my-prime-jennie/shared/strategy.py'>
+DEBUG: Mock setup. checking strategy.check_golden_cross: <MagicMock name='check_golden_cross' id='136069972204704'>
+DEBUG: Result signal: None, metrics: None
+DEBUG: Mock called? False
+_________________ TestBuyScanner.test_detect_signals_momentum __________________
+
+self = <test_scanner.TestBuyScanner testMethod=test_detect_signals_momentum>
+
+    def test_detect_signals_momentum(self):
+        """Test Momentum strategy signal"""
+        with patch("scanner.strategy.calculate_momentum", return_value=5.0):
+            signal, metrics = self.scanner._detect_signals(
+                "005930", pd.DataFrame(), 100, 50,
+                MarketRegimeDetector.REGIME_BULL,
+                [StrategySelector.STRATEGY_MOMENTUM],
+                None
+            )
+>           self.assertEqual(signal, 'MOMENTUM')
+E           AssertionError: None != 'MOMENTUM'
+
+tests/services/buy-scanner/test_scanner.py:290: AssertionError
+_____________ TestBuyScanner.test_detect_signals_relative_strength _____________
+
+self = <test_scanner.TestBuyScanner testMethod=test_detect_signals_relative_strength>
+
+    def test_detect_signals_relative_strength(self):
+        """Test Relative Strength strategy signal"""
+        with patch("scanner.strategy.calculate_relative_strength", return_value=3.0):
+            signal, metrics = self.scanner._detect_signals(
+                "005930", pd.DataFrame(), 100, 50,
+                MarketRegimeDetector.REGIME_BULL,
+                [StrategySelector.STRATEGY_RELATIVE_STRENGTH],
+                pd.DataFrame({'CLOSE_PRICE': [100]*20})
+            )
+>           self.assertEqual(signal, 'RELATIVE_STRENGTH')
+E           AssertionError: None != 'RELATIVE_STRENGTH'
+
+tests/services/buy-scanner/test_scanner.py:303: AssertionError
+_______________ TestBuyScanner.test_detect_signals_rsi_oversold ________________
+
+self = <test_scanner.TestBuyScanner testMethod=test_detect_signals_rsi_oversold>
+
+    def test_detect_signals_rsi_oversold(self):
+        """Test RSI Oversold signal detection"""
+        rsi = 10
+        daily_prices = pd.DataFrame({'CLOSE_PRICE': [100]*20})
+        last_price = 100
+        regime = MarketRegimeDetector.REGIME_SIDEWAYS
+        active_strategies = [StrategySelector.STRATEGY_MEAN_REVERSION]
+    
+        with patch("scanner.strategy.calculate_bollinger_bands", return_value=80):
+            signal_type, metrics = self.scanner._detect_signals(
+                "005930", daily_prices, last_price, rsi, regime, active_strategies, kospi_prices_df=None
+            )
+    
+>       self.assertEqual(signal_type, 'RSI_OVERSOLD')
+E       AssertionError: None != 'RSI_OVERSOLD'
+
+tests/services/buy-scanner/test_scanner.py:144: AssertionError
+____________ TestBuyScanner.test_scan_buy_opportunities_bear_market ____________
+
+self = <test_scanner.TestBuyScanner testMethod=test_scan_buy_opportunities_bear_market>
+
+    def test_scan_buy_opportunities_bear_market(self):
+        """Test scanning behavior in Bear Market (Restricted)"""
+        mock_regime_result = {
+            'regime': MarketRegimeDetector.REGIME_BEAR,
+            'active_strategies': [],
+            'market_context_dict': {'regime': 'BEAR'},
+            'risk_setting': {},
+            'strategy_preset': {'name': 'bear_preset', 'params': {}}
+        }
+        self.scanner._analyze_market_regime = MagicMock(return_value=mock_regime_result)
+        # Scenario 1: ALLOW_BEAR_TRADING = False (Default)
+        self.mock_config.get_bool.side_effect = lambda k, default=None: False if k == 'ALLOW_BEAR_TRADING' else (default if default is not None else False)
+        # self.mock_config.get_bool.return_value = False # Redundant
+        # self.scanner.config.get_bool.return_value = False # Redundant
+    
+        with patch("scanner.session_scope"), \
+             patch("scanner.get_active_watchlist", return_value={'005930': {'trade_tier': 'TIER1'}, '000660': {'trade_tier': 'RECON'}}), \
+             patch("scanner.get_active_portfolio", return_value=[]), \
+             patch("scanner.database.get_redis_connection"):
+            # Mock _scan_stocks_parallel
+            self.scanner._scan_stocks_parallel = MagicMock(return_value=[])
+    
+            result = self.scanner.scan_buy_opportunities()
+    
+            # result might be empty if _scan_stocks_parallel returns empty, but we check if it was called with correct filter.
+            assert self.scanner._scan_stocks_parallel.called
+            # Verify watchlist passed to scan contains only RECON
+            args, _ = self.scanner._scan_stocks_parallel.call_args
+            passed_watchlist = args[0]
+            print(f"DEBUG: Actual passed watchlist keys in assertion: {list(passed_watchlist.keys())}")
+            self.assertIn('000660', passed_watchlist)
+>           self.assertNotIn('005930', passed_watchlist)
+E           AssertionError: '005930' unexpectedly found in {'005930': {'trade_tier': 'TIER1'}, '000660': {'trade_tier': 'RECON'}}
+
+tests/services/buy-scanner/test_scanner.py:440: AssertionError
+----------------------------- Captured stdout call -----------------------------
+DEBUG: Actual passed watchlist keys in assertion: ['005930', '000660']
+------------------------------ Captured log call -------------------------------
+WARNING  scanner_test_mod:scanner.py:243 현금 비중 계산 실패 (Tier 2 비활성): '>' not supported between instances of 'MagicMock' and 'int'
 =========================== short test summary info ============================
-FAILED tests/services/scout-job/test_scout_pipeline.py::TestPhase1HunterV5Task::test_hunter_fail_and_shadow_log
-========================= 1 failed, 8 passed in 1.66s ==========================
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_analyze_stock_bear_strategies
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_golden_cross
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_momentum
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_relative_strength
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_detect_signals_rsi_oversold
+FAILED tests/services/buy-scanner/test_scanner.py::TestBuyScanner::test_scan_buy_opportunities_bear_market
+========================= 6 failed, 10 passed in 0.32s =========================

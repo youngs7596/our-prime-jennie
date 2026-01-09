@@ -57,7 +57,7 @@ from shared.scheduler_client import mark_job_run
 from shared.notification import TelegramBot
 
 from monitor import PriceMonitor
-from opportunity_watcher import OpportunityWatcher
+# from opportunity_watcher import OpportunityWatcher
 
 # 로깅 설정
 logging.basicConfig(

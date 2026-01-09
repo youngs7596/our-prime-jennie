@@ -1,3 +1,4 @@
+
 # tests/services/buy-scanner/test_scanner.py
 # BuyScanner 유닛 테스트 (unittest 변환)
 
@@ -12,11 +13,10 @@ import importlib.util
 # Project Root Setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 if PROJECT_ROOT not in sys.path:
-    # sys.path.insert(0, PROJECT_ROOT)
     pass
 
 # Add service directory to path to allow imports
-# sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'buy-scanner'))
+
 
 # Standard import
 from shared.market_regime import MarketRegimeDetector, StrategySelector
@@ -78,6 +78,19 @@ class TestBuyScanner(unittest.TestCase):
         # Configure session scope mock
         self.mock_session_scope.return_value.__enter__.return_value = self.mock_db_session
 
+        # Fix: Assign constants to mocked classes so scanner.py uses correct string values
+        self.mock_detector_cls.REGIME_BULL = MarketRegimeDetector.REGIME_BULL
+        self.mock_detector_cls.REGIME_BEAR = MarketRegimeDetector.REGIME_BEAR
+        self.mock_detector_cls.REGIME_SIDEWAYS = MarketRegimeDetector.REGIME_SIDEWAYS
+        self.mock_detector_cls.REGIME_RECOVERY = "RECOVERY" # Assuming string if not in import
+        
+        self.mock_selector_cls.STRATEGY_TREND_FOLLOWING = StrategySelector.STRATEGY_TREND_FOLLOWING
+        self.mock_selector_cls.STRATEGY_MEAN_REVERSION = StrategySelector.STRATEGY_MEAN_REVERSION
+        self.mock_selector_cls.STRATEGY_MOMENTUM = StrategySelector.STRATEGY_MOMENTUM
+        self.mock_selector_cls.STRATEGY_RELATIVE_STRENGTH = StrategySelector.STRATEGY_RELATIVE_STRENGTH
+        self.mock_selector_cls.STRATEGY_BEAR_SNIPE_DIP = "BEAR_SNIPE_DIP"
+        self.mock_selector_cls.STRATEGY_BEAR_MOMENTUM_BREAKOUT = "BEAR_MOMENTUM_BREAKOUT"
+
         self.scanner = self.BuyScanner(self.mock_kis, self.mock_config)
         self.scanner.regime_detector = self.mock_detector_cls.return_value
         self.scanner.strategy_selector = self.mock_selector_cls.return_value
@@ -101,15 +114,15 @@ class TestBuyScanner(unittest.TestCase):
         self.factor_repo_patcher.stop()
 
 
-    @unittest.skip("Fixing mock issues")
     def test_detect_signals_golden_cross(self):
         """Test Golden Cross signal detection"""
-        with patch("shared.strategy.check_golden_cross", return_value=True):
+        with patch("scanner.strategy.check_golden_cross", return_value=True) as mock_gc:
             daily_prices = pd.DataFrame({'CLOSE_PRICE': [100]*20})
             last_price = 100
             rsi = 50
             regime = MarketRegimeDetector.REGIME_BULL
-            active_strategies = [StrategySelector.STRATEGY_TREND_FOLLOWING]
+            # Use raw string just in case constant mismatch
+            active_strategies = ['TREND_FOLLOWING'] 
             
             signal_type, metrics = self.scanner._detect_signals(
                 "005930", daily_prices, last_price, rsi, regime, active_strategies, kospi_prices_df=None
@@ -118,7 +131,6 @@ class TestBuyScanner(unittest.TestCase):
             self.assertEqual(signal_type, 'GOLDEN_CROSS')
             self.assertEqual(metrics['signal'], 'GOLDEN_CROSS_5_20')
 
-    @unittest.skip("Fixing mock issues")
     def test_detect_signals_rsi_oversold(self):
         """Test RSI Oversold signal detection"""
         rsi = 10 
@@ -127,7 +139,7 @@ class TestBuyScanner(unittest.TestCase):
         regime = MarketRegimeDetector.REGIME_SIDEWAYS
         active_strategies = [StrategySelector.STRATEGY_MEAN_REVERSION]
         
-        with patch("shared.strategy.calculate_bollinger_bands", return_value=80): 
+        with patch("scanner.strategy.calculate_bollinger_bands", return_value=80): 
             signal_type, metrics = self.scanner._detect_signals(
                 "005930", daily_prices, last_price, rsi, regime, active_strategies, kospi_prices_df=None
             )
@@ -268,10 +280,9 @@ class TestBuyScanner(unittest.TestCase):
              self.assertEqual(passed_df.iloc[-1]['CLOSE_PRICE'], 110.0)
              self.assertEqual(passed_df.iloc[-1]['VOLUME'], 2000)
 
-    @unittest.skip("Fixing mock issues")
     def test_detect_signals_momentum(self):
         """Test Momentum strategy signal"""
-        with patch("shared.strategy.calculate_momentum", return_value=5.0): 
+        with patch("scanner.strategy.calculate_momentum", return_value=5.0): 
             signal, metrics = self.scanner._detect_signals(
                 "005930", pd.DataFrame(), 100, 50, 
                 MarketRegimeDetector.REGIME_BULL, 
@@ -281,10 +292,9 @@ class TestBuyScanner(unittest.TestCase):
             self.assertEqual(signal, 'MOMENTUM')
             self.assertEqual(metrics['momentum_pct'], 5.0)
 
-    @unittest.skip("Fixing mock issues")
     def test_detect_signals_relative_strength(self):
         """Test Relative Strength strategy signal"""
-        with patch("shared.strategy.calculate_relative_strength", return_value=3.0): 
+        with patch("scanner.strategy.calculate_relative_strength", return_value=3.0): 
             signal, metrics = self.scanner._detect_signals(
                 "005930", pd.DataFrame(), 100, 50, 
                 MarketRegimeDetector.REGIME_BULL, 
@@ -396,7 +406,6 @@ class TestBuyScanner(unittest.TestCase):
             self.assertEqual(passed_df.iloc[-1]['CLOSE_PRICE'], 110.0)
             self.assertEqual(passed_df.iloc[-1]['VOLUME'], 2000.0)
 
-    @unittest.skip("Fixing mock issues")
     def test_scan_buy_opportunities_bear_market(self):
         """Test scanning behavior in Bear Market (Restricted)"""
         mock_regime_result = {
@@ -417,17 +426,9 @@ class TestBuyScanner(unittest.TestCase):
              patch("scanner.get_active_portfolio", return_value=[]), \
              patch("scanner.database.get_redis_connection"):
             # Mock _scan_stocks_parallel
-            def debug_scan(w, owned, regime, *args):
-                allow = self.scanner.config.get_bool('ALLOW_BEAR_TRADING')
-                raise RuntimeError(f"DEBUG_INFO: passed_keys={list(w.keys())}, regime={regime}, allow_bear={allow}")
+            self.scanner._scan_stocks_parallel = MagicMock(return_value=[])
             
-            self.scanner._scan_stocks_parallel = MagicMock(side_effect=debug_scan)
-            
-            try:
-                result = self.scanner.scan_buy_opportunities()
-            except RuntimeError as e:
-                print(e)
-                raise e # Re-raise to see it in traceback
+            result = self.scanner.scan_buy_opportunities()
             
             # result might be empty if _scan_stocks_parallel returns empty, but we check if it was called with correct filter.
             assert self.scanner._scan_stocks_parallel.called
@@ -438,7 +439,6 @@ class TestBuyScanner(unittest.TestCase):
             self.assertIn('000660', passed_watchlist)
             self.assertNotIn('005930', passed_watchlist)
 
-    @unittest.skip("Fixing mock issues")
     def test_analyze_stock_bear_strategies(self):
         """Test specific Bear strategies (Snipe Dip)"""
         daily_prices = pd.DataFrame({
