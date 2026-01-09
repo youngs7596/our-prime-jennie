@@ -5,7 +5,7 @@
 import logging
 import sys
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # shared 패키지 임포트
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -153,7 +153,7 @@ class BuyExecutor:
             llm_scored_at = stock_info_data.get('llm_scored_at') or selected_candidate.get('llm_scored_at')
             if llm_scored_at:
                 try:
-                    from datetime import datetime, timezone, timedelta
+
                     scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
                     age_hours = (datetime.now(timezone.utc) - scored_dt).total_seconds() / 3600
                     if age_hours > 24:
