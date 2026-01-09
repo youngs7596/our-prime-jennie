@@ -30,15 +30,15 @@ except ImportError:
     loader.exec_module(mod)
     PriceMonitor = mod.PriceMonitor
 
-from opportunity_watcher import OpportunityWatcher # Import real class to avoid mocking it globally if possible.
-# Actually we don't need to import OpportunityWatcher here if we patch it in monitor module.
+from monitor import PriceMonitor
+
+# OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
+# from opportunity_watcher import OpportunityWatcher
 
 class TestPriceMonitor(unittest.TestCase):
     
     def setUp(self):
-        # Patch OpportunityWatcher in monitor module
-        self.ow_patcher = patch('monitor.OpportunityWatcher')
-        self.mock_ow_cls = self.ow_patcher.start() # This mocks the CLASS
+        # OpportunityWatcher는 buy-scanner로 이관됨 (패치 불필요)
         
         self.mock_kis = MagicMock()
         
@@ -56,7 +56,7 @@ class TestPriceMonitor(unittest.TestCase):
         self.monitor = PriceMonitor(self.mock_kis, self.mock_config, self.mock_publisher)
 
     def tearDown(self):
-        self.ow_patcher.stop()
+        pass  # OpportunityWatcher 패치 제거됨
 
     def test_check_sell_signal_stop_loss(self):
         """Test Fixed Stop Loss Trigger"""
@@ -193,10 +193,11 @@ class TestPriceMonitor(unittest.TestCase):
             self.assertNotIn(1, self.monitor.portfolio_cache)
 
     def test_check_sell_signal_rsi_overbought(self):
-        """Test RSI Overbought Scale-out"""
+        """Test RSI Overbought Scale-out (requires 3%+ profit)"""
         def config_side_effect(key, default=None):
             config_map = {
                 'SELL_RSI_OVERBOUGHT_THRESHOLD': 75.0,
+                'SELL_RSI_MIN_PROFIT_PCT': 3.0,
                 'SELL_TARGET_PROFIT_PCT': 20.0,
                 'SELL_STOP_LOSS_PCT': -5.0,
                 'TRAILING_TAKE_PROFIT_ENABLED': False,
@@ -208,14 +209,17 @@ class TestPriceMonitor(unittest.TestCase):
         self.mock_config.get_bool.side_effect = lambda k, default=False: config_side_effect(k, default)
         self.mock_config.get_float_for_symbol.side_effect = lambda code, k, default=None: config_side_effect(k, default)
         
+        # Buy price=100, Current price=105 (5% profit, satisfies 3% minimum)
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame({'CLOSE_PRICE': [100]*20})), \
              patch("monitor.strategy.calculate_atr", return_value=None), \
              patch("monitor.strategy.calculate_rsi", return_value=80.0), \
-             patch("monitor.update_high_watermark", return_value={"high_price": 110, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
-             patch("monitor.get_scale_out_level", return_value=0):
+             patch("monitor.update_high_watermark", return_value={"high_price": 105, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
+             patch("monitor.get_scale_out_level", return_value=0), \
+             patch("monitor.get_rsi_overbought_sold", return_value=False), \
+             patch("monitor.set_rsi_overbought_sold", return_value=None):
             
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 110, {}
+                self.mock_db_session, "005930", "Samsung", 100, 105, {}  # 5% profit
             )
             
             self.assertIsNotNone(result)

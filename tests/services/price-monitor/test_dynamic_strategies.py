@@ -3,21 +3,21 @@ from unittest.mock import MagicMock, patch
 import sys
 import os
 
-# Adjust path to import services/price-monitor
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/price-monitor')))
+# Adjust path to import services/buy-scanner (OpportunityWatcher 이관됨)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
 
 # Mock external dependencies before importing
 sys.modules['redis'] = MagicMock()
 sys.modules['shared.database'] = MagicMock()
 
-from opportunity_watcher import OpportunityWatcher
+from opportunity_watcher import BuyOpportunityWatcher
 
 class TestDynamicStrategies(unittest.TestCase):
     
     def setUp(self):
         self.mock_config = MagicMock()
         self.mock_publisher = MagicMock()
-        self.watcher = OpportunityWatcher(self.mock_config, self.mock_publisher)
+        self.watcher = BuyOpportunityWatcher(self.mock_config, self.mock_publisher)
         
         # Mock BarAggregator
         self.watcher.bar_aggregator = MagicMock()

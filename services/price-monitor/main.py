@@ -135,23 +135,9 @@ def initialize_service():
         )
         logger.info("✅ Price Monitor 초기화 완료")
         
-        # 7. OpportunityWatcher 초기화 (Hot Watchlist 매수 신호 감시)
-        enable_opportunity_watcher = os.getenv("ENABLE_OPPORTUNITY_WATCHER", "true").lower() == "true"
-        if enable_opportunity_watcher:
-            buy_signals_queue = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
-            buy_signals_publisher = RabbitMQPublisher(amqp_url=rabbitmq_url, queue_name=buy_signals_queue)
-            
-            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-            opportunity_watcher = OpportunityWatcher(
-                config=config_manager,
-                tasks_publisher=buy_signals_publisher,
-                redis_url=redis_url
-            )
-            price_monitor.opportunity_watcher = opportunity_watcher
-            price_monitor.buy_signals_publisher = buy_signals_publisher
-            logger.info("✅ OpportunityWatcher 초기화 완료 (queue=%s)", buy_signals_queue)
-        else:
-            logger.info("⚠️ OpportunityWatcher 비활성화 (ENABLE_OPPORTUNITY_WATCHER=false)")
+        # 7. OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
+        # 매수 역할은 buy-scanner가 담당, price-monitor는 매도만 담당
+        logger.info("ℹ️ OpportunityWatcher는 buy-scanner로 이관됨 (매도 전용 모드)")
         
         logger.info("=== Price Monitor Service 초기화 완료 ===")
         _start_scheduler_worker()

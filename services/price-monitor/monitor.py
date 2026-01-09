@@ -28,8 +28,8 @@ from shared.db.connection import session_scope
 from shared.db import repository as repo
 from shared.notification import TelegramBot
 
-# OpportunityWatcher (Hot Watchlist 매수 기회 감지)
-from opportunity_watcher import OpportunityWatcher
+# OpportunityWatcher는 buy-scanner로 이관됨 (매수 역할 분리)
+# from opportunity_watcher import OpportunityWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,8 @@ class PriceMonitor:
         
         self.portfolio_cache = {}
         
-        # Hot Watchlist 매수 기회 감지 (Phase 2)
-        self.buy_signals_publisher = None  # 별도 설정 필요
-        self.opportunity_watcher = None
+        # [Phase: WebSocket 역할 분리] OpportunityWatcher는 buy-scanner로 이관됨
+        # price-monitor는 매도 신호 감지에만 집중
         
         # Silent Stall 감지용
         self.last_ws_data_time = 0
@@ -122,16 +121,9 @@ class PriceMonitor:
                 portfolio_codes = list(set(item['code'] for item in portfolio))
                 self.portfolio_cache = {item['id']: item for item in portfolio}
                 
-                # Hot Watchlist 종목 추가 (OpportunityWatcher)
-                hot_codes = []
-                if self.opportunity_watcher:
-                    self.opportunity_watcher.load_hot_watchlist()
-                    hot_codes = self.opportunity_watcher.get_watchlist_codes()
-                    # 중복 제거
-                    hot_codes = [c for c in hot_codes if c not in portfolio_codes]
-                    logger.info(f"   (WS) Hot Watchlist 추가: {len(hot_codes)}개 종목")
-                
-                all_codes = portfolio_codes + hot_codes
+                # [Phase: WebSocket 역할 분리] 보유 포트폴리오만 감시 (매도 전용)
+                # Hot Watchlist 매수 감시는 buy-scanner가 담당
+                all_codes = portfolio_codes
                 
                 self.kis.websocket.start_realtime_monitoring(
                     portfolio_codes=all_codes,
@@ -161,11 +153,7 @@ class PriceMonitor:
                         logger.warning(f"   (WS) ⚠️ Silent Stall 감지! (60초간 데이터 수신 없음) 재연결 시도.")
                         self.kis.websocket.stop()
                         break
-                    
-                    # Dashboard Heartbeat (5초마다)
-                    if self.opportunity_watcher and (now - last_heartbeat_time >= 5):
-                        self.opportunity_watcher.publish_heartbeat()
-                        last_heartbeat_time = now
+                    # Dashboard Heartbeat 제거 (매수 감시는 buy-scanner가 담당)
 
                     if now - last_status_log_time >= 600:
                         logger.info(f"   (WS) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
@@ -425,13 +413,7 @@ class PriceMonitor:
                         h['quantity'] -= sell_qty
                         logger.info(f"   (WS) 분할 매도({q_pct}%): {old_qty} -> {h['quantity']} (모니터링 유지)")
             
-            # 2. Hot Watchlist 매수 신호 체크 (Phase 2)
-            if self.opportunity_watcher:
-                buy_signal = self.opportunity_watcher.on_price_update(
-                    stock_code, current_price, volume=0
-                )
-                if buy_signal:
-                    self.opportunity_watcher.publish_signal(buy_signal)
+            # 매수 신호 감시는 buy-scanner가 담당 (Phase: WebSocket 역할 분리)
                     
         except Exception as e:
             logger.error(f"❌ (WS) 오류: {e}")

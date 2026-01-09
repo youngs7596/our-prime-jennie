@@ -12,7 +12,15 @@ SellExecutor 클래스의 핵심 기능을 테스트합니다.
 - Idempotency (중복 실행 방지)
 """
 
-import pytest
+import unittest
+try:
+    import pytest
+except ImportError:
+    pytest = None
+
+# unittest discover 시 pytest 없으면 전체 모듈 스킵
+if pytest is None:
+    raise unittest.SkipTest("pytest not installed, skipping pytest-based tests")
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone, timedelta
 import sys

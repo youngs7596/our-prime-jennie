@@ -11,29 +11,26 @@ services/buy-scanner/main.py - 매수 신호 스캔 서비스
 3. 20일 저항선 돌파
 4. 골든크로스 (MA5 > MA20)
 
-처리 흐름:
----------
-1. Scheduler/RabbitMQ에서 트리거 수신
-2. Watchlist 종목 조회
-3. 각 종목 기술적 지표 계산
-4. 매수 신호 발생 시 buy-signals 큐로 발행
-
-출력:
-----
-RabbitMQ buy-signals 큐로 매수 후보 발행
+처리 흐름 (WebSocket 모드):
+-------------------------
+1. Hot Watchlist 로드 (scout-job이 저장한 것)
+2. KIS WebSocket으로 실시간 가격 구독
+3. 매수 신호 발생 시 buy-signals 큐로 발행
 
 환경변수:
 --------
 - PORT: HTTP 서버 포트 (기본: 8081)
 - TRADING_MODE: REAL/MOCK
 - RABBITMQ_URL: RabbitMQ 연결 URL
-- KIS_GATEWAY_URL: KIS Gateway URL
+- USE_WEBSOCKET_MODE: true/false (WebSocket 상시 실행 모드)
 """
 
 import os
 import sys
 import uuid
 import logging
+import threading
+import time
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -43,15 +40,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.auth as auth
 import shared.database as database
-import shared.redis_cache as redis_cache  # Trading Flag 체크용
+import shared.redis_cache as redis_cache
 from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker  # [변경] shared 모듈 사용
+from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
 from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage
 from shared.scheduler_client import mark_job_run
 
 from scanner import BuyScanner
+from opportunity_watcher import BuyOpportunityWatcher
 
 # 로깅 설정
 logging.basicConfig(
@@ -70,10 +68,18 @@ scheduler_job_worker = None
 scheduler_job_publisher = None
 scheduler_job_queue = None
 
+# WebSocket 모드 전역 변수
+kis_client = None  # WebSocket용 KIS 클라이언트
+opportunity_watcher = None
+websocket_thread = None
+is_websocket_mode = False
+websocket_lock = threading.Lock()
+
 
 def initialize_service():
     """서비스 초기화"""
     global scanner, rabbitmq_publisher, scheduler_job_worker, scheduler_job_publisher, scheduler_job_queue
+    global kis_client, opportunity_watcher, is_websocket_mode
     
     logger.info("=== Buy Scanner Service 초기화 시작 ===")
     load_dotenv()
@@ -88,11 +94,13 @@ def initialize_service():
         # 2. KIS API 초기화
         trading_mode = os.getenv("TRADING_MODE", "MOCK")
         use_gateway = os.getenv("USE_KIS_GATEWAY", "true").lower() == "true"
+        is_websocket_mode = os.getenv("USE_WEBSOCKET_MODE", "true").lower() == "true"
         
-        if use_gateway:
+        if use_gateway and not is_websocket_mode:
             kis = KISGatewayClient()
             logger.info("✅ KIS Gateway Client 초기화 완료")
         else:
+            # WebSocket 모드는 반드시 KIS_API 직접 연결 필요
             kis = KIS_API(
                 app_key=auth.get_secret(os.getenv(f"{trading_mode}_SECRET_ID_APP_KEY")),
                 app_secret=auth.get_secret(os.getenv(f"{trading_mode}_SECRET_ID_APP_SECRET")),
@@ -103,36 +111,49 @@ def initialize_service():
                 trading_mode=trading_mode
             )
             kis.authenticate()
-            logger.info("✅ KIS API 초기화 완료")
+            kis_client = kis  # WebSocket용 저장
+            logger.info("✅ KIS API 초기화 완료 (WebSocket 모드: %s)", is_websocket_mode)
         
         # 3. ConfigManager 초기화
         config_manager = ConfigManager(db_conn=None, cache_ttl=300)
         
-        # 4. Buy Scanner 초기화
+        # 4. Buy Scanner 초기화 (폴백용)
         scanner = BuyScanner(kis=kis, config=config_manager)
         logger.info("✅ Buy Scanner 초기화 완료")
         
-        # 5. RabbitMQ Publisher 초기화 (Pub/Sub 대체)
+        # 5. RabbitMQ Publisher 초기화
         amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-        # 매수 신호 큐는 아직 정의되지 않았으므로 'buy-signals'로 정의
         queue_name = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
         rabbitmq_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
         logger.info("✅ RabbitMQ Publisher 초기화 완료 (queue=%s)", queue_name)
 
-        # 6. Scheduler Job Worker (RabbitMQ)
-        if os.getenv("ENABLE_BUY_SCANNER_JOB_WORKER", "true").lower() == "true":
-            scheduler_job_queue = os.getenv("SCHEDULER_QUEUE_BUY_SCANNER", "real.jobs.buy-scanner")
-            scheduler_job_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=scheduler_job_queue)
-            scheduler_job_worker = RabbitMQWorker(
-                amqp_url=amqp_url,
-                queue_name=scheduler_job_queue,
-                handler=handle_scheduler_job_message,
+        # 6. WebSocket 모드: BuyOpportunityWatcher 초기화
+        if is_websocket_mode:
+            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+            opportunity_watcher = BuyOpportunityWatcher(
+                config=config_manager,
+                tasks_publisher=rabbitmq_publisher,
+                redis_url=redis_url
             )
-            scheduler_job_worker.start()
-            logger.info("✅ Scheduler Job Worker 시작 (queue=%s)", scheduler_job_queue)
-            _bootstrap_scheduler_job()
+            logger.info("✅ BuyOpportunityWatcher 초기화 완료")
+            
+            # WebSocket 감시 시작
+            _start_websocket_monitoring()
         else:
-            logger.info("⚠️ Scheduler Job Worker 비활성화 (ENABLE_BUY_SCANNER_JOB_WORKER=false)")
+            # 7. Scheduler Job Worker (폴링 모드)
+            if os.getenv("ENABLE_BUY_SCANNER_JOB_WORKER", "true").lower() == "true":
+                scheduler_job_queue = os.getenv("SCHEDULER_QUEUE_BUY_SCANNER", "real.jobs.buy-scanner")
+                scheduler_job_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=scheduler_job_queue)
+                scheduler_job_worker = RabbitMQWorker(
+                    amqp_url=amqp_url,
+                    queue_name=scheduler_job_queue,
+                    handler=handle_scheduler_job_message,
+                )
+                scheduler_job_worker.start()
+                logger.info("✅ Scheduler Job Worker 시작 (queue=%s)", scheduler_job_queue)
+                _bootstrap_scheduler_job()
+            else:
+                logger.info("⚠️ Scheduler Job Worker 비활성화 (ENABLE_BUY_SCANNER_JOB_WORKER=false)")
         
         logger.info("=== Buy Scanner Service 초기화 완료 ===")
         return True
@@ -140,6 +161,79 @@ def initialize_service():
     except Exception as e:
         logger.critical(f"❌ 초기화 실패: {e}", exc_info=True)
         return False
+
+
+def _start_websocket_monitoring():
+    """WebSocket 기반 실시간 감시 시작"""
+    global websocket_thread
+    
+    def websocket_loop():
+        logger.info("=== WebSocket 매수 신호 감시 시작 ===")
+        last_heartbeat_time = 0
+        
+        while not opportunity_watcher.stop_event.is_set():
+            try:
+                # Hot Watchlist 로드
+                opportunity_watcher.load_hot_watchlist()
+                hot_codes = opportunity_watcher.get_watchlist_codes()
+                
+                if not hot_codes:
+                    logger.info("   (WS) Hot Watchlist 비어있음. 60초 후 다시 확인합니다.")
+                    time.sleep(60)
+                    continue
+                
+                logger.info(f"   (WS) {len(hot_codes)}개 종목 WebSocket 구독 시작...")
+                
+                # WebSocket 구독 시작
+                kis_client.websocket.start_realtime_monitoring(
+                    portfolio_codes=hot_codes,
+                    on_price_func=_on_price_update
+                )
+                
+                if not kis_client.websocket.connection_event.wait(timeout=15):
+                    logger.error("   (WS) ❌ WebSocket 연결 타임아웃! 재시도합니다.")
+                    time.sleep(5)
+                    continue
+                
+                logger.info("   (WS) ✅ WebSocket 연결 성공! 실시간 감시 중.")
+                
+                # 연결 유지 루프
+                while kis_client.websocket.connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
+                    time.sleep(1)
+                    now = time.time()
+                    
+                    # Heartbeat 발행 (5초마다)
+                    if now - last_heartbeat_time >= 5:
+                        opportunity_watcher.publish_heartbeat()
+                        last_heartbeat_time = now
+                
+                if opportunity_watcher.stop_event.is_set():
+                    break
+                
+                logger.warning("   (WS) WebSocket 연결 끊김. 재연결 시도.")
+                
+            except Exception as e:
+                logger.error(f"❌ (WS) 감시 루프 오류: {e}", exc_info=True)
+                time.sleep(60)
+        
+        kis_client.websocket.stop()
+        logger.info("=== WebSocket 매수 신호 감시 종료 ===")
+    
+    websocket_thread = threading.Thread(target=websocket_loop, daemon=True)
+    websocket_thread.start()
+
+
+def _on_price_update(stock_code: str, current_price: float, current_high: float):
+    """WebSocket 가격 업데이트 콜백"""
+    if not opportunity_watcher:
+        return
+    
+    # 매수 신호 체크
+    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+    
+    if signal:
+        # 매수 신호 발행
+        opportunity_watcher.publish_signal(signal)
 
 
 @app.route('/health', methods=['GET'])
