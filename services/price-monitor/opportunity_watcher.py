@@ -415,3 +415,21 @@ class OpportunityWatcher:
             'hot_watchlist_size': len(self.hot_watchlist),
             'market_regime': getattr(self, 'market_regime', 'UNKNOWN'),
         }
+
+    def publish_heartbeat(self):
+        """
+        대시보드 모니터링용 상태값을 Redis에 발행 (Heartbeat)
+        TTL 15초 (15초간 갱신 안되면 죽은 것으로 간주)
+        """
+        if not self.redis:
+            return
+            
+        try:
+            metrics = self.get_metrics()
+            metrics['updated_at'] = datetime.now(timezone.utc).isoformat()
+            
+            key = "monitoring:opportunity_watcher"
+            self.redis.setex(key, 15, json.dumps(metrics))
+        except Exception as e:
+            # Heartbeat 실패는 로그만 남기고 무시 (메인 로직 방해 X)
+            logger.debug(f"Heartbeat 발행 실패: {e}")

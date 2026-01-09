@@ -17,15 +17,20 @@ if PROJECT_ROOT not in sys.path:
 @pytest.fixture
 def monitor_module_setup():
     """Setup monitor module and clean up after test"""
-    spec = importlib.util.spec_from_file_location(
-        "monitor", 
-        os.path.join(PROJECT_ROOT, "services/price-monitor/monitor.py")
-    )
-    monitor_module = importlib.util.module_from_spec(spec)
+    # Mock opportunity_watcher module
+    mock_ow = MagicMock()
+    mock_ow.OpportunityWatcher = MagicMock
     
-    with patch.dict(sys.modules, {"monitor": monitor_module}):
-        spec.loader.exec_module(monitor_module)
-        yield monitor_module
+    with patch.dict(sys.modules, {"opportunity_watcher": mock_ow}):
+        spec = importlib.util.spec_from_file_location(
+            "monitor", 
+            os.path.join(PROJECT_ROOT, "services/price-monitor/monitor.py")
+        )
+        monitor_module = importlib.util.module_from_spec(spec)
+        
+        with patch.dict(sys.modules, {"monitor": monitor_module}):
+            spec.loader.exec_module(monitor_module)
+            yield monitor_module
 
 @pytest.fixture
 def PriceMonitor(monitor_module_setup):
@@ -316,6 +321,50 @@ class TestPriceMonitor:
         """Test stop monitoring signal"""
         monitor_instance.stop_monitoring()
         assert monitor_instance.stop_event.is_set()
+
+    def test_monitor_websocket_silent_stall(self, monitor_instance, mock_kis):
+        """Test Silent Stall Detection in WebSocket mode"""
+        # Mock Session and Portfolio
+        with patch("monitor.session_scope"), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_portfolio:
+            
+            # Setup portfolio (needs items to trigger stall check)
+            mock_get_portfolio.return_value = [
+                {'code': '005930', 'name': 'Samsung', 'id': 1}
+            ]
+            
+            # Mock WebSocket setup
+            monitor_instance.use_websocket = True
+            monitor_instance.config.get_bool.return_value = False # disable_check=False
+            monitor_instance.kis.check_market_open = MagicMock(return_value=True)
+            monitor_instance.kis.websocket.connection_event.wait.return_value = True
+            monitor_instance.kis.websocket.connection_event.is_set.return_value = True
+            
+            # Dynamic time mocking to handle logging calls
+            current_time = 1000.0
+            
+            def mock_time_func():
+                return current_time
+            
+            def mock_sleep_func(seconds):
+                nonlocal current_time
+                current_time += seconds
+                # After 1st iter (1001), simulate huge delay/stall
+                if current_time >= 1001.0:
+                    current_time += 70.0 # Jump to trigger stall
+            
+            with patch("time.time", side_effect=mock_time_func), \
+                 patch("time.sleep", side_effect=mock_sleep_func):
+                
+                # 1. Outer check (False) -> Enter
+                # 2. Inner check (False) -> Enter
+                # 3. Sleep -> time jumps -> checking stall -> Break
+                # 4. Outer check (True) -> Exit
+                monitor_instance.stop_event.is_set = MagicMock(side_effect=[False, False, True]) 
+                
+                monitor_instance._monitor_with_websocket(dry_run=True)
+                
+                monitor_instance.kis.websocket.stop.assert_called()
 
     @pytest.mark.skip(reason="Patches global datetime.datetime which causes test pollution")
     def test_start_monitoring_fallback_time_check(self, monitor_instance):

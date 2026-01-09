@@ -97,6 +97,10 @@ export const systemApi = {
     const response = await api.get(`/system/logs/${containerName}?limit=${limit}&since=${since}`)
     return response.data
   },
+  getRealtimeMonitor: async () => {
+    const response = await api.get('/system/realtime-monitor')
+    return response.data
+  },
 }
 
 // Scheduler Control API (스케줄러 작업 직접 제어)

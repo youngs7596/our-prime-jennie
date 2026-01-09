@@ -301,3 +301,21 @@ async def get_container_logs(
             "logs": [],
             "error": str(e)
         }
+@router.get("/realtime-monitor")
+@cache_response(ttl_seconds=1)
+async def get_realtime_monitor_status():
+    """OpportunityWatcher 실시간 상태 조회 (Redis)"""
+    try:
+        r = get_redis_client()
+        if not r:
+            return {"status": "offline", "error": "Redis unavailable"}
+        
+        data = r.get("monitoring:opportunity_watcher")
+        if not data:
+            return {"status": "offline", "message": "No heartbeat data"}
+            
+        metrics = json.loads(data)
+        return {"status": "online", "metrics": metrics}
+    except Exception as e:
+        logger.error(f"Realtime Monitor 상태 조회 실패: {e}")
+        return {"status": "error", "error": str(e)}

@@ -55,9 +55,12 @@ class PriceMonitor:
         
         self.portfolio_cache = {}
         
-        # Hot Watchlist 매수 기회 감시 (Phase 2)
+        # Hot Watchlist 매수 기회 감지 (Phase 2)
         self.buy_signals_publisher = None  # 별도 설정 필요
         self.opportunity_watcher = None
+        
+        # Silent Stall 감지용
+        self.last_ws_data_time = 0
     
     def start_monitoring(self, dry_run: bool = True):
         logger.info("=== 가격 모니터링 시작 ===")
@@ -141,9 +144,25 @@ class PriceMonitor:
                 logger.info("   (WS) ✅ WebSocket 연결 확인! 실시간 감시 시작.")
                 
                 last_status_log_time = time.time()
+                self.last_ws_data_time = time.time()  # 연결 시점 초기화
+                last_heartbeat_time = 0  # Heartbeat 타이머
+                
                 while self.kis.websocket.connection_event.is_set() and not self.stop_event.is_set():
                     time.sleep(1)
                     now = time.time()
+                    
+                    # Silent Stall 감지 (데이터가 60초간 안 들어오면 재연결)
+                    # 단, 구독 종목이 있을 때만 체크
+                    if len(all_codes) > 0 and (now - self.last_ws_data_time > 60):
+                        logger.warning(f"   (WS) ⚠️ Silent Stall 감지! (60초간 데이터 수신 없음) 재연결 시도.")
+                        self.kis.websocket.stop()
+                        break
+                    
+                    # Dashboard Heartbeat (5초마다)
+                    if self.opportunity_watcher and (now - last_heartbeat_time >= 5):
+                        self.opportunity_watcher.publish_heartbeat()
+                        last_heartbeat_time = now
+
                     if now - last_status_log_time >= 600:
                         logger.info(f"   (WS) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
                         last_status_log_time = now
@@ -359,6 +378,9 @@ class PriceMonitor:
 
     def _on_websocket_price_update(self, stock_code, current_price, current_high):
         try:
+            # Silent Stall 감지용 타임스탬프 갱신
+            self.last_ws_data_time = time.time()
+            
             # logger.debug(f"   (WS) [{stock_code}] {current_price}")
             
             # 1. 보유 종목 매도 신호 체크
