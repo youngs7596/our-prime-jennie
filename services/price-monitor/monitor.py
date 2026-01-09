@@ -342,8 +342,12 @@ class PriceMonitor:
                 prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
                 rsi = strategy.calculate_rsi(prices[::-1], period=14)
                 threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
-                if rsi and rsi >= threshold:
-                    return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f})", "quantity_pct": 50.0}
+                
+                # [Jennie's Fix] 최소 수익률 조건 추가 (사용자 요청: 3%)
+                min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
+                
+                if rsi and rsi >= threshold and profit_pct >= min_rsi_profit:
+                    return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f}, Profit: {profit_pct:.1f}%)", "quantity_pct": 50.0}
 
             # =====================================================================
             # 5. 고정 목표 익절 (트레일링 비활성화 시 폴백)
