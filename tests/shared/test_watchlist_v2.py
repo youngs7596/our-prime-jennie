@@ -5,7 +5,7 @@ import sys
 import os
 
 # Adjust path to import shared
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from shared.watchlist import save_hot_watchlist, get_hot_watchlist
 

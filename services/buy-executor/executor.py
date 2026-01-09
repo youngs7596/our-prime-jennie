@@ -8,7 +8,8 @@ import os
 from datetime import datetime, timezone, timedelta
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# shared 패키지 임포트
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
 from shared.db.connection import session_scope
@@ -596,6 +597,7 @@ class BuyExecutor:
             # 2. 최대 보유 종목 수 확인
             max_portfolio_size = self.config.get_int('MAX_PORTFOLIO_SIZE', default=10)
             current_portfolio = repo.get_active_portfolio(session)
+            
             
             if len(current_portfolio) >= max_portfolio_size:
                 return {

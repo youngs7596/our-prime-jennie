@@ -6,7 +6,7 @@ from datetime import datetime
 import time
 
 # Adjust path to import services/price-monitor
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../services/price-monitor')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../services/price-monitor')))
 
 # Manual mocks for dependency injection
 sys.modules['redis'] = MagicMock()

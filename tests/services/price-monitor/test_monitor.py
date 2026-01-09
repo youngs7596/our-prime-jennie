@@ -12,25 +12,27 @@ import importlib.util
 # Project Root Setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 # We need to import monitor.
-sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'price-monitor'))
+# sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'price-monitor'))
 # Also ensure shared is in path (already done by PROJECT_ROOT insert)
 
-# Standard import
-try:
-    from monitor import PriceMonitor
-except ImportError:
-    # If standard import fails
-    import importlib.machinery
-    loader = importlib.machinery.SourceFileLoader('monitor', os.path.join(PROJECT_ROOT, 'services', 'price-monitor', 'monitor.py'))
-    mod = importlib.types.ModuleType(loader.name)
-    sys.modules['monitor'] = mod
-    loader.exec_module(mod)
-    PriceMonitor = mod.PriceMonitor
+# Standard import via importlib to avoid sys.path and legacy loader issues
+def load_monitor_module():
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'price-monitor', 'monitor.py')
+    spec = importlib.util.spec_from_file_location("monitor", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["monitor"] = module
+    spec.loader.exec_module(module)
+    return module
 
-from monitor import PriceMonitor
+monitor_mod = load_monitor_module()
+PriceMonitor = monitor_mod.PriceMonitor
+
+
 
 # OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
 # from opportunity_watcher import OpportunityWatcher

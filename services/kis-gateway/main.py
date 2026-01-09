@@ -47,7 +47,11 @@ from pybreaker import CircuitBreaker, CircuitBreakerError, CircuitBreakerListene
 import requests
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# shared 패키지 임포트
+try:
+    import shared
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.auth as auth
 from shared.kis.client import KISClient

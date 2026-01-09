@@ -3,22 +3,34 @@ import unittest
 from unittest.mock import MagicMock, patch
 import sys
 import os
+import importlib.util
 
 
 # Add project root and service directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../services/buy-scanner')))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
-# Mock missing 3rd party dependencies
-sys.modules['flask'] = MagicMock()
-sys.modules['dotenv'] = MagicMock()
-sys.modules['pika'] = MagicMock() # Mock pika for rabbitmq
-sys.modules['pika.exceptions'] = MagicMock()
-sys.modules['redis'] = MagicMock() # Mock redis for database connections
-sys.modules['shared.redis_cache'] = MagicMock() # Mock shared modules if needed, but let's try real first if path is ok.
+# Import main via importlib with mocked dependencies
+def load_main_module():
+    PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+    module_path = os.path.join(PROJECT_ROOT, 'services', 'buy-scanner', 'main.py')
+    spec = importlib.util.spec_from_file_location("buy_scanner_main", module_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["buy_scanner_main"] = module
+    spec.loader.exec_module(module)
+    return module
 
-# Import main directly
-import main
+with patch.dict(sys.modules, {
+    'flask': MagicMock(),
+    'dotenv': MagicMock(),
+    'pika': MagicMock(),
+    'pika.exceptions': MagicMock(),
+    'redis': MagicMock(),
+    'shared.redis_cache': MagicMock(),
+    'scanner': MagicMock(),
+    'opportunity_watcher': MagicMock()
+}):
+    main = load_main_module()
 
 class TestBuyScannerMain(unittest.TestCase):
     
@@ -37,10 +49,12 @@ class TestBuyScannerMain(unittest.TestCase):
         }
         
     @patch('shared.database.get_redis_connection')
-    @patch('shared.redis_cache.is_trading_stopped', return_value=False)
-    @patch('shared.redis_cache.is_trading_paused', return_value=False)
-    def test_scan_safety_mode_monitor_alive(self, mock_paused, mock_stopped, mock_get_redis):
+    def test_scan_safety_mode_monitor_alive(self, mock_get_redis):
         """Monitor가 살아있으면 신호 발송을 안 해야 함"""
+        # Mock Redis Cache functions directly on the loaded module
+        main.redis_cache.is_trading_stopped.return_value = False
+        main.redis_cache.is_trading_paused.return_value = False
+        
         # Redis Mock
         mock_redis = MagicMock()
         mock_get_redis.return_value = mock_redis
@@ -61,10 +75,11 @@ class TestBuyScannerMain(unittest.TestCase):
         
     @unittest.skip("CI Stabilization: Fallback logic changed, needs investigation")
     @patch('shared.database.get_redis_connection')
-    @patch('shared.redis_cache.is_trading_stopped', return_value=False)
-    @patch('shared.redis_cache.is_trading_paused', return_value=False)
-    def test_scan_fallback_mode_monitor_dead(self, mock_paused, mock_stopped, mock_get_redis):
+    def test_scan_fallback_mode_monitor_dead(self, mock_get_redis):
         """Monitor가 죽어있으면 신호 발송을 해야 함 (Fallback)"""
+        main.redis_cache.is_trading_stopped.return_value = False
+        main.redis_cache.is_trading_paused.return_value = False
+        
         # Redis Mock
         mock_redis = MagicMock()
         mock_get_redis.return_value = mock_redis
@@ -82,10 +97,11 @@ class TestBuyScannerMain(unittest.TestCase):
         main.rabbitmq_publisher.publish.assert_called_once()
         
     @patch('shared.database.get_redis_connection')
-    @patch('shared.redis_cache.is_trading_stopped', return_value=False)
-    @patch('shared.redis_cache.is_trading_paused', return_value=False)
-    def test_scan_config_disabled_safety(self, mock_paused, mock_stopped, mock_get_redis):
+    def test_scan_config_disabled_safety(self, mock_get_redis):
         """Config가 False면 무조건 발송해야 함"""
+        main.redis_cache.is_trading_stopped.return_value = False
+        main.redis_cache.is_trading_paused.return_value = False
+        
         # DISABLE_DIRECT_BUY = False
         main.scanner.config.get_bool.return_value = False
         

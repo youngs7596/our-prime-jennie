@@ -17,7 +17,8 @@ import importlib.util
 # Project Root Setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 # Dynamic import for module with hyphen in name
 spec = importlib.util.spec_from_file_location(

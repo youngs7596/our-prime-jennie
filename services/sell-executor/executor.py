@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timezone, timedelta
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
 from shared.db import connection

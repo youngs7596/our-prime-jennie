@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+norecursedirs = [".venv", "venv", "node_modules", ".git", "__pycache__", "*.egg-info"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+]

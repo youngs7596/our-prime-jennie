@@ -17,7 +17,7 @@ from datetime import datetime, timezone, timedelta
 
 # Project Root Setup
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
-sys.path.insert(0, PROJECT_ROOT)
+# sys.path.insert(0, PROJECT_ROOT)
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

@@ -21,7 +21,8 @@ import os
 # 프로젝트 루트를 sys.path에 추가
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 
 class MockConfig:

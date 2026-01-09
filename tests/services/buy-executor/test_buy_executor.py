@@ -29,7 +29,7 @@ import importlib.util
 
 # 프로젝트 루트 추가
 PROJECT_ROOT = os.path.join(os.path.dirname(__file__), '..', '..', '..')
-sys.path.insert(0, PROJECT_ROOT)
+# sys.path.insert(0, PROJECT_ROOT)
 
 
 def load_executor_module():
@@ -38,7 +38,13 @@ def load_executor_module():
     spec = importlib.util.spec_from_file_location("buy_executor", module_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules['buy_executor'] = module
-    spec.loader.exec_module(module)
+    
+    # 전략 프리셋 및 DB 의존성 모킹
+    with patch('shared.strategy_presets.resolve_preset_for_regime', return_value=('TEST_PRESET', {})), \
+         patch('shared.strategy_presets.apply_preset_to_config'), \
+         patch('shared.db.repository'), \
+         patch('shared.db.connection'):
+        spec.loader.exec_module(module)
     return module
 
 
@@ -140,6 +146,8 @@ class TestBuyExecutorSignalProcessing:
              patch('shared.portfolio_diversification.DiversificationChecker'), \
              patch('shared.sector_classifier.SectorClassifier') as mock_sector, \
              patch('shared.market_regime.MarketRegimeDetector'), \
+             patch('shared.strategy_presets.resolve_preset_for_regime', return_value=('TEST_PRESET', {})), \
+             patch('shared.strategy_presets.apply_preset_to_config'), \
              patch('shared.database') as mock_db:
             
             mock_sector.return_value.get_sector.return_value = "IT"

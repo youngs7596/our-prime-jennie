@@ -10,7 +10,7 @@ from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from croniter import croniter
 from fastapi import Depends, FastAPI, HTTPException, status
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from sqlalchemy import (
     Boolean,
     Column,
@@ -169,21 +169,24 @@ class JobBase(BaseModel):
     retry_limit: int = Field(default=3, ge=0)
     telemetry_label: Optional[str] = None
 
-    @validator("cron_expr")
+    @field_validator("cron_expr")
+    @classmethod
     def validate_cron(cls, value: str) -> str:
         if not croniter.is_valid(value):
             raise ValueError("유효하지 않은 cron 표현식입니다.")
         return value
 
-    @validator("reschedule_mode")
+    @field_validator("reschedule_mode")
+    @classmethod
     def validate_mode(cls, value: str) -> str:
         if value not in RESCHEDULE_MODES:
             raise ValueError(f"reschedule_mode는 {RESCHEDULE_MODES} 중 하나여야 합니다.")
         return value
 
-    @validator("interval_seconds")
-    def validate_interval(cls, value: Optional[int], values):
-        mode = values.get("reschedule_mode", "scheduler")
+    @field_validator("interval_seconds")
+    @classmethod
+    def validate_interval(cls, value: Optional[int], info: ValidationInfo):
+        mode = info.data.get("reschedule_mode", "scheduler")
         if mode == "queue" and (value is None or value <= 0):
             raise ValueError("queue 모드에서는 interval_seconds가 필요합니다.")
         return value
@@ -206,21 +209,24 @@ class JobUpdate(BaseModel):
     retry_limit: Optional[int] = Field(default=None, ge=0)
     telemetry_label: Optional[str] = None
 
-    @validator("cron_expr")
+    @field_validator("cron_expr")
+    @classmethod
     def validate_cron(cls, value: Optional[str]) -> Optional[str]:
         if value is not None and not croniter.is_valid(value):
             raise ValueError("유효하지 않은 cron 표현식입니다.")
         return value
 
-    @validator("reschedule_mode")
+    @field_validator("reschedule_mode")
+    @classmethod
     def validate_mode(cls, value: Optional[str]) -> Optional[str]:
         if value and value not in RESCHEDULE_MODES:
             raise ValueError(f"reschedule_mode는 {RESCHEDULE_MODES} 중 하나여야 합니다.")
         return value
 
-    @validator("interval_seconds")
-    def validate_interval(cls, value: Optional[int], values):
-        mode = values.get("reschedule_mode")
+    @field_validator("interval_seconds")
+    @classmethod
+    def validate_interval(cls, value: Optional[int], info: ValidationInfo):
+        mode = info.data.get("reschedule_mode")
         if mode == "queue" and (value is None or value <= 0):
             raise ValueError("queue 모드에서는 interval_seconds가 필요합니다.")
         return value
