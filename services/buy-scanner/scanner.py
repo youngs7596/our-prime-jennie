@@ -117,6 +117,28 @@ class BuyScanner:
                         "scan_timestamp": datetime.now(timezone.utc).isoformat()
                     }
 
+                # [Phase 4] Hot Watchlist Only 모드 (WebSocket 장애 시 Fallback)
+                # OpportunityWatcher가 정상 작동하면 buy-scanner는 Hot Watchlist만 스캔
+                hot_watchlist_only = self.config.get_bool('HOT_WATCHLIST_ONLY_MODE', default=False)
+                if hot_watchlist_only:
+                    try:
+                        import redis
+                        import json
+                        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+                        r = redis.from_url(redis_url, decode_responses=True)
+                        version_key = r.get("hot_watchlist:active")
+                        if version_key:
+                            hot_data = r.get(version_key)
+                            if hot_data:
+                                payload = json.loads(hot_data)
+                                hot_codes = {s['code'] for s in payload.get('stocks', [])}
+                                # Hot Watchlist에 있는 종목만 필터링
+                                original_count = len(watchlist)
+                                watchlist = {k: v for k, v in watchlist.items() if k in hot_codes}
+                                logger.info(f"🔥 [Hot Watchlist Only] {original_count} → {len(watchlist)}개로 필터")
+                    except Exception as e:
+                        logger.warning(f"Hot Watchlist 로드 실패 (전체 Watchlist 사용): {e}")
+
                 # 하락장에서는 기본 중단, 단 설정에 따라 제한적 스캔 허용
                 if current_regime == MarketRegimeDetector.REGIME_BEAR:
                     if not allow_bear_trading:

@@ -141,6 +141,29 @@ class BuyExecutor:
             is_tradable = selected_candidate.get('is_tradable', False)
             trade_tier = selected_candidate.get('trade_tier') or ("TIER1" if is_tradable else "TIER2")
             
+            # [Phase 3] Realtime Source 빠른 경로 (OpportunityWatcher에서 온 신호)
+            signal_source = scan_result.get('source', 'buy-scanner')
+            if signal_source == 'opportunity_watcher':
+                # Hot Watchlist는 이미 LLM Score 필터 통과 → 중복 점수 체크 스킵
+                logger.info(f"⚡ [Realtime] OpportunityWatcher 신호 → LLM 점수 체크 스킵 (score={current_score})")
+                # 하지만 llm_scored_at stale 체크는 수행
+                
+            # [Phase 3] llm_scored_at stale 체크 (준호 제안: 1영업일 이상 지난 점수는 보수적 처리)
+            stock_info_data = selected_candidate.get('stock_info') or {}
+            llm_scored_at = stock_info_data.get('llm_scored_at') or selected_candidate.get('llm_scored_at')
+            if llm_scored_at:
+                try:
+                    from datetime import datetime, timezone, timedelta
+                    scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
+                    age_hours = (datetime.now(timezone.utc) - scored_dt).total_seconds() / 3600
+                    if age_hours > 24:
+                        # 24시간 이상 된 점수 → 보수적 처리 (10점 감점)
+                        penalty = 10
+                        current_score = max(0, current_score - penalty)
+                        logger.warning(f"⚠️ [Stale Score] {age_hours:.1f}시간 경과 → {penalty}점 감점 (현재: {current_score}점)")
+                except Exception as e:
+                    logger.debug(f"llm_scored_at 파싱 실패: {e}")
+            
             # 점수 확인 (환경변수로 설정 가능, 기본값 70점 - B등급 이상만 매수)
             # Tier2(Scout Judge 미통과) 경로는 별도 최소 점수 적용 (품질 상향)
             base_min_llm_score = self.config.get_int('MIN_LLM_SCORE', default=60)

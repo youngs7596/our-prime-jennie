@@ -57,6 +57,7 @@ from shared.scheduler_client import mark_job_run
 from shared.notification import TelegramBot
 
 from monitor import PriceMonitor
+from opportunity_watcher import OpportunityWatcher
 
 # 로깅 설정
 logging.basicConfig(
@@ -77,6 +78,7 @@ rabbitmq_sell_queue = None
 tasks_publisher = None
 scheduler_job_worker = None
 scheduler_job_publisher = None
+buy_signals_publisher = None  # Hot Watchlist 매수 신호용
 monitor_lock = threading.Lock()
 
 
@@ -132,6 +134,24 @@ def initialize_service():
             telegram_bot=telegram_bot
         )
         logger.info("✅ Price Monitor 초기화 완료")
+        
+        # 7. OpportunityWatcher 초기화 (Hot Watchlist 매수 신호 감시)
+        enable_opportunity_watcher = os.getenv("ENABLE_OPPORTUNITY_WATCHER", "true").lower() == "true"
+        if enable_opportunity_watcher:
+            buy_signals_queue = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
+            buy_signals_publisher = RabbitMQPublisher(amqp_url=rabbitmq_url, queue_name=buy_signals_queue)
+            
+            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+            opportunity_watcher = OpportunityWatcher(
+                config=config_manager,
+                tasks_publisher=buy_signals_publisher,
+                redis_url=redis_url
+            )
+            price_monitor.opportunity_watcher = opportunity_watcher
+            price_monitor.buy_signals_publisher = buy_signals_publisher
+            logger.info("✅ OpportunityWatcher 초기화 완료 (queue=%s)", buy_signals_queue)
+        else:
+            logger.info("⚠️ OpportunityWatcher 비활성화 (ENABLE_OPPORTUNITY_WATCHER=false)")
         
         logger.info("=== Price Monitor Service 초기화 완료 ===")
         _start_scheduler_worker()
