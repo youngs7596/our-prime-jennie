@@ -1,5 +1,15 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-10
+- **Scout E2E 백테스트 시뮬레이터 개발**: 뉴스 데이터 + Factor Score 기반 Scout 종목 선정 시뮬레이션 구현
+  - `utilities/backtest_scout_e2e.py`: ScoutSimulator (Factor+뉴스), E2EBacktestEngine (Buy/Sell 시뮬레이션) 구현
+  - `utilities/auto_optimize_backtest_scout_e2e.py`: Grid 기반 자동 파라미터 최적화 스크립트 생성
+  - **Phase A**: 기술적 매수 신호 (`check_technical_entry`), Regime 동적 파라미터 (`REGIME_PARAMS`) 구현
+  - **Phase B**: 비선형 Scout 점수 (과락+가산점), 트레일링 스톱, 일중 시뮬레이션 (18슬롯) 추가
+  - **실제 거래 분석**: tradelog 테이블 확인 결과 실제 시스템은 삼전 +45%, 기아 +21% 등 수익 중
+  - **결론**: 시뮬레이터는 LLM 판단력 재현 한계로 인해 실제와 차이 발생, 트레이딩 시스템 자체는 정상 작동
+  - `docs/scout_e2e_backtest_report.md`: 개발 보고서 문서화
+
 ## 2026-01-09
 - **WebSocket E2E 테스트 환경 구축**: Mock WebSocket 서버 구현 및 테스트 API 추가로 완전한 E2E 테스트 파이프라인 구성.
   - `docker/kis-mock/mock_server.py`: Flask-SocketIO 기반 WebSocket 기능 추가, 테스트용 API (`/api/trigger-buy-signal`, `/api/trigger-price-burst`) 구현

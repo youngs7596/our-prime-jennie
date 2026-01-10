@@ -162,8 +162,106 @@ def get_sentiment_at_date(
 
 
 # =============================================================================
+# Regime 기반 동적 파라미터 (Phase A-2)
+# =============================================================================
+
+REGIME_PARAMS = {
+    "STRONG_BULL": {
+        "daily_buy_limit": 6,
+        "target_profit_pct": 0.30,
+        "stop_loss_pct": 0.10,
+        "buy_signal_threshold": 65,
+        "max_portfolio_size": 15,
+    },
+    "BULL": {
+        "daily_buy_limit": 4,
+        "target_profit_pct": 0.25,
+        "stop_loss_pct": 0.08,
+        "buy_signal_threshold": 68,
+        "max_portfolio_size": 12,
+    },
+    "SIDEWAYS": {
+        "daily_buy_limit": 3,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70,
+        "max_portfolio_size": 10,
+    },
+    "BEAR": {
+        "daily_buy_limit": 1,
+        "target_profit_pct": 0.10,
+        "stop_loss_pct": 0.05,
+        "buy_signal_threshold": 75,
+        "max_portfolio_size": 5,
+    },
+}
+
+
+def get_regime_params(regime: str) -> dict:
+    """시장 국면에 맞는 파라미터 반환"""
+    return REGIME_PARAMS.get(regime, REGIME_PARAMS["SIDEWAYS"])
+
+
+# =============================================================================
+# 매수 타이밍 로직 (Phase A-1)
+# =============================================================================
+
+def check_technical_entry(
+    df: pd.DataFrame,
+    target_date: pd.Timestamp,
+    min_signals: int = 1
+) -> Tuple[bool, List[str]]:
+    """
+    기술적 매수 신호 확인 (실제 Buy Scanner 로직 재현)
+    
+    Args:
+        df: 종목 가격 DataFrame (CLOSE_PRICE, RSI, BB_LOWER 등 포함)
+        target_date: 매수 조건 확인 날짜
+        min_signals: 최소 필요 신호 수 (기본 1)
+        
+    Returns:
+        (is_entry, signals): 매수 조건 충족 여부, 발생한 신호 리스트
+    """
+    bars = df.loc[:target_date].tail(25)
+    if len(bars) < 20:
+        return False, []
+    
+    today = bars.iloc[-1]
+    signals = []
+    
+    # 1. Golden Cross: MA5 > MA20 상향 돌파
+    ma5 = bars['CLOSE_PRICE'].tail(5).mean()
+    ma20 = bars['CLOSE_PRICE'].tail(20).mean()
+    ma5_prev = bars['CLOSE_PRICE'].iloc[-6:-1].mean()
+    ma20_prev = bars['CLOSE_PRICE'].iloc[-21:-1].mean()
+    if ma5_prev <= ma20_prev and ma5 > ma20:
+        signals.append('GOLDEN_CROSS')
+    
+    # 2. RSI Oversold: RSI < 35 (눌림목)
+    rsi = today.get('RSI', 50) if not pd.isna(today.get('RSI')) else 50
+    if rsi < 35:
+        signals.append('RSI_OVERSOLD')
+    
+    # 3. BB Lower: 가격이 볼린저 하단 근처
+    bb_lower = today.get('BB_LOWER', 0) if not pd.isna(today.get('BB_LOWER')) else 0
+    if bb_lower and today['CLOSE_PRICE'] < bb_lower * 1.02:
+        signals.append('BB_LOWER')
+    
+    # 4. Momentum: 최근 5일 상승률 > 3%
+    if len(bars) >= 5:
+        prev_price = bars.iloc[-5]['CLOSE_PRICE']
+        if prev_price > 0:
+            momentum = (today['CLOSE_PRICE'] - prev_price) / prev_price
+            if momentum > 0.03:
+                signals.append('MOMENTUM')
+    
+    return len(signals) >= min_signals, signals
+
+
+# =============================================================================
 # Scout 시뮬레이터
 # =============================================================================
+
 
 @dataclass
 class ScoutSnapshot:
@@ -293,13 +391,31 @@ class ScoutSimulator:
                 news_df = self.news_cache.get(code)
                 news_sentiment, news_count = get_sentiment_at_date(news_df, target_date, lookback_days=7)
                 
-                # 뉴스 감성 보정 (-10 ~ +10점)
-                # 감성 50 = 중립, 0 = 매우 부정, 100 = 매우 긍정
-                news_adjustment = (news_sentiment - 50) / 5  # -10 ~ +10
+                # === Phase B-1: 비선형 Scout 점수 추정 ===
                 
-                # 최종 Scout 점수 추정
-                # 기본점수 55 + Factor 기여(40%) + 뉴스 보정
-                estimated_score = 55 + (factor_score * 0.4) + news_adjustment
+                # 1. 과락: 뉴스 감성이 매우 부정적이면 탈락
+                if news_sentiment < 40 and news_count > 0:
+                    continue  # 악재 뉴스가 있으면 제외
+                
+                # 2. 기본 점수: 베이스(40) + Factor Score 기여(30%)
+                # factor_score 범위: 0~100, 기여도: 0~30
+                base_score = 40 + (factor_score * 0.3)
+                
+                # 3. 뉴스 가산점 (비선형)
+                if news_sentiment > 85:
+                    news_bonus = 20  # 강력한 호재
+                elif news_sentiment > 70:
+                    news_bonus = 10  # 긍정적
+                elif news_sentiment > 55:
+                    news_bonus = 5   # 약간 긍정
+                else:
+                    news_bonus = 0   # 중립 이하
+                
+                # 4. 수급 보너스 (쌍끌이)
+                supply_bonus = 10 if investor_bonus > 0 else 0  # 쌍끌이 시 +10점
+                
+                # 최종 Scout 점수 (40 + 0~30 + 0~20 + 0~10 = 40~100)
+                estimated_score = base_score + news_bonus + supply_bonus
                 estimated_score = max(0, min(100, estimated_score))
                 
                 if estimated_score >= self.min_score:
@@ -381,6 +497,11 @@ class E2EBacktestEngine:
         self.scout_min_score = scout_min_score
         self.buy_signal_threshold = buy_signal_threshold
         
+        # 일중 시뮬레이션 옵션
+        self.use_intraday_sim = True  # 일중 시뮬레이션 사용
+        self.intraday_slots = 18  # 하루 18슬롯 (20분 간격)
+        self.slot_offsets = [timedelta(minutes=20 * i) for i in range(self.intraday_slots)]
+        
         # Portfolio Engine (기존 백테스트 재사용)
         self.portfolio = PortfolioEngine(
             initial_capital=initial_capital,
@@ -398,10 +519,61 @@ class E2EBacktestEngine:
         self.news_cache: Dict[str, pd.DataFrame] = {}
         self.investor_cache: Dict[str, pd.DataFrame] = {}
         self.financial_cache: Dict[str, pd.DataFrame] = {}
+        self.intraday_cache: Dict[str, List[float]] = {}  # 일중 가격 캐시
         
         # 결과
         self.equity_curve: List[Tuple[datetime, float]] = []
         self.scout_snapshots: List[ScoutSnapshot] = []
+    
+    def _simulate_intraday_path(
+        self, open_p: float, high_p: float, low_p: float, close_p: float
+    ) -> List[float]:
+        """OHLC를 기반으로 일중 가격 경로 생성 (gpt_v2 방식)"""
+        import math
+        slots = self.intraday_slots
+        if slots <= 1:
+            return [close_p]
+        
+        key_points = [open_p, low_p, high_p, close_p]
+        segments = len(key_points) - 1
+        steps_remaining = slots - 1
+        extras = steps_remaining % segments if segments > 0 else 0
+        
+        path = [max(0.0, key_points[0])]
+        for idx in range(segments):
+            base_steps = max(1, steps_remaining // segments) if segments > 0 else 1
+            start = key_points[idx]
+            end = key_points[idx + 1]
+            steps = base_steps + (1 if idx < extras else 0)
+            steps = max(1, steps)
+            for step in range(1, steps + 1):
+                t = step / steps
+                ease = -(math.cos(math.pi * t) - 1) / 2
+                value = start + (end - start) * ease
+                path.append(max(0.0, value))
+        
+        if len(path) < slots:
+            path.extend([close_p] * (slots - len(path)))
+        return path[:slots]
+    
+    def _get_intraday_price(self, code: str, date: datetime, slot_idx: int) -> float:
+        """특정 슬롯의 일중 가격 반환"""
+        key = f"{code}_{date.strftime('%Y%m%d')}"
+        if key not in self.intraday_cache:
+            df = self.price_cache.get(code)
+            if df is None or date not in df.index:
+                return 0.0
+            row = df.loc[date]
+            self.intraday_cache[key] = self._simulate_intraday_path(
+                float(row.get("OPEN_PRICE", row["CLOSE_PRICE"])),
+                float(row.get("HIGH_PRICE", row["CLOSE_PRICE"])),
+                float(row.get("LOW_PRICE", row["CLOSE_PRICE"])),
+                float(row["CLOSE_PRICE"]),
+            )
+        path = self.intraday_cache.get(key, [])
+        if 0 <= slot_idx < len(path):
+            return path[slot_idx]
+        return path[-1] if path else 0.0
         
     def load_data(self, stock_codes: List[str] = None):
         """
@@ -504,14 +676,23 @@ class E2EBacktestEngine:
             scout_result = scout_sim.simulate_scout_for_date(current_date)
             self.scout_snapshots.append(scout_result)
             
+            # 1-2. Regime 기반 동적 파라미터 적용 (Phase A-2)
+            regime = scout_result.regime
+            regime_params = get_regime_params(regime)
+            current_buy_limit = regime_params["daily_buy_limit"]
+            current_buy_threshold = regime_params["buy_signal_threshold"]
+            current_target_profit = regime_params["target_profit_pct"]
+            current_stop_loss = regime_params["stop_loss_pct"]
+            current_max_portfolio = regime_params["max_portfolio_size"]
+            
             hot_watchlist_codes = {item["code"] for item in scout_result.hot_watchlist}
             
             # 2. Buy Scanner 시뮬레이션
             # Hot Watchlist 종목 중 매수 신호 발생한 종목 탐색
             for item in scout_result.hot_watchlist:
-                if daily_buys >= self.daily_buy_limit:
+                if daily_buys >= current_buy_limit:
                     break
-                if len(self.portfolio.positions) >= self.max_portfolio_size:
+                if len(self.portfolio.positions) >= current_max_portfolio:
                     break
                 if item["code"] in self.portfolio.positions:
                     continue  # 이미 보유 중
@@ -525,26 +706,88 @@ class E2EBacktestEngine:
                 price = float(row["CLOSE_PRICE"])
                 atr = float(row.get("ATR", price * 0.02)) if not pd.isna(row.get("ATR")) else price * 0.02
                 
-                # 매수 신호: Scout 점수가 임계값 이상
-                if item["estimated_score"] >= self.buy_signal_threshold:
-                    # 포지션 사이즈 계산
+                # 매수 조건 1: Scout 점수가 임계값 이상
+                # 매수 조건 1: 기술적 진입 신호 확인 (Phase A-1)
+                is_entry, signals = check_technical_entry(df, current_date, min_signals=1)
+                
+                # 매수 조건 2: Scout 점수 + 기술적 신호 결합 판단
+                # - 기술적 신호가 있으면: Scout 점수 요구치 5점 완화
+                # - 기술적 신호가 없으면: Bull/Strong Bull에서만 높은 Scout 점수로 매수 허용
+                effective_threshold = current_buy_threshold - 5 if is_entry else current_buy_threshold + 5
+                
+                # Bear/Sideways에서 기술적 신호 없으면 매수 안함
+                if not is_entry and regime in ["BEAR", "SIDEWAYS"]:
+                    continue
+                
+                if item["estimated_score"] < effective_threshold:
+                    continue
+                
+                # 일중 시뮬레이션: 여러 슬롯에서 매수 시도
+                if self.use_intraday_sim:
+                    # 슬롯 3~8 (일중 저점 구간)에서 매수 시도
+                    for slot_idx in range(3, min(9, self.intraday_slots)):
+                        if daily_buys >= current_buy_limit:
+                            break
+                        
+                        slot_price = self._get_intraday_price(code, current_date, slot_idx)
+                        if slot_price <= 0:
+                            continue
+                        
+                        slot_timestamp = current_date + self.slot_offsets[slot_idx]
+                        atr = float(row.get("ATR", slot_price * 0.02)) if not pd.isna(row.get("ATR")) else slot_price * 0.02
+                        
+                        # 포지션 사이즈 계산
+                        position_value = self.portfolio.cash * self.max_stock_pct
+                        qty = int(position_value / slot_price)
+                        
+                        if qty > 0:
+                            signal_str = "+".join(signals) if signals else "SCOUT"
+                            candidate = Candidate(
+                                code=code,
+                                price=slot_price,
+                                signal=f"SCOUT_{signal_str}",
+                                score=item["estimated_score"],
+                                factor_score=item["factor_score"],
+                                llm_score=item["estimated_score"],
+                            )
+                            
+                            risk_setting = {
+                                "stop_loss_pct": current_stop_loss,
+                                "target_profit_pct": current_target_profit,
+                            }
+                            
+                            success = self.portfolio.execute_buy(
+                                candidate=candidate,
+                                qty=qty,
+                                trade_date=current_date,
+                                slot_timestamp=slot_timestamp,
+                                atr=atr,
+                                sector="기타",
+                                risk_setting=risk_setting,
+                            )
+                            
+                            if success:
+                                daily_buys += 1
+                                break  # 한 종목당 한 번만 매수
+                else:
+                    # 기존 종가 기준 매수
                     position_value = self.portfolio.cash * self.max_stock_pct
                     qty = int(position_value / price)
                     
                     if qty > 0:
-                        # 매수 실행
+                        signal_str = "+".join(signals) if signals else "SCOUT"
                         candidate = Candidate(
                             code=code,
                             price=price,
-                            signal="SCOUT_BUY",
+                            signal=f"SCOUT_{signal_str}",
                             score=item["estimated_score"],
                             factor_score=item["factor_score"],
                             llm_score=item["estimated_score"],
                         )
                         
                         risk_setting = {
-                            "stop_loss_pct": self.stop_loss_pct,
-                            "target_profit_pct": self.target_profit_pct,
+                            "stop_loss_pct": current_stop_loss,
+                            "target_profit_pct": current_target_profit,
                         }
                         
                         success = self.portfolio.execute_buy(
@@ -553,7 +796,7 @@ class E2EBacktestEngine:
                             trade_date=current_date,
                             slot_timestamp=current_date,
                             atr=atr,
-                            sector="기타",  # TODO: 섹터 정보 추가
+                            sector="기타",
                             risk_setting=risk_setting,
                         )
                         
@@ -561,26 +804,92 @@ class E2EBacktestEngine:
                             daily_buys += 1
             
             # 3. Sell 시뮬레이션
-            def price_lookup(code: str) -> float:
-                df = self.price_cache.get(code)
-                if df is None or current_date not in df.index:
-                    return 0.0
-                return float(df.loc[current_date]["CLOSE_PRICE"])
+            # Phase B-2: 트레일링 스톱 적용 (Bull/Strong Bull에서)
+            use_trailing_stop = regime in ["BULL", "STRONG_BULL"]
+            trailing_stop_pct = 0.08 if regime == "BULL" else 0.10
             
-            sell_actions = self.portfolio.process_slot(
-                slot_timestamp=current_date,
-                trade_date=current_date,
-                price_lookup=price_lookup,
-                price_cache=self.price_cache,
-                risk_setting={
-                    "stop_loss_pct": -self.stop_loss_pct,
-                    "target_profit_pct": self.target_profit_pct,
-                },
-                rsi_thresholds=(70, 75, 80),
-            )
+            if self.use_intraday_sim:
+                # 일중 슬롯별 매도 체크
+                for slot_idx in range(self.intraday_slots):
+                    slot_timestamp = current_date + self.slot_offsets[slot_idx]
+                    
+                    def slot_price_lookup(code: str, idx=slot_idx) -> float:
+                        return self._get_intraday_price(code, current_date, idx)
+                    
+                    # 트레일링 스톱: 슬롯별로 고점 업데이트
+                    if use_trailing_stop:
+                        for code, position in list(self.portfolio.positions.items()):
+                            slot_price = slot_price_lookup(code)
+                            if slot_price <= 0:
+                                continue
+                            
+                            if position.high_price <= 0:
+                                position.high_price = position.avg_price
+                            if slot_price > position.high_price:
+                                position.high_price = slot_price
+                                trailing_stop_price = position.high_price * (1 - trailing_stop_pct)
+                                if trailing_stop_price > position.stop_loss_price:
+                                    position.stop_loss_price = trailing_stop_price
+                    
+                    # 슬롯별 매도 체크
+                    self.portfolio.process_slot(
+                        slot_timestamp=slot_timestamp,
+                        trade_date=current_date,
+                        price_lookup=slot_price_lookup,
+                        price_cache=self.price_cache,
+                        risk_setting={
+                            "stop_loss_pct": -current_stop_loss,
+                            "target_profit_pct": current_target_profit,
+                        },
+                        rsi_thresholds=(70, 75, 80),
+                    )
+            else:
+                # 기존 종가 기준 매도
+                def price_lookup(code: str) -> float:
+                    df = self.price_cache.get(code)
+                    if df is None or current_date not in df.index:
+                        return 0.0
+                    return float(df.loc[current_date]["CLOSE_PRICE"])
+                
+                if use_trailing_stop:
+                    for code, position in list(self.portfolio.positions.items()):
+                        current_price = price_lookup(code)
+                        if current_price <= 0:
+                            continue
+                        if position.high_price <= 0:
+                            position.high_price = position.avg_price
+                        if current_price > position.high_price:
+                            position.high_price = current_price
+                            trailing_stop_price = position.high_price * (1 - trailing_stop_pct)
+                            if trailing_stop_price > position.stop_loss_price:
+                                position.stop_loss_price = trailing_stop_price
+                
+                self.portfolio.process_slot(
+                    slot_timestamp=current_date,
+                    trade_date=current_date,
+                    price_lookup=price_lookup,
+                    price_cache=self.price_cache,
+                    risk_setting={
+                        "stop_loss_pct": -current_stop_loss,
+                        "target_profit_pct": current_target_profit,
+                    },
+                    rsi_thresholds=(70, 75, 80),
+                )
             
-            # 4. 일일 자산 기록
-            equity = self.portfolio.total_value(current_date, self.price_cache, price_lookup)
+            # 4. 일일 자산 기록 (종가 기준)
+            def closing_lookup(code: str) -> float:
+                return self._get_intraday_price(code, current_date, self.intraday_slots - 1) if self.use_intraday_sim else (
+                    float(self.price_cache.get(code, pd.DataFrame()).loc[current_date]["CLOSE_PRICE"]) 
+                    if code in self.price_cache and current_date in self.price_cache[code].index else 0.0
+                )
+            
+            # 일중 캐시 정리
+            if self.use_intraday_sim:
+                keys_to_remove = [k for k in self.intraday_cache.keys() if k.endswith(current_date.strftime('%Y%m%d'))]
+                for k in keys_to_remove:
+                    del self.intraday_cache[k]
+            
+            equity = self.portfolio.total_value(current_date, self.price_cache, closing_lookup)
             self.equity_curve.append((current_date, equity))
             
             if (i + 1) % 20 == 0:
