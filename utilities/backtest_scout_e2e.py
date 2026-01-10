@@ -323,6 +323,204 @@ class ScoutSimulator:
         self.regime_detector = MarketRegimeDetector()
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
+    
+    def load_llm_decisions_for_date(
+        self,
+        target_date: datetime,
+        stock_codes: List[str],
+        source_priority: List[str] = None,
+        carry_forward_days: int = 3,  # ChatGPT 권고: Carry-forward 최대 일수
+        decay_per_day: float = 5.0,   # ChatGPT 권고: 하루당 점수 감쇠
+    ) -> Dict[str, dict]:
+        """
+        LLM 결정 로드 (우선순위 기반 Fallback + Carry-forward)
+        
+        ChatGPT 피드백 반영:
+        - effective_date 기반 룩어헤드 방어 (created_at 시간대별 규칙)
+        - Carry-forward + Decay: 결정이 없으면 N일 이내 결정을 감쇠하여 사용
+        - decision_source 상세 로깅
+        
+        Fallback 우선순위 (ChatGPT 권고):
+        Tier 0: DECISION_LEDGER (당일 effective)
+        Tier 1: DECISION_LEDGER (Carry-forward + Decay)
+        Tier 2: WATCHLIST_HISTORY
+        Tier 3: FACTOR_SCORE (최후)
+        
+        Args:
+            target_date: 조회 기준일 (매수 결정을 내릴 날짜)
+            stock_codes: 조회할 종목 코드 리스트
+            source_priority: 소스 우선순위
+            carry_forward_days: Carry-forward 최대 일수 (기본 3일)
+            decay_per_day: 하루당 점수 감쇠 (기본 5점)
+            
+        Returns:
+            {stock_code: {
+                "source": str,  # "LEDGER_SAME_DAY" | "LEDGER_CARRY_FWD" | "WATCHLIST" | "FACTOR_SCORE"
+                "estimated_score": float,
+                "llm_decision_type": str,
+                "hunter_score": float,
+                "effective_date": datetime,  # 결정이 적용되는 날짜
+                "created_at": datetime,      # 원본 결정 생성 시각
+                "decay_applied": float,      # 적용된 감쇠량
+                "mode": str,                 # "replay" | "surrogate"
+            }}
+        """
+        if source_priority is None:
+            source_priority = ["DECISION_LEDGER", "WATCHLIST_HISTORY"]
+        
+        results = {}
+        
+        # === Tier 0 & 1: LLM_DECISION_LEDGER (당일 + Carry-forward) ===
+        if "DECISION_LEDGER" in source_priority:
+            try:
+                cursor = self.connection.cursor()
+                placeholders = ','.join(['%s'] * len(stock_codes))
+                
+                # ChatGPT 권고: effective_date 규칙
+                # - 장 마감(15:30) 이후 생성 → 다음 거래일에만 사용
+                # - 장 시작(09:00) 전 생성 → 당일 사용 가능
+                # - 장중 생성 → 다음 거래일로 이월
+                
+                # Carry-forward 범위: target_date 기준 N일 이내
+                lookback_start = (target_date - timedelta(days=carry_forward_days)).strftime("%Y-%m-%d")
+                target_date_str = target_date.strftime("%Y-%m-%d")
+                
+                cursor.execute(f"""
+                    SELECT STOCK_CODE, FINAL_DECISION, HUNTER_SCORE, 
+                           MARKET_REGIME, FINAL_REASON, CREATED_AT
+                    FROM LLM_DECISION_LEDGER
+                    WHERE STOCK_CODE IN ({placeholders})
+                      AND DATE(CREATED_AT) BETWEEN %s AND %s
+                    ORDER BY CREATED_AT DESC
+                """, (*stock_codes, lookback_start, target_date_str))
+                
+                # 종목별 최신 유효 결정 선택
+                for row in cursor.fetchall():
+                    if isinstance(row, dict):
+                        code = row["STOCK_CODE"]
+                        decision = row["FINAL_DECISION"]
+                        hunter_score = row.get("HUNTER_SCORE") or 0
+                        created_at = row["CREATED_AT"]
+                    else:
+                        code, decision, hunter_score, _, _, created_at = row
+                        hunter_score = hunter_score or 0
+                    
+                    if code in results:
+                        continue  # 이미 더 최신 결정이 있음
+                    
+                    # === effective_date 규칙 (ChatGPT 권고) ===
+                    created_dt = pd.to_datetime(created_at)
+                    created_hour = created_dt.hour
+                    created_date = created_dt.date()
+                    
+                    # 1) 장 시작 전(09:00 이전) 생성 → 당일 effective
+                    # 2) 장 마감 후(15:30 이후) 생성 → 다음 거래일 effective
+                    # 3) 장중(09:00~15:30) 생성 → 다음 거래일 effective (일봉으로 장중 재현 불가)
+                    if created_hour < 9:
+                        effective_date = created_date
+                    else:
+                        # 다음 거래일 (간단히 +1일 처리, 실제로는 거래일 캘린더 필요)
+                        effective_date = created_date + timedelta(days=1)
+                    
+                    # 룩어헤드 방어: effective_date <= target_date만 허용
+                    if effective_date > target_date.date():
+                        continue
+                    
+                    # Carry-forward Decay 계산
+                    days_old = (target_date.date() - effective_date).days
+                    decay = days_old * decay_per_day
+                    
+                    # source 분류
+                    if days_old == 0:
+                        source = "LEDGER_SAME_DAY"
+                    else:
+                        source = f"LEDGER_CARRY_FWD_{days_old}D"
+                    
+                    # 결정 타입 → 점수 매핑 (감쇠 적용)
+                    base_score = float(hunter_score)
+                    if decision == "BUY":
+                        estimated_score = max(75, base_score) - decay
+                    elif decision == "HOLD":
+                        estimated_score = min(74, max(50, base_score)) - decay
+                    elif decision == "SELL":
+                        estimated_score = min(49, base_score) - decay
+                    else:
+                        estimated_score = 50.0 - decay
+                    
+                    estimated_score = max(0, estimated_score)  # 음수 방지
+                    
+                    results[code] = {
+                        "source": source,
+                        "estimated_score": estimated_score,
+                        "llm_decision_type": decision or "NO_DECISION",
+                        "hunter_score": base_score,
+                        "effective_date": datetime.combine(effective_date, datetime.min.time()),
+                        "created_at": created_dt,
+                        "decay_applied": decay,
+                        "mode": "replay",  # DECISION_LEDGER는 항상 replay 모드
+                    }
+                
+                cursor.close()
+                
+                ledger_same = len([r for r in results.values() if r["source"] == "LEDGER_SAME_DAY"])
+                ledger_carry = len([r for r in results.values() if "CARRY_FWD" in r["source"]])
+                if ledger_same or ledger_carry:
+                    logger.info(f"📘 DECISION_LEDGER: 당일={ledger_same}, Carry-forward={ledger_carry}")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ DECISION_LEDGER 조회 실패: {e}")
+        
+        # === Tier 2: WATCHLIST_HISTORY ===
+        if "WATCHLIST_HISTORY" in source_priority:
+            missing_codes = [c for c in stock_codes if c not in results]
+            if missing_codes:
+                try:
+                    cursor = self.connection.cursor()
+                    placeholders = ','.join(['%s'] * len(missing_codes))
+                    
+                    # 전일 스냅샷 조회
+                    snapshot_date = (target_date - timedelta(days=1)).strftime("%Y-%m-%d")
+                    cursor.execute(f"""
+                        SELECT STOCK_CODE, LLM_SCORE, IS_TRADABLE
+                        FROM WATCHLIST_HISTORY
+                        WHERE SNAPSHOT_DATE = %s
+                          AND STOCK_CODE IN ({placeholders})
+                    """, (snapshot_date, *missing_codes))
+                    
+                    for row in cursor.fetchall():
+                        if isinstance(row, dict):
+                            code = row["STOCK_CODE"]
+                            score = row.get("LLM_SCORE") or 0
+                            is_tradable = row.get("IS_TRADABLE", 1)
+                        else:
+                            code, score, is_tradable = row
+                            score = score or 0
+                        
+                        if is_tradable:
+                            decision_type = "BUY" if score > 70 else "HOLD"
+                        else:
+                            decision_type = "NO_DECISION"
+                        
+                        results[code] = {
+                            "source": "WATCHLIST",
+                            "estimated_score": float(score),
+                            "llm_decision_type": decision_type,
+                            "hunter_score": float(score),
+                            "effective_date": target_date - timedelta(days=1),
+                            "created_at": target_date - timedelta(days=1),
+                            "decay_applied": 0.0,
+                            "mode": "replay",  # WATCHLIST도 과거 데이터이므로 replay
+                        }
+                    
+                    cursor.close()
+                    wh_count = len([r for r in results.values() if r["source"] == "WATCHLIST"])
+                    if wh_count > 0:
+                        logger.info(f"📗 WATCHLIST_HISTORY: {wh_count}건 보완")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ WATCHLIST_HISTORY 조회 실패: {e}")
+        
+        return results
         
     def simulate_scout_for_date(
         self,
@@ -507,6 +705,7 @@ class E2EBacktestEngine:
         intraday_mode: str = "ohlc",
         dynamic_universe: bool = True,
         use_watchlist_history: bool = False,
+        use_llm_decisions: bool = False,  # Prime Council 제안: LLM 결정 활용
         max_volume_pct: float = 0.01,
         volume_full_fill: int = 100000,
     ):
@@ -528,6 +727,7 @@ class E2EBacktestEngine:
         self.intraday_mode = intraday_mode
         self.dynamic_universe = dynamic_universe
         self.use_watchlist_history = use_watchlist_history
+        self.use_llm_decisions = use_llm_decisions  # LLM 결정 활용 옵션
         self.max_volume_pct = max_volume_pct
         self.volume_full_fill = volume_full_fill
         
@@ -964,7 +1164,49 @@ class E2EBacktestEngine:
                     self._ensure_code_loaded(code)
             
             # 1. Scout 시뮬레이션 (매일 아침)
-            if self.use_watchlist_history and i > 0:
+            # === Prime Council 제안: LLM 결정 우선 활용 ===
+            if self.use_llm_decisions and i > 0 and daily_universe:
+                # LLM 결정 로드 (DECISION_LEDGER → WATCHLIST_HISTORY Fallback)
+                llm_decisions = scout_sim.load_llm_decisions_for_date(
+                    current_date, daily_universe
+                )
+                
+                if llm_decisions:
+                    # LLM 결정을 Scout Watchlist로 변환
+                    llm_watchlist = []
+                    for code, decision in llm_decisions.items():
+                        self._ensure_code_loaded(code)
+                        if decision["llm_decision_type"] == "BUY":
+                            llm_watchlist.append({
+                                "code": code,
+                                "name": self.stock_names.get(code, code),
+                                "estimated_score": decision["estimated_score"],
+                                "factor_score": decision["hunter_score"],
+                                "news_sentiment": 50.0,  # LLM이 이미 판단
+                                "news_count": 0,
+                                "llm_source": decision["source"],
+                            })
+                    
+                    if llm_watchlist:
+                        # LLM BUY 결정 종목만으로 Hot Watchlist 구성
+                        llm_watchlist.sort(key=lambda x: x["estimated_score"], reverse=True)
+                        regime = self._detect_regime(current_date)
+                        scout_result = ScoutSnapshot(
+                            date=current_date,
+                            regime=regime,
+                            hot_watchlist=llm_watchlist[:self.scout_top_n],
+                        )
+                        logger.info(
+                            f"🤖 [{current_date.strftime('%Y-%m-%d')}] LLM 결정 활용: "
+                            f"{len(llm_watchlist)}개 BUY 신호"
+                        )
+                    else:
+                        # LLM BUY 결정이 없으면 Factor Score로 Fallback
+                        scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
+                else:
+                    # LLM 결정 없으면 Factor Score로 Fallback
+                    scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
+            elif self.use_watchlist_history and i > 0:
                 snapshot_date = trading_days[i - 1]
                 history_items = self._load_watchlist_history_snapshot(snapshot_date)
                 if history_items:
@@ -1347,6 +1589,11 @@ def parse_args():
         default=100000,
         help="체결 확률 100% 기준 거래량",
     )
+    parser.add_argument(
+        "--use-llm-decisions",
+        action="store_true",
+        help="LLM_DECISION_LEDGER의 실제 LLM 판단 이력을 활용합니다 (Prime Council 제안).",
+    )
     
     return parser.parse_args()
 
@@ -1397,6 +1644,7 @@ def main():
             intraday_mode=args.intraday_mode,
             dynamic_universe=args.dynamic_universe,
             use_watchlist_history=args.use_watchlist_history,
+            use_llm_decisions=args.use_llm_decisions,  # Prime Council 제안
             max_volume_pct=args.max_volume_pct,
             volume_full_fill=args.volume_full_fill,
         )
