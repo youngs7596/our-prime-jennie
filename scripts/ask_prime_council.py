@@ -48,6 +48,29 @@ SAGE_NAMES = {
     "orchestrator": "Orchestrator"
 }
 
+# === 비용 계산 상수 (2025-2026 기준 가격) ===
+# 단위: USD per 1M tokens
+MODEL_PRICING = {
+    # Gemini (gemini-2.5-flash)
+    "gemini": {
+        "input_per_1m": 0.075,   # $0.075 / 1M input tokens
+        "output_per_1m": 0.30,   # $0.30 / 1M output tokens
+    },
+    # Claude (claude-3-opus)
+    "claude": {
+        "input_per_1m": 15.0,    # $15 / 1M input tokens
+        "output_per_1m": 75.0,   # $75 / 1M output tokens
+    },
+    # OpenAI (gpt-4o-mini)
+    "openai": {
+        "input_per_1m": 0.15,    # $0.15 / 1M input tokens
+        "output_per_1m": 0.60,   # $0.60 / 1M output tokens
+    },
+}
+
+# KRW / USD 환율 (대략적)
+USD_TO_KRW = 1450
+
 def load_system_prompt(sage_name: str) -> str:
     """prompts/council/{name}_system.txt 로드"""
     path = PROMPTS_DIR / f"{sage_name}_system.txt"
@@ -113,20 +136,27 @@ def _safe_generate(provider, system_prompt, user_query, context, prev_reports):
             if start != -1 and end > start:
                 json_str = text_content[start:end]
             else:
-                return {"text": text_content, "error": "No JSON found in response"}
+                return {"text": text_content, "error": "No JSON found in response"}, 0, 0
+        
+        # 토큰 사용량 추정 (응답에 usage 정보가 없으면 문자 수 기반 추정)
+        input_chars = len(system_prompt) + len(context) + len(user_query)
+        output_chars = len(text_content)
+        # 대략 4자 = 1토큰 (영어 기준, 한글은 더 많음)
+        input_tokens = input_chars // 3
+        output_tokens = output_chars // 3
         
         try:
-            return json.loads(json_str)
+            return json.loads(json_str), input_tokens, output_tokens
         except json.JSONDecodeError as je:
             return {
                 "text": text_content, 
                 "error": f"JSON Parse Failed: {je}",
                 "raw_json_snippet": json_str[:200]
-            }
+            }, input_tokens, output_tokens
             
     except Exception as e:
         logger.error(f"LLM Error: {_mask_secrets(str(e))}")
-        return {"error": str(e), "decision": "veto"}
+        return {"error": str(e), "decision": "veto"}, 0, 0
 
 def _safe_chat(provider, system_prompt, content):
     """Helper for chat (markdown output)"""
@@ -136,9 +166,45 @@ def _safe_chat(provider, system_prompt, content):
     ]
     try:
         res = provider.generate_chat(history)
-        return res.get("text") or res.get("content", "")
+        text = res.get("text") or res.get("content", "")
+        # 토큰 추정
+        input_tokens = (len(system_prompt) + len(content)) // 3
+        output_tokens = len(text) // 3
+        return text, input_tokens, output_tokens
     except Exception as e:
-        return f"Error generating final report: {e}"
+        return f"Error generating final report: {e}", 0, 0
+
+def _calculate_cost(provider_name: str, input_tokens: int, output_tokens: int) -> float:
+    """비용 계산 (USD)"""
+    pricing = MODEL_PRICING.get(provider_name, MODEL_PRICING["openai"])
+    input_cost = (input_tokens / 1_000_000) * pricing["input_per_1m"]
+    output_cost = (output_tokens / 1_000_000) * pricing["output_per_1m"]
+    return input_cost + output_cost
+
+def _format_cost_report(usage_stats: dict) -> str:
+    """비용 리포트 문자열 생성"""
+    lines = ["\n" + "=" * 60]
+    lines.append("💰 Prime Council 세션 비용 리포트")
+    lines.append("=" * 60)
+    
+    total_usd = 0.0
+    for name, stats in usage_stats.items():
+        input_t = stats["input_tokens"]
+        output_t = stats["output_tokens"]
+        cost_usd = stats["cost_usd"]
+        total_usd += cost_usd
+        
+        lines.append(f"  {name}:")
+        lines.append(f"    - Input:  {input_t:,} tokens")
+        lines.append(f"    - Output: {output_t:,} tokens")
+        lines.append(f"    - Cost:   ${cost_usd:.4f} USD")
+    
+    total_krw = total_usd * USD_TO_KRW
+    lines.append("-" * 60)
+    lines.append(f"  합계: ${total_usd:.4f} USD (≈ {total_krw:,.0f}원)")
+    lines.append("=" * 60 + "\n")
+    
+    return "\n".join(lines)
 
 def run_council(query: str, target_file: str = None):
     """
@@ -172,30 +238,53 @@ def run_council(query: str, target_file: str = None):
         logger.error(f"Failed to initialize providers: {e}")
         return
 
+    # 비용 추적 딕셔너리
+    usage_stats = {}
+
     # [Step 1] Jennie (Strategy & Analysis)
     logger.info("🟢 [1/3] Jennie (Analysis) is reviewing...")
-    jennie_output = _safe_generate(jennie_provider, jennie_prompt, query, file_context, [])
+    jennie_output, j_in, j_out = _safe_generate(jennie_provider, jennie_prompt, query, file_context, [])
+    usage_stats["Jennie (Gemini)"] = {
+        "input_tokens": j_in, "output_tokens": j_out,
+        "cost_usd": _calculate_cost("gemini", j_in, j_out)
+    }
     
     # [Step 2] Minji (Engineering)
-    logger.info("🔵 [2/3] Minji (Engineering) is coding...")
+    logger.info("🟢 [2/3] Minji (Engineering) is coding...")
     minji_context = f"{file_context}\n\n[Jennie's Findings]:\n{json.dumps(jennie_output, ensure_ascii=False)}"
-    minji_output = _safe_generate(minji_provider, minji_prompt, query, minji_context, [])
+    minji_output, m_in, m_out = _safe_generate(minji_provider, minji_prompt, query, minji_context, [])
+    usage_stats["Minji (Claude)"] = {
+        "input_tokens": m_in, "output_tokens": m_out,
+        "cost_usd": _calculate_cost("claude", m_in, m_out)
+    }
 
     # [Step 3] Junho (Approval)
     logger.info("🟣 [3/3] Junho (Review) is judging...")
     junho_context = (f"{file_context}\n\n"
                      f"[Jennie's Strategy]:\n{json.dumps(jennie_output, ensure_ascii=False)}\n\n"
                      f"[Minji's Proposal]:\n{json.dumps(minji_output, ensure_ascii=False)}")
-    junho_output = _safe_generate(junho_provider, junho_prompt, query, junho_context, [])
+    junho_output, h_in, h_out = _safe_generate(junho_provider, junho_prompt, query, junho_context, [])
+    usage_stats["Junho (OpenAI)"] = {
+        "input_tokens": h_in, "output_tokens": h_out,
+        "cost_usd": _calculate_cost("openai", h_in, h_out)
+    }
 
     # [Step 4] Orchestration
-    # ... (생략 없이 유지)
     logger.info("🎼 Orchestrating Final Report...")
     orchestrator_input = (f"[Jennie Report]\n{json.dumps(jennie_output, ensure_ascii=False)}\n\n"
                           f"[Minji Report]\n{json.dumps(minji_output, ensure_ascii=False)}\n\n"
                           f"[Junho Report]\n{json.dumps(junho_output, ensure_ascii=False)}")
     
-    final_markdown = _safe_chat(junho_provider, orchestrator_prompt, orchestrator_input)
+    final_markdown, o_in, o_out = _safe_chat(junho_provider, orchestrator_prompt, orchestrator_input)
+    usage_stats["Orchestrator (OpenAI)"] = {
+        "input_tokens": o_in, "output_tokens": o_out,
+        "cost_usd": _calculate_cost("openai", o_in, o_out)
+    }
+    
+    # 비용 리포트 출력
+    cost_report = _format_cost_report(usage_stats)
+    print(cost_report)
+    logger.info(cost_report)
     
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(f"# Prime Council Report\n")
@@ -208,7 +297,17 @@ def run_council(query: str, target_file: str = None):
         f.write(f"### Jennie\n```json\n{json.dumps(jennie_output, indent=2, ensure_ascii=False)}\n```\n")
         f.write(f"### Minji\n```json\n{json.dumps(minji_output, indent=2, ensure_ascii=False)}\n```\n")
         f.write(f"### Junho\n```json\n{json.dumps(junho_output, indent=2, ensure_ascii=False)}\n```\n")
-        f.write("\n</details>")
+        f.write("\n</details>\n\n")
+        
+        # 비용 정보를 리포트에도 추가
+        f.write("---\n## Cost Summary\n")
+        total_usd = sum(s["cost_usd"] for s in usage_stats.values())
+        total_krw = total_usd * USD_TO_KRW
+        f.write(f"| Model | Input | Output | Cost (USD) |\n")
+        f.write(f"|-------|-------|--------|------------|\n")
+        for name, stats in usage_stats.items():
+            f.write(f"| {name} | {stats['input_tokens']:,} | {stats['output_tokens']:,} | ${stats['cost_usd']:.4f} |\n")
+        f.write(f"| **Total** | - | - | **${total_usd:.4f}** (≈{total_krw:,.0f}원) |\n")
 
     logger.info(f"✅ Council session finished. Report saved to: {report_file}")
     print(f"\n[REPORT GENERATED] {report_file}")

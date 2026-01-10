@@ -173,6 +173,20 @@
 
 ---
 
+## Prime Council (3인의 현자) 실행 환경
+
+> ⚠️ **필수**: Prime Council 스크립트(`scripts/ask_prime_council.py`)는 **`.venv` 가상환경**에서 실행해야 합니다.
+
+```bash
+# 실행 방법
+source .venv/bin/activate
+python scripts/ask_prime_council.py --query "질문" --file "대상파일"
+```
+
+**이유**: 시스템 Python에는 `google-generativeai`, `anthropic`, `openai` 패키지가 설치되어 있지 않습니다. Docker 컨테이너 내부에서도 경로 문제로 직접 실행이 어렵습니다.
+
+---
+
 ## Junho 리뷰 기반 패치(council-patch) 워크플로우
 
 목표: 최신 `junho_review.json`의 `action_items_for_minji` / `key_findings`를 코드에 반영합니다.

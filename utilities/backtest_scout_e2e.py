@@ -533,9 +533,9 @@ class E2EBacktestEngine:
         
         # 일중 시뮬레이션 옵션
         self.use_intraday_sim = True  # 일중 시뮬레이션 사용
-        self.intraday_slots = 18  # 하루 18슬롯 (20분 간격)
-        self.slot_offsets = [timedelta(minutes=20 * i) for i in range(self.intraday_slots)]
-        self.intraday_mode = intraday_mode  # ohlc 또는 atr
+        self.intraday_slots = 72  # 하루 72슬롯 (5분 간격)
+        self.slot_offsets = [timedelta(minutes=5 * i) for i in range(self.intraday_slots)]
+        self.intraday_mode = intraday_mode  # ohlc, atr, 또는 brw
         
         # Portfolio Engine (기존 백테스트 재사용)
         self.portfolio = PortfolioEngine(
@@ -616,6 +616,83 @@ class E2EBacktestEngine:
             path.append(max(0.0, interpolate(t)))
         return path
 
+    def _simulate_intraday_path_brw(
+        self,
+        open_price: float,
+        high_price: float,
+        low_price: float,
+        close_price: float,
+        prev_atr: float,
+        regime: str = "SIDEWAYS",
+    ) -> List[float]:
+        """
+        Bounded Random Walk 기반 일중 가격 경로
+        
+        Args:
+            open_price: 시가
+            high_price, low_price: 일별 고가/저가 (경계)
+            close_price: 종가 (수렴 방향 참고용)
+            prev_atr: 전일 ATR (변동성 기준)
+            regime: 시장 국면 (변동성 가중치)
+        
+        Returns:
+            List[float]: 슬롯별 가격 경로
+        """
+        import numpy as np
+        
+        slots = self.intraday_slots
+        if slots <= 1:
+            return [open_price]
+        
+        # 1. 변동성 설정 (시장 국면별)
+        regime_volatility_mult = {
+            "STRONG_BULL": 0.8,   # 상승장: 변동성 낮음
+            "BULL": 1.0,
+            "SIDEWAYS": 1.2,      # 박스권: 변동성 중간
+            "BEAR": 1.5,          # 하락장: 변동성 높음
+        }
+        vol_mult = regime_volatility_mult.get(regime, 1.0)
+        step_volatility = prev_atr * vol_mult / np.sqrt(slots)
+        
+        # 2. 드리프트 설정 (룩어헤드 방어: 방향만 참조)
+        expected_direction = 1.0 if close_price > open_price else -1.0
+        drift_strength = 0.05  # 5% 정도만 드리프트
+        
+        # 3. 경로 생성 (재현성을 위한 시드)
+        seed = hash(f"{open_price}_{high_price}_{low_price}_{slots}") % (2**31)
+        np.random.seed(seed)
+        
+        path = [open_price]
+        current = open_price
+        mid_price = (high_price + low_price) / 2
+        
+        for i in range(1, slots):
+            # 정규분포 노이즈
+            noise = np.random.normal(0, step_volatility)
+            
+            # 드리프트 (종가 방향, 약함)
+            drift = expected_direction * drift_strength * prev_atr / slots
+            
+            # 평균 회귀 (범위 중심으로)
+            mean_revert = (mid_price - current) * 0.02
+            
+            # 다음 가격
+            next_price = current + noise + drift + mean_revert
+            
+            # 경계 조건: [low * 0.99, high * 1.01] 내로 클리핑
+            next_price = max(low_price * 0.99, min(high_price * 1.01, next_price))
+            
+            path.append(max(0.0, next_price))
+            current = next_price
+        
+        # 마지막 슬롯이 종가와 너무 멀면 50% 정도만 조정
+        if len(path) > 1 and prev_atr > 0:
+            last_gap = abs(path[-1] - close_price)
+            if last_gap > prev_atr * 0.5:
+                path[-1] = path[-1] * 0.5 + close_price * 0.5
+        
+        return path
+
     def _get_prev_atr(self, df: pd.DataFrame, date: datetime, fallback: float) -> float:
         if date in df.index:
             idx = df.index.get_loc(date) - 1
@@ -639,15 +716,21 @@ class E2EBacktestEngine:
             if open_price <= 0:
                 open_price = float(row.get("CLOSE_PRICE", 0))
 
+            high_price = float(row.get("HIGH_PRICE", row["CLOSE_PRICE"]))
+            low_price = float(row.get("LOW_PRICE", row["CLOSE_PRICE"]))
+            close_price = float(row["CLOSE_PRICE"])
+            atr = self._get_prev_atr(df, date, fallback=open_price * 0.02)
+            
             if self.intraday_mode == "ohlc":
                 self.intraday_cache[key] = self._simulate_intraday_path_ohlc(
-                    open_price,
-                    float(row.get("HIGH_PRICE", row["CLOSE_PRICE"])),
-                    float(row.get("LOW_PRICE", row["CLOSE_PRICE"])),
-                    float(row["CLOSE_PRICE"]),
+                    open_price, high_price, low_price, close_price,
                 )
-            else:
-                atr = self._get_prev_atr(df, date, fallback=open_price * 0.02)
+            elif self.intraday_mode == "brw":
+                regime = self._detect_regime(date)
+                self.intraday_cache[key] = self._simulate_intraday_path_brw(
+                    open_price, high_price, low_price, close_price, atr, regime,
+                )
+            else:  # atr 모드
                 self.intraday_cache[key] = self._simulate_intraday_path_v2(open_price, atr)
         path = self.intraday_cache.get(key, [])
         if 0 <= slot_idx < len(path):
@@ -1237,9 +1320,9 @@ def parse_args():
     parser.add_argument(
         "--intraday-mode",
         type=str,
-        choices=["ohlc", "atr"],
+        choices=["ohlc", "atr", "brw"],
         default="ohlc",
-        help="일중 경로 모드 (ohlc: ZigZag, atr: 시가+전일 ATR)",
+        help="일중 경로 모드 (ohlc: ZigZag, atr: 시가+전일ATR, brw: Bounded Random Walk)",
     )
     parser.add_argument(
         "--static-universe",

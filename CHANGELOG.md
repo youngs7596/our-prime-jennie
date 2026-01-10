@@ -19,6 +19,16 @@
   - `shared/llm_providers.py`: Gemini/Claude 시스템 프롬프트 호환성 개선 (`system` role handling)
   - **Self-Improving**: 3현자가 스스로 파이프라인의 JSON 파싱 약점과 보안 취약점을 지적하고 개선안을 제시하여 코드에 반영함
   - `.agent/workflows/council.md`: `/council` 명령어로 3현자 소환 가능한 워크플로우 정의
+- **Backtest 5분 단위 Intraday 시뮬레이션 보강 (BRW 알고리즘)**:
+  - `utilities/backtest_scout_e2e.py`: 72슬롯(5분 간격) 변경, Bounded Random Walk 알고리즘 구현
+  - 시장 국면별 변동성 가중치(BEAR 1.5x, BULL 0.8x), 정규분포 노이즈+드리프트+평균회귀 적용
+  - `--intraday-mode brw` 옵션 추가, 테스트 완료 (수익률 0.34%, MDD 1.03%)
+- **Prime Council 비용 계산 기능**:
+  - `scripts/ask_prime_council.py`: 모델별 토큰 사용량 추적 및 비용 계산 로직 추가
+  - Gemini($0.075/1M in, $0.30/1M out), Claude($15/1M in, $75/1M out), OpenAI($0.15/1M in, $0.60/1M out)
+  - 세션 종료 시 비용 리포트 출력 및 마크다운 테이블로 저장
+- **문서화**:
+  - `rules.md`: Prime Council `.venv` 가상환경 사용 필수 요구사항 추가
 
 ## 2026-01-09
 - **WebSocket E2E 테스트 환경 구축**: Mock WebSocket 서버 구현 및 테스트 API 추가로 완전한 E2E 테스트 파이프라인 구성.
