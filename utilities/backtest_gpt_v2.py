@@ -70,19 +70,36 @@ TOP_TRADING_LIMIT = 200
 TOP_TRADING_LOOKBACK_DAYS = 30
 
 
-def fetch_top_trading_value_codes(connection, limit: int = TOP_TRADING_LIMIT, lookback_days: int = TOP_TRADING_LOOKBACK_DAYS) -> List[str]:
-    # MariaDB 호환 쿼리
-    query = """
-        SELECT STOCK_CODE, AVG(CLOSE_PRICE * VOLUME) AS AVG_AMT
-        FROM STOCK_DAILY_PRICES_3Y
-        WHERE PRICE_DATE >= CURDATE() - INTERVAL %s DAY
-        GROUP BY STOCK_CODE
-        ORDER BY AVG_AMT DESC
-        LIMIT %s
-    """
+def fetch_top_trading_value_codes(
+    connection,
+    limit: int = TOP_TRADING_LIMIT,
+    lookback_days: int = TOP_TRADING_LOOKBACK_DAYS,
+    as_of_date: Optional[datetime] = None,
+) -> List[str]:
+    # MariaDB 호환 쿼리 (기준일 지정 시 look-ahead 방지)
+    if as_of_date:
+        query = """
+            SELECT STOCK_CODE, AVG(CLOSE_PRICE * VOLUME) AS AVG_AMT
+            FROM STOCK_DAILY_PRICES_3Y
+            WHERE PRICE_DATE BETWEEN DATE_SUB(%s, INTERVAL %s DAY) AND %s
+            GROUP BY STOCK_CODE
+            ORDER BY AVG_AMT DESC
+            LIMIT %s
+        """
+        params = (as_of_date, lookback_days, as_of_date, limit)
+    else:
+        query = """
+            SELECT STOCK_CODE, AVG(CLOSE_PRICE * VOLUME) AS AVG_AMT
+            FROM STOCK_DAILY_PRICES_3Y
+            WHERE PRICE_DATE >= CURDATE() - INTERVAL %s DAY
+            GROUP BY STOCK_CODE
+            ORDER BY AVG_AMT DESC
+            LIMIT %s
+        """
+        params = (lookback_days, limit)
     cursor = connection.cursor()
     try:
-        cursor.execute(query, (lookback_days, limit))
+        cursor.execute(query, params)
         rows = cursor.fetchall()
         # DictCursor일 경우와 일반 cursor 모두 처리
         if rows and isinstance(rows[0], dict):
@@ -354,10 +371,12 @@ class ScannerLite:
         strategies: List[str],
         kospi_slice: pd.DataFrame,
         price_lookup: Callable[[str], float],
+        universe_codes: Optional[List[str]] = None,
     ) -> List[Candidate]:
         candidates: List[Candidate] = []
         # 재현성을 위해 정렬된 순서로 순회
-        for code in sorted(self.price_cache.keys()):
+        scan_codes = universe_codes or list(self.price_cache.keys())
+        for code in sorted(scan_codes):
             df = self.price_cache[code]
             if code == "0001":
                 continue
@@ -906,7 +925,7 @@ class BacktestGPT:
         self.slot_offsets = self._build_slot_offsets()
         self.intraday_price_cache: Dict[Tuple[str, pd.Timestamp], List[float]] = {}
 
-    def _load_universe(self) -> List[str]:
+    def _load_universe(self, as_of_date: Optional[datetime] = None) -> List[str]:
         watchlist = database.get_active_watchlist(self.connection)
         if watchlist:
             self.watchlist_cache = watchlist
@@ -915,7 +934,11 @@ class BacktestGPT:
             return codes[:limit]
 
         logger.warning("Watchlist가 비어 있습니다. Top 200 거래대금 기반으로 대체합니다.")
-        top_codes = fetch_top_trading_value_codes(self.connection, limit=self.args.universe_limit or TOP_TRADING_LIMIT)
+        top_codes = fetch_top_trading_value_codes(
+            self.connection,
+            limit=self.args.universe_limit or TOP_TRADING_LIMIT,
+            as_of_date=as_of_date,
+        )
         if top_codes:
             self.watchlist_cache = {code: {"name": self.stock_metadata.get(code, {}).get("name", code)} for code in top_codes}
             return top_codes
@@ -926,8 +949,9 @@ class BacktestGPT:
         return fallback_codes
 
     def _prefetch_data(self, codes: List[str]) -> None:
-        kospi_df = load_price_series(self.connection, "0001")
-        self.price_cache["0001"] = prepare_indicators(kospi_df)
+        if "0001" not in self.price_cache:
+            kospi_df = load_price_series(self.connection, "0001")
+            self.price_cache["0001"] = prepare_indicators(kospi_df)
         for code in codes:
             df = load_price_series(self.connection, code)
             if df.empty:
@@ -940,15 +964,79 @@ class BacktestGPT:
             
         self._load_stock_metadata()
 
+    def _ensure_codes_loaded(self, codes: List[str]) -> None:
+        missing = [code for code in codes if code not in self.price_cache and code != "0001"]
+        if not missing:
+            return
+        self._prefetch_data(missing)
+
+    def _get_daily_universe(self, current_date: datetime, calendar_idx: int) -> List[str]:
+        if not self.args.dynamic_universe:
+            return self._load_universe(as_of_date=current_date)
+        if calendar_idx <= 0:
+            return self._load_universe(as_of_date=current_date)
+        as_of_date = self.calendar[calendar_idx - 1]
+        return fetch_top_trading_value_codes(
+            self.connection,
+            limit=self.args.universe_limit or TOP_TRADING_LIMIT,
+            as_of_date=as_of_date,
+        )
+
+    def _load_trading_days_from_db(self, start: datetime, end: datetime) -> List[pd.Timestamp]:
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT DISTINCT PRICE_DATE
+                FROM STOCK_DAILY_PRICES_3Y
+                WHERE PRICE_DATE BETWEEN %s AND %s
+                ORDER BY PRICE_DATE ASC
+                """,
+                (start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+
+        dates = []
+        for row in rows:
+            value = row["PRICE_DATE"] if isinstance(row, dict) else row[0]
+            dates.append(pd.to_datetime(value))
+        return dates
+
+    def _get_db_max_price_date(self) -> Optional[pd.Timestamp]:
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("SELECT MAX(PRICE_DATE) FROM STOCK_DAILY_PRICES_3Y")
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+        if not row:
+            return None
+        value = row["MAX(PRICE_DATE)"] if isinstance(row, dict) else row[0]
+        return pd.to_datetime(value) if value else None
+
     def _build_calendar(self, days: Optional[int]) -> None:
         kospi_df = self.price_cache["0001"]
         start = kospi_df.index.min()
         end = kospi_df.index.max()
-        if days:
-            start = max(start, end - timedelta(days=days))
-        full_calendar = list(kospi_df.loc[start:end].index)
-        
-        full_calendar = list(kospi_df.loc[start:end].index)
+        db_max = self._get_db_max_price_date()
+        if db_max and end < db_max:
+            logger.warning("KOSPI 거래일 데이터가 최신이 아닙니다. DB 거래일로 대체합니다.")
+            end = db_max
+            if days:
+                start = max(start, end - timedelta(days=days))
+            full_calendar = self._load_trading_days_from_db(start, end)
+        else:
+            if days:
+                start = max(start, end - timedelta(days=days))
+            full_calendar = list(kospi_df.loc[start:end].index)
+
+        if not full_calendar:
+            logger.warning("KOSPI 거래일 데이터가 부족합니다. DB 거래일로 대체합니다.")
+            full_calendar = self._load_trading_days_from_db(start, end)
+        if not full_calendar:
+            raise RuntimeError("거래일 데이터를 확인할 수 없습니다.")
         
         # Train/Test Split Logic
         split_ratio = self.args.train_ratio
@@ -1001,19 +1089,29 @@ class BacktestGPT:
         )
 
     def run(self) -> Dict[str, float]:
-        universe = self._load_universe()
+        # KOSPI 먼저 로드해 캘린더/시뮬레이션 기간 확정
+        if "0001" not in self.price_cache:
+            kospi_df = load_price_series(self.connection, "0001")
+            self.price_cache["0001"] = prepare_indicators(kospi_df)
+        self._build_calendar(self.args.days)
+
+        as_of_date = self.calendar[0] if self.calendar else None
+        universe = self._load_universe(as_of_date=as_of_date)
         if not universe:
             raise RuntimeError("Universe is empty.")
 
         logger.info(f"🎯 Universe: {len(universe)}개 종목")
         self._prefetch_data(universe)
-        self._build_calendar(self.args.days)
         self._init_components()
 
         kospi_df = self.price_cache["0001"]
         daily_buy_limit = self.args.max_buys_per_day
 
-        for current_date in self.calendar:
+        for idx, current_date in enumerate(self.calendar):
+            daily_universe = self._get_daily_universe(current_date, idx)
+            if daily_universe:
+                self._ensure_codes_loaded(daily_universe)
+
             kospi_slice_full = kospi_df.loc[:current_date]
             if kospi_slice_full.empty:
                 continue
@@ -1046,7 +1144,14 @@ class BacktestGPT:
                 if buys_today >= daily_buy_limit:
                     continue
 
-                candidates = self.scanner.generate_candidates(current_date, regime, strategies, kospi_slice_full, price_lookup)
+                candidates = self.scanner.generate_candidates(
+                    current_date,
+                    regime,
+                    strategies,
+                    kospi_slice_full,
+                    price_lookup,
+                    universe_codes=daily_universe,
+                )
                 for candidate in candidates:
                     if buys_today >= daily_buy_limit:
                         break
@@ -1105,6 +1210,7 @@ class BacktestGPT:
         if row is None:
             return skip("가격 데이터 부족")
         atr = float(row.get("ATR", candidate.price * 0.02)) if not pd.isna(row.get("ATR")) else candidate.price * 0.02
+        daily_volume = int(row.get("VOLUME", 0) or 0)
 
         base_allocation = equity * self.portfolio.max_position_pct
         risk_ratio = risk_setting.get("position_size_ratio", 1.0)
@@ -1127,6 +1233,19 @@ class BacktestGPT:
         logger.info(f"    - 라운드 후 수량: {qty}주")
         if qty <= 0:
             return skip("배분된 수량이 0주")
+
+        if daily_volume > 0:
+            max_executable = int(daily_volume * self.args.max_volume_pct)
+            if max_executable <= 0:
+                return skip("거래량 제한으로 0주")
+            if max_executable < qty:
+                logger.info(f"    - 거래량 제한 적용: {qty} → {max_executable}주")
+            qty = min(qty, max_executable)
+            fill_prob = min(1.0, daily_volume / self.args.volume_full_fill)
+            key = f"{candidate.code}:{trade_date.strftime('%Y%m%d')}:{slot_timestamp.strftime('%H%M')}"
+            decision = (abs(hash(key)) % 10000) / 10000.0
+            if decision > fill_prob:
+                return skip("거래량 기반 체결 실패")
 
         max_stock_pct = self.args.max_stock_pct if regime != MarketRegimeDetector.REGIME_STRONG_BULL else min(20.0, self.args.max_stock_pct * 1.5)
         new_qty = self._apply_stock_limit(candidate.code, qty, candidate.price, equity, holdings_value, max_stock_pct)
@@ -1503,9 +1622,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Lightweight backtest runner (GPT edition)")
     parser.add_argument("--preset", choices=preset_choices if preset_choices else None,
                         help="미리 정의된 전략 프리셋 이름")
-    parser.add_argument("--initial-capital", type=float, default=150_000_000)
+    parser.add_argument("--initial-capital", type=float, default=210_000_000)
     parser.add_argument("--days", type=int, default=180, help="최근 N일만 시뮬레이션")
     parser.add_argument("--universe-limit", type=int, default=60, help="Watchlist 상위 N개만 사용")
+    parser.add_argument(
+        "--static-universe",
+        action="store_false",
+        dest="dynamic_universe",
+        help="유니버스를 고정(시뮬레이션 시작일 기준)합니다.",
+    )
     parser.add_argument("--top-n", type=int, default=5, help="일별 후보 수")
     parser.add_argument("--rsi-buy", type=int, default=None)
     parser.add_argument("--breakout-buffer-pct", type=float, default=None)
@@ -1527,6 +1652,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-level", type=str, default="INFO")
     parser.add_argument("--log-dir", type=str, default="logs", help="자동 로그 저장 디렉터리")
     parser.add_argument("--seed", type=int, default=67, help="랜덤 시드 (기본값 67)")
+    parser.add_argument("--max-volume-pct", type=float, default=0.01, help="일 거래량 대비 최대 체결 비율")
+    parser.add_argument("--volume-full-fill", type=int, default=100000, help="체결 확률 100% 기준 거래량")
     
     # Out-of-Sample 테스트 옵션
     parser.add_argument("--mode", type=str, choices=["full", "train", "test"], default="full",

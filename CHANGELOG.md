@@ -9,6 +9,13 @@
   - **실제 거래 분석**: tradelog 테이블 확인 결과 실제 시스템은 삼전 +45%, 기아 +21% 등 수익 중
   - **결론**: 시뮬레이터는 LLM 판단력 재현 한계로 인해 실제와 차이 발생, 트레이딩 시스템 자체는 정상 작동
   - `docs/scout_e2e_backtest_report.md`: 개발 보고서 문서화
+- **Three Sages Council Integration (Phase B-3) 👑**: 3현자(Jennie, Minji, Junho) 코드 리뷰 시스템 통합 완료
+  - **Best Brains Strategy**: Jennie(Gemini 3.0 Pro), Minji(Claude Opus 4.5), Junho(ChatGPT 5.2) 최상위 모델 적용
+  - `prompts/council/*.txt`: 3현자 및 오케스트레이터 페르소나 정의 및 시스템 프롬프트 작성
+  - `scripts/ask_prime_council.py`: 3단계(Strategy -> Engineering -> Approval) 파이프라인 스크립트 구현 (Self-Reflection 기능 포함)
+  - `shared/llm_providers.py`: Gemini/Claude 시스템 프롬프트 호환성 개선 (`system` role handling)
+  - **Self-Improving**: 3현자가 스스로 파이프라인의 JSON 파싱 약점과 보안 취약점을 지적하고 개선안을 제시하여 코드에 반영함
+  - `.agent/workflows/council.md`: `/council` 명령어로 3현자 소환 가능한 워크플로우 정의
 
 ## 2026-01-09
 - **WebSocket E2E 테스트 환경 구축**: Mock WebSocket 서버 구현 및 테스트 API 추가로 완전한 E2E 테스트 파이프라인 구성.

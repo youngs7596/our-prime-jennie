@@ -882,6 +882,9 @@ def main():
             # 공통 Phase 3: 최종 Watchlist 저장
             logger.info(f"--- [Phase 3] 최종 Watchlist {len(final_approved_list)}개 저장 ---")
             database.save_to_watchlist(session, final_approved_list)
+            # Watchlist 히스토리 저장 (백테스트 재현용 스냅샷)
+            snapshot_date = datetime.now().strftime('%Y-%m-%d')
+            database.save_to_watchlist_history(session, final_approved_list, snapshot_date=snapshot_date)
             
             # Hot Watchlist 저장 (Price Monitor WebSocket 구독용)
             # 시장 국면별 score_threshold 계산

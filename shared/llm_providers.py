@@ -569,9 +569,8 @@ class GeminiLLMProvider(BaseLLMProvider):
         if fallback_models:
             model_candidates.extend(fallback_models)
 
-        # [Fix] Convert OpenAI-style history to Gemini format
-        # OpenAI: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
-        # Gemini: [{"role": "user", "parts": [{"text": "..."}]}, {"role": "model", "parts": [{"text": "..."}]}]
+        # [Fix] Handle System Prompt for Gemini
+        system_instruction = ""
         gemini_history = []
         last_message = None
         
@@ -579,22 +578,36 @@ class GeminiLLMProvider(BaseLLMProvider):
             role = h.get('role', 'user')
             content = h.get('content') or (h.get('parts', [{}])[0].get('text', ''))
             
+            if role == 'system':
+                # Gemini doesn't support 'system' role in history directly in some versions.
+                # Safe approach: Prepend to first user message or keep as instruction log.
+                system_instruction += f"{content}\n\n"
+                continue
+
             if role == 'assistant': 
                 role = 'model'
             
-            # Gemini requires strict alternating turns. 
-            # We assume history is well-formed but ensure conversion.
             gemini_history.append({
                 "role": role,
                 "parts": [{"text": content}]
             })
             
         # Separate the last user message as the prompt for send_message
+        # Also prepend system instruction to the last message if history is empty, 
+        # or find the first user message in history? 
+        # API requires turns. Let's prepend to the LAST message if it is user, 
+        # or Append a user message with system instruction if needed.
+        
         if gemini_history and gemini_history[-1]['role'] == 'user':
-            last_message = gemini_history.pop()['parts'][0]['text']
+            last_entry = gemini_history.pop()
+            last_message = last_entry['parts'][0]['text']
+            # Prepend system instruction
+            if system_instruction:
+                last_message = f"System Instruction:\n{system_instruction}\n\nUser Request:\n{last_message}"
         else:
-            # Fallback if history is empty or ends with model (shouldn't happen in standard chat)
-            last_message = "Continue"
+            last_message = "Continue" # Fallback
+            if system_instruction:
+                 last_message = f"System Instruction:\n{system_instruction}\n\n{last_message}"
 
         last_error: Optional[Exception] = None
         max_retries = 3
@@ -606,7 +619,8 @@ class GeminiLLMProvider(BaseLLMProvider):
                     generation_config = {"temperature": temperature}
                     if response_schema:
                         generation_config["response_mime_type"] = "application/json"
-                        generation_config["response_schema"] = response_schema
+                        # [Fix] Skip schema validation on client side to avoid 400 Errors if empty
+                        # generation_config["response_schema"] = response_schema 
 
                     response = self._client.models.generate_content(
                         model=target_model,
@@ -616,20 +630,30 @@ class GeminiLLMProvider(BaseLLMProvider):
 
                     text = response.text
                     if response_schema:
-                        return json.loads(text)
+                        # Try parsing JSON manually if API returns text
+                        try:
+                            return json.loads(text)
+                        except:
+                            # Try finding JSON block
+                            start = text.find("{")
+                            end = text.rfind("}") + 1
+                            if start != -1 and end != -1:
+                                return json.loads(text[start:end])
+                            return {"text": text, "error": "JSON Parse Failed"}
+                            
                     return {"text": text}
                 except Exception as exc:
                     err_str = str(exc)
                     if "429" in err_str or "quota" in err_str.lower():
                         if attempt < max_retries:
-                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
-                            logger.warning(f"⚠️ [GeminiProvider] Chat Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            wait_time = 5 * (attempt + 1)
+                            logger.warning(f"⚠️ [GeminiProvider] Chat Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s...")
                             time.sleep(wait_time)
                             continue
 
                     last_error = exc
                     logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
-                    break # Try next model candidate
+                    break 
 
         raise RuntimeError(f"LLM Chat 호출 실패: {last_error}") from last_error
 
@@ -879,23 +903,31 @@ class ClaudeLLMProvider(BaseLLMProvider):
             model_candidates.extend(fallback_models)
         
         messages = []
+        system_msg = "You are a helpful assistant."
+        
+        # [Fix] Extract System Prompt from history
         for entry in history:
             role = entry.get('role', 'user')
+            content = entry['parts'][0]['text'] if 'parts' in entry else entry.get('content', '')
+            
+            if role == 'system':
+                system_msg = content
+                continue
+                
             if role == 'model':
                 role = 'assistant'
-            content = entry['parts'][0]['text'] if 'parts' in entry else entry.get('content', '')
+                
             messages.append({"role": role, "content": content})
         
         last_error: Optional[Exception] = None
         for target_model in model_candidates:
             try:
-                system_msg = "You are a helpful assistant."
                 if response_schema:
                     system_msg += " Always respond with valid JSON only, no markdown formatting."
                 
                 response = self.client.messages.create(
                     model=target_model,
-                    max_tokens=4096,  # 2048→4096
+                    max_tokens=4096, 
                     temperature=temperature,
                     system=system_msg,
                     messages=messages

@@ -134,7 +134,9 @@ def load_news_sentiment_history(
 def get_sentiment_at_date(
     news_df: pd.DataFrame,
     target_date: datetime,
-    lookback_days: int = 7
+    lookback_days: int = 7,
+    cutoff_hour: int = 9,
+    cutoff_minute: int = 0,
 ) -> Tuple[float, int]:
     """
     특정 날짜 기준 뉴스 감성 점수 계산
@@ -150,8 +152,11 @@ def get_sentiment_at_date(
     if news_df is None or news_df.empty:
         return 50.0, 0  # 중립값 반환
     
-    start = target_date - timedelta(days=lookback_days)
-    mask = (news_df.index >= start) & (news_df.index <= target_date)
+    cutoff_time = target_date.replace(
+        hour=cutoff_hour, minute=cutoff_minute, second=0, microsecond=0
+    )
+    start = cutoff_time - timedelta(days=lookback_days)
+    mask = (news_df.index >= start) & (news_df.index <= cutoff_time)
     period_news = news_df.loc[mask]
     
     if period_news.empty:
@@ -222,36 +227,41 @@ def check_technical_entry(
     Returns:
         (is_entry, signals): 매수 조건 충족 여부, 발생한 신호 리스트
     """
-    bars = df.loc[:target_date].tail(25)
-    if len(bars) < 20:
+    bars = df.loc[:target_date].tail(26)
+    if len(bars) < 21:
         return False, []
     
-    today = bars.iloc[-1]
+    if target_date in bars.index and len(bars) >= 2:
+        prev_row = bars.iloc[-2]
+        prev_window = bars.iloc[:-1]
+    else:
+        prev_row = bars.iloc[-1]
+        prev_window = bars
     signals = []
     
-    # 1. Golden Cross: MA5 > MA20 상향 돌파
-    ma5 = bars['CLOSE_PRICE'].tail(5).mean()
-    ma20 = bars['CLOSE_PRICE'].tail(20).mean()
-    ma5_prev = bars['CLOSE_PRICE'].iloc[-6:-1].mean()
-    ma20_prev = bars['CLOSE_PRICE'].iloc[-21:-1].mean()
+    # 1. Golden Cross: 전일 기준 MA5 > MA20 상향 돌파
+    ma5 = prev_window['CLOSE_PRICE'].tail(5).mean()
+    ma20 = prev_window['CLOSE_PRICE'].tail(20).mean()
+    ma5_prev = prev_window['CLOSE_PRICE'].iloc[-6:-1].mean()
+    ma20_prev = prev_window['CLOSE_PRICE'].iloc[-21:-1].mean()
     if ma5_prev <= ma20_prev and ma5 > ma20:
         signals.append('GOLDEN_CROSS')
     
-    # 2. RSI Oversold: RSI < 35 (눌림목)
-    rsi = today.get('RSI', 50) if not pd.isna(today.get('RSI')) else 50
+    # 2. RSI Oversold: 전일 RSI 기준
+    rsi = prev_row.get('RSI', 50) if not pd.isna(prev_row.get('RSI')) else 50
     if rsi < 35:
         signals.append('RSI_OVERSOLD')
     
-    # 3. BB Lower: 가격이 볼린저 하단 근처
-    bb_lower = today.get('BB_LOWER', 0) if not pd.isna(today.get('BB_LOWER')) else 0
-    if bb_lower and today['CLOSE_PRICE'] < bb_lower * 1.02:
+    # 3. BB Lower: 전일 종가 기준 볼린저 하단 근처
+    bb_lower = prev_row.get('BB_LOWER', 0) if not pd.isna(prev_row.get('BB_LOWER')) else 0
+    if bb_lower and prev_row['CLOSE_PRICE'] < bb_lower * 1.02:
         signals.append('BB_LOWER')
     
-    # 4. Momentum: 최근 5일 상승률 > 3%
-    if len(bars) >= 5:
-        prev_price = bars.iloc[-5]['CLOSE_PRICE']
+    # 4. Momentum: 전일 기준 최근 5일 상승률 > 3%
+    if len(prev_window) >= 5:
+        prev_price = prev_window['CLOSE_PRICE'].iloc[-5]
         if prev_price > 0:
-            momentum = (today['CLOSE_PRICE'] - prev_price) / prev_price
+            momentum = (prev_window['CLOSE_PRICE'].iloc[-1] - prev_price) / prev_price
             if momentum > 0.03:
                 signals.append('MOMENTUM')
     
@@ -314,7 +324,11 @@ class ScoutSimulator:
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
         
-    def simulate_scout_for_date(self, target_date: datetime) -> ScoutSnapshot:
+    def simulate_scout_for_date(
+        self,
+        target_date: datetime,
+        universe_codes: Optional[List[str]] = None,
+    ) -> ScoutSnapshot:
         """
         지정 날짜에 Scout이 선정했을 종목 추정
         
@@ -331,6 +345,8 @@ class ScoutSimulator:
         else:
             kospi_slice = kospi_df.loc[:target_date].tail(60)
             if not kospi_slice.empty:
+                if target_date in kospi_slice.index and len(kospi_slice) >= 2:
+                    kospi_slice = kospi_slice.iloc[:-1]
                 close_df = kospi_slice[["CLOSE_PRICE"]]
                 current_price = float(close_df["CLOSE_PRICE"].iloc[-1])
                 regime, _ = self.regime_detector.detect_regime(close_df, current_price, quiet=True)
@@ -342,7 +358,8 @@ class ScoutSimulator:
         # 2. 종목별 점수 계산
         candidates = []
         
-        for code in sorted(self.price_cache.keys()):
+        scan_codes = universe_codes or list(self.price_cache.keys())
+        for code in sorted(scan_codes):
             if code == "0001":  # KOSPI 인덱스 제외
                 continue
                 
@@ -389,7 +406,13 @@ class ScoutSimulator:
                 
                 # 뉴스 감성 점수 조회
                 news_df = self.news_cache.get(code)
-                news_sentiment, news_count = get_sentiment_at_date(news_df, target_date, lookback_days=7)
+                news_sentiment, news_count = get_sentiment_at_date(
+                    news_df,
+                    target_date,
+                    lookback_days=7,
+                    cutoff_hour=9,
+                    cutoff_minute=0,
+                )
                 
                 # === Phase B-1: 비선형 Scout 점수 추정 ===
                 
@@ -480,6 +503,12 @@ class E2EBacktestEngine:
         scout_min_score: float = 60.0,
         # 매수 신호 임계값
         buy_signal_threshold: float = 70.0,
+        # 시뮬레이션 옵션
+        intraday_mode: str = "ohlc",
+        dynamic_universe: bool = True,
+        use_watchlist_history: bool = False,
+        max_volume_pct: float = 0.01,
+        volume_full_fill: int = 100000,
     ):
         self.connection = connection
         self.start_date = start_date
@@ -496,11 +525,17 @@ class E2EBacktestEngine:
         self.scout_top_n = scout_top_n
         self.scout_min_score = scout_min_score
         self.buy_signal_threshold = buy_signal_threshold
+        self.intraday_mode = intraday_mode
+        self.dynamic_universe = dynamic_universe
+        self.use_watchlist_history = use_watchlist_history
+        self.max_volume_pct = max_volume_pct
+        self.volume_full_fill = volume_full_fill
         
         # 일중 시뮬레이션 옵션
         self.use_intraday_sim = True  # 일중 시뮬레이션 사용
         self.intraday_slots = 18  # 하루 18슬롯 (20분 간격)
         self.slot_offsets = [timedelta(minutes=20 * i) for i in range(self.intraday_slots)]
+        self.intraday_mode = intraday_mode  # ohlc 또는 atr
         
         # Portfolio Engine (기존 백테스트 재사용)
         self.portfolio = PortfolioEngine(
@@ -520,56 +555,100 @@ class E2EBacktestEngine:
         self.investor_cache: Dict[str, pd.DataFrame] = {}
         self.financial_cache: Dict[str, pd.DataFrame] = {}
         self.intraday_cache: Dict[str, List[float]] = {}  # 일중 가격 캐시
+        self.regime_detector = MarketRegimeDetector()
         
         # 결과
         self.equity_curve: List[Tuple[datetime, float]] = []
         self.scout_snapshots: List[ScoutSnapshot] = []
     
-    def _simulate_intraday_path(
-        self, open_p: float, high_p: float, low_p: float, close_p: float
-    ) -> List[float]:
-        """OHLC를 기반으로 일중 가격 경로 생성 (gpt_v2 방식)"""
+    def _simulate_intraday_path_v2(self, open_price: float, atr: float) -> List[float]:
+        """시가 + 전일 ATR 기반 일중 경로 (look-ahead 제거)"""
         import math
         slots = self.intraday_slots
         if slots <= 1:
-            return [close_p]
-        
-        key_points = [open_p, low_p, high_p, close_p]
-        segments = len(key_points) - 1
-        steps_remaining = slots - 1
-        extras = steps_remaining % segments if segments > 0 else 0
-        
-        path = [max(0.0, key_points[0])]
-        for idx in range(segments):
-            base_steps = max(1, steps_remaining // segments) if segments > 0 else 1
-            start = key_points[idx]
-            end = key_points[idx + 1]
-            steps = base_steps + (1 if idx < extras else 0)
-            steps = max(1, steps)
-            for step in range(1, steps + 1):
-                t = step / steps
-                ease = -(math.cos(math.pi * t) - 1) / 2
-                value = start + (end - start) * ease
-                path.append(max(0.0, value))
-        
-        if len(path) < slots:
-            path.extend([close_p] * (slots - len(path)))
-        return path[:slots]
+            return [open_price]
+
+        path = [open_price]
+        current = open_price
+        step_volatility = atr * 0.05
+
+        for i in range(1, slots):
+            noise = math.sin(i * 1.618) * step_volatility
+            mean_revert = (open_price - current) * 0.1
+            current = current + noise + mean_revert
+            current = max(current, open_price * 0.9)
+            current = min(current, open_price * 1.1)
+            path.append(max(0.0, current))
+
+        return path
+
+    def _simulate_intraday_path_ohlc(
+        self,
+        open_price: float,
+        high_price: float,
+        low_price: float,
+        close_price: float,
+    ) -> List[float]:
+        """OHLC ZigZag 기반 일중 경로 (실제 범위 내 체결)"""
+        slots = self.intraday_slots
+        if slots <= 1:
+            return [close_price]
+
+        if close_price >= open_price:
+            points = [(0.0, open_price), (0.3, low_price), (0.7, high_price), (1.0, close_price)]
+        else:
+            points = [(0.0, open_price), (0.3, high_price), (0.7, low_price), (1.0, close_price)]
+
+        def interpolate(t: float) -> float:
+            for i in range(len(points) - 1):
+                t0, v0 = points[i]
+                t1, v1 = points[i + 1]
+                if t0 <= t <= t1:
+                    if t1 == t0:
+                        return v1
+                    ratio = (t - t0) / (t1 - t0)
+                    return v0 + (v1 - v0) * ratio
+            return points[-1][1]
+
+        path = []
+        for i in range(slots):
+            t = i / max(1, slots - 1)
+            path.append(max(0.0, interpolate(t)))
+        return path
+
+    def _get_prev_atr(self, df: pd.DataFrame, date: datetime, fallback: float) -> float:
+        if date in df.index:
+            idx = df.index.get_loc(date) - 1
+            if idx >= 0:
+                prev_row = df.iloc[idx]
+                atr = float(prev_row.get("ATR", fallback)) if not pd.isna(prev_row.get("ATR")) else fallback
+                return atr
+        return fallback
     
     def _get_intraday_price(self, code: str, date: datetime, slot_idx: int) -> float:
         """특정 슬롯의 일중 가격 반환"""
         key = f"{code}_{date.strftime('%Y%m%d')}"
         if key not in self.intraday_cache:
             df = self.price_cache.get(code)
-            if df is None or date not in df.index:
+            if df is None or df.empty:
                 return 0.0
-            row = df.loc[date]
-            self.intraday_cache[key] = self._simulate_intraday_path(
-                float(row.get("OPEN_PRICE", row["CLOSE_PRICE"])),
-                float(row.get("HIGH_PRICE", row["CLOSE_PRICE"])),
-                float(row.get("LOW_PRICE", row["CLOSE_PRICE"])),
-                float(row["CLOSE_PRICE"]),
-            )
+            row = df.loc[date] if date in df.index else get_row_at_or_before(df, date)
+            if row is None:
+                return 0.0
+            open_price = float(row.get("OPEN_PRICE", row["CLOSE_PRICE"]))
+            if open_price <= 0:
+                open_price = float(row.get("CLOSE_PRICE", 0))
+
+            if self.intraday_mode == "ohlc":
+                self.intraday_cache[key] = self._simulate_intraday_path_ohlc(
+                    open_price,
+                    float(row.get("HIGH_PRICE", row["CLOSE_PRICE"])),
+                    float(row.get("LOW_PRICE", row["CLOSE_PRICE"])),
+                    float(row["CLOSE_PRICE"]),
+                )
+            else:
+                atr = self._get_prev_atr(df, date, fallback=open_price * 0.02)
+                self.intraday_cache[key] = self._simulate_intraday_path_v2(open_price, atr)
         path = self.intraday_cache.get(key, [])
         if 0 <= slot_idx < len(path):
             return path[slot_idx]
@@ -583,7 +662,7 @@ class E2EBacktestEngine:
         
         # 종목 코드 결정
         if stock_codes is None:
-            stock_codes = fetch_top_trading_value_codes(self.connection, limit=200)
+            stock_codes = fetch_top_trading_value_codes(self.connection, limit=200, as_of_date=self.start_date)
             stock_codes.insert(0, "0001")  # KOSPI 인덱스
         
         # 1. 가격 데이터 로드
@@ -637,6 +716,123 @@ class E2EBacktestEngine:
             f"가격={len(self.price_cache)}, 뉴스={len(self.news_cache)}, "
             f"수급={len(self.investor_cache)}, 재무={len(self.financial_cache)}"
         )
+
+    def _load_stock_name(self, code: str) -> None:
+        if code in self.stock_names:
+            return
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("SELECT STOCK_NAME FROM STOCK_MASTER WHERE STOCK_CODE = %s", (code,))
+            row = cursor.fetchone()
+            if row:
+                name = row["STOCK_NAME"] if isinstance(row, dict) else row[0]
+                self.stock_names[code] = name
+        finally:
+            cursor.close()
+
+    def _ensure_code_loaded(self, code: str) -> None:
+        if code == "0001" or code in self.price_cache:
+            return
+        df = load_price_series(self.connection, code)
+        if df.empty:
+            return
+        self.price_cache[code] = prepare_indicators(df)
+        self.investor_cache[code] = load_investor_trading(self.connection, code, days=400)
+        self.financial_cache[code] = load_financial_metrics(self.connection, code)
+        news = load_news_sentiment_history(
+            self.connection,
+            stock_codes=[code],
+            start_date=self.start_date,
+            end_date=self.end_date,
+            lookback_days=7,
+        )
+        if news:
+            self.news_cache[code] = news.get(code)
+        self._load_stock_name(code)
+
+    def _get_daily_universe(self, current_date: datetime, trading_days: List[datetime], idx: int) -> List[str]:
+        if not self.dynamic_universe:
+            return fetch_top_trading_value_codes(self.connection, limit=200, as_of_date=self.start_date)
+        if idx <= 0:
+            as_of_date = current_date
+        else:
+            as_of_date = trading_days[idx - 1]
+        return fetch_top_trading_value_codes(self.connection, limit=200, as_of_date=as_of_date)
+
+    def _load_trading_days_from_db(self) -> List[datetime]:
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT DISTINCT PRICE_DATE
+                FROM STOCK_DAILY_PRICES_3Y
+                WHERE PRICE_DATE BETWEEN %s AND %s
+                ORDER BY PRICE_DATE ASC
+                """,
+                (self.start_date.strftime("%Y-%m-%d"), self.end_date.strftime("%Y-%m-%d")),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+
+        dates = []
+        for row in rows:
+            value = row["PRICE_DATE"] if isinstance(row, dict) else row[0]
+            dates.append(pd.to_datetime(value))
+        return dates
+
+    def _detect_regime(self, target_date: datetime) -> str:
+        kospi_df = self.price_cache.get("0001")
+        if kospi_df is None or kospi_df.empty:
+            return "SIDEWAYS"
+        kospi_slice = kospi_df.loc[:target_date].tail(60)
+        if kospi_slice.empty:
+            return "SIDEWAYS"
+        if target_date in kospi_slice.index and len(kospi_slice) >= 2:
+            kospi_slice = kospi_slice.iloc[:-1]
+        close_df = kospi_slice[["CLOSE_PRICE"]]
+        current_price = float(close_df["CLOSE_PRICE"].iloc[-1])
+        regime, _ = self.regime_detector.detect_regime(close_df, current_price, quiet=True)
+        return regime
+
+    def _load_watchlist_history_snapshot(self, snapshot_date: datetime) -> List[dict]:
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT STOCK_CODE, STOCK_NAME, IS_TRADABLE, LLM_SCORE, LLM_REASON
+                FROM WATCHLIST_HISTORY
+                WHERE SNAPSHOT_DATE = %s
+                """,
+                (snapshot_date.strftime("%Y-%m-%d"),),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+
+        results = []
+        for row in rows:
+            if isinstance(row, dict):
+                code = row.get("STOCK_CODE")
+                name = row.get("STOCK_NAME", code)
+                is_tradable = row.get("IS_TRADABLE", 1)
+                llm_score = row.get("LLM_SCORE", 0) or 0
+                llm_reason = row.get("LLM_REASON", "")
+            else:
+                code, name, is_tradable, llm_score, llm_reason = row
+            results.append(
+                {
+                    "code": code,
+                    "name": name,
+                    "is_tradable": bool(is_tradable),
+                    "estimated_score": float(llm_score),
+                    "factor_score": 0.0,
+                    "news_sentiment": 50.0,
+                    "news_count": 0,
+                    "llm_reason": llm_reason or "",
+                }
+            )
+        return results
         
     def run_simulation(self) -> Dict:
         """
@@ -661,19 +857,46 @@ class E2EBacktestEngine:
         
         # 거래일 목록 추출
         kospi_df = self.price_cache.get("0001")
-        if kospi_df is None:
-            logger.error("KOSPI 데이터 없음")
+        trading_days = []
+        if kospi_df is not None and not kospi_df.empty:
+            trading_days = kospi_df.loc[self.start_date:self.end_date].index.tolist()
+            if trading_days and trading_days[-1] < self.end_date:
+                logger.warning("KOSPI 거래일 데이터가 종료일 이전에 끊겨 있습니다. DB 거래일로 대체합니다.")
+                trading_days = []
+        if not trading_days:
+            logger.warning("KOSPI 거래일 데이터가 부족합니다. DB 거래일로 대체합니다.")
+            trading_days = self._load_trading_days_from_db()
+        if not trading_days:
+            logger.error("거래일 데이터를 확인할 수 없습니다.")
             return {}
-        
-        trading_days = kospi_df.loc[self.start_date:self.end_date].index.tolist()
+
         logger.info(f"📅 거래일: {len(trading_days)}일")
         
         # 일별 시뮬레이션
         for i, current_date in enumerate(trading_days):
             daily_buys = 0
+            daily_universe = self._get_daily_universe(current_date, trading_days, i)
+            if daily_universe:
+                for code in daily_universe:
+                    self._ensure_code_loaded(code)
             
             # 1. Scout 시뮬레이션 (매일 아침)
-            scout_result = scout_sim.simulate_scout_for_date(current_date)
+            if self.use_watchlist_history and i > 0:
+                snapshot_date = trading_days[i - 1]
+                history_items = self._load_watchlist_history_snapshot(snapshot_date)
+                if history_items:
+                    for item in history_items:
+                        self._ensure_code_loaded(item["code"])
+                    regime = self._detect_regime(current_date)
+                    scout_result = ScoutSnapshot(
+                        date=current_date,
+                        regime=regime,
+                        hot_watchlist=history_items[: self.scout_top_n],
+                    )
+                else:
+                    scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
+            else:
+                scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
             self.scout_snapshots.append(scout_result)
             
             # 1-2. Regime 기반 동적 파라미터 적용 (Phase A-2)
@@ -704,7 +927,8 @@ class E2EBacktestEngine:
                 
                 row = df.loc[current_date]
                 price = float(row["CLOSE_PRICE"])
-                atr = float(row.get("ATR", price * 0.02)) if not pd.isna(row.get("ATR")) else price * 0.02
+                atr = self._get_prev_atr(df, current_date, fallback=price * 0.02)
+                daily_volume = int(row.get("VOLUME", 0) or 0)
                 
                 # 매수 조건 1: Scout 점수가 임계값 이상
                 # 매수 조건 1: 기술적 진입 신호 확인 (Phase A-1)
@@ -734,11 +958,22 @@ class E2EBacktestEngine:
                             continue
                         
                         slot_timestamp = current_date + self.slot_offsets[slot_idx]
-                        atr = float(row.get("ATR", slot_price * 0.02)) if not pd.isna(row.get("ATR")) else slot_price * 0.02
+                        atr = self._get_prev_atr(df, current_date, fallback=slot_price * 0.02)
                         
                         # 포지션 사이즈 계산
                         position_value = self.portfolio.cash * self.max_stock_pct
                         qty = int(position_value / slot_price)
+                        if daily_volume > 0:
+                            max_executable = int(daily_volume * self.max_volume_pct)
+                            qty = min(qty, max_executable)
+                        if qty <= 0:
+                            continue
+                        if daily_volume > 0:
+                            fill_prob = min(1.0, daily_volume / self.volume_full_fill)
+                            key = f"{code}:{current_date.strftime('%Y%m%d')}:{slot_idx}"
+                            decision = (abs(hash(key)) % 10000) / 10000.0
+                            if decision > fill_prob:
+                                continue
                         
                         if qty > 0:
                             signal_str = "+".join(signals) if signals else "SCOUT"
@@ -773,7 +1008,16 @@ class E2EBacktestEngine:
                     # 기존 종가 기준 매수
                     position_value = self.portfolio.cash * self.max_stock_pct
                     qty = int(position_value / price)
-                    
+                    if daily_volume > 0:
+                        max_executable = int(daily_volume * self.max_volume_pct)
+                        qty = min(qty, max_executable)
+                    if qty > 0 and daily_volume > 0:
+                        fill_prob = min(1.0, daily_volume / self.volume_full_fill)
+                        key = f"{code}:{current_date.strftime('%Y%m%d')}:close"
+                        decision = (abs(hash(key)) % 10000) / 10000.0
+                        if decision > fill_prob:
+                            qty = 0
+                
                     if qty > 0:
                         signal_str = "+".join(signals) if signals else "SCOUT"
                         candidate = Candidate(
@@ -970,7 +1214,7 @@ def parse_args():
     # 기본 설정
     parser.add_argument("--start-date", type=str, default=default_start, help=f"시작일 (YYYY-MM-DD, 기본: {default_start})")
     parser.add_argument("--end-date", type=str, default=default_end, help=f"종료일 (YYYY-MM-DD, 기본: {default_end})")
-    parser.add_argument("--capital", type=float, default=10_000_000, help="초기 자본금")
+    parser.add_argument("--capital", type=float, default=210_000_000, help="초기 자본금")
     parser.add_argument("--verbose", action="store_true", help="상세 로그 출력")
     
     # === Scout 설정 (튜닝 대상) ===
@@ -990,6 +1234,36 @@ def parse_args():
     
     # === 매수 신호 임계값 (튜닝 대상) ===
     parser.add_argument("--buy-signal-threshold", type=float, default=70, help="매수 신호 트리거 점수")
+    parser.add_argument(
+        "--intraday-mode",
+        type=str,
+        choices=["ohlc", "atr"],
+        default="ohlc",
+        help="일중 경로 모드 (ohlc: ZigZag, atr: 시가+전일 ATR)",
+    )
+    parser.add_argument(
+        "--static-universe",
+        action="store_false",
+        dest="dynamic_universe",
+        help="유니버스를 고정(시뮬레이션 시작일 기준)합니다.",
+    )
+    parser.add_argument(
+        "--use-watchlist-history",
+        action="store_true",
+        help="WATCHLIST_HISTORY 스냅샷을 리플레이에 사용합니다.",
+    )
+    parser.add_argument(
+        "--max-volume-pct",
+        type=float,
+        default=0.01,
+        help="일 거래량 대비 최대 체결 비율 (기본 0.01 = 1%)",
+    )
+    parser.add_argument(
+        "--volume-full-fill",
+        type=int,
+        default=100000,
+        help="체결 확률 100% 기준 거래량",
+    )
     
     return parser.parse_args()
 
@@ -1037,6 +1311,11 @@ def main():
             # Scout 설정
             scout_top_n=args.scout_top_n,
             scout_min_score=args.scout_min_score,
+            intraday_mode=args.intraday_mode,
+            dynamic_universe=args.dynamic_universe,
+            use_watchlist_history=args.use_watchlist_history,
+            max_volume_pct=args.max_volume_pct,
+            volume_full_fill=args.volume_full_fill,
         )
         
         # 매수 신호 임계값 저장 (실행 시 사용)
