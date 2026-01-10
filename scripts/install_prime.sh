@@ -264,6 +264,12 @@ if [ ! -f "secrets.json" ]; then
         echo -e "${RED}Error: Secrets generation failed or cancelled.${NC}"
         exit 1
     fi
+    
+    # [Fix] Change ownership of generated secrets.json to real user
+    if [ -n "$REAL_USER" ]; then
+        chown "${REAL_USER}:${REAL_USER}" secrets.json
+        chmod 600 secrets.json
+    fi
 else
     echo -e "${GREEN}✓ secrets.json found.${NC}"
 fi
@@ -295,7 +301,7 @@ echo -e "4. 서비스 상태 확인:"
 echo -e "   ${YELLOW}docker compose ps${NC}"
 echo -e ""
 echo -e "5. 대시보드 접속:"
-echo -e "   ${YELLOW}http://localhost:3000${NC}"
+echo -e "   ${YELLOW}http://localhost${NC}"
 echo -e ""
 echo -e "6. 자동화 작업 등록 (Cron Jobs - 선택사항):"
 echo -e "   ${YELLOW}./scripts/setup_cron_jobs.sh${NC}"

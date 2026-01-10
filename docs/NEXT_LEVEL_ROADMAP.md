@@ -100,15 +100,9 @@ graph TB
 ### Phase 2: 공격 강화 (2-3주) 👁️
 > **목표**: 수익률 향상을 위한 분석 고도화
 
-#### 2.1 Vision AI - 차트 패턴 분석
-- **구현 위치**: `shared/vision_analyzer.py` [NEW]
-- **핵심 기능**:
-  - 캔들 차트 이미지 생성 (matplotlib/mplfinance)
-  - Gemini Vision API로 패턴 분석 (W패턴, 헤드앤숄더 등)
-  - Hunter 스코어에 기술적 분석 점수 추가
-- **통합 대상**: `scout_pipeline.py`의 `process_quant_scoring_task()`
-- **난이도**: ⭐⭐⭐ (중간)
-- **ROI**: 🔥🔥🔥🔥 (기술적 분석 자동화)
+#### ~~2.1 Vision AI - 차트 패턴 분석~~ [DEPRECATED 2025-12-31]
+> ⛔ **폐기 사유**: LLM 호출 비용 부담. 이미지 분석은 텍스트 대비 토큰 소모가 크고, 종목당 호출 시 비용 급증 우려.
+> **대안**: 기술적 지표 기반 패턴 탐지 (TA-Lib 등 순수 계산 방식) - 필요시 별도 검토
 
 #### 2.2 Macro Insight 모듈
 - **구현 위치**: `shared/macro_insight.py` [NEW]

@@ -58,27 +58,33 @@ class LLMFactory:
         Defaults: FAST -> gemini (cloud), REASONING -> ollama (local), THINKING -> openai
         """
         env_key = f"TIER_{tier.value}_PROVIDER"
-        # FAST tier uses Cloud Gemini for speed (Ollama queue saturation issue)
-        # THINKING tier uses OpenAI for deep reasoning (stable API)
+        # [Cost Optimization 2026-01]
+        # Scout와 News-Crawler 스케줄 분리로 Local LLM 사용 가능
+        # FAST -> Ollama (Local gemma3:27b) - 비용 ₩0
+        # REASONING -> OpenAI GPT-4o-mini (Best Value vs Performance)
+        # THINKING -> OpenAI GPT-4o (Standard Quality)
         if tier == LLMTier.FAST:
-            default = "gemini"
+            default = "ollama"  # Cloud Gemini -> Local Ollama
         elif tier == LLMTier.THINKING:
-            default = "openai"  # GPT-5.2 for Daily Self-Evolution & Weekly Council
+            default = "openai" 
         else:
-            default = "ollama"
+            default = "openai" # REASONING Default: GPT-4o-mini
+            
         return os.getenv(env_key, default).lower()
 
     @staticmethod
     def _get_local_model_name(tier: LLMTier) -> str:
         """Get the specific local model name for a tier."""
         env_key = f"LOCAL_MODEL_{tier.value}"
+        # 2026-01-03: FAST Tier -> gemma3:27b (JSON 안정성 개선)
+        # - gpt-oss:20b에서 JSON 파싱 오류 다수 발생 -> gemma3로 변경
+        # - 뉴스 필터링 개선으로 처리량 감소 (1800개 -> ~300개) -> 속도 부담 감소
         defaults = {
-            # Qwen3 32B Strategy (All Tiers)
-            LLMTier.FAST: "qwen3:32b",      # High-end 24GB VRAM model
-            LLMTier.REASONING: "qwen3:32b", # Unified Model
-            LLMTier.THINKING: "qwen3:32b"   # Unified Model
+            LLMTier.FAST: "gemma3:27b",        # 감성분석 (JSON 안정성)
+            LLMTier.REASONING: "gemma3:27b",  # Hunter, Debate
+            LLMTier.THINKING: "gemma3:27b"    # Judge
         }
-        return os.getenv(env_key, defaults.get(tier, "qwen3:32b"))
+        return os.getenv(env_key, defaults.get(tier, "gemma3:27b"))
 
     @classmethod
     def get_provider(cls, tier: LLMTier):

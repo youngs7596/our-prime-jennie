@@ -38,8 +38,8 @@ def _build_connection_url() -> str:
     user_enc = quote_plus(user)
     password_enc = quote_plus(password)
     
-    # PyMySQL 드라이버 사용
-    return f"mysql+pymysql://{user_enc}:{password_enc}@{host}:{port}/{dbname}?charset=utf8mb4"
+    # mysql-connector-python 드라이버 사용
+    return f"mysql+mysqlconnector://{user_enc}:{password_enc}@{host}:{port}/{dbname}?charset=utf8mb4"
 
 
 def _get_db_type():
@@ -47,10 +47,10 @@ def _get_db_type():
 
 
 def init_engine(
-    db_user: Optional[str],
-    db_password: Optional[str],
-    db_service_name: Optional[str],
-    wallet_path: Optional[str],
+    db_user: Optional[str] = None,
+    db_password: Optional[str] = None,
+    db_service_name: Optional[str] = None,
+    wallet_path: Optional[str] = None,
     *,
     min_sessions: int = None,
     max_sessions: int = None,
@@ -63,8 +63,7 @@ def init_engine(
         max_sessions = int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "10")) + min_sessions
     """
     SQLAlchemy Engine + Session Factory를 초기화합니다.
-    기존 oracledb Connection Pool과 병행 운영되며,
-    추후에는 이 Engine을 기본 진입점으로 사용할 예정입니다.
+    현재 DB는 MariaDB로 단일화되어 있으며, Oracle(oracledb) 병행 운영은 종료되었습니다.
     """
     global _engine, _session_factory, _engine_config
 
@@ -82,6 +81,7 @@ def init_engine(
         max_overflow,
         pool_recycle,
     )
+    
     try:
         _engine = create_engine(
             connection_url,
@@ -91,10 +91,7 @@ def init_engine(
             pool_pre_ping=True,
             pool_recycle=pool_recycle,
             future=True,
-            connect_args={
-                # GSSAPI 인증 플러그인 우회 (mysql_native_password 사용)
-                "auth_plugin_map": {"auth_gssapi_client": None}
-            },
+            connect_args={"auth_plugin": "mysql_native_password", "use_pure": True},
         )
         _session_factory = scoped_session(
             sessionmaker(bind=_engine, autoflush=False, autocommit=False, expire_on_commit=False)

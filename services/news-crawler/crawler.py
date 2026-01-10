@@ -18,6 +18,7 @@ import feedparser # type: ignore
 import logging
 import os 
 import calendar
+import warnings
 from dotenv import load_dotenv 
 from datetime import datetime, timedelta, timezone
 
@@ -51,8 +52,8 @@ try:
     from shared.db.models import WatchList as WatchListModel
     from shared.gemini import ensure_gemini_api_key
     # 경쟁사 수혜 분석 모듈
-    from shared.news_classifier import NewsClassifier, get_classifier
-    from shared.hybrid_scoring.competitor_analyzer import CompetitorAnalyzer
+    # from shared.news_classifier import NewsClassifier, get_classifier
+    # from shared.hybrid_scoring.competitor_analyzer import CompetitorAnalyzer
     logger.info("✅ 'shared' 패키지 모듈 import 성공")
 except ImportError as e: # type: ignore
     logger.error(f"🚨 'shared' 공용 패키지를 찾을 수 없습니다! (오류: {e})")
@@ -75,7 +76,15 @@ except Exception as e:
 
 from langchain_core.documents import Document
 from langchain_chroma import Chroma
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+# [Cost Optimization] Cloud Embedding -> Local Embedding
+# langchain_google_genai -> langchain_huggingface
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings
+    LOCAL_EMBEDDINGS_AVAILABLE = True
+except ImportError:
+    LOCAL_EMBEDDINGS_AVAILABLE = False
+    logger.warning("⚠️ langchain_huggingface not available, falling back to Cloud Embeddings")
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # ==============================================================================
@@ -93,12 +102,76 @@ VERTEX_AI_BATCH_SIZE = 10
 MAX_SENTIMENT_DOCS_PER_RUN = int(os.getenv("MAX_SENTIMENT_DOCS_PER_RUN", "40"))
 SENTIMENT_COOLDOWN_SECONDS = float(os.getenv("SENTIMENT_COOLDOWN_SECONDS", "0.2"))
 
+# --- 🔽 네이버 금융 뉴스 크롤링 설정 🔽 ---
+# 뉴스 소스 선택: "google" (기존), "naver" (신규), "hybrid" (둘 다)
+NEWS_CRAWLER_SOURCE = os.getenv("NEWS_CRAWLER_SOURCE", "naver")
+NAVER_FINANCE_NEWS_URL = "https://finance.naver.com/item/news_news.naver?code={code}&page={page}"
+NAVER_NEWS_MAX_PAGES = int(os.getenv("NAVER_NEWS_MAX_PAGES", "2"))  # 페이지당 ~15건
+NAVER_NEWS_REQUEST_DELAY = float(os.getenv("NAVER_NEWS_REQUEST_DELAY", "0.3"))  # Rate limit 대응
+
 # --- 🔽 '일반 경제' RSS 피드 🔽 ---
 GENERAL_RSS_FEEDS = [
+    {"source_name": "Hankyung (Finance)", "url": "https://www.hankyung.com/feed/finance"},
+    {"source_name": "Hankyung (Economy)", "url": "https://www.hankyung.com/feed/economy"},
     {"source_name": "Maeil Business (Economy)", "url": "https://www.mk.co.kr/rss/50000001/"},
     {"source_name": "Maeil Business (Stock)", "url": "https://www.mk.co.kr/rss/50100001/"},
-    {"source_name": "Investing.com (News)", "url": "https://kr.investing.com/rss/news.rss"}
 ]
+
+# ==============================================================================
+# 뉴스 소스 필터링 설정 (2026-01 현자 3인 피드백 반영)
+# ==============================================================================
+
+# Tier 1: 신뢰할 수 있는 경제/금융 전문지 도메인 (hostname suffix 매칭)
+TRUSTED_NEWS_DOMAINS = {
+    "hankyung.com",      # 한국경제
+    "mk.co.kr",          # 매일경제
+    "sedaily.com",       # 서울경제
+    "mt.co.kr",          # 머니투데이
+    "fnnews.com",        # 파이낸셜뉴스
+    "thebell.co.kr",     # 더벨 (M&A/IB)
+    "newspim.com",       # 뉴스핌
+    "edaily.co.kr",      # 이데일리
+    "etoday.co.kr",      # 이투데이
+    "yna.co.kr",         # 연합뉴스
+    "etnews.com",        # 전자신문 (IT/반도체)
+    "biz.chosun.com",    # 조선비즈
+    "newsis.com",        # 뉴시스
+}
+
+# Wrapper 도메인 (포털/구글 - 신뢰 소스로 취급하지 않음)
+WRAPPER_DOMAINS = {
+    "news.naver.com", "n.news.naver.com",
+    "v.daum.net", "news.v.daum.net",
+    "news.google.com",
+}
+
+# 노이즈 키워드 (제목에 있으면 저품질로 판단하여 제외)
+NOISE_KEYWORDS = [
+    "특징주", "오전 시황", "장마감", "마감 시황", "급등락",
+    "오늘의 증시", "환율", "개장", "출발", "상위 종목",
+    "장중 시황", "거래량 상위", "외인 순매수", "기관 순매수",
+]
+
+# 신뢰할 수 있는 언론사 이름 (Google News source.title 매칭용)
+TRUSTED_SOURCE_NAMES = {
+    "한국경제", "한경", "Hankyung",
+    "매일경제", "매경", "MK",
+    "서울경제",
+    "머니투데이",
+    "파이낸셜뉴스",
+    "더벨", "thebell",
+    "뉴스핌",
+    "이데일리",
+    "이투데이",
+    "연합뉴스", "연합뉴스TV",
+    "전자신문", "ETNews",
+    "조선비즈",
+    "뉴시스",
+    "헤럴드경제",
+    "아시아경제",
+    "데일리안",
+    "뉴스1",
+}
 
 # ==============================================================================
 # LangChain, Chroma 클라이언트 초기화
@@ -112,9 +185,7 @@ GENERAL_RSS_FEEDS = [
 load_dotenv()
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-DB_SERVICE_NAME = os.getenv("OCI_DB_SERVICE_NAME")
-WALLET_DIR_NAME = os.getenv("OCI_WALLET_DIR_NAME", "wallet")
-WALLET_PATH = os.path.join(PROJECT_ROOT, WALLET_DIR_NAME)
+# Oracle/OCI 관련 설정은 더 이상 사용하지 않습니다. (MariaDB + SQLAlchemy 단일화)
 
 # 지연 초기화를 위한 전역 변수 (None으로 시작)
 embeddings = None
@@ -137,13 +208,32 @@ def initialize_services():
     except Exception as e:
         logger.warning(f"⚠️ SQLAlchemy 엔진 초기화 실패: {e}")
     
-    logger.info("... [RAG Crawler v8.1] LangChain 및 AI 컴포넌트 초기화 시작 ...")
+    logger.info("... [RAG Crawler v10.0] LangChain 및 AI 컴포넌트 초기화 시작 ...")
     try:
-        api_key = ensure_gemini_api_key()
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=api_key,
-        )
+        # [Cost Optimization] Local Embeddings 사용 (Cloud API 비용 ₩0)
+        if LOCAL_EMBEDDINGS_AVAILABLE:
+            logger.info("="*60)
+            logger.info("🏠 [LOCAL] Embedding 모델 로딩 중 (jhgan/ko-sroberta-multitask)")
+            logger.info("🏠 [LOCAL] Cloud API 호출 없음 - 비용: ₩0")
+            logger.info("="*60)
+            embeddings = HuggingFaceEmbeddings(
+                model_name="jhgan/ko-sroberta-multitask",  # 한국어 최적화 모델
+                model_kwargs={"device": "cpu"},
+                encode_kwargs={"normalize_embeddings": True}
+            )
+            logger.info("✅ [LOCAL] Embedding 모델 로딩 완료! (비용: ₩0)")
+        else:
+            # Fallback: Cloud Embeddings (비용 발생)
+            logger.error("="*60)
+            logger.error("🚨 [CLOUD] Cloud Embedding 사용 중! - 비용 발생!")
+            logger.error("🚨 [CLOUD] langchain-huggingface 설치 필요!")
+            logger.error("="*60)
+            api_key = ensure_gemini_api_key()
+            embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/text-embedding-004",
+                google_api_key=api_key,
+            )
+        
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         logger.info("✅ LangChain 컴포넌트(Embedding, Splitter) 초기화 성공.")
         
@@ -157,6 +247,8 @@ def initialize_services():
         except Exception as e:
             logger.warning(f"⚠️ JennieBrain 초기화 실패 (감성 분석 Skip): {e}")
             jennie_brain = None
+
+
 
     except Exception as e:
         logger.exception("🔥 LangChain 컴포넌트 초기화 실패!")
@@ -183,6 +275,11 @@ def get_kospi_200_universe():
     """
     KOSPI 시가총액 상위 200개 종목을 가져옵니다.
     Scout와 동일한 Universe를 사용하여 뉴스를 수집합니다.
+    
+    Fallback 순서:
+    1. FinanceDataReader API
+    2. 네이버 금융 시총 스크래핑
+    3. DB WatchList (최후의 수단)
     """
     universe_size = int(os.getenv("SCOUT_UNIVERSE_SIZE", "200"))
     logger.info(f"  (1/6) KOSPI 시총 상위 {universe_size}개 종목 로드 중...")
@@ -224,9 +321,66 @@ def get_kospi_200_universe():
         except Exception as e:
             logger.warning(f"⚠️ (1/6) FinanceDataReader 실패: {e}")
     
-    # 2. Fallback: DB의 WatchList 사용
-    logger.info("  (1/6) Fallback: DB WatchList 조회 중...")
+    # 2. Fallback: 네이버 금융 시총 스크래핑
+    universe = _scrape_naver_finance_top_stocks(universe_size)
+    if universe:
+        return universe
+    
+    # 3. 최후 Fallback: DB의 WatchList 사용
+    logger.info("  (1/6) 최후 Fallback: DB WatchList 조회 중...")
     return get_watchlist_from_db()
+
+
+def _scrape_naver_finance_top_stocks(limit: int = 200) -> list:
+    """
+    네이버 금융에서 KOSPI 시총 상위 종목을 스크래핑합니다.
+    FDR API 장애 시 Fallback으로 사용.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    
+    logger.info("  (1/6) 네이버 금융 시총 스크래핑 시도 중...")
+    
+    universe = []
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    
+    try:
+        # KOSPI 시총 상위 (페이지당 50개, 최대 4페이지 = 200개)
+        pages_needed = (limit // 50) + 1
+        
+        for page in range(1, pages_needed + 1):
+            if len(universe) >= limit:
+                break
+                
+            url = f'https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}'
+            resp = requests.get(url, headers=headers, timeout=10)
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            rows = soup.select('table.type_2 tbody tr')
+            for row in rows:
+                if len(universe) >= limit:
+                    break
+                    
+                cells = row.select('td')
+                if len(cells) >= 2:
+                    link = cells[1].select_one('a')
+                    if link:
+                        name = link.text.strip()
+                        href = link.get('href', '')
+                        code = href.split('code=')[-1][:6] if 'code=' in href else ''
+                        if code and len(code) == 6 and code.isdigit():
+                            universe.append({"code": code, "name": name})
+        
+        if universe:
+            logger.info(f"✅ (1/6) 네이버 금융 스크래핑으로 {len(universe)}개 종목 로드 완료!")
+            return universe
+        else:
+            logger.warning("⚠️ (1/6) 네이버 금융 스크래핑 결과 없음")
+            
+    except Exception as e:
+        logger.warning(f"⚠️ (1/6) 네이버 금융 스크래핑 실패: {e}")
+    
+    return []
 
 
 def get_watchlist_from_db():
@@ -265,12 +419,264 @@ def get_numeric_timestamp(feed_entry):
     else:
         return int(datetime.now(timezone.utc).timestamp())
 
+# ==============================================================================
+# 뉴스 소스 필터링 유틸 함수 (Phase 1,2,3)
+# ==============================================================================
+
+def get_hostname(url: str) -> str:
+    """URL에서 hostname 추출"""
+    try:
+        return (urllib.parse.urlparse(url).hostname or "").lower().strip(".")
+    except Exception:
+        return ""
+
+def is_trusted_hostname(host: str) -> bool:
+    """hostname이 신뢰 도메인인지 확인 (suffix 매칭)"""
+    return any(host == d or host.endswith("." + d) for d in TRUSTED_NEWS_DOMAINS)
+
+def is_wrapper_domain(host: str) -> bool:
+    """hostname이 wrapper 도메인(포털/구글)인지 확인"""
+    return any(host == d or host.endswith("." + d) for d in WRAPPER_DOMAINS)
+
+def extract_date_from_url(url: str):
+    """
+    URL 패턴에서 발행일 추출 (예: /20250102...)
+    한경, 매경 등 대부분의 국내 언론사 지원
+    """
+    import re
+    from datetime import date as date_class
+    match = re.search(r'/(\d{4})(\d{2})(\d{2})\d+', url)
+    if match:
+        try:
+            return date_class(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        except ValueError:
+            return None
+    return None
+
+def is_noise_title(title: str) -> bool:
+    """제목이 노이즈(저품질) 뉴스인지 확인"""
+    for noise in NOISE_KEYWORDS:
+        if noise in title:
+            return True
+    return False
+
+def is_trusted_source_name(source_name: str) -> bool:
+    """Google News의 source.title이 신뢰 언론사인지 확인"""
+    if not source_name:
+        return False
+    for trusted in TRUSTED_SOURCE_NAMES:
+        if trusted in source_name:
+            return True
+    return False
+
+def compute_news_hash(title: str) -> str:
+    """제목 기반 중복 체크용 해시"""
+    import hashlib
+    import re as re_module
+    # 특수문자, 공백 정규화 후 해싱
+    normalized = re_module.sub(r'[^\w]', '', title.lower())
+    return hashlib.md5(normalized.encode()).hexdigest()[:12]
+
+# 세션 내 중복 제거용 캐시
+_seen_news_hashes = set()
+
+def crawl_naver_finance_news(stock_code: str, stock_name: str, max_pages: int = None) -> list:
+    """
+    네이버 금융에서 특정 종목의 뉴스를 직접 크롤링합니다.
+    [2026-01-03] Google News RSS 대신/보조로 사용.
+    
+    Args:
+        stock_code: 종목 코드 (예: "005930")
+        stock_name: 종목명 (예: "삼성전자")
+        max_pages: 수집할 최대 페이지 수 (기본값: NAVER_NEWS_MAX_PAGES 환경변수)
+    
+    Returns:
+        Document 리스트 (기존 crawl_news_for_stock과 동일한 형식)
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    from datetime import date as date_class
+    
+    if max_pages is None:
+        max_pages = NAVER_NEWS_MAX_PAGES
+    
+    logger.info(f"  (2/6) [Naver Finance] '{stock_name}({stock_code})' 뉴스 크롤링 시작 (max_pages={max_pages})")
+    documents = []
+    
+    # 필터링 통계
+    stats = {"total": 0, "noise": 0, "old": 0, "dup": 0, "accepted": 0}
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': f'https://finance.naver.com/item/news.naver?code={stock_code}'
+    }
+    
+    for page in range(1, max_pages + 1):
+        try:
+            url = NAVER_FINANCE_NEWS_URL.format(code=stock_code, page=page)
+            resp = requests.get(url, headers=headers, timeout=10)
+            resp.encoding = 'euc-kr'
+            
+            if resp.status_code != 200:
+                logger.warning(f"  [Naver Finance] HTTP {resp.status_code} for {stock_code} page {page}")
+                continue
+            
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            news_table = soup.select_one('table.type5')
+            
+            if not news_table:
+                logger.debug(f"  [Naver Finance] 뉴스 테이블 없음 - {stock_code} page {page}")
+                break  # 더 이상 페이지 없음
+            
+            rows = news_table.select('tr')
+            page_news_count = 0
+            
+            for row in rows:
+                title_td = row.select_one('td.title')
+                if not title_td:
+                    continue
+                
+                link = title_td.select_one('a')
+                if not link:
+                    continue
+                
+                info_td = row.select_one('td.info')  # 언론사
+                date_td = row.select_one('td.date')  # 날짜
+                
+                title = link.text.strip()
+                href = link.get('href', '')
+                source = info_td.text.strip() if info_td else 'N/A'
+                date_str = date_td.text.strip() if date_td else ''
+                
+                if not title:
+                    continue
+                
+                stats["total"] += 1
+                
+                # 1. 노이즈 필터링
+                if is_noise_title(title):
+                    stats["noise"] += 1
+                    continue
+                
+                # 2. 날짜 필터링 (7일 이내)
+                if date_str:
+                    try:
+                        # 형식: "2026.01.03 08:54"
+                        date_part = date_str.split()[0]  # "2026.01.03"
+                        parts = date_part.split('.')
+                        if len(parts) == 3:
+                            article_date = date_class(int(parts[0]), int(parts[1]), int(parts[2]))
+                            days_old = (date_class.today() - article_date).days
+                            if days_old > 7:
+                                stats["old"] += 1
+                                continue
+                    except (ValueError, IndexError):
+                        pass  # 파싱 실패 시 일단 포함
+                
+                # 3. 중복 체크
+                news_hash = compute_news_hash(title)
+                if news_hash in _seen_news_hashes:
+                    stats["dup"] += 1
+                    continue
+                _seen_news_hashes.add(news_hash)
+                
+                # 모든 필터 통과 -> 수집
+                stats["accepted"] += 1
+                page_news_count += 1
+                
+                # 링크 정규화
+                if href.startswith('/'):
+                    full_link = 'https://finance.naver.com' + href
+                else:
+                    full_link = href
+                
+                # 타임스탬프 생성 (날짜 문자열 기반)
+                published_timestamp = int(datetime.now(timezone.utc).timestamp())
+                if date_str:
+                    try:
+                        dt = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
+                        dt = dt.replace(tzinfo=timezone(timedelta(hours=9)))  # KST
+                        published_timestamp = int(dt.timestamp())
+                    except ValueError:
+                        pass
+                
+                doc = Document(
+                    page_content=f"뉴스 제목: {title}\n링크: {full_link}",
+                    metadata={
+                        "stock_code": stock_code,
+                        "stock_name": stock_name,
+                        "source": f"Naver Finance ({source})",
+                        "source_url": full_link,
+                        "created_at_utc": published_timestamp
+                    }
+                )
+                documents.append(doc)
+            
+            logger.debug(f"  [Naver Finance] {stock_code} page {page}: {page_news_count}건 수집")
+            
+            # Rate limit 대응
+            if page < max_pages:
+                time.sleep(NAVER_NEWS_REQUEST_DELAY)
+                
+        except Exception as e:
+            logger.exception(f"🔥 [Naver Finance] {stock_code} page {page} 크롤링 오류: {e}")
+    
+    # 필터링 통계 로그
+    if stats["total"] > 0:
+        logger.info(f"  (2/6) [{stock_name}] Naver 필터링: 총{stats['total']} → noise:{stats['noise']} old:{stats['old']} dup:{stats['dup']} → 수집:{stats['accepted']}")
+    else:
+        logger.info(f"  (2/6) [{stock_name}] Naver 뉴스 없음")
+    
+    return documents
+
+
+def crawl_stock_news_with_fallback(stock_code: str, stock_name: str) -> list:
+    """
+    종목 뉴스 크롤링 (Naver 우선, Google Fallback)
+    
+    1. 네이버 금융에서 먼저 크롤링 시도
+    2. 실패하거나 결과가 없으면 Google News RSS로 Fallback
+    
+    Args:
+        stock_code: 종목 코드
+        stock_name: 종목명
+    
+    Returns:
+        Document 리스트
+    """
+    # 1차: 네이버 금융 시도
+    try:
+        naver_docs = crawl_naver_finance_news(stock_code, stock_name)
+        if naver_docs:
+            return naver_docs
+        else:
+            # 네이버에서 뉴스가 없으면 Google Fallback
+            logger.info(f"  [Fallback] {stock_name}: Naver 뉴스 0건 → Google News 시도")
+    except Exception as e:
+        logger.warning(f"  [Fallback] {stock_name}: Naver 크롤링 오류 ({e}) → Google News 시도")
+    
+    # 2차: Google News Fallback
+    try:
+        google_docs = crawl_news_for_stock(stock_code, stock_name)
+        if google_docs:
+            logger.info(f"  [Fallback] {stock_name}: Google News에서 {len(google_docs)}건 수집")
+        return google_docs
+    except Exception as e:
+        logger.error(f"🔥 [Fallback] {stock_name}: Google News도 실패 - {e}")
+        return []
+
+
 def crawl_news_for_stock(stock_code, stock_name):
     """
     Google News RSS를 사용하여 특정 종목의 뉴스를 수집합니다.
+    [2026-01 개선] 신뢰 소스 필터링 + 노이즈 키워드 제외 + 중복 제거
     """
     logger.info(f"  (2/6) [App 5] '{stock_name}({stock_code})' Google News RSS 피드 수집 중...")
     documents = []
+    
+    # 필터링 통계
+    stats = {"total": 0, "wrapper": 0, "untrusted": 0, "noise": 0, "old": 0, "dup": 0, "accepted": 0}
+    
     try:
         query = f'"{stock_name}" OR "{stock_code}"'
         encoded_query = urllib.parse.quote(query)
@@ -282,12 +688,55 @@ def crawl_news_for_stock(stock_code, stock_name):
             return []
 
         for entry in feed.entries:
-            # 7일이 지난 뉴스는 수집 단계에서 제외
-            published_timestamp = get_numeric_timestamp(entry)
-            if datetime.fromtimestamp(published_timestamp, tz=timezone.utc) < datetime.now(timezone.utc) - timedelta(days=7):
-                logger.debug(f"  (2/6) 오래된 뉴스 제외: {entry.title[:30]}...")
+            stats["total"] += 1
+            
+            # 1. 소스 검증 (Google wrapper vs 직접 URL)
+            host = get_hostname(entry.link)
+            source_title = entry.get('source', {}).get('title', '')
+            
+            if is_wrapper_domain(host):
+                # Google/포털 wrapper인 경우 -> source.title로 신뢰 검증
+                if not is_trusted_source_name(source_title):
+                    stats["untrusted"] += 1
+                    continue
+                # 신뢰 언론사면 wrapper여도 통과
+            else:
+                # 직접 URL인 경우 -> hostname으로 신뢰 검증
+                if not is_trusted_hostname(host):
+                    stats["untrusted"] += 1
+                    continue
+            
+            # 3. 노이즈 키워드 체크
+            if is_noise_title(entry.title):
+                stats["noise"] += 1
                 continue
-
+            
+            # 4. 날짜 필터링 (URL 패턴 우선, fallback은 RSS)
+            article_date = extract_date_from_url(entry.link)
+            if article_date:
+                from datetime import date as date_class
+                days_old = (date_class.today() - article_date).days
+                if days_old > 7:
+                    stats["old"] += 1
+                    continue
+            else:
+                # fallback: RSS published 날짜
+                published_timestamp = get_numeric_timestamp(entry)
+                if datetime.fromtimestamp(published_timestamp, tz=timezone.utc) < datetime.now(timezone.utc) - timedelta(days=7):
+                    stats["old"] += 1
+                    continue
+            
+            # 5. 중복 체크 (제목 해시)
+            news_hash = compute_news_hash(entry.title)
+            if news_hash in _seen_news_hashes:
+                stats["dup"] += 1
+                continue
+            _seen_news_hashes.add(news_hash)
+            
+            # 모든 필터 통과 -> 수집
+            stats["accepted"] += 1
+            published_timestamp = get_numeric_timestamp(entry)
+            
             doc = Document(
                 page_content=f"뉴스 제목: {entry.title}\n링크: {entry.link}",
                 metadata={
@@ -299,9 +748,16 @@ def crawl_news_for_stock(stock_code, stock_name):
                 }
             )
             documents.append(doc)
+            
     except Exception as e:
         logger.exception(f"🔥 (2/6) '{stock_name}' 뉴스 수집 중 오류 발생")
+    
+    # 필터링 통계 로그
+    if stats["total"] > 0:
+        logger.info(f"  (2/6) [{stock_name}] 필터링: 총{stats['total']} → wrapper:{stats['wrapper']} untrusted:{stats['untrusted']} noise:{stats['noise']} old:{stats['old']} dup:{stats['dup']} → 수집:{stats['accepted']}")
+    
     return documents
+
 
 def crawl_general_news():
     """
@@ -362,245 +818,234 @@ def filter_new_documents(documents):
     logger.info(f"✅ {step_id} 중복 검사 완료. 새로운 문서 {len(new_docs)}개 발견.")
     return new_docs
 
-def process_sentiment_analysis(documents):
+def process_unified_analysis(documents):
     """
-    [New] 수집된 뉴스 중 종목 뉴스에 대해 실시간 감성 분석을 수행합니다.
-    분석 결과는 Redis 및 MariaDB에 저장됩니다.
-    ThreadPoolExecutor를 사용한 병렬 처리 도입 (Cloud LLM 속도 활용)
+    [2026-01 Optimized] 통합 뉴스 분석 (감성 + 경쟁사 리스크)
+    Single-Pass LLM Call로 두 가지 분석을 동시에 수행합니다.
+    - 감성 분석: Redis & MariaDB 저장
+    - 리스크 탐지: 경쟁사 수혜 이벤트 생성
     """
     if not jennie_brain or not documents:
         return
 
-    logger.info(f"  [Sentiment] 신규 문서 {len(documents)}개에 대한 감성 분석 시작 (병렬 처리)...")
+    logger.info("="*60)
+    # [Fix] Log actual model name from Env (since JennieBrain doesn't expose it directly)
+    model_name = os.getenv("LOCAL_MODEL_FAST", "gemma3:27b")
+    logger.info(f"🚀 [Unified] 통합 뉴스 분석 시작 - Ollama ({model_name})")
+    logger.info("🚀 [Unified] Single-Pass LLM Call (Sentiment + Risk) - 비용/시간 최적화")
+    logger.info("="*60)
+    
+    # stock_code가 있는 문서만 분석 대상
+    stock_docs = [doc for doc in documents if doc.metadata.get("stock_code")]
+    logger.info(f"  [Unified] 대상 종목 뉴스 {len(stock_docs)}개 / 전체 {len(documents)}개")
+    
+    if not stock_docs:
+        return
 
-    MAX_WORKERS = 5 # OpenAI/Gemini Rate Limit 고려하여 5개 병렬로 제한
-
-    def _analyze_single_doc(doc):
-        stock_code = doc.metadata.get("stock_code")
-        if not stock_code:
-            return 0
-            
-        title = doc.metadata.get("source", "제목 없음").replace("Google News RSS", "") 
+    # 배치 준비
+    batch_items = []
+    doc_map = {}
+    
+    for idx, doc in enumerate(stock_docs):
         content_lines = doc.page_content.split('\n')
         news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
-        news_link = doc.metadata.get("source_url")
-        published_at = doc.metadata.get("created_at_utc")
-
-        # 1. LLM 감성 분석
-        try:
-            result = jennie_brain.analyze_news_sentiment(news_title, news_title)
-            score = result.get('score', 50)
-            reason = result.get('reason', '분석 불가')
-        except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] 분석 중 오류 (Skip): {e}")
-            return 0
-
-        # 2. Redis 저장 (Fast Hands용)
-        stock_name = doc.metadata.get("stock_name")
-        # 뉴스 제목과 날짜도 함께 저장
-        news_date_str = None
-        if published_at:
-            try:
-                news_date_str = datetime.fromtimestamp(published_at, tz=timezone.utc).strftime('%Y-%m-%d')
-            except Exception:
-                pass
-        try:
-            database.set_sentiment_score(
-                stock_code, score, reason, 
-                source_url=news_link, 
-                stock_name=stock_name,
-                news_title=news_title,
-                news_date=news_date_str
-            )
-        except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] Redis 저장 실패 (Skip): {e}")
         
-        # 3. DB 저장 (기록용)
+        batch_items.append({
+            "id": idx,
+            "title": news_title,
+            "summary": news_title 
+        })
+        doc_map[idx] = doc
+    
+    # 배치 분석 실행 (Sequential Batch Processing - Best Performance for Local LLM)
+    BATCH_SIZE = 5
+    batches = [batch_items[i:i + BATCH_SIZE] for i in range(0, len(batch_items), BATCH_SIZE)]
+    all_results = []
+    
+    logger.info(f"  [Unified] 총 {len(batches)}개 배치 순차 분석 시작 (Single Thread)...")
+    
+    for i, batch in enumerate(batches):
+        try:
+            results = jennie_brain.analyze_news_unified(batch)
+            all_results.extend(results)
+            logger.info(f"  [Unified] 배치 {i+1}/{len(batches)} 분석 완료 ({len(results)}건)")
+        except Exception as e:
+            logger.warning(f"⚠️ [Unified] 배치 {i+1} 분석 실패: {e}")
+            # Fallback handled inside analyze_news_unified usually using get_unified_fallback_response
+
+    # 결과 처리 (병렬 저장)
+    logger.info(f"  [Unified] {len(all_results)}건 결과 처리 시작 (병렬 저장/이벤트 생성)...")
+    
+    # DB 작업이 혼합되어 있으므로 안전하게 처리
+    _process_unified_results_parallel(all_results, doc_map)
+
+
+def _process_unified_results_parallel(results, doc_map):
+    """
+    통합 분석 결과를 병렬로 처리합니다.
+    1. 감성 분석 결과 저장 (Redis/DB)
+    2. 리스크 탐지 시 경쟁사 수혜 이벤트 생성
+    """
+    MAX_WORKERS = 5 # DB Pool 고려
+    processed_count = 0
+    risk_event_count = 0
+    
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = []
+        for res in results:
+            futures.append(executor.submit(_handle_single_unified_result, res, doc_map))
+            
+        for future in as_completed(futures):
+            try:
+                success, is_risk = future.result()
+                if success: processed_count += 1
+                if is_risk: risk_event_count += 1
+            except Exception as e:
+                logger.error(f"❌ [Unified] 결과 처리 중 오류: {e}")
+                
+    logger.info(f"✅ [Unified] 완료: 감성분석 {processed_count}건 저장, 리스크 이벤트 {risk_event_count}건 생성.")
+
+
+def _handle_single_unified_result(result, doc_map):
+    """개별 통합 결과 처리 핸들러"""
+    idx = result.get('id')
+    doc = doc_map.get(idx)
+    if not doc: return False, False
+    
+    # 1. 감성 분석 저장
+    sentiment = result.get('sentiment', {})
+    score = sentiment.get('score', 50)
+    reason = sentiment.get('reason', 'N/A')
+    
+    # (기존 _save_single_sentiment_result 로직 인라인 or 재사용)
+    # 여기서는 로직을 단순화하여 직접 호출
+    save_success = _save_sentiment_to_db(doc, score, reason)
+    
+    # 2. 경쟁사 리스크 이벤트 처리
+    risk = result.get('competitor_risk', {})
+    is_risk = risk.get('is_detected', False)
+    
+    if is_risk:
+        _create_competitor_event(doc, risk)
+        
+    return save_success, is_risk
+
+
+def _save_sentiment_to_db(doc, score, reason):
+    """감성 점수 저장 로직 (Redis + MariaDB)"""
+    stock_code = doc.metadata.get("stock_code")
+    stock_name = doc.metadata.get("stock_name")
+    content_lines = doc.page_content.split('\n')
+    news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
+    news_link = doc.metadata.get("source_url")
+    published_at = doc.metadata.get("created_at_utc")
+    
+    news_date_str = None
+    if published_at:
+        try:
+            news_date_str = datetime.fromtimestamp(published_at, tz=timezone.utc).strftime('%Y-%m-%d')
+        except Exception: pass
+        
+    # Redis
+    try:
+        database.set_sentiment_score(stock_code, score, reason, source_url=news_link, stock_name=stock_name, news_title=news_title, news_date=news_date_str)
+    except Exception: pass
+    
+    # DB
+    import random
+    for attempt in range(3):
         try:
             with session_scope() as session:
                 database.save_news_sentiment(session, stock_code, news_title, score, reason, news_link, published_at)
+            return True
         except Exception as e:
-            logger.warning(f"⚠️ [Sentiment] DB 저장 실패 (Skip): {e}")
-            return 0
-            
-        return 1
+            if "Deadlock" in str(e) and attempt < 2:
+                time.sleep(random.uniform(0.1, 0.5))
+                continue
+            return False
+    return False
 
-    processed_count = 0
-    futures = []
+
+def _create_competitor_event(doc, risk_data):
+    """경쟁사 수혜 이벤트 생성 로직"""
+    stock_code = doc.metadata.get("stock_code")
+    content_lines = doc.page_content.split('\n')
+    news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
+    news_link = doc.metadata.get("source_url")
     
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for doc in documents:
-            if 0 < MAX_SENTIMENT_DOCS_PER_RUN <= len(futures):
-                logger.info(
-                    "  [Sentiment] 1회 실행당 분석 제한(%s개)에 도달했습니다. 나머지는 다음 주기에 처리됩니다.",
-                    MAX_SENTIMENT_DOCS_PER_RUN
-                )
-                break
-            
-            futures.append(executor.submit(_analyze_single_doc, doc))
-            
-        for future in as_completed(futures):
-            try:
-                processed_count += future.result()
-            except Exception as e:
-                logger.error(f"❌ [Sentiment] 스레드 실행 중 오류: {e}")
-
-    logger.info(f"✅ [Sentiment] 종목 뉴스 {processed_count}건 감성 분석 및 저장 완료.")
-
-
-
-def process_competitor_benefit_analysis(documents):
-    """
-    뉴스에서 경쟁사 수혜 기회를 분석합니다.
-    LLM-First Analysis (JennieBrain Reasoning Tier)
-    ThreadPoolExecutor를 사용한 병렬 처리 도입 (Cloud LLM 속도 활용)
-    """
-    if not jennie_brain or not CompetitorAnalyzer or not documents:
-        return
+    event_type = risk_data.get('type', 'OTHER')
+    benefit_score = risk_data.get('benefit_score', 0)
     
-    logger.info(f"  [경쟁사 수혜] 신규 문서 {len(documents)}개 경쟁사 수혜 분석 시작 (병렬 처리)...")
-    
-    from shared.db.connection import get_session, session_scope # ensure import
+    logger.info(f"  🔴 [Risk Detected] {stock_code} - {event_type} (Benefit Score: {benefit_score})")
+
     from shared.db.models import IndustryCompetitors, CompetitorBenefitEvents
     
-    MAX_WORKERS = 5
-    
-    def _analyze_single_competitor_benefit(doc):
-        # 문서 정보 추출
-        stock_code = doc.metadata.get("stock_code")
-        if not stock_code:
-            return 0
-        
-        content_lines = doc.page_content.split('\n')
-        news_title = content_lines[0].replace("뉴스 제목: ", "") if len(content_lines) > 0 else "제목 없음"
-        news_link = doc.metadata.get("source_url")
-        
-        events_created = 0
-
-        # 1. LLM 심층 분석
-        try:
-            analysis_result = jennie_brain.analyze_competitor_benefit(news_title)
-        except Exception as e:
-            logger.warning(f"⚠️ [경쟁사 수혜] LLM 분석 오류 '{news_title[:20]}...': {e}")
-            return 0
-
-        # 2. 리스크 아니면 Skip
-        if not analysis_result.get('is_risk'):
-            return 0
-        
-        event_type = analysis_result.get('event_type', 'OTHER')
-        benefit_score = analysis_result.get('competitor_benefit_score', 0)
-        
-        logger.info(f"  🔴 [악재 감지/LLM] {stock_code} - {event_type}: {news_title[:50]}... (Score: {benefit_score})")
-
-        # 3. DB 로직 (Thread-Safe하게 내부에서 세션 생성)
-        try:
-            with session_scope() as session:
-                # 해당 종목의 섹터 확인
-                affected_stock = session.query(IndustryCompetitors).filter(
-                    IndustryCompetitors.stock_code == stock_code
+    try:
+        with session_scope() as session:
+            # 1. 섹터 확인
+            affected_stock = session.query(IndustryCompetitors).filter(IndustryCompetitors.stock_code == stock_code).first()
+            if not affected_stock: return
+            
+            # 2. 경쟁사 조회
+            competitors = session.query(IndustryCompetitors).filter(
+                IndustryCompetitors.sector_code == affected_stock.sector_code,
+                IndustryCompetitors.stock_code != stock_code,
+                IndustryCompetitors.is_active == 1
+            ).all()
+            
+            if not competitors: return
+            
+            # 3. 이벤트 생성
+            duration_days = 30 if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK'] else 7
+            expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
+            
+            for comp in competitors:
+                # 중복 체크
+                existing = session.query(CompetitorBenefitEvents).filter(
+                    CompetitorBenefitEvents.affected_stock_code == stock_code,
+                    CompetitorBenefitEvents.beneficiary_stock_code == comp.stock_code,
+                    CompetitorBenefitEvents.event_type == event_type,
+                    CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
                 ).first()
                 
-                if not affected_stock:
-                    return 0
+                if existing: continue
                 
-                sector_code = affected_stock.sector_code
-                sector_name = affected_stock.sector_name
-                affected_name = affected_stock.stock_name
-                
-                # 동일 섹터 경쟁사 조회
-                competitors = session.query(IndustryCompetitors).filter(
-                    IndustryCompetitors.sector_code == sector_code,
-                    IndustryCompetitors.stock_code != stock_code,
-                    IndustryCompetitors.is_active == 1
-                ).all()
-                
-                if not competitors:
-                    return 0
-                
-                # 이벤트 생성
-                duration_days = 7
-                if event_type in ['FIRE', 'RECALL', 'SECURITY', 'OWNER_RISK']:
-                    duration_days = 30
-                expires_at = datetime.now(timezone.utc) + timedelta(days=duration_days)
-                
-                for competitor in competitors:
-                    # 중복 조회
-                    existing = session.query(CompetitorBenefitEvents).filter(
-                        CompetitorBenefitEvents.affected_stock_code == stock_code,
-                        CompetitorBenefitEvents.beneficiary_stock_code == competitor.stock_code,
-                        CompetitorBenefitEvents.event_type == event_type,
-                        CompetitorBenefitEvents.detected_at >= datetime.now(timezone.utc) - timedelta(hours=24)
-                    ).first()
-                    
-                    if existing:
-                        continue
-                    
-                    # 새로운 이벤트 추가
-                    benefit_event = CompetitorBenefitEvents(
-                        affected_stock_code=stock_code,
-                        affected_stock_name=affected_name,
-                        event_type=event_type,
-                        event_title=news_title[:1000],
-                        event_severity=-10,
-                        source_url=news_link,
-                        beneficiary_stock_code=competitor.stock_code,
-                        beneficiary_stock_name=competitor.stock_name,
-                        benefit_score=benefit_score,
-                        sector_code=sector_code,
-                        sector_name=sector_name,
-                        status='ACTIVE',
-                        expires_at=expires_at
-                    )
-                    session.add(benefit_event)
-                    events_created += 1
-                    
-                    # Redis 저장 (Loop 안에서 호출하되, 에러나도 진행)
-                    try:
-                        database.set_competitor_benefit_score(
-                            stock_code=competitor.stock_code,
-                            score=benefit_score,
-                            reason=f"경쟁사 {affected_name}의 {event_type} 악재로 인한 수혜 (LLM Analysis)",
-                            affected_stock=stock_code,
-                            event_type=event_type,
-                            ttl=duration_days * 86400
-                        )
-                    except Exception as e:
-                        logger.warning(f"⚠️ [경쟁사 수혜] Redis 저장 실패: {e}")
-
-                    logger.info(
-                        f"  ✅ [수혜 등록] {competitor.stock_name}({competitor.stock_code}) "
-                        f"+{benefit_score}점 ← {affected_name} {event_type}"
-                    )
-                
-                # session_scope exit -> commit
-                return events_created
-                
-        except Exception as e:
-            logger.error(f"❌ [경쟁사 수혜] DB 처리 중 오류: {e}")
-            return 0
-
-    total_events_created = 0
-    futures = []
-    
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        for doc in documents:
-            if 0 < MAX_SENTIMENT_DOCS_PER_RUN <= len(futures):
-                logger.info(
-                    "  [경쟁사 수혜] 1회 실행당 분석 제한(%s개)에 도달했습니다. 나머지는 다음 주기에 처리됩니다.",
-                    MAX_SENTIMENT_DOCS_PER_RUN
+                # 이벤트 등록
+                event = CompetitorBenefitEvents(
+                    affected_stock_code=stock_code,
+                    affected_stock_name=affected_stock.stock_name,
+                    event_type=event_type,
+                    event_title=news_title[:1000],
+                    event_severity=-10, # 기본값
+                    source_url=news_link,
+                    beneficiary_stock_code=comp.stock_code,
+                    beneficiary_stock_name=comp.stock_name,
+                    benefit_score=benefit_score,
+                    sector_code=affected_stock.sector_code,
+                    sector_name=affected_stock.sector_name,
+                    status='ACTIVE',
+                    expires_at=expires_at
                 )
-                break
-            
-            futures.append(executor.submit(_analyze_single_competitor_benefit, doc))
-            
-        for future in as_completed(futures):
-            try:
-                total_events_created += future.result()
-            except Exception as e:
-                logger.error(f"❌ [경쟁사 수혜] 스레드 실행 중 오류: {e}")
+                session.add(event)
+                
+                # Redis 업데이트 (Optional) - try-catch
+                try:
+                    database.set_competitor_benefit_score(
+                        comp.stock_code, benefit_score, 
+                        f"경쟁사 {affected_stock.stock_name} {event_type} 발생 (Unified Analysis)",
+                        stock_code, event_type, ttl=duration_days*86400
+                    )
+                except: pass
+                
+                logger.info(f"  ✅ [수혜 등록] {comp.stock_name} +{benefit_score}점 (by {event_type})")
 
-    logger.info(f"✅ [경쟁사 수혜] 수혜 이벤트 {total_events_created}건 생성 완료 (병렬 처리)")
+    except Exception as e:
+        logger.error(f"❌ [Event Creation] 실패: {e}")
+
+
+                    
+                    # 동일 섹터 경쟁사 조회
+
 
 
 
@@ -615,6 +1060,7 @@ def add_documents_to_chroma(documents):
 
     logger.info(f"  {step_id} [App 5] '새' 문서 {len(documents)}개 텍스트 분할 및 임베딩 중...")
     try:
+        # Local Embedding 사용 - 필터링 없이 모든 문서 임베딩 (비용 ₩0)
         splitted_docs = text_splitter.split_documents(documents)
         
         for i in range(0, len(splitted_docs), VERTEX_AI_BATCH_SIZE): # type: ignore
@@ -624,7 +1070,11 @@ def add_documents_to_chroma(documents):
                 batch_docs
             )
         
-        logger.info(f"✅ {step_id} [App 4] Chroma 서버에 '새' 청크 총 {len(splitted_docs)}개 저장 완료!")
+        logger.info("="*60)
+        logger.info("🏠 [LOCAL] 임베딩 완료 - HuggingFace (ko-sroberta) 사용")
+        logger.info("🏠 [LOCAL] Cloud API 호출 없음 - 비용: ₩0")
+        logger.info("="*60)
+        logger.info(f"✅ {step_id} Chroma 서버에 '새' 청크 총 {len(splitted_docs)}개 저장 완료!")
     except Exception as e:
         logger.exception(f"🔥 {step_id} [App 4] Chroma 서버에 'Write' 중 심각한 오류 발생")
 
@@ -656,11 +1106,13 @@ def run_collection_job():
     """
     logger.info(f"\n--- [RAG 수집 봇 v9.0] 작업 시작 ---")
     
-    # [Operating Hours Check]
-    from shared.utils import is_operating_hours
-    if not is_operating_hours():
-        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-        return
+    # [Operating Hours Check] — mock/test에서는 스킵 가능
+    disable_market_open_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+    if not disable_market_open_check:
+        from shared.utils import is_operating_hours
+        if not is_operating_hours():
+            logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
+            return
     
     # 서비스 초기화 (지연 초기화)
     try:
@@ -682,7 +1134,7 @@ def run_collection_job():
 
         # 3. 각 종목별 뉴스 크롤링을 병렬로 실행
         with ThreadPoolExecutor(max_workers=10) as executor:
-            future_to_stock = {executor.submit(crawl_news_for_stock, stock["code"], stock["name"]): stock for stock in universe}
+            future_to_stock = {executor.submit(crawl_stock_news_with_fallback, stock["code"], stock["name"]): stock for stock in universe}
             for future in as_completed(future_to_stock):
                 stock = future_to_stock[future]
                 try:
@@ -696,10 +1148,8 @@ def run_collection_job():
         
         # [New] 4-1. 새로운 문서 감성 분석 및 저장
         if os.getenv("ENABLE_NEWS_ANALYSIS", "true").lower() == "true":
-            process_sentiment_analysis(new_documents_to_add)
-        
-            # 4-2. 경쟁사 수혜 분석 및 저장
-            process_competitor_benefit_analysis(new_documents_to_add)
+            # [2026-01 Optimized] Unified Analysis (Sentiment + Risk)
+            process_unified_analysis(new_documents_to_add)
         else:
             logger.info("⚠️ [Config] 'ENABLE_NEWS_ANALYSIS=false' 설정으로 인해 분석 단계 생략.")
         

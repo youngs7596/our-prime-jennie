@@ -9,7 +9,7 @@
 - WatchList 종목의 재무 데이터 수집 (ROE, 매출성장률, EPS성장률, PBR, PER)
 - FINANCIAL_DATA 테이블에서 데이터 조회 및 계산
 - KIS API 또는 네이버 증권에서 PBR/PER 수집
-- MariaDB/Oracle 호환 지원
+- MariaDB 단일 지원 (Oracle/분기 제거)
 """
 
 import logging
@@ -22,8 +22,8 @@ from datetime import datetime, timezone
 logger = logging.getLogger(__name__)
 
 def _is_mariadb() -> bool:
-    """현재 DB 타입이 MariaDB인지 확인"""
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    """단일화: MariaDB만 사용"""
+    return True
 
 def calculate_roe_from_financial_data(connection, stock_code):
     """

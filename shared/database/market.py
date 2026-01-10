@@ -16,6 +16,21 @@ from .core import _get_table_name, _is_mariadb
 
 logger = logging.getLogger(__name__)
 
+# STOCK_FUNDAMENTALS 테이블 자동 생성용 DDL (마리아DB 단일)
+DDL_STOCK_FUNDAMENTALS = """
+CREATE TABLE IF NOT EXISTS STOCK_FUNDAMENTALS (
+    STOCK_CODE  VARCHAR(20) NOT NULL,
+    TRADE_DATE  DATE NOT NULL,
+    PER         DECIMAL(15,4) NULL,
+    PBR         DECIMAL(15,4) NULL,
+    ROE         DECIMAL(15,4) NULL,
+    MARKET_CAP  BIGINT NULL,
+    CREATED_AT  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UPDATED_AT  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (STOCK_CODE, TRADE_DATE)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+"""
+
 
 # ============================================================================
 # [Master] 종목 마스터 조회
@@ -178,8 +193,22 @@ def update_all_stock_fundamentals(session, all_fundamentals_params: List[dict]):
     """
     from sqlalchemy import text
     
+    if not all_fundamentals_params:
+        return
+
     try:
+        # 테이블이 없으면 생성
+        session.execute(text(DDL_STOCK_FUNDAMENTALS))
+
         for p in all_fundamentals_params:
+            stock_code = p.get('stock_code')
+            trade_date = p.get('trade_date')
+
+            # 기본 키 누락 시 스킵하여 불필요한 예외 방지
+            if not stock_code or not trade_date:
+                logger.warning(f"⚠️ 재무지표 스킵: stock_code/trade_date 누락 → {p}")
+                continue
+
             session.execute(text("""
                 INSERT INTO STOCK_FUNDAMENTALS (STOCK_CODE, TRADE_DATE, PER, PBR, ROE, MARKET_CAP)
                 VALUES (:stock_code, :trade_date, :per, :pbr, :roe, :market_cap)
@@ -189,8 +218,8 @@ def update_all_stock_fundamentals(session, all_fundamentals_params: List[dict]):
                     ROE = VALUES(ROE),
                     MARKET_CAP = VALUES(MARKET_CAP)
             """), {
-                'stock_code': p.get('stock_code'),
-                'trade_date': p.get('trade_date'),
+                'stock_code': stock_code,
+                'trade_date': trade_date,
                 'per': p.get('per'),
                 'pbr': p.get('pbr'),
                 'roe': p.get('roe'),
@@ -362,7 +391,7 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
     """
     try:
         from shared.db.models import NewsSentiment
-        table_name = _get_table_name("NEWS_SENTIMENT")
+        from datetime import datetime
         
         # 중복 URL 체크 (이미 저장된 뉴스면 Skip)
         existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == url).first()
@@ -396,4 +425,39 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
         
     except Exception as e:
         logger.error(f"❌ [DB] 뉴스 감성 저장 실패: {e}")
-        raise # session_scope에서 rollback을 처리하도록 예외를 다시 발생시킵니다.
+        # session_scope에서 rollback을 처리하도록 예외를 다시 발생시킵니다.
+
+
+# ============================================================================
+# [Investor] 투자자 매매 동향 조회
+# ============================================================================
+
+def get_investor_trading(connection, stock_code: str, limit: int = 30) -> pd.DataFrame:
+    """
+    DB에서 종목의 투자자별 매매 동향을 조회합니다.
+    """
+    import pandas as pd
+    from sqlalchemy import text
+    
+    query = text(f"""
+        SELECT TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY, INDIVIDUAL_NET_BUY, CLOSE_PRICE
+        FROM STOCK_INVESTOR_TRADING
+        WHERE STOCK_CODE = :stock_code
+        ORDER BY TRADE_DATE DESC
+        LIMIT :limit
+    """)
+    
+    # SQLAlchemy Session 또는 Connection 모두 대응
+    if hasattr(connection, 'execute'):
+        result = connection.execute(query, {"stock_code": stock_code, "limit": limit})
+        df = pd.DataFrame(result.fetchall(), columns=result.keys())
+    else:
+        # Raw Cursor
+        import pandas as pd
+        df = pd.read_sql(query, connection, params={"stock_code": stock_code, "limit": limit})
+
+    if not df.empty:
+        df['TRADE_DATE'] = pd.to_datetime(df['TRADE_DATE'])
+        df = df.sort_values('TRADE_DATE', ascending=True)
+        
+    return df

@@ -36,7 +36,8 @@ import {
 } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
-const COLORS = ['#FF6B9D', '#9B5DE5', '#00F5D4', '#FFD93D', '#6366F1']
+// Raydium 네온 색상 팔레트
+const COLORS = ['#7C3AED', '#22D3EE', '#10B981', '#FBBF24', '#EC4899']
 
 // Animation variants
 const containerVariants = {
@@ -81,10 +82,10 @@ function StatCard({ title, value, subValue, icon: Icon, trend, color }: StatCard
             <div
               className={cn(
                 'p-3 rounded-xl',
-                color || 'bg-gradient-to-br from-jennie-pink/20 to-jennie-purple/20'
+                color || 'bg-raydium-purple/20'
               )}
             >
-              <Icon className="w-6 h-6 text-jennie-purple" />
+              <Icon className="w-6 h-6 text-raydium-purpleLight" />
             </div>
           </div>
           {trend !== undefined && (
@@ -237,7 +238,7 @@ export function OverviewPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-jennie-purple" />
+                <Activity className="w-5 h-5 text-raydium-purpleLight" />
                 자산 추이
               </CardTitle>
             </CardHeader>
@@ -247,24 +248,24 @@ export function OverviewPage() {
                   <AreaChart data={chartData}>
                     <defs>
                       <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#9B5DE5" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#9B5DE5" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#635BFF" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#635BFF" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                     <XAxis
                       dataKey="date"
-                      stroke="rgba(255,255,255,0.5)"
+                      stroke="rgba(136,152,170,0.8)"
                       fontSize={12}
                     />
                     <YAxis
-                      stroke="rgba(255,255,255,0.5)"
+                      stroke="rgba(136,152,170,0.8)"
                       fontSize={12}
                       tickFormatter={(v) => formatCurrency(v)}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: 'rgba(13, 17, 23, 0.9)',
+                        backgroundColor: '#0A2540',
                         border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '8px',
                       }}
@@ -273,7 +274,7 @@ export function OverviewPage() {
                     <Area
                       type="monotone"
                       dataKey="value"
-                      stroke="#9B5DE5"
+                      stroke="#635BFF"
                       strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#colorValue)"
@@ -290,7 +291,7 @@ export function OverviewPage() {
           <Card className="h-full">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-jennie-pink" />
+                <PieChart className="w-5 h-5 text-raydium-cyan" />
                 포트폴리오 구성
               </CardTitle>
             </CardHeader>
@@ -313,7 +314,7 @@ export function OverviewPage() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: 'rgba(13, 17, 23, 0.9)',
+                        backgroundColor: '#0A2540',
                         border: '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '8px',
                       }}
@@ -357,7 +358,7 @@ export function OverviewPage() {
               {recentTrades?.map((trade: any) => (
                 <div
                   key={trade.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-xl bg-raydium-card/50 hover:bg-raydium-cardHover border border-white/5 transition-all duration-300"
                 >
                   <div className="flex items-center gap-3">
                     <div
@@ -398,22 +399,22 @@ export function OverviewPage() {
           <Card glow={scoutStatus.status === 'running'}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-jennie-blue" />
+                <Brain className="w-5 h-5 text-raydium-cyan" />
                 Scout-Debate-Judge Pipeline
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                 {['Hunter Scout', 'Bull vs Bear Debate', 'Final Judge'].map((phase, i) => (
                   <div
                     key={phase}
                     className={cn(
                       'p-4 rounded-lg border',
                       scoutStatus.phase === i + 1
-                        ? 'border-jennie-purple bg-jennie-purple/10'
+                        ? 'border-raydium-purple bg-raydium-purple/20 shadow-neon-purple'
                         : scoutStatus.phase > i + 1
-                          ? 'border-profit-positive/50 bg-profit-positive/10'
-                          : 'border-white/10 bg-white/5'
+                          ? 'border-emerald-500/50 bg-emerald-500/10'
+                          : 'border-white/10 bg-raydium-card/50'
                     )}
                   >
                     <div className="flex items-center gap-2 mb-2">
@@ -421,10 +422,10 @@ export function OverviewPage() {
                         className={cn(
                           'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
                           scoutStatus.phase === i + 1
-                            ? 'bg-jennie-purple text-white'
+                            ? 'bg-raydium-purple text-white'
                             : scoutStatus.phase > i + 1
-                              ? 'bg-profit-positive text-white'
-                              : 'bg-white/10 text-muted-foreground'
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-raydium-card text-muted-foreground'
                         )}
                       >
                         {i + 1}
@@ -461,10 +462,10 @@ export function OverviewPage() {
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-jennie-pink" />
-              시장 국면 (Market Regime)
-            </CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-raydium-purpleLight" />
+                시장 국면 (Market Regime)
+              </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-6">
@@ -473,7 +474,7 @@ export function OverviewPage() {
                 marketRegime?.regime === 'BULL' && 'bg-profit-positive/20 text-profit-positive',
                 marketRegime?.regime === 'BEAR' && 'bg-profit-negative/20 text-profit-negative',
                 marketRegime?.regime === 'SIDEWAYS' && 'bg-yellow-500/20 text-yellow-400',
-                (!marketRegime?.regime || marketRegime?.regime === 'UNKNOWN' || marketRegime?.regime === 'ERROR') && 'bg-white/10 text-muted-foreground'
+                (!marketRegime?.regime || marketRegime?.regime === 'UNKNOWN' || marketRegime?.regime === 'ERROR') && 'bg-raydium-card text-muted-foreground'
               )}>
                 {marketRegime?.regime === 'BULL' && '🐂 상승장'}
                 {marketRegime?.regime === 'BEAR' && '🐻 하락장'}
@@ -552,9 +553,9 @@ export function OverviewPage() {
       <motion.div variants={itemVariants}>
         <Card glow>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-jennie-purple" />
-              3현자 데일리 리뷰 (Daily Council)
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-raydium-purpleLight" />
+                3현자 데일리 리뷰 (Daily Council)
               {councilReview?.date && (
                 <span className="text-xs text-muted-foreground ml-2">{councilReview.date}</span>
               )}
@@ -565,7 +566,7 @@ export function OverviewPage() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {councilReview.sages.map((sage: any) => (
-                    <div key={sage.name} className="p-4 rounded-lg bg-white/5 border border-white/10">
+                    <div key={sage.name} className="p-4 rounded-xl bg-raydium-card/50 border border-raydium-purple/20 hover:border-raydium-purple/40 transition-colors">
                       <div className="flex items-center gap-2 mb-3">
                         <span className="text-2xl">{sage.icon}</span>
                         <div>
@@ -578,15 +579,15 @@ export function OverviewPage() {
                   ))}
                 </div>
                 {councilReview.consensus && (
-                  <div className="mt-4 p-4 rounded-lg bg-jennie-purple/10 border border-jennie-purple/30">
-                    <p className="text-sm font-medium text-jennie-purple">📋 합의 사항</p>
+                  <div className="mt-4 p-4 rounded-xl bg-raydium-purple/20 border border-raydium-purple/40">
+                    <p className="text-sm font-medium text-raydium-purpleLight">📋 합의 사항</p>
                     <p className="text-sm text-muted-foreground mt-1">{councilReview.consensus}</p>
                   </div>
                 )}
               </>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <div className="p-4 rounded-xl bg-raydium-card/50 border border-raydium-purple/20">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-2xl">👑</span>
                     <div>
@@ -596,7 +597,7 @@ export function OverviewPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">오늘의 리뷰가 아직 생성되지 않았습니다.</p>
                 </div>
-                <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <div className="p-4 rounded-xl bg-raydium-card/50 border border-raydium-purple/20">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-2xl">🔍</span>
                     <div>
@@ -606,7 +607,7 @@ export function OverviewPage() {
                   </div>
                   <p className="text-sm text-muted-foreground">시스템 분석을 기다리고 있습니다.</p>
                 </div>
-                <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                <div className="p-4 rounded-xl bg-raydium-card/50 border border-raydium-purple/20">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-2xl">📈</span>
                     <div>

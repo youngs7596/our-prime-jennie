@@ -140,6 +140,7 @@ class JennieBrain:
         """
         뉴스 제목과 요약을 분석하여 긍정/부정 점수를 매깁니다.
         High Volume / Low Risk -> FAST Tier (Local LLM)
+        [2026-01] Cloud Fallback 제거 - Local LLM 전용 (비용 ₩0)
         """
         provider = self._get_provider(LLMTier.FAST)
         if provider is None:
@@ -148,32 +149,187 @@ class JennieBrain:
         try:
             # build_news_sentiment_prompt args: news_title, news_summary
             prompt = build_news_sentiment_prompt(title, description)
-            # logger.debug(f"--- [JennieBrain] 뉴스 분석 via {provider.name} ---")
             
+            # [Optimization] Use Flash model for FAST tier if available (e.g. Gemini 2.5 Flash)
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
             result = provider.generate_json(
                 prompt,
                 ANALYSIS_RESPONSE_SCHEMA,
-                temperature=0.0 # Deterministic
+                temperature=0.0, # Deterministic
+                model_name=model_name
             )
             return result
         except Exception as e:
-            logger.warning(f"⚠️ [News] Local LLM failed: {e}. Attempting Cloud Fallback (Tier-Adaptive)...")
-            try:
-                # Tier-Adaptive Fallback
-                fallback_provider = LLMFactory.get_fallback_provider(LLMTier.FAST)
-                if fallback_provider is None:
-                     raise ValueError("No fallback provider for FAST tier")
+            # [2026-01] Cloud Fallback 제거 - Local LLM 실패 시 기본값 반환
+            logger.warning(f"⚠️ [News] Local LLM 분석 실패 (Skip): {e}")
+            return {'score': 50, 'reason': f'Local LLM 분석 실패: {str(e)[:50]}'}
 
-                result = fallback_provider.generate_json(
-                    prompt,
-                    ANALYSIS_RESPONSE_SCHEMA,
-                    temperature=0.0
-                )
-                logger.info(f"   ✅ [News] Cloud Fallback Success via {fallback_provider.name}")
-                return result
-            except Exception as fb_e:
-                logger.error(f"❌ [News] Fallback failed: {fb_e}")
-                return {'score': 50, 'reason': f'분석 실패 (Local+Cloud): {e}'}
+    def analyze_news_sentiment_batch(self, items: list) -> list:
+        """
+        뉴스 배치 분석 (다건 처리로 속도 향상)
+        [2026-01] gpt-oss:20b + 배치 처리 도입
+        
+        Args:
+            items: List of dicts with 'id', 'title', 'summary' keys
+        Returns:
+            List of dicts with 'id', 'score', 'reason' keys
+        """
+        provider = self._get_provider(LLMTier.FAST)
+        if provider is None:
+            return [{'id': item['id'], 'score': 50, 'reason': '모델 미초기화'} for item in items]
+
+        # Build batched prompt
+        items_text = ""
+        for item in items:
+            items_text += f"""
+        [ID: {item['id']}]
+        - 제목: {item['title']}
+        - 내용: {item['summary']}
+        """
+        
+        prompt = f"""
+        [금융 뉴스 다건 감성 분석]
+        당신은 '금융 전문가'입니다. 아래 {len(items)}개의 뉴스를 각각 분석하여 호재/악재 점수를 매기세요.
+        
+        [중요] 반드시 한국어(Korean)로만 응답하세요. 영어로 출력하면 안 됩니다.
+        
+        {items_text}
+        
+        [채점 기준]
+        - 80 ~ 100점: 강력 호재
+        - 60 ~ 79점: 호재
+        - 40 ~ 59점: 중립
+        - 20 ~ 39점: 악재
+        - 0 ~ 19점: 강력 악재
+        
+        [출력 형식]
+        반드시 아래와 같은 JSON 객체로 응답하세요. ID는 입력된 것과 일치해야 합니다.
+        {{
+            "results": [
+                {{ "id": 0, "score": 85, "reason": "판단 이유(한국어)" }},
+                {{ "id": 1, "score": 30, "reason": "판단 이유(한국어)" }},
+                ...
+            ]
+        }}
+        """
+        
+        BATCH_SCHEMA = {
+            "type": "object",
+            "properties": {
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "score": {"type": "integer"},
+                            "reason": {"type": "string"}
+                        },
+                        "required": ["id", "score", "reason"]
+                    }
+                }
+            },
+            "required": ["results"]
+        }
+
+        try:
+            result = provider.generate_json(prompt, BATCH_SCHEMA, temperature=0.0)
+            return result.get('results', [])
+        except Exception as e:
+            logger.warning(f"⚠️ [News Batch] 배치 분석 실패: {e}")
+            # Fallback: 기본값 반환
+            return [{'id': item['id'], 'score': 50, 'reason': '배치 분석 실패'} for item in items]
+
+    def analyze_news_unified(self, items: list) -> list:
+        """
+        통합 뉴스 분석 (감성 + 리스크 동시 처리)
+        [Optimization] Single-Pass Analysis (Cost/Time Reduction)
+        
+        Args:
+            items: List of dicts with 'id', 'title', 'summary' keys
+        
+        Returns:
+            List of dicts with structure:
+            {
+                "id": int,
+                "sentiment": {"score": int, "reason": str},
+                "competitor_risk": {"is_detected": bool, "type": str, "benefit_score": int, "reason": str}
+            }
+        """
+        provider = self._get_provider(LLMTier.FAST)
+        if provider is None:
+            # 기본값 반환
+            return self._get_unified_fallback_response(items, "Helper initialization failed")
+
+        try:
+            # Import prompt builder
+            from shared.llm_prompts import build_unified_analysis_prompt
+            prompt = build_unified_analysis_prompt(items)
+            
+            # [Optimization] Use Flash model for FAST tier if available
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
+            # Schema Definition (Strict JSON)
+            UNIFIED_SCHEMA = {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "sentiment": {
+                                    "type": "object", 
+                                    "properties": {"score": {"type": "integer"}, "reason": {"type": "string"}},
+                                    "required": ["score", "reason"]
+                                },
+                                "competitor_risk": {
+                                    "type": "object",
+                                    "properties": {
+                                        "is_detected": {"type": "boolean"},
+                                        "type": {"type": "string"},
+                                        "benefit_score": {"type": "integer"},
+                                        "reason": {"type": "string"}
+                                    },
+                                    "required": ["is_detected", "type", "benefit_score", "reason"]
+                                }
+                            },
+                            "required": ["id", "sentiment", "competitor_risk"]
+                        }
+                    }
+                },
+                "required": ["results"]
+            }
+
+            result = provider.generate_json(
+                prompt, 
+                UNIFIED_SCHEMA, 
+                temperature=0.1,
+                model_name=model_name
+            )
+            return result.get('results', [])
+
+        except Exception as e:
+            logger.error(f"❌ [Unified Analysis] 분석 실패: {e}")
+            return self._get_unified_fallback_response(items, f"Analysis Error: {str(e)[:50]}")
+
+    def _get_unified_fallback_response(self, items: list, reason: str) -> list:
+        """통합 분석 실패 시 기본값 생성"""
+        fallback_results = []
+        for item in items:
+            fallback_results.append({
+                "id": item.get('id', 0),
+                "sentiment": {"score": 50, "reason": reason},
+                "competitor_risk": {"is_detected": False, "type": "NONE", "benefit_score": 0, "reason": reason}
+            })
+        return fallback_results
+
 
     # -----------------------------------------------------------------
     # 토론 (Bull vs Bear)
@@ -314,7 +470,7 @@ class JennieBrain:
             return {
                 'score': hunter_score, 
                 'grade': self._calculate_grade(hunter_score), 
-                'reason': f"Hunter Score({hunter_score}) failed to meet Judge Threshold({JUDGE_THRESHOLD}). Auto-Rejected."
+                'reason': f"Hunter({hunter_score}점) < TIER1 기준({JUDGE_THRESHOLD}) → Judge 스킵 (RECON tier로 정찰매수 가능)"
             }
 
         provider = self._get_provider(LLMTier.THINKING)
@@ -540,10 +696,16 @@ class JennieBrain:
             logger.info(f"--- [JennieBrain/Competitor] 뉴스 분석 via {provider.name} ---")
             logger.debug(f"   Target: {news_title[:50]}...")
 
+            # [Optimization] Use Flash model for FAST tier if available (e.g. Gemini 2.5 Flash)
+            model_name = None
+            if hasattr(provider, 'flash_model_name'):
+                 model_name = provider.flash_model_name()
+
             result = provider.generate_json(
                 prompt,
                 SCHEMA,
-                temperature=0.1 # Deterministic for classification
+                temperature=0.1, # Deterministic for classification
+                model_name=model_name
             )
             return result
             

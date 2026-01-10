@@ -28,7 +28,7 @@ class KISGatewayClient:
         """
         self.gateway_url = gateway_url or os.getenv(
             'KIS_GATEWAY_URL',
-            'https://kis-gateway-641885523217.asia-northeast3.run.app'
+            'http://127.0.0.1:8080'
         )
         self.timeout = timeout
         self.session = requests.Session()
@@ -36,8 +36,11 @@ class KISGatewayClient:
         # Cloud Run 인증 토큰 (로컬에서는 gcloud 인증 사용)
         self.use_auth = os.getenv('USE_GATEWAY_AUTH', 'true').lower() == 'true'
         
-        # Rate Limit 방지를 위한 클라이언트 측 딜레이 (Gateway 제한: 20req/sec -> 0.05s)
-        self.API_CALL_DELAY = 0.05
+        # Rate Limit 방지를 위한 클라이언트 측 딜레이
+        # KIS 실전 가이드: 초당 20건 -> 안전하게 0.1s (10req/sec)
+        # KIS 모의 가이드: 초당 2건 -> 0.6s
+        trading_mode = os.getenv("TRADING_MODE", "MOCK")
+        self.API_CALL_DELAY = 0.1 if trading_mode == "REAL" else 0.6
         
         logger.info(f"✅ KIS Gateway Client 초기화: {self.gateway_url}")
     
@@ -62,10 +65,11 @@ class KISGatewayClient:
             if response.status_code == 200:
                 return response.text
             else:
-                logger.warning(f"Metadata Server 토큰 획득 실패: {response.status_code}")
+                # Cloud Run 외부(로컬)에서는 실패하는 것이 정상입니다.
+                logger.debug(f"Metadata Server 토큰 획득 실패 (로컬 환경 예상): {response.status_code}")
                 return None
-        except Exception as e:
-            logger.warning(f"인증 토큰 획득 실패 (로컬 환경일 수 있음): {e}")
+        except Exception:
+            # 로컬 환경에서는 NameResolutionError 등이 발생하며, 이는 예상된 동작입니다.
             return None
     
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
@@ -138,6 +142,27 @@ class KISGatewayClient:
         else:
             logger.error(f"❌ Snapshot 조회 실패: {stock_code}")
             return None
+    
+    def check_market_open(self) -> bool:
+        """
+        오늘이 장 운영일(거래 가능일)인지 확인 (Gateway를 통해)
+        
+        Returns:
+            True: 장 운영일 (평일 & 비휴일)
+            False: 휴장일 (주말 또는 공휴일)
+        """
+        logger.debug(f"📅 [Gateway] Market Open Check 요청")
+        
+        # Endpoint 가칭: /api/market-data/check-market-open
+        response = self._request('GET', '/api/market-data/check-market-open')
+        
+        if response and response.get('success'):
+            is_open = response.get('data', {}).get('is_open', False)
+            logger.info(f"   (Gateway) Market Open: {is_open}")
+            return is_open
+        else:
+            logger.warning(f"⚠️ [Gateway] 휴장일 확인 실패 (기본값 False 반환)")
+            return False
     
     def place_buy_order(self, stock_code: str, quantity: int, price: int = 0) -> Optional[str]:
         """
@@ -266,4 +291,38 @@ class KISGatewayClient:
     def get_stats(self) -> Optional[Dict[str, Any]]:
         """Gateway 통계 조회"""
         return self._request('GET', '/stats')
+
+    def get_market_data(self):
+        """
+        MarketData 모듈 프록시 반환
+        Existing code calls: kis_api.get_market_data().get_investor_trend(...)
+        """
+        return GatewayMarketData(self)
+
+
+class GatewayMarketData:
+    """KISGatewayClient용 MarketData 프록시 클래스"""
+    
+    def __init__(self, gateway_client):
+        self.client = gateway_client
+        
+    def get_investor_trend(self, stock_code: str, start_date: str = None, end_date: str = None):
+        """
+        투자자별 매매동향 조회 (Gateway 프록시)
+        """
+        logger.debug(f"📊 [GatewayClient] Investor Trend 요청: {stock_code}")
+        
+        payload = {
+            'stock_code': stock_code,
+            'start_date': start_date,
+            'end_date': end_date
+        }
+        
+        response = self.client._request('POST', '/api/market-data/investor-trend', payload)
+        
+        if response and response.get('success'):
+            return response.get('data')
+        else:
+            logger.error(f"❌ Investor Trend 조회 실패: {stock_code}")
+            return None
 

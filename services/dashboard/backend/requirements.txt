@@ -9,7 +9,7 @@ httpx>=0.26.0
 
 # Database
 SQLAlchemy>=2.0.31
-pymysql>=1.1.0
+mysql-connector-python>=8.0.0
 
 # Cache & Queue
 redis>=5.0.0

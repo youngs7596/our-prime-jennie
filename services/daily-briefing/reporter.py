@@ -119,9 +119,17 @@ class DailyReporter:
         today_trades = database.get_trade_logs(session, date=today_str)
         trade_summary = self._summarize_trades(today_trades)
         
+        # 3-1. Tier2 주간 성과 (최근 7일) - Scout 미통과 매수의 품질/리스크 모니터링
+        try:
+            tier2_weekly = self._get_tier2_weekly_summary(session, portfolio_details)
+        except Exception as e:
+            logger.error(f"⚠️ Tier2 주간 성과 집계 실패: {e}")
+            tier2_weekly = None
+        
         # 4. Watchlist 현황
         try:
-            watchlist = database.get_watchlist_all(session)
+            watchlist_data = database.get_active_watchlist(session)
+            watchlist = list(watchlist_data.values())
             watchlist_summary = [{
                 'name': w.get('name', 'N/A'),
                 'code': w.get('code', 'N/A'),
@@ -154,6 +162,7 @@ class DailyReporter:
             'cash_ratio': (cash_balance / total_aum * 100) if total_aum > 0 else 0,
             'portfolio': portfolio_details,
             'trades': trade_summary,
+            'tier2_weekly': tier2_weekly,
             'watchlist': watchlist_summary,
             'recent_news': recent_news,
             'daily_change_pct': daily_change_pct,
@@ -199,6 +208,7 @@ class DailyReporter:
         """실행 로그 데이터 (LLM 입력용 Text)"""
         trades = data['trades']
         portfolio = data['portfolio']
+        tier2_weekly = data.get('tier2_weekly')
         
         trade_logs = []
         if trades['buy_count'] > 0 or trades['sell_count'] > 0:
@@ -212,6 +222,21 @@ class DailyReporter:
         for p in portfolio:
             status = "수익중" if p['profit_pct'] > 0 else "손실중"
             pf_logs.append(f"- {p['name']}: {status} ({p['profit_pct']:+.2f}%)")
+        
+        tier2_logs = []
+        if tier2_weekly and tier2_weekly.get("buy_count", 0) > 0:
+            tier2_logs.append(f"- 최근 7일 Tier2 매수: {tier2_weekly['buy_count']}건 ({tier2_weekly['unique_codes']}종목)")
+            held = tier2_weekly.get("held_count", 0)
+            if held > 0:
+                tier2_logs.append(f"- 현재 보유중(Tier2 유래): {held}종목, 평균 수익률: {tier2_weekly.get('avg_profit_pct_held', 0):+.2f}%")
+                tier2_logs.append(f"- 승/패(보유 기준): {tier2_weekly.get('winners_held', 0)}/{held}")
+            # 상위/하위 3개 요약
+            top = tier2_weekly.get("top_held", [])
+            if top:
+                tier2_logs.append("- 상위(보유): " + ", ".join([f"{x['name']}({x['code']}) {x['profit_pct']:+.2f}%" for x in top]))
+            bottom = tier2_weekly.get("bottom_held", [])
+            if bottom:
+                tier2_logs.append("- 하위(보유): " + ", ".join([f"{x['name']}({x['code']}) {x['profit_pct']:+.2f}%" for x in bottom]))
             
         return f"""
         [매매 수행]
@@ -219,7 +244,81 @@ class DailyReporter:
         
         [현재 포트폴리오]
         {chr(10).join(pf_logs) if pf_logs else "보유 종목 없음"}
+        
+        [Tier2 주간 성과(최근 7일)]
+        {chr(10).join(tier2_logs) if tier2_logs else "Tier2 매수 없음"}
         """
+
+    def _get_tier2_weekly_summary(self, session, portfolio_details: List[Dict]) -> Optional[Dict]:
+        """
+        최근 7일 Tier2(Scout Judge 미통과) 매수 성과 요약.
+        - BUY 트레이드의 key_metrics_json에 tier='TIER2'가 기록된 건을 기준으로 집계
+        - 실현손익은 포괄적으로 계산하기 어렵기 때문에, '현재 보유중 종목의 평가손익' 중심으로 보여줍니다.
+        """
+        from datetime import datetime, timedelta, timezone
+        from sqlalchemy import text
+        import json
+        from shared.db import models as db_models
+        
+        tradelog_table = db_models.resolve_table_name("TRADELOG")
+        since = datetime.now(timezone.utc) - timedelta(days=7)
+        
+        rows = session.execute(text(f"""
+            SELECT STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, KEY_METRICS_JSON, TRADE_TIMESTAMP
+            FROM {tradelog_table}
+            WHERE TRADE_TIMESTAMP >= :since
+            ORDER BY TRADE_TIMESTAMP DESC
+        """), {"since": since}).fetchall()
+        
+        tier2_buys = []
+        for r in rows:
+            stock_code, trade_type, qty, price, km_json, ts = r
+            if trade_type != "BUY":
+                continue
+            try:
+                km = json.loads(km_json or "{}")
+            except Exception:
+                km = {}
+            if km.get("tier") == "TIER2":
+                tier2_buys.append({
+                    "code": stock_code,
+                    "quantity": int(qty or 0),
+                    "price": float(price or 0),
+                    "ts": ts,
+                    "llm_score": km.get("llm_score"),
+                    "buy_signal_type": km.get("buy_signal_type"),
+                })
+        
+        if not tier2_buys:
+            return {"buy_count": 0, "unique_codes": 0, "held_count": 0}
+        
+        # 보유중 종목 평가손익 매핑 (portfolio_details 기반)
+        pf_map = {p["code"]: p for p in (portfolio_details or [])}
+        held_items = []
+        for b in tier2_buys:
+            if b["code"] in pf_map:
+                p = pf_map[b["code"]]
+                held_items.append({
+                    "code": p["code"],
+                    "name": p["name"],
+                    "profit_pct": float(p["profit_pct"]),
+                    "profit_amount": float(p["profit_amount"]),
+                })
+        
+        held_items_sorted = sorted(held_items, key=lambda x: x["profit_pct"], reverse=True)
+        held_count = len(held_items_sorted)
+        avg_profit_pct_held = (sum(x["profit_pct"] for x in held_items_sorted) / held_count) if held_count else 0.0
+        winners_held = sum(1 for x in held_items_sorted if x["profit_pct"] > 0)
+        
+        return {
+            "buy_count": len(tier2_buys),
+            "unique_codes": len({b["code"] for b in tier2_buys}),
+            "held_count": held_count,
+            "avg_profit_pct_held": avg_profit_pct_held,
+            "winners_held": winners_held,
+            "top_held": held_items_sorted[:3],
+            "bottom_held": list(reversed(held_items_sorted[-3:])) if held_items_sorted else [],
+        }
 
     def _summarize_trades(self, trades: List) -> Dict:
         """거래 내역 요약"""
@@ -309,8 +408,8 @@ class DailyReporter:
         if isinstance(balance_data, list):
              items = balance_data
 
-        # [Manual Management] 삼성전자(005930) 등 수동 관리 종목은 동기화 제외
-        MANUAL_MANAGED_CODES = ['005930']
+        # [Manual Management] 수동 관리 종목 동기화 제외 (필요시 추가)
+        MANUAL_MANAGED_CODES = []
 
         for item in items:
             code = item.get('code') or item.get('pdno')
@@ -336,30 +435,30 @@ class DailyReporter:
         table_name = database._get_table_name("Portfolio")
         
         
-        # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 수량이 있으면 좀비 데이터이므로 조회)
-        result = session.execute(text(f"SELECT STOCK_CODE, QUANTITY FROM {table_name} WHERE QUANTITY > 0"))
-        db_holdings = {row[0]: row[1] for row in result.fetchall()}
+        # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 존재하는지 확인하여 중복 Insert 방지)
+        # STOCK_CODE에 Unique Constraint가 없으므로 로직으로 처리해야 함
+        result = session.execute(text(f"SELECT STOCK_CODE FROM {table_name}"))
+        existing_codes = {row[0] for row in result.fetchall()}
         
         # 2-2. Update & Insert
         for code, info in live_holdings.items():
-            if code in db_holdings:
-                # 수량이나 평단가가 다르면 업데이트
+            if code in existing_codes:
+                # 이미 존재하는 종목 (HOLDING 또는 SOLD) -> UPDATE
+                # 중복된 행이 있을 경우 모두 업데이트됨 (데이터 정합성 유지)
                 session.execute(text(f"""
                     UPDATE {table_name}
                     SET QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, STATUS = 'HOLDING', UPDATED_AT = NOW()
                     WHERE STOCK_CODE = :code
                 """), {'qty': info['qty'], 'price': info['avg_price'], 'code': code})
             else:
-                # 신규 종목 추가 (외부 매수 등)
+                # DB에 아예 없는 신규 종목 -> INSERT
                 session.execute(text(f"""
                     INSERT INTO {table_name} (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, STATUS, CREATED_AT, UPDATED_AT)
                     VALUES (:code, :name, :qty, :price, 'HOLDING', NOW(), NOW())
-                    ON DUPLICATE KEY UPDATE
-                    QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, STATUS = 'HOLDING', UPDATED_AT = NOW()
                 """), {'code': code, 'name': info['name'], 'qty': info['qty'], 'price': info['avg_price']})
         
         # 2-3. Delete (Mark as SOLD) - DB에는 있는데 실계좌에 없는 경우
-        for db_code in db_holdings:
+        for db_code in existing_codes:
             if db_code in MANUAL_MANAGED_CODES:
                 continue
                 

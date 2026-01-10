@@ -1,0 +1,3467 @@
+{
+  "date": "2025-12-31",
+  "summary_stats": {
+    "veto_count": 207,
+    "no_trade_ratio": 0.4791666666666667,
+    "total_scanned": 432,
+    "selected_candidates": 225
+  },
+  "representative_cases": [
+    {
+      "case_id": "VETO-7686",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 무시하고, PER 및 부채비율 조건 미충족으로 -17점 감점. 기술적 지표 또한 좋지 않아 추가 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7687",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인이나, 단기 스나이퍼/장기 헌터 점수가 모두 F등급이며, 기술적 지표(RSI)가 낮고, 뉴스통계가 단기 역신호이므로, 5점 감점하여 50점대 초반으로 평가함. 현재 하락장 국면임을 고려하여 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7688",
+      "category": "VETO",
+      "symbol": "011780",
+      "reasoning_summary": "정량 점수 55점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 점수 조정 없음. PER, 부채비율 조건 미충족으로 매수 불가. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7689",
+      "category": "VETO",
+      "symbol": "032830",
+      "reasoning_summary": "정량 점수 54.83점 기반, 뉴스 제목만으로는 긍정적 판단 어려움. 중앙이코노미뉴스에서 하락 기사 확인. 과거 유사 조건 발생 시 상승 확률 69.2%이지만 표본 수가 26회로 신뢰도 중간. 전략 회고 보고서의 가이드라인에 따라 하락장에서는 Hunter Score가 높아도 회피해야 하므로 점수 조정 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7690",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7691",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로 -20점 감점. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높으므로 추가 -5점 감점. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7692",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 배당 재개 기대감 및 보험금청구권 신탁 관련 뉴스는 긍정적이지만 단기적인 이벤트로 판단되어 +3점 조정. 현재 하락장 국면이므로, 펀더멘털 조건(PER, 부채비율) 확인 필요하며, 기술적 지표(5일선/20일선) 확인 필요. 추가적인 리스크 요소는 발견되지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7693",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 조건 미충족으로 인해 펀더멘털 점수가 낮고, 기술적 지표 또한 좋지 않아 중립 등급으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7694",
+      "category": "VETO",
+      "symbol": "267270",
+      "reasoning_summary": "정량 점수 53.09점 기반, 뉴스 호재에도 불구하고 단기 스나이퍼 및 장기 헌터 점수가 모두 F등급이며, 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높으므로 보수적으로 판단, 과거 실패 사례 분석 결과에 따라 하락장에서는 Hunter Score가 높은 종목이라도 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7695",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 신한투자증권 매수 의견은 긍정적이지만, 현재 하락장(BEAR) 국면이므로 매수 결정을 중단해야 함(가이드라인 1). 또한, 단기 스나이퍼 점수 25.2점(F), 장기 헌터 점수 15.0점(F)으로 전반적인 점수가 낮음. 기술적 지표 RSI가 4.58점으로 매우 낮다는 점도 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7696",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7697",
+      "category": "VETO",
+      "symbol": "016360",
+      "reasoning_summary": "정량 점수 53.04점 기반, 뉴스 제목이 주가 상승 중으로 반복되어 정보의 신뢰성이 낮고, 펀더멘털 변화를 나타내는 내용이 없어 중립적으로 판단. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목도 실패할 수 있으므로 보수적으로 접근.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7698",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, VI 발동 뉴스 및 단기 역신호로 -5점 조정, 하락장 국면임을 감안하여 -5점 추가 조정, 부채비율 및 PER 조건 미충족으로 -5점 추가 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7699",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호 뉴스로 -18점 조정. 부채비율 및 기술적 지표는 양호하나, 하락장 국면임을 감안하여 리스크를 크게 반영함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7700",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서의 가이드라인에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 낮고 뉴스통계도 단기 역신호이므로 리스크가 매우 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7701",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮음. 하락장 국면임을 감안하여 전면 매수 중단 가이드라인 준수. 추가적으로 PER 및 부채비율 조건 미충족으로 -15점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7702",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 전반적으로 중립적 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7703",
+      "category": "VETO",
+      "symbol": "002380",
+      "reasoning_summary": "정량 점수 59.02점 기반, 단기/장기 모두 F등급으로 매우 낮음. 뉴스 호재가 있지만, '희망퇴직 실시' 기사로 인해 리스크가 존재하며, 하락장 국면임을 고려하여 -4점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7704",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고 뉴스통계가 단기 역신호이므로 -18점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7705",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면이므로, 펀더멘털 조건 확인 필요. PER, 부채비율 정보가 없어 추가적인 분석 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7706",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가. 가이드라인 2에 따라 PER 및 부채비율 조건 미충족. 단기/장기 점수 모두 F등급으로 매우 낮음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7707",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 뉴스 내용이 구조조정 및 주가 하락에 대한 내용이므로 -5점 조정. 화학 업종 전반의 이슈와 LG화학의 개별적인 문제 발생 가능성을 고려하여 중립적인 관점으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7708",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정. CEO 교체는 단기적 불확실성으로 -5점 조정. 뉴스 반복으로 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7709",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58.07점 기반, 최근 뉴스들이 단기적인 주가 변동을 보여주는 수준이며 펀더멘털 변화를 나타내지 않음. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수하지 않음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 현재 시장 상황을 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7710",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮아 -15점 감점. 최근 뉴스 없음. 전략 회고 보고서 가이드라인에 따라 하락장 국면이므로 매수 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7711",
+      "category": "VETO",
+      "symbol": "010060",
+      "reasoning_summary": "정량 점수 57.93점 기반, 최근 하락 추세와 단기/장기 점수 모두 F등급임을 감안하여 -2.93점 조정. 뉴스 호재에도 불구하고, 현재 시장 상황(하락장)과 기술적 지표(5일 이동평균선이 20일 이동평균선 아래)를 고려하여 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7712",
+      "category": "VETO",
+      "symbol": "036460",
+      "reasoning_summary": "정량 점수 53.32점 기반, 뉴스 제목이 주가 상승 중이라는 반복적인 내용으로 실질적인 정보 부족으로 조정 없음. 기술적 지표 RSI가 양호하지만, 단기 스나이퍼 및 장기 헌터 점수가 모두 F등급이며, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높아 추세 전환 신호로 판단, 과거 실패 사례 분석 결과에 따라 하락장에서는 Hunter Score가 높은 종목이라도 매수 결정을 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7713",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, 뉴스 내용이 부정적(곳간 말라가는 두산밥캣)이며, 기술적 지표(RSI)가 낮아 -15점 감점. 추가적인 리스크 요소 확인 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7714",
+      "category": "VETO",
+      "symbol": "039490",
+      "reasoning_summary": "정량 점수 55점 기반, 뉴스들은 단기 이벤트성으로 펀더멘털에 미치는 영향 미미. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 불가. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 현 상황에서는 중립적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7715",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 강화 및 경쟁사 동향 분석에 그쳐 펀더멘털 변화로 보기 어려움. 기술적 지표(RSI)가 매우 낮아 단기 반등 가능성은 있으나, 하락장 국면임을 감안하여 중립적으로 평가. 과거 실패 사례 분석 결과에 따라 매수 조건(PER, 부채비율) 충족 여부 확인 필요, 현재 정보 부족으로 판단 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7716",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 무시. PER 및 부채비율 조건 미충족, 기술적 지표 또한 좋지 않음. 따라서 회피 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7717",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인했으나, 단기 약세 흐름과 낮은 기술적 지표(RSI)를 고려하여 +5점만 조정. 현재 하락장 국면임을 감안하여 보수적으로 평가함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7718",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 단기/장기 점수 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목도 위험하며, PER/부채비율 펀더멘털 조건을 충족하지 못함. 기술적 지표 또한 좋지 않음. 따라서 리스크가 매우 높다고 판단하여 35점으로 평가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7719",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로 -20점 감점. 기술적 지표(RSI)는 양호하지만, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 추가 감점. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7720",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 배당 재개 기대감 및 보험금청구권 신탁 관련 뉴스는 긍정적이지만, 단기 스나이퍼 점수 F, 장기 헌터 점수 F, 기술적 지표 RSI 2.72점으로 매우 낮아 긍정적 뉴스의 효과를 상쇄합니다. 또한, 과거 전략 회고 보고서에서 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 한다는 가이드라인을 준수해야 합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7721",
+      "category": "VETO",
+      "symbol": "005940",
+      "reasoning_summary": "정량 점수 52.49점 기반, 뉴스 호재에도 불구하고 단기/장기 점수 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수하지 않도록 가이드라인 제시되었으며, 기술적 지표(RSI)도 낮음. 따라서 중립 등급으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7722",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 조건 미충족으로 펀더멘털 점수가 낮고, 기술적 지표 또한 좋지 않음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목도 실패할 수 있으므로 보수적인 접근 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7723",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 점수 조정. 팩터별 점수 중 기술적 지표(RSI)가 매우 낮고, 단기 스나이퍼 점수가 F등급이므로 보수적으로 판단. Strategic Feedback 가이드라인에 따라 하락장에서는 Hunter Score가 높더라도 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7724",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 RSI는 양호하지만, 5일 이동평균선이 20일 이동평균선 아래로 이탈했는지 확인 필요. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7725",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적임. 기술적 지표 RSI가 양호하지만, 단기 스나이퍼 점수가 낮고 장기 헌터 점수가 매우 낮으므로 중립적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7726",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호 뉴스로 -18점 조정. 부채비율 및 기술적 지표는 양호하나, 하락장 국면임을 감안하여 리스크를 크게 반영함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7727",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이라도 매수 중단해야 함. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높으므로 매수 대상에서 제외. 펀더멘털 조건(PER 15 이하, 부채비율 100% 이하) 충족 여부 확인 불가하므로 보수적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7728",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮음. 하락장 국면임을 감안하여 전면 매수 중단 가이드라인 준수. 추가적으로 PER 및 부채비율 조건 미충족으로 -15점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7729",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 전반적으로 중립적 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7730",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고, 뉴스통계도 단기 역신호이므로 리스크가 매우 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7731",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면이므로, Hunter Score와 관계없이 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7732",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7733",
+      "category": "VETO",
+      "symbol": "001720",
+      "reasoning_summary": "정량 점수 52.46점 기반, 최근 뉴스에서 VI 발동 및 과거 예측 실패 반성 언급으로 -7점 조정. 하락장 국면임을 감안하여 추가 -5점 감점. 기술적 지표 RSI가 낮고, 단기 스나이퍼 점수가 F등급인 점을 고려하여 리스크가 높다고 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7734",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 구조조정 및 주가 하락 뉴스, 단기 역신호로 -6점 조정. 사업 전환 관련 뉴스는 긍정적이지만, 단기적인 악재가 더 크게 작용. 표본 수가 19회로 신뢰도가 낮아 보수적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7735",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정. CEO 교체는 단기적 불확실성으로 -5점 조정. 뉴스 반복으로 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7736",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58점 기반, 최근 뉴스 혼재(약보합, 상승)로 중립 평가. 기술적 지표(RSI)가 낮고, 단기 스나이퍼 점수가 낮아 매수 불가. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수하지 않도록 가이드라인 제시되었으므로, 현재 시장 상황을 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7737",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮아 -15점 감점. 최근 뉴스 없음. 전략 회고 보고서 가이드라인에 따라 하락장 국면이므로 매수 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7738",
+      "category": "VETO",
+      "symbol": "010060",
+      "reasoning_summary": "정량 점수 57.93점 기반, 최근 하락 추세와 단기/장기 점수 모두 F등급임을 감안하여 -2.93점 조정. 뉴스 호재에도 불구하고, 현재 시장 상황(하락장)과 기술적 지표(5일 이동평균선이 20일 이동평균선 아래)를 고려하여 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7739",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, '곳간 말라가는' 뉴스 헤드라인으로 -5점 조정. CES 관련 뉴스는 긍정적이지만, 재무 악화 뉴스가 더 강하게 작용함. 추가적인 리스크 확인 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7740",
+      "category": "VETO",
+      "symbol": "00680K",
+      "reasoning_summary": "정량 점수 53.2점 기반, 뉴스 제목만으로는 긍정적 판단하기 어려움. 단기 상승폭 확대는 이미 반영되었을 가능성이 높음. 전략 회고 보고서의 가이드라인에 따라 하락장에서는 Hunter Score가 높은 종목도 회피해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7741",
+      "category": "VETO",
+      "symbol": "028670",
+      "reasoning_summary": "정량 점수 53.82점 기반, 뉴스 내용은 긍정적이지만, 현재 하락장(BEAR) 국면이므로 매수 불가. 팩터별 점수 중 기술적 지표(RSI)가 매우 낮고, 단기/장기 점수 모두 F등급이므로 중립적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7742",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 강화 및 경쟁사 동향에 집중되어 있어 펀더멘털 변화로 보기 어려움. 기술적 지표(RSI)가 매우 낮아 단기 반등 가능성은 있으나, 하락장 국면임을 고려하여 중립적인 평가를 내림. 추가적인 리스크 요소는 발견되지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7743",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 매수 불가, 팩터별 점수 중 품질(ROE)과 기술적(RSI)만 양호, 단기/장기 점수 모두 F등급으로 매우 낮음, 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7744",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인. 하지만 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이며, 기술적 지표(RSI)는 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 불가. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 현 상황은 매수 조건에 부합하지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7745",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 매수 불가, 팩터별 점수 중 기술적(RSI)과 품질(ROE)만 양호, 나머지 지표는 낮음. 따라서 15점 감점하여 35점 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7746",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 단기/장기 모두 F등급으로 매우 낮음. 가이드라인에 따라 하락장에서는 Hunter Score 60점 이상이어야 매수 가능하지만, 현재 점수는 54.56점으로 매수 불가. 기술적 지표(RSI)는 양호하지만, 다른 지표들이 낮고, 특히 단기 스나이퍼 점수가 매우 낮아 위험성이 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7747",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 배당 재개 기대감 및 보험금청구권 신탁 관련 뉴스는 긍정적이지만 단기적인 이벤트로 판단하여 +3점 조정. 기술적 지표(RSI)가 매우 낮고, 단기 스나이퍼 점수가 F등급이며, 과거 전략 회고 보고서의 가이드라인(하락장에서는 Hunter Score 60점 이상이라도 매수 중단)을 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7748",
+      "category": "VETO",
+      "symbol": "005940",
+      "reasoning_summary": "정량 점수 52.49점 기반, 뉴스 호재에도 불구하고 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고, 모멘텀과 뉴스통계 지표가 좋지 않음. 특히, 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 보수적으로 판단하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7749",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 등 펀더멘털 조건 미충족으로 인해 매수 불가. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7750",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 신한투자증권 매수 리포트가 단기적인 이벤트로 판단되어 +2점 조정. 하지만, 현재 하락장 국면이므로 전략 회고 보고서의 가이드라인에 따라 매수 불가. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 추가적인 하락 가능성이 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7751",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7752",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적이다. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목도 실패할 수 있으므로, 보수적으로 판단하여 -5점 조정. 기술적 지표 또한 좋지 않다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7753",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호 뉴스로 -18점 조정. 부채비율 및 기술적 지표는 양호하나, 하락장 국면임을 감안하여 리스크를 크게 반영함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7754",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이라도 매수 불가. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높으므로 매수 대상에서 제외. 펀더멘털 조건(PER 15 이하, 부채비율 100% 이하) 충족 여부 확인 불가하므로 보수적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7755",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮고, 단기/장기 모두 F등급입니다. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하며, PER 15 이하, 부채비율 100% 이하의 펀더멘털 조건을 충족해야 합니다. 현대차2우B는 해당 조건을 충족하지 못하므로, 리스크가 매우 높다고 판단됩니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7756",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 기술적 지표(RSI)가 매우 낮아 추가 하락 가능성을 고려하여 -2점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7757",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7758",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면임을 고려하여 보수적으로 평가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7759",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가. 가이드라인 2에 따라 PER 및 부채비율 조건 미충족. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7760",
+      "category": "VETO",
+      "symbol": "001720",
+      "reasoning_summary": "정량 점수 52.46점 기반, 최근 뉴스에서 VI 발동 및 과거 예측 실패 반성 언급으로 -7점 조정. 하락장 국면임을 고려하여 추가 -5점 감점. 기술적 지표(RSI)가 낮고, 단기 스나이퍼 점수가 F등급이므로 리스크가 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7761",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 구조조정 및 주가 하락 뉴스, 단기 역신호 등으로 -6점 조정. 펀더멘털 악화 가능성 및 하락 추세 확인. 표본 수가 19회로 낮아 신뢰도가 낮음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7762",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정, CEO 교체는 단기적 불확실성으로 -5점 조정, 뉴스 반복은 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7763",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58.07점 기반, 최근 뉴스들이 단기적인 주가 변동을 보여주는 수준이며 펀더멘털 변화를 나타내지 않음. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 불가. 전략 회고 보고서의 가이드라인에 따라 하락장 국면임을 감안하여 중립적으로 평가함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7764",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮아 -15점 감점. 최근 뉴스 없음. 전략 회고 보고서의 가이드라인에 따라 하락장 국면임을 감안하여 추가 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7765",
+      "category": "VETO",
+      "symbol": "010060",
+      "reasoning_summary": "정량 점수 57.93점 기반, 최근 하락 추세와 단기 지표 부진으로 -2.93점 조정. 뉴스 호재는 있으나, 단기 역신호와 하락장 상황을 고려하여 제한적인 긍정적 영향만 반영. 펀더멘털 조건 미충족(PER, 부채비율 확인 필요)으로 추가 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7766",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, '곳간 말라가는' 뉴스 헤드라인으로 -5점 조정. CES 관련 뉴스는 긍정적이지만, 재무 악화 뉴스가 더 강하게 작용함. 추가적인 리스크 확인 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7767",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 강화 및 경쟁사 동향에 집중되어 있어 펀더멘털 변화로 보기 어려움. 기술적 지표(RSI)가 매우 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높아 하락 추세일 가능성이 높음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수 조정 없이 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7768",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 무시. PER, 부채비율 조건 미충족. 기술적 지표 RSI가 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7769",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인했으나, 단기 약세 흐름과 낮은 기술적 지표(RSI)를 고려하여 +5점만 조정. 현재 하락장 국면임을 감안하여 보수적으로 평가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7770",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 단기/장기 점수 모두 F등급으로 매우 낮음. 가치, 기술적 지표 점수도 낮고, 뉴스도 없음. 전략 회고 보고서 가이드라인에 따라 하락장 국면임을 감안하여, Hunter Score와 관계없이 매수 불가. 추가적으로 PER, 부채비율 조건도 충족하지 못하는 것으로 추정됨.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7771",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 RSI는 양호하지만, 5일 이동평균선이 20일 이동평균선 아래로 이탈했는지 확인 필요. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7772",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 뉴스 호재에도 불구하고 단기/장기 점수가 모두 F등급이며, 기술적 지표(RSI)가 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 불가. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수 조정 없이 중립 등급 유지.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7773",
+      "category": "VETO",
+      "symbol": "005940",
+      "reasoning_summary": "정량 점수 52.49점 기반, 뉴스 호재에도 불구하고 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고, 모멘텀과 뉴스통계 지표가 좋지 않음. 특히, 과거 전략 회고 보고서에서 하락장에서는 Hunter Score가 높더라도 매수를 중단하라는 지침을 준수해야 하므로, 점수를 낮게 유지함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7774",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 등 펀더멘털 조건 미충족으로 인해 매수 불가. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7775",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 신한투자증권 매수 리포트가 단기적인 이벤트일 가능성이 높고, 기술적 지표(RSI)가 낮으며, 현재 하락장(BEAR) 국면임을 고려하여 중립적으로 판단합니다. 펀더멘털 조건(PER, 부채비율) 확인 불가로 점수 조정 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7776",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가, 가이드라인 2에 따라 PER 및 부채비율 조건 미충족, 가이드라인 3에 따라 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 회피 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7777",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, VI 발동 뉴스 및 단기 역신호로 -5점 조정, 하락장 국면임을 감안하여 추가 -5점 조정, 부채비율 및 PER 조건 미충족으로 -10점 조정, 기술적 지표 악화로 -5점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7778",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호로 -18.34점 조정. 하락장 국면임을 감안하여 추가 감점. 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7779",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이라도 매수 불가. 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높으므로 매수 대상에서 제외. 펀더멘털 조건(PER 15 이하, 부채비율 100% 이하) 충족 여부 확인 불가하므로 보수적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7780",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮음. 하락장 국면임을 감안하여 전면 매수 중단 가이드라인 준수. 추가적으로 PER 및 부채비율 조건 미충족으로 -15점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7781",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 전반적으로 중립적인 관점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7782",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로 -18점 감점. 기술적 지표(RSI)는 양호하지만, 다른 지표들이 좋지 않으므로 제한적인 긍정적 요소. 추가적인 리스크 요소는 발견되지 않았으나, 전반적인 상황을 고려하여 주의 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7783",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면이므로, Hunter Score와 관계없이 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7784",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가, 가이드라인 2에 따라 PER 및 부채비율 조건 미충족, 가이드라인 3에 따라 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외, 최신 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7785",
+      "category": "VETO",
+      "symbol": "001720",
+      "reasoning_summary": "정량 점수 52.46점 기반, 최근 뉴스에서 VI 발동 및 과거 예측 실패 반성 언급으로 -7점 조정. 하락장 국면임을 고려하여 추가 -5점 감점. 기술적 지표 RSI가 낮고, 단기 스나이퍼 점수가 F등급인 점을 감안하여 리스크가 높다고 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7786",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 구조조정 뉴스 및 주가 하락으로 -5점 조정, 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이므로 중립 평가",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7787",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정, CEO 교체는 단기적 불확실성으로 -5점 조정, 뉴스 반복으로 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7788",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58점 기반, 최근 뉴스 혼재(약보합, 급등, 상승)로 중립 평가. 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외해야 함. 가이드라인 3에 따라 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7789",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮아 -15점 감점. 최근 뉴스 없음. 전략 회고 보고서의 가이드라인에 따라 하락장 국면이므로 매수 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7790",
+      "category": "VETO",
+      "symbol": "010060",
+      "reasoning_summary": "정량 점수 57.93점 기반, 최근 하락 추세와 단기 스나이퍼/장기 헌터 점수 모두 F등급으로 인해 -2.93점 조정. 뉴스 호재에도 불구하고, 현재 시장 상황(하락장)과 기술적 지표(5일 이동평균선 20일 이동평균선 하회)를 고려하여 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7791",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, 부정적 뉴스(곳간 말라가는 두산밥캣)로 -5점 조정, 기술적 지표 RSI가 3.83점으로 매우 낮아 -5점 추가 조정, 현재 하락장 국면임을 고려하여 -5점 추가 조정, 리스크 요소 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7792",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 강화 및 카드사 순위 변동에 그쳐 펀더멘털 변화로 보기 어려움으로 +2점 조정. 기술적 지표(RSI)가 매우 낮아 단기 반등 가능성은 있으나, 전반적인 시장 상황과 과거 실패 사례를 고려하여 중립적인 관점 유지. 특히, AI 전략 회고 보고서의 가이드라인에 따라 하락장 국면임을 감안하여 보수적인 접근.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7793",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인에 따라 하락장(BEAR) 국면이므로 Hunter Score 무시. PER 및 부채비율 조건 미충족, 기술적 지표 또한 좋지 않음. 따라서 회피 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7794",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인. 하지만 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이며, 기술적 지표(RSI)가 낮고, 뉴스통계가 단기 역신호이므로 5점 감점. 현재 하락장 국면임을 고려하여 보수적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7795",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로 -15점 감점. PER, 부채비율 등 펀더멘털 조건 확인 불가. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7796",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하며, PER 15 이하, 부채비율 100% 이하의 펀더멘털 조건을 충족해야 함. 해당 종목의 펀더멘털 지표 확인 필요. 기술적 지표 또한 RSI가 낮아 매수 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7797",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 뉴스 호재에도 불구하고 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 불가. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수 조정 없이 중립 등급 유지.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7798",
+      "category": "VETO",
+      "symbol": "005940",
+      "reasoning_summary": "정량 점수 52.49점 기반, 뉴스 호재에도 불구하고 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고, 모멘텀과 뉴스통계 지표가 좋지 않음. 특히, 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 보수적으로 판단하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7799",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 등 펀더멘털 조건 미충족으로 인해 매수 불가. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7800",
+      "category": "VETO",
+      "symbol": "267270",
+      "reasoning_summary": "정량 점수 53.09점 기반, 뉴스 호재에도 불구하고 단기/장기 점수가 모두 F등급이며, 기술적 지표(RSI)가 낮고, 뉴스통계가 단기 역신호이므로, 가이드라인에 따라 매수 조건을 충족하지 못함. 특히, 현재 시장 상황이 하락장(BEAR) 국면임을 고려하여 Hunter Score에 대한 의존도를 낮추고, 펀더멘털 및 기술적 지표를 우선적으로 고려함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7801",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 점수 조정. 팩터별 점수 중 기술적 지표(RSI)가 매우 낮고, 단기 스나이퍼 점수가 F등급이므로 보수적으로 판단. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 펀더멘털 조건 충족 여부와 기술적 지표를 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7802",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 RSI는 양호하나, 5일 이동평균선이 20일 이동평균선 아래로 이탈했는지 확인 필요. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7803",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적이다. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목이라도 매수를 중단해야 하므로 점수를 낮춘다. 기술적 지표 또한 좋지 않다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7804",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호 뉴스로 -18점 조정. 부채비율 및 기술적 지표는 양호하나, 시장 상황(하락장)과 가이드라인에 따라 매수 불가. 추가적으로 뉴스에서 오버행 이슈가 언급되어 리스크가 존재함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7805",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서의 가이드라인에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 낮고 뉴스통계도 단기 역신호이므로 리스크가 매우 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7806",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮고, 단기/장기 모두 F등급으로 위험 신호가 뚜렷합니다. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수를 크게 하락시켰습니다. 추가적으로, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7807",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 부채비율 및 PER 조건 미충족으로 인해 추가 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7808",
+      "category": "VETO",
+      "symbol": "024110",
+      "reasoning_summary": "정량 점수 56.79점 기반, 뉴스 내용은 단기 이벤트성으로 판단하여 조정 없음. 부채비율 및 PER 조건 미충족으로 -10점 감점. 기술적 지표 RSI가 2.42점으로 과매도 구간이지만, 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외. 과거 유사 조건 발생 시 상승 확률이 64.3%이지만 표본 수가 28회로 신뢰도가 높지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7809",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)가 매우 낮고 뉴스도 없으므로 리스크가 매우 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7810",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면이므로, Hunter Score와 관계없이 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7811",
+      "category": "VETO",
+      "symbol": "004800",
+      "reasoning_summary": "정량 점수 60.59점 기반, 뉴스 중립 및 단기 역신호, 기술적 지표 RSI 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 -5점 조정. 무역 사업 효성 매각은 단기적 혼란을 야기할 수 있으며, 장기적인 펀더멘털 변화 여부를 판단하기 어려움.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7812",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가. 추가적으로 PER, 부채비율 조건 미충족으로 -17점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7813",
+      "category": "VETO",
+      "symbol": "001720",
+      "reasoning_summary": "정량 점수 52.46점 기반, 단기 스나이퍼 점수 F, 장기 헌터 점수 F, 기술적 지표 RSI는 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외. 뉴스 통계 역신호, 부채비율 및 PER 정보 부족으로 펀더멘털 조건 충족 여부 확인 불가. 전략 회고 보고서 가이드라인에 따라 하락장 국면이므로 Hunter Score와 관계없이 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7814",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 구조조정 뉴스 및 주가 하락 뉴스로 -5점 조정, 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이므로 중립 평가",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7815",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정, CEO 교체는 단기적 불확실성으로 -5점 조정, 뉴스 반복은 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7816",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58.07점 기반, 최근 뉴스 혼재(약보합, 상승)로 중립 평가. 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이며, 기술적 지표(RSI)가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높아 하락 추세로 판단됨. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 보수적으로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7817",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮아 -15점 감점. 최근 뉴스 없음. 전략 회고 보고서의 가이드라인에 따라 하락장 국면임을 감안하여 추가 -5점 감점. PER 및 부채비율 조건 미충족으로 -5점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7818",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, '곳간 말라가는' 뉴스 헤드라인과 부정적 뉴스 통계(역신호)로 -5점 조정. CES 관련 뉴스는 긍정적이지만, 단기적인 이벤트로 판단. 추가적인 리스크 확인 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7819",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 이슈 및 경쟁사 비교에 집중되어 있어 펀더멘털 변화로 보기 어려움. 기술적 지표(RSI)가 매우 낮아 단기 반등 가능성은 있으나, 하락장 국면임을 고려하여 중립적인 평가를 내림. 부채비율 및 PER 조건 미충족으로 인해 매수 불가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7820",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가. 가이드라인 2에 따라 PER 및 부채비율 조건 미충족. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7821",
+      "category": "VETO",
+      "symbol": "020150",
+      "reasoning_summary": "정량 점수 50.26점 기반, AI 가속기로 적자 탈출 노력 뉴스 확인했으나, 단기 약세 흐름과 낮은 기술적 지표(RSI)를 고려하여 +5점만 조정. 현재 하락장 국면임을 감안하여 보수적으로 평가.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7822",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수 중단해야 하므로 -15점 감점. PER, 부채비율 등 펀더멘털 조건 확인 불가로 -5점 감점. 기술적 지표 RSI는 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 -5점 감점. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7823",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 단기/장기 모두 F등급으로 매우 낮음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수를 크게 하락시킴. PER, 부채비율 등 펀더멘털 조건 확인 필요. 기술적 지표 RSI는 양호하지만, 5일 이동평균선이 20일 이동평균선 아래로 이탈했는지 확인 필요. 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7824",
+      "category": "VETO",
+      "symbol": "088350",
+      "reasoning_summary": "정량 점수 52.77점 기반, 뉴스 호재에도 불구하고 단기/장기 점수가 모두 F이며, 기술적 지표(RSI)가 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 중립적으로 판단. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수 조정 없이 정량 점수를 유지함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7825",
+      "category": "VETO",
+      "symbol": "014680",
+      "reasoning_summary": "정량 점수 49.95점 기반, 뉴스 호재에도 불구하고 현재 하락장 국면임을 감안하여 +6점 조정. PER, 부채비율 등 펀더멘털 조건 미충족으로 인해 긍정적 요소를 상쇄. 기술적 지표 또한 좋지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7826",
+      "category": "VETO",
+      "symbol": "139130",
+      "reasoning_summary": "정량 점수 58.64점 기반, 신한투자증권 매수 리포트가 긍정적이지만, 현재 하락장(BEAR) 국면이므로 매수 결정을 중단해야 합니다(가이드라인 1). 또한, 단기 스나이퍼 점수가 F이고, 기술적 지표(RSI)가 낮으므로(가이드라인 3) 점수를 낮춰 중립으로 평가합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7827",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 단기/장기 모두 F등급으로 매우 낮음. 특히 하락장 국면임을 고려하여 전략 회고 보고서 가이드라인에 따라 전면 매수 중단해야 함. 기술적 지표(RSI)는 양호하지만, 다른 지표들이 낮고, 시장 상황을 고려했을 때 리스크가 매우 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7828",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적임. 기술적 지표 RSI가 양호하지만, 단기 스나이퍼 점수가 매우 낮고 장기 헌터 점수는 최저점임. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높은 종목도 실패할 수 있으므로 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7829",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 및 단기 역신호로 -18.34점 조정. 하락장 국면임을 고려하여 추가 감점. 리스크 요소 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7830",
+      "category": "VETO",
+      "symbol": "025560",
+      "reasoning_summary": "정량 점수 62.53점, 하지만 전략 회고 보고서의 가이드라인에 따라 하락장(BEAR) 국면이므로 매수 불가. 단기/장기 점수 모두 F등급이며, 기술적 지표(RSI)는 양호하지만 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외. 부채비율 및 PER 정보가 없어 펀더멘털 조건 충족 여부 확인 불가. 따라서 리스크가 매우 높다고 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7831",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 가치 및 기술적 지표가 매우 낮음. 하락장 국면임을 감안하여 전면 매수 중단 가이드라인 준수. 추가적으로 PER 및 부채비율 조건 미충족으로 -15점 감점.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7832",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 52주 신고가 뉴스는 단기 이벤트로 판단하여 +2점 조정. CEO 연임 관련 내규 변경은 지배구조 리스크로 -3점 조정. 필리핀 MOU는 영향 미미하여 중립적 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7833",
+      "category": "VETO",
+      "symbol": "024110",
+      "reasoning_summary": "정량 점수 56.79점 기반, 뉴스 내용은 단기 이벤트성으로 판단하여 조정 없음. 부채비율 및 PER 조건 미충족으로 -10점 감점. 기술적 지표 RSI가 2.42점으로 과매도 구간이지만, 5일 이동평균선이 20일 이동평균선 아래에 위치하므로 매수 불가. 과거 유사 조건 발생 시 상승 확률이 64.3%이지만 표본 수가 28회로 신뢰도가 높지 않음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7834",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 단기/장기 모두 F등급으로 매우 낮음. 가이드라인에 따라 하락장에서는 Hunter Score 60점 이상이어야 매수 가능하지만, 현재 점수는 53.06점으로 매수 불가. 기술적 지표(RSI)는 양호하지만, 다른 지표들이 낮아 전반적으로 부정적이며, 리스크 요소를 고려하여 D등급으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7835",
+      "category": "VETO",
+      "symbol": "034230",
+      "reasoning_summary": "정량 점수 50.18점 기반, 기부 관련 뉴스는 단기 이벤트로 판단하여 영향 없음. 12월 26일 하락 마감 뉴스는 부정적이지만, 단기적인 변동성으로 판단하여 -5점 조정. 현재 하락장 국면이므로, Hunter Score와 관계없이 매수 결정을 중단해야 함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7836",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 가이드라인 1에 따라 하락장(BEAR) 국면이므로 Hunter Score 60점 이상이어도 매수 불가, 가이드라인 2에 따라 PER 및 부채비율 조건 미충족, 가이드라인 3에 따라 5일 이동평균선이 20일 이동평균선 아래로 이탈했으므로 매수 대상에서 제외, 최신 뉴스 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7837",
+      "category": "VETO",
+      "symbol": "001720",
+      "reasoning_summary": "정량 점수 52.46점 기반, 최근 뉴스에서 VI 발동 및 과거 예측 실패 반성 언급으로 -7.46점 조정. 하락장 국면임을 감안하여 추가 -5점 감점. 기술적 지표 RSI가 낮고, 단기 스나이퍼 점수가 F등급이므로 리스크가 높음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7838",
+      "category": "VETO",
+      "symbol": "051910",
+      "reasoning_summary": "정량 점수 51.55점 기반, 구조조정 뉴스 및 주가 하락 뉴스로 -5점 조정, 단기 스나이퍼 및 장기 헌터 점수 모두 F등급이므로 중립 평가",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7839",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 발행어음 도전은 규제 리스크 존재로 -7점 조정, CEO 교체는 단기적 불확실성으로 -5점 조정, 뉴스 반복은 신뢰도 하락으로 -3점 조정.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7840",
+      "category": "VETO",
+      "symbol": "204320",
+      "reasoning_summary": "정량 점수 58.07점 기반, 단기 스나이퍼 점수 F, 장기 헌터 점수 F로 인해 -3점 조정. 뉴스들은 단기적인 주가 변동을 보여주는 것으로 판단되며, 펀더멘털 변화를 나타내지 않음. 기술적 지표 RSI가 낮고, 5일 이동평균선이 20일 이동평균선 아래로 이탈했을 가능성이 높아 하락 추세일 수 있음. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7841",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 가치 및 기술적 지표가 매우 낮고, 단기/장기 모두 F등급입니다. 과거 실패 사례 분석 결과, 하락장에서는 Hunter Score가 높아도 매수를 중단해야 하므로, 점수를 크게 하락시켰습니다. PER 및 부채비율 조건도 충족하지 못하는 것으로 보입니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7842",
+      "category": "VETO",
+      "symbol": "010060",
+      "reasoning_summary": "정량 점수 57.93점 기반, 최근 하락 추세와 단기/장기 점수 모두 F등급임을 감안하여 -2.93점 조정. 뉴스 호재에도 불구하고, 현재 시장 상황(하락장)과 기술적 지표(5일 이동평균선이 20일 이동평균선 아래)를 고려하여 보수적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7843",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, '곳간 말라가는' 뉴스 헤드라인으로 -5점 조정. CES 관련 뉴스는 긍정적이지만, 재무 악화 뉴스가 더 강하게 작용함. 추가적인 리스크 확인 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7844",
+      "category": "VETO",
+      "symbol": "029780",
+      "reasoning_summary": "정량 점수 53.62점 기반, 뉴스 내용이 단기적인 마케팅 이슈 및 경쟁사 비교에 집중되어 있어 펀더멘털 변화로 보기 어려움. 기술적 지표(RSI)가 매우 낮아 단기 반등 가능성은 있으나, 하락장 국면임을 고려하여 중립적인 평가를 내림. 특히, 과거 실패 사례 분석 결과에 따라 하락장에서는 Hunter Score가 높더라도 매수를 중단해야 하므로, 점수 조정폭을 최소화함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7845",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7846",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7847",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7848",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7849",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적임. 시장 상황이 하락장임을 고려하여 -5점 조정. 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7850",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 부정적 뉴스 및 단기 역신호로 -3점 조정, 주거안심동행 협약은 긍정적이지만 단기적인 이벤트로 판단, 리스크 요소 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7851",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 뉴스 없음으로 정성적 판단 불가. 과거 실패 사례 분석 결과, 하락장에서는 매수를 중단해야 하므로 점수 조정 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7852",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮은 점수를 기록하고 있으며, 현재 하락장 국면임을 고려하여 중립적인 관점을 유지합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7853",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7854",
+      "category": "VETO",
+      "symbol": "003540",
+      "reasoning_summary": "정량 점수 52.64점 기반, 뉴스 내용이 발행어음 도전 및 수장 교체로 단기적인 이벤트이며, 펀더멘털 변화로 보기 어려움. 추가적인 리스크 요소는 발견되지 않음. 하락장 국면임을 고려하여 중립적인 평가를 내림.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7855",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7856",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, 뉴스 제목에 '곳간 말라가는' 이라는 부정적 표현이 있어 -5점 조정. CES 관련 긍정적 뉴스가 있지만, 단기적인 이벤트로 판단, 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7857",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7858",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7859",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 특별한 뉴스 없음. 하락장임을 감안하여 점수 조정 없음. 기술적 지표(RSI)가 양호하지만, 단기/장기 모두 F등급이므로 중립적으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7860",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 특별한 뉴스 없음. 단기/장기 점수 모두 F등급으로 매우 낮고, 현재 하락장(BEAR) 국면임을 고려하여 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7861",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적이다. 시장 상황이 하락장임을 고려하여 -5점 조정. 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7862",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 부정적 뉴스 및 단기 역신호로 -3점 조정, 주거안심동행 협약은 긍정적이지만 영향 미미, 전반적으로 중립적 판단",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7863",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과에 따라 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7864",
+      "category": "VETO",
+      "symbol": "023590",
+      "reasoning_summary": "정량 점수 53.06점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮은 점수를 기록하고 있으며, 현재 하락장 국면임을 고려하여 중립적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7865",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7866",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮고, 현재 하락장(BEAR) 국면임을 감안하여 보수적으로 판단, 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7867",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, 뉴스 제목에 '곳간 말라가는' 이라는 부정적 표현이 있어 -5점 조정. CES 관련 긍정적 뉴스가 있지만, 단기적인 이벤트로 판단, 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7868",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7869",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7870",
+      "category": "VETO",
+      "symbol": "002220",
+      "reasoning_summary": "정량 점수 54.56점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮은 점수를 받았습니다. 과거 분석 결과, 하락장에서는 Hunter Score에 관계없이 매수 결정을 중단해야 하므로 중립 등급을 부여합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7871",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7872",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적임. 하락장 국면임을 고려하여 -5점 조정. 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7873",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 악재 뉴스로 -8점 조정. 주거안심동행 협약은 긍정적이지만, 단기적인 이벤트로 판단. 리스크 요소 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7874",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7875",
+      "category": "VETO",
+      "symbol": "175330",
+      "reasoning_summary": "정량 점수 59점 기반, 단기/장기 모두 F등급으로 매우 낮음. 뉴스 호재는 있으나 단기 역신호 및 낮은 기술적 지표를 감안하여 +2점 조정. CEO 연임 관련 리스크 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7876",
+      "category": "VETO",
+      "symbol": "006805",
+      "reasoning_summary": "정량 점수 52.74점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7877",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮고, 현재 하락장(BEAR) 국면임을 고려하여 중립 등급으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7878",
+      "category": "VETO",
+      "symbol": "241560",
+      "reasoning_summary": "정량 점수 50.52점 기반, 뉴스 제목에 '곳간 말라가는' 이라는 부정적 표현이 있어 -5점 조정. CES 관련 긍정적 뉴스가 있지만, 단기적인 이벤트로 판단되어 반영하지 않음. 리스크 요소 확인 결과, 재무적인 어려움이 있어 주의 필요.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7879",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7880",
+      "category": "VETO",
+      "symbol": "45226K",
+      "reasoning_summary": "정량 점수 50.42점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7881",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적이다. 시장 상황이 하락장임을 고려하여 -5점 조정. 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7882",
+      "category": "VETO",
+      "symbol": "395400",
+      "reasoning_summary": "정량 점수 50.14점 기반, 뉴스 내용이 VI 발동으로 부정적이며, 회사채 발행 뉴스는 중립적임. 하락장 국면임을 고려하여 -5점 조정. 리스크 요소 없음.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7883",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7884",
+      "category": "VETO",
+      "symbol": "005387",
+      "reasoning_summary": "정량 점수 50.7점 기반, 뉴스 없음으로 변동 없음. 단기/장기 모두 F등급으로 매우 낮고, 현재 하락장(BEAR) 국면임을 고려하여 중립 등급으로 판단.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7885",
+      "category": "VETO",
+      "symbol": "005385",
+      "reasoning_summary": "정량 점수 50.73점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮은 점수를 기록하고 있으며, 현재 하락장 국면임을 고려하여 중립적으로 판단함.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7886",
+      "category": "VETO",
+      "symbol": "012205",
+      "reasoning_summary": "정량 점수 52.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮음. 과거 분석 결과, 하락장에서는 매수를 중단해야 하므로 중립 등급 부여.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7887",
+      "category": "VETO",
+      "symbol": "031210",
+      "reasoning_summary": "정량 점수 53.34점 기반, IPO 재도전 관련 부정적 뉴스 및 단기 역신호로 -3점 조정, 주거안심동행 협약은 긍정적이지만 단기적인 이벤트로 판단, 리스크 요소 존재.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7888",
+      "category": "VETO",
+      "symbol": "000270",
+      "reasoning_summary": "오류(Local+Cloud): HTTPConnectionPool(host='localhost', port=11500): Max retries exceeded with url: /api/generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7c05686ae650>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7889",
+      "category": "VETO",
+      "symbol": "128820",
+      "reasoning_summary": "정량 점수 54.08점 기반, 특별한 뉴스 없음. 단기/장기 모두 F등급으로 매우 낮은 점수를 기록하고 있으며, 현재 하락장(BEAR) 국면임을 고려하여 중립적인 관점을 유지합니다.",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7890",
+      "category": "VETO",
+      "symbol": "004170",
+      "reasoning_summary": "오류(Local+Cloud): HTTPConnectionPool(host='localhost', port=11500): Max retries exceeded with url: /api/generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a3ecc5ba010>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7891",
+      "category": "VETO",
+      "symbol": "006400",
+      "reasoning_summary": "오류(Local+Cloud): HTTPConnectionPool(host='localhost', port=11500): Max retries exceeded with url: /api/generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a3ecc5b63d0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "VETO-7892",
+      "category": "VETO",
+      "symbol": "000270",
+      "reasoning_summary": "오류(Local+Cloud): HTTPConnectionPool(host='localhost', port=11500): Max retries exceeded with url: /api/generate (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x7a3ecc5f6fd0>: Failed to establish a new connection: [Errno 111] Connection refused'))",
+      "model_decision": "REJECT",
+      "market_context": "Trigger: FILTER_REJECT, Stage: HUNTER"
+    },
+    {
+      "case_id": "DEC-2171",
+      "category": "BEST",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면 상승장(+5점), 경쟁사 수혜 및 실적 기대감 등 Bull의 논리가 설득력 있으나, 기술적 지표 및 과열된 시장 상황을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2172",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, LG에너지솔루션 악재 수혜 및 시장 국면 상승장(Bull) 고려하여 +18점 조정, 단기 스나이퍼 점수 매우 낮아 +1점 감점",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2173",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면 상승장(+5점), 경쟁사 수혜 기회(+18점) 고려하나 과거 실패 분석 결과 하락장 Hunter Score 종목 회피 가이드라인 및 단기 스나이퍼 점수 F등급 감안하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2174",
+      "category": "BEST",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 상승장(Bull) +5점, 경쟁사 리콜 수혜 및 실적 개선 기대감으로 Bull 의견 일부 반영 +4점, 단기 과열 및 기술적 지표 악화 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2175",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2176",
+      "category": "NORMAL",
+      "symbol": "267250",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2177",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2178",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2179",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2180",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2181",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2182",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2183",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2184",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2185",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2186",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2187",
+      "category": "NORMAL",
+      "symbol": "005940",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2188",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2189",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2190",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2191",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2192",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2193",
+      "category": "NORMAL",
+      "symbol": "055550",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2194",
+      "category": "NORMAL",
+      "symbol": "086280",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2195",
+      "category": "NORMAL",
+      "symbol": "032640",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2196",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 경쟁사 수혜 기회(+18점) 및 시장 국면 상승장(+5점)을 반영하나, 과거 실패 사례 분석 결과 및 단기 스나이퍼 점수 F등급을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2197",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 경쟁사 수혜 및 뉴스 호재(신세계 주가 상승, 실적 호조 기대)를 고려하여 +10점, 시장 국면(Positive/Bullish) 고려하여 +6점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2198",
+      "category": "NORMAL",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면(Positive) +5점, 경쟁사 수혜 기회 +10점, 토론에서 Bull의 성장 스토리가 구체적이나, 민지의 밸류에이션 우려를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 80.0"
+    },
+    {
+      "case_id": "DEC-2199",
+      "category": "NORMAL",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, Bull의 실적 및 경쟁사 수혜 근거가 구체적이나 과거 실패 사례 및 시장 국면을 고려하여 +9점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 73.0"
+    },
+    {
+      "case_id": "DEC-2200",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2201",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2202",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2203",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2204",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2205",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2206",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2207",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2208",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2209",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2210",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2211",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2212",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2213",
+      "category": "NORMAL",
+      "symbol": "034220",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2214",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2215",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2216",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2217",
+      "category": "NORMAL",
+      "symbol": "267270",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2218",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2219",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2220",
+      "category": "NORMAL",
+      "symbol": "055550",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2221",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 시장 국면 상승장(+5점), 경쟁사 수혜 기회 및 뉴스 긍정적 흐름(+10점), 고PER 및 기술적 지표 과열에 대한 Bear 의견 반영하여 +4점 감점.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2222",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면 상승장(+5점), NAVER 수혜 기대감 및 2026년 실적 호조 뉴스 근거로 +12점 조정, 단기 과매수 및 PER 부담 고려하여 +10점 제한",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2223",
+      "category": "NORMAL",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, Bull의 경쟁사 수혜 및 성장 스토리가 구체적이나 과거 실패 분석 및 시장 과열을 고려하여 +15점 조정. 단기 스나이퍼 점수가 낮고 장기 헌터 점수도 낮으므로 과도한 점수 부여는 지양.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 80.0"
+    },
+    {
+      "case_id": "DEC-2224",
+      "category": "NORMAL",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 상승장(Bull)으로 +5점, 경쟁사 수혜 기회(+18점)는 이미 정량 점수에 반영되었으므로 추가 가점 없음, 토론에서 Bull의 실적 근거가 구체적이나, 민지의 리스크 관리 지적을 고려하여 +4점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 73.0"
+    },
+    {
+      "case_id": "DEC-2225",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2226",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2227",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2228",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2229",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2230",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2231",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2232",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2233",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2234",
+      "category": "NORMAL",
+      "symbol": "105560",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2235",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2236",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2237",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2238",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2239",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2240",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2241",
+      "category": "NORMAL",
+      "symbol": "267270",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2242",
+      "category": "NORMAL",
+      "symbol": "016360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2243",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2244",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2245",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2246",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 경쟁사 수혜 기회(+18점) 및 시장 국면 상승장(+5점)을 반영하나, 과거 실패 사례 분석 결과 및 토론 내용에서 지적된 밸류에이션 부담과 기술적 과열을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2247",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면 상승장(+5점), NAVER 수혜 및 2026년 실적 기대감 등 Bull의 근거가 일부 설득력 있으나, 고PER 및 기술적 지표 부진을 감안하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2248",
+      "category": "NORMAL",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면 상승장(+5점), Bull의 경쟁사 수혜 및 실적 기대감 근거가 구체적이나, 과거 실패 사례 및 민지의 리스크 경고를 고려하여 +7점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 80.0"
+    },
+    {
+      "case_id": "DEC-2249",
+      "category": "NORMAL",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 상승장(+5점), Bull의 경쟁사 수혜 및 실적 기대감 근거가 구체적이나, 과거 실패 사례 및 민지의 리스크 관리 지적을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 73.0"
+    },
+    {
+      "case_id": "DEC-2250",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2251",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2252",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2253",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2254",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2255",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2256",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2257",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2258",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2259",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2260",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2261",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2262",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2263",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2264",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2265",
+      "category": "NORMAL",
+      "symbol": "267270",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2266",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2267",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2268",
+      "category": "NORMAL",
+      "symbol": "055550",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2269",
+      "category": "NORMAL",
+      "symbol": "086280",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2270",
+      "category": "NORMAL",
+      "symbol": "032640",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2271",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 시장 국면 상승장(Bull) +5점, 경쟁사 수혜 기회(뉴스) +10점, 단기 스나이퍼/장기 헌터 점수 매우 낮아 -6점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2272",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면 상승장(+5점), NAVER 수혜 및 2026년 실적 기대감 등 Bull의 주장이 설득력 있으나, 과열된 시장 상황과 높은 PER을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2273",
+      "category": "NORMAL",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면 상승장(+5점), 경쟁사 수혜 및 리브랜딩 효과 등 Bull의 주장이 설득력 있으나, 민지의 리스크 경고를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 80.0"
+    },
+    {
+      "case_id": "DEC-2274",
+      "category": "NORMAL",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 상승장(Bull)으로 +5점, 경쟁사 수혜 기회(기아 리콜)로 +4점, 토론에서 Bull의 실적 근거가 구체적이나 민지의 리스크 경고를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 73.0"
+    },
+    {
+      "case_id": "DEC-2275",
+      "category": "NORMAL",
+      "symbol": "267250",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2276",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2277",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2278",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2279",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2280",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2281",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2282",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2283",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2284",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2285",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2286",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2287",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2288",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2289",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2290",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2291",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2292",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2293",
+      "category": "NORMAL",
+      "symbol": "086280",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2294",
+      "category": "NORMAL",
+      "symbol": "032640",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2295",
+      "category": "NORMAL",
+      "symbol": "010950",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2296",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 시장 국면 상승장(+5점), 경쟁사 수혜 기회(+18점) 고려하나, 과거 실패 사례 분석 결과 하락장에서는 Hunter Score가 높은 종목도 실패할 수 있음을 인지하고, PER 32.52, PBR 0.94 등 밸류에이션 부담을 감안하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2297",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면 상승장(+5점), NAVER 악재 수혜 및 실적 기대감(뉴스 기반)으로 +12점 추가, 과거 실패 분석 결과 및 기술적 지표 악화로 -5점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2298",
+      "category": "NORMAL",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, Bull의 실적 및 경쟁사 수혜 근거가 구체적이나 과거 실패 사례 및 시장 국면(Positive)을 고려하여 +15점 조정, 단기 스나이퍼 점수가 낮으므로 과도한 낙관은 경계",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 80.0"
+    },
+    {
+      "case_id": "DEC-2299",
+      "category": "NORMAL",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 긍정적(+5점), 경쟁사 수혜 기회 및 실적 부진에도 목표가 상향 뉴스 등 Bull의 근거가 일부 설득력 있으나, 과거 실패 사례 및 가이드라인(하락장 Hunter Score 주의)을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 73.0"
+    },
+    {
+      "case_id": "DEC-2300",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2301",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2302",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2303",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2304",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2305",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2306",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2307",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2308",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2309",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2310",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2311",
+      "category": "NORMAL",
+      "symbol": "005940",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2312",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2313",
+      "category": "NORMAL",
+      "symbol": "002460",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2314",
+      "category": "NORMAL",
+      "symbol": "003490",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2315",
+      "category": "NORMAL",
+      "symbol": "267270",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2316",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2317",
+      "category": "NORMAL",
+      "symbol": "006800",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2318",
+      "category": "NORMAL",
+      "symbol": "015760",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2319",
+      "category": "NORMAL",
+      "symbol": "086280",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2320",
+      "category": "NORMAL",
+      "symbol": "032640",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2321",
+      "category": "BEST",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 실적 근거(뉴스1, 리브랜딩)가 구체적이나, 과거 피드백(하락장 회피) 및 단기 스나이퍼 점수(F) 고려하여 +2점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2322",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 경쟁사 수혜 및 시장 국면(Positive/Bullish) 고려하여 +10점, 토론에서 Bull의 실적 근거가 구체적이나 단기 과열 및 고밸류에이션을 고려하여 +8점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2323",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면(Positive/Bullish) +5점, NAVER 수혜 +11점(토론 반영), 단기 과열 및 밸류에이션 부담으로 -1점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2324",
+      "category": "BEST",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 경쟁사 수혜 기회 및 뉴스 호재를 고려하여 +4점 추가 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2325",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "정량 56.76점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 실적 근거가 구체적이나 민지의 기술적 지적을 고려하여 +2점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2326",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "정량 61.35점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수 금지) 및 시장 국면 고려하여 +10.65점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2327",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "정량 53.61점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 토론에서 Bull의 실적 근거가 구체적이지만, 과거 피드백과 정량 분석 결과(D+5, D+60 모두 F)를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2328",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "정량 58.27점 기반, 시장 국면(Positive/Bullish) +5점, 토론에서 Bull의 실적 근거가 구체적이나, 단기 과열 및 기술적 지표의 위험성을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2329",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "정량 61.3점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 단기/장기 점수 모두 F등급임을 고려하여 +10.7점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2330",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "정량 60.56점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례 및 하락장 주의 가이드라인을 고려하여 +12점 조정. 단기 스나이퍼 점수가 낮고 장기 헌터 점수도 낮으므로 과도한 점수 부여는 지양.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2331",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "정량 51.99점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 토론에서 Bull의 성장 스토리가 구체적이나, 고PER 리스크를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2332",
+      "category": "NORMAL",
+      "symbol": "267250",
+      "reasoning_summary": "정량 51.8점 기반, 시장 국면 긍정적(+5점), 토론에서 Bull의 주장이 구체적이나, 민지의 밸류에이션 우려와 변동성 지적을 고려하여 +6점만 조정. 과거 피드백에서 하락장 매수 실패 사례를 감안하여 보수적으로 접근.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2333",
+      "category": "NORMAL",
+      "symbol": "001430",
+      "reasoning_summary": "정량 56.21점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 시장 국면(Positive/Bullish)을 고려하여 +16점 조정. 단기 스나이퍼 점수 매우 낮으므로, 상승 추세가 꺾이면 즉시 손절해야 함.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2334",
+      "category": "NORMAL",
+      "symbol": "011070",
+      "reasoning_summary": "정량 60.89점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례 및 시장 국면(Positive/Bullish)을 고려하여 +12점 조정. 단기 스나이퍼 점수가 낮으므로 과도한 상승 기대는 경계해야 함.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2335",
+      "category": "NORMAL",
+      "symbol": "005850",
+      "reasoning_summary": "정량 62.31점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 민지의 리스크 경고를 고려하여 +10점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2336",
+      "category": "NORMAL",
+      "symbol": "005935",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2337",
+      "category": "NORMAL",
+      "symbol": "009150",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2338",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2339",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2340",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2341",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2342",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2343",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2344",
+      "category": "NORMAL",
+      "symbol": "105560",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2345",
+      "category": "NORMAL",
+      "symbol": "032830",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2346",
+      "category": "BEST",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 경쟁사 수혜 및 리브랜딩 성공 논리가 구체적이나, 민지의 리스크 경고를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2347",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 경쟁사 수혜 기회(+18점)는 정량 점수에 일부 반영되었다고 판단하여 +3점, 토론에서 Bull의 주장이 구체적인 뉴스 근거를 제시했으나, 민지의 리스크 관리 지적도 유효하여 +2점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2348",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면(Positive/Bullish) +5점, NAVER 수혜 +7점, 단기 과열 및 PER 고려하여 +5점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2349",
+      "category": "BEST",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, 시장 국면 Positive/Bullish이므로 +5점, 경쟁사 수혜 기회 및 뉴스 호재를 고려하여 +4점 추가 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2350",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "정량 56.76점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 Hunter Score 낮은 점을 고려하여 +2점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2351",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "정량 61.35점 기반, Bull의 미국 시장 성장세 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 단기 스나이퍼/헌터 점수 모두 F등급임을 고려하여 +10.65점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2352",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "정량 61.3점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례 및 하락장 가이드라인, 그리고 RSI 과열을 고려하여 +10.7점 조정 (단기 스나이퍼 점수 낮음).",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2353",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "정량 53.61점 기반, 시장 국면(Positive/Bullish) +5점, 토론에서 Bull의 성장 논리가 일부 설득력 있으나, 민지의 리스크 관리 지적을 고려하여 +2점만 조정, 과거 피드백(하락장 회피)을 반영하여 +2점 추가, 총 +10점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2354",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "정량 70점 기반, Bull의 실적 근거가 구체적이나 과거 피드백과 시장 국면(하락장 회피)을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2355",
+      "category": "NORMAL",
+      "symbol": "267250",
+      "reasoning_summary": "정량 51.8점 기반, 시장 국면(Positive/Bullish) +5점, 토론에서 Bull의 수주 실적 근거가 구체적이나, 단기 과열 및 Cyclical stock 특성을 고려하여 +2점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2356",
+      "category": "NORMAL",
+      "symbol": "001430",
+      "reasoning_summary": "정량 56.21점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 실적 근거가 구체적이나 Hunter Score가 낮고, 과거 피드백(하락장 회피)을 고려하여 +7점만 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2357",
+      "category": "NORMAL",
+      "symbol": "011070",
+      "reasoning_summary": "정량 60.89점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 시장 국면(Positive/Bullish)을 고려하여 +12점 조정. 단기 스나이퍼 점수가 낮으므로 과도한 상승 기대는 경계.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2358",
+      "category": "NORMAL",
+      "symbol": "005850",
+      "reasoning_summary": "정량 62.31점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 토론에서 Bull의 실적 근거가 구체적이나, 단기 스나이퍼/장기 헌터 점수가 낮고 과거 피드백에서 하락장 매수 실패 사례가 있으므로 +5점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2359",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2360",
+      "category": "NORMAL",
+      "symbol": "005935",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2361",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2362",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2363",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2364",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2365",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2366",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2367",
+      "category": "NORMAL",
+      "symbol": "105560",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2368",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2369",
+      "category": "NORMAL",
+      "symbol": "032830",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2370",
+      "category": "NORMAL",
+      "symbol": "003690",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2371",
+      "category": "BEST",
+      "symbol": "000270",
+      "reasoning_summary": "정량 57.97점 기반, 시장 국면(Positive/Bullish) +5점, 경쟁사 수혜 기회 +10점, 토론에서 Bull의 실적 근거가 구체적이나, 단기 스나이퍼 점수 매우 낮고 장기 헌터 점수도 낮아 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2372",
+      "category": "BEST",
+      "symbol": "006400",
+      "reasoning_summary": "정량 53.72점 기반, LG에너지솔루션 수혜 및 시장 국면 Positive/Bullish 고려하여 +18점 조정, 단기 스나이퍼 점수 낮고 장기 헌터 점수 매우 낮아 +18점 모두 부여하지 않고 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2373",
+      "category": "BEST",
+      "symbol": "004170",
+      "reasoning_summary": "정량 55.93점 기반, 시장 국면(Positive/Bullish) +5점, NAVER 수혜 +10점, 단기 과열 및 밸류에이션 부담으로 +1점 제한 조정.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 86.0"
+    },
+    {
+      "case_id": "DEC-2374",
+      "category": "BEST",
+      "symbol": "005380",
+      "reasoning_summary": "정량 63.2점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례 및 하락장 주의 가이드라인을 고려하여 +9점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 83.0"
+    },
+    {
+      "case_id": "DEC-2375",
+      "category": "NORMAL",
+      "symbol": "111770",
+      "reasoning_summary": "정량 56.76점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 시장 국면(Positive/Bullish)을 고려하여 +15점 조정. 단기 스나이퍼/장기 헌터 점수가 모두 F이므로, 과도한 점수 상승은 지양함.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2376",
+      "category": "NORMAL",
+      "symbol": "011210",
+      "reasoning_summary": "정량 61.3점 기반, 시장 국면(Positive/Bullish) +5점, Bull의 실적 근거가 구체적이나 Hunter Score가 낮고, 과거 피드백에서 하락장 매수 실패 사례를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 75.0"
+    },
+    {
+      "case_id": "DEC-2377",
+      "category": "NORMAL",
+      "symbol": "402340",
+      "reasoning_summary": "정량 53.61점 기반, 시장 국면(Positive/Bullish) +5점, 토론에서 Bull의 구체적인 근거(뉴스) 제시로 +4점 추가, 과거 피드백(하락장 회피) 및 단기/장기 점수 모두 F등급임을 감안하여 -10점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2378",
+      "category": "NORMAL",
+      "symbol": "073240",
+      "reasoning_summary": "정량 61.35점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 토론에서 Bull의 미국 시장 성장 근거가 구체적이지만 Hunter Score가 낮고, 과거 피드백에서 하락장 매수 실패 사례를 고려하여 +6점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2379",
+      "category": "NORMAL",
+      "symbol": "316140",
+      "reasoning_summary": "정량 60.56점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례 및 하락장 경고를 고려하여 +11.44점 조정. 단기 스나이퍼 점수가 낮고, 기술적 지표가 좋지 않으므로 보수적으로 접근함.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2380",
+      "category": "NORMAL",
+      "symbol": "066570",
+      "reasoning_summary": "정량 51.99점 기반, 시장 국면(Positive/Bullish) +5점, 토론에서 Bull의 실적 개선 및 성장 스토리 근거가 구체적이나, 민지의 리스크 관리 지적을 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2381",
+      "category": "NORMAL",
+      "symbol": "267250",
+      "reasoning_summary": "정량 51.8점 기반, 시장 국면 긍정적(+5점), Bull의 수주 실적 근거가 구체적이나, 과거 피드백(하락장 회피) 및 민지의 리스크 경고를 고려하여 +2점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2382",
+      "category": "NORMAL",
+      "symbol": "001430",
+      "reasoning_summary": "정량 56.21점 기반, 시장 국면이 Positive/Bullish이므로 +5점, 토론에서 Bull의 실적 근거가 구체적이나 Hunter Score가 낮고 단기적 모멘텀에 치중되어 +11점 추가 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2383",
+      "category": "NORMAL",
+      "symbol": "011070",
+      "reasoning_summary": "정량 60.89점 기반, Bull의 실적 상향 및 성장 동력 주장이 구체적이나 과거 실패 사례 및 민지의 리스크 관리 지적, 그리고 단기 스나이퍼/장기 헌터 점수가 모두 F임을 고려하여 +11.11점만 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2384",
+      "category": "NORMAL",
+      "symbol": "005850",
+      "reasoning_summary": "정량 62.31점 기반, Bull의 실적 근거가 구체적이나 과거 실패 사례(하락장 매수) 및 단기 스나이퍼/장기 헌터 점수 모두 F등급임을 고려하여 +10점 조정",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 72.0"
+    },
+    {
+      "case_id": "DEC-2385",
+      "category": "NORMAL",
+      "symbol": "005935",
+      "reasoning_summary": "Hunter Score(68) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 68.0"
+    },
+    {
+      "case_id": "DEC-2386",
+      "category": "NORMAL",
+      "symbol": "006360",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2387",
+      "category": "NORMAL",
+      "symbol": "012330",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2388",
+      "category": "NORMAL",
+      "symbol": "000120",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2389",
+      "category": "NORMAL",
+      "symbol": "001450",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2390",
+      "category": "NORMAL",
+      "symbol": "086790",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2391",
+      "category": "NORMAL",
+      "symbol": "020150",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2392",
+      "category": "NORMAL",
+      "symbol": "011780",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2393",
+      "category": "NORMAL",
+      "symbol": "105560",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2394",
+      "category": "NORMAL",
+      "symbol": "000990",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    },
+    {
+      "case_id": "DEC-2395",
+      "category": "NORMAL",
+      "symbol": "032830",
+      "reasoning_summary": "Hunter Score(65) failed to meet Judge Threshold(70). Auto-Rejected.",
+      "model_decision": "BUY",
+      "market_context": "Regime: BEAR, Score: 65.0"
+    }
+  ]
+}

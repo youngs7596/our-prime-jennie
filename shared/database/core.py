@@ -11,9 +11,19 @@ from datetime import datetime, timezone, timedelta
 
 from shared.db import connection as sa_connection
 from shared.db import repository as sa_repository
-from shared.db.connection import get_session, dispose_engine
+from shared.db.connection import get_session, dispose_engine, session_scope
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+@contextmanager
+def get_db_connection_context():
+    """
+    DB 연결 컨텍스트 매니저 (SQLAlchemy Session 사용)
+    kis-gateway 등에서 with database.get_db_connection_context() as conn: 형태로 사용
+    """
+    with session_scope() as session:
+        yield session
 
 # ============================================================================
 # [Base] DB 타입 및 테이블 네이밍 헬퍼

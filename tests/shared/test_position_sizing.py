@@ -275,6 +275,22 @@ class TestEdgeCases:
         
         # 최소 1주도 못 살 수 있음
         assert result['quantity'] >= 0
+    
+    def test_exception_handling(self, sizer):
+        """Exception 발생 시 안전하게 처리"""
+        # calculate_quantity 내부에서 Exception 발생 시 안전하게 처리
+        # stock_price가 None이면 산술 연산에서 TypeError 발생
+        result = sizer.calculate_quantity(
+            stock_code='005930',
+            stock_price=None,  # TypeError 유발
+            atr=1400,
+            account_balance=10000000,
+            portfolio_value=0
+        )
+        
+        # Exception 시 quantity=0, reason에 오류 메시지 포함
+        assert result['quantity'] == 0
+        assert '계산 오류' in result['reason']
 
 
 # ============================================================================

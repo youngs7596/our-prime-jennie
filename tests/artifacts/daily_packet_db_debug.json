@@ -1,0 +1,59 @@
+{
+  "date": "2025-12-31",
+  "summary_stats": {
+    "veto_count": 2,
+    "no_trade_ratio": 0.35,
+    "total_scanned": 150,
+    "selected_candidates": 12
+  },
+  "representative_cases": [
+    {
+      "case_id": "CASE-20251231-001",
+      "category": "VETO",
+      "symbol": "017322",
+      "reasoning_summary": "Sample reasoning for 017322 (VETO). Market conditions were favorable but risk factors detected.",
+      "model_decision": "REJECT",
+      "market_context": "KOSPI bullish, sector momentum high."
+    },
+    {
+      "case_id": "CASE-20251231-002",
+      "category": "VIOLATION",
+      "symbol": "015338",
+      "reasoning_summary": "Sample reasoning for 015338 (VIOLATION). Market conditions were favorable but risk factors detected.",
+      "model_decision": "HOLD",
+      "market_context": "KOSPI bullish, sector momentum high."
+    },
+    {
+      "case_id": "CASE-20251231-003",
+      "category": "WORST",
+      "symbol": "062864",
+      "reasoning_summary": "Sample reasoning for 062864 (WORST). Market conditions were favorable but risk factors detected.",
+      "model_decision": "HOLD",
+      "market_context": "KOSPI bullish, sector momentum high."
+    },
+    {
+      "case_id": "CASE-20251231-004",
+      "category": "BEST",
+      "symbol": "090388",
+      "reasoning_summary": "Sample reasoning for 090388 (BEST). Market conditions were favorable but risk factors detected.",
+      "model_decision": "BUY",
+      "market_context": "KOSPI bullish, sector momentum high."
+    },
+    {
+      "case_id": "CASE-20251231-005",
+      "category": "NORMAL",
+      "symbol": "032636",
+      "reasoning_summary": "Sample reasoning for 032636 (NORMAL). Market conditions were favorable but risk factors detected.",
+      "model_decision": "BUY",
+      "market_context": "KOSPI bullish, sector momentum high."
+    },
+    {
+      "case_id": "CASE-20251231-006",
+      "category": "NORMAL",
+      "symbol": "015923",
+      "reasoning_summary": "Sample reasoning for 015923 (NORMAL). Market conditions were favorable but risk factors detected.",
+      "model_decision": "BUY",
+      "market_context": "KOSPI bullish, sector momentum high."
+    }
+  ]
+}

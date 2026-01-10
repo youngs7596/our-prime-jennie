@@ -267,97 +267,103 @@ class OllamaLLMProvider(BaseLLMProvider):
             }
         }
 
-        try:
-            # [Debug] Log Request/Response for Qwen3 stability check
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Request Prompt (First 500 chars): {prompt[:500]}...")
-            
-            result = self._call_ollama_api("/api/generate", payload)
-            content = result.get("response", "")
-            
-            # [Debug] Log Raw Response
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Raw Response (len={len(content)}): {content[:500]}... [Truncated]")
-            if not content:
-                logger.warning("   ⚠️ [Ollama] Empty response content received!")
-            
-            # Debug 로깅
-            self._log_llm_interaction(
-                interaction_type="generate_json",
-                request_data={"prompt": prompt, "temperature": temperature},
-                response_data={"content": content, "parsed": None},  # parsed는 나중에 업데이트
-                model_name=target_model
-            )
-            
-            # [Defensive] Tag Removal
-            raw_content = content
-            content = self._clean_deepseek_tags(content)
-            
-            if not content.strip() and raw_content.strip():
-                # [Defensive] Model generated only thinking traces
-                error_msg = f"Model generated {len(raw_content)} chars of reasoning but no final JSON output."
-                logger.warning(f"⚠️ [Ollama] {error_msg}")
-                raise ValueError(error_msg)
-            
-            # [Defensive] JSON Parsing with basic cleanup
+        # [Defensive] Internal Retry for Empty/Malformed Content
+        # Sometimes Ollama returns empty string or cut-off JSON. 
+        # We retry locally before falling back to Cloud.
+        max_internal_retries = 3
+        
+        for attempt in range(max_internal_retries):
             try:
-                parsed = json.loads(content)
-            except json.JSONDecodeError:
-                # Try to find JSON block if mixed with text
-                if "```json" in content:
-                    content = content.split("```json")[1].split("```")[0]
-                elif "```" in content:
-                    content = content.split("```")[1].split("```")[0]
-                elif "{" in content:
-                    start = content.find("{")
-                    end = content.rfind("}") + 1
-                    content = content[start:end]
+                # [Debug] Log Request/Response for Qwen3 stability check
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Request Prompt (First 500 chars): {prompt[:500]}...")
                 
-                if not content.strip():
-                     logger.error(f"❌ [Ollama] No JSON found. Raw Content:\n{raw_content}")
-                     raise ValueError(f"No JSON content found in output (len={len(raw_content)})")
-                     
-                parsed = json.loads(content)
-            
-            # [Defensive] Case-insensitive Key Normalization
-            # Qwen3 sometimes returns 'Score' instead of 'score'
-            if response_schema:
-                 normalized = {}
-                 required_keys = response_schema.get("required", [])
-                 # Create a mapping of lowercase key -> original key in parsed result
-                 parsed_keys_lower = {k.lower(): k for k in parsed.keys()}
-                 
-                 for req_key in required_keys:
-                     req_key_lower = req_key.lower()
-                     if req_key in parsed:
-                         normalized[req_key] = parsed[req_key]
-                     elif req_key_lower in parsed_keys_lower:
-                         # Found it with different case
-                         original_key = parsed_keys_lower[req_key_lower]
-                         normalized[req_key] = parsed[original_key]
-                         logger.warning(f"⚠️ [Ollama] Normalized key case: {original_key} -> {req_key}")
-                     else:
-                         # Key missing, keep what we have (or let it fail later)
-                         pass
-                 
-                 # Copy over other keys that weren't required (optional)
-                 for k, v in parsed.items():
-                     if k not in normalized and k.lower() not in parsed_keys_lower:
-                         normalized[k] = v
+                result = self._call_ollama_api("/api/generate", payload)
+                content = result.get("response", "")
+                
+                # [Debug] Log Raw Response
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Raw Response (len={len(content)}): {content[:500]}... [Truncated]")
+                
+                if not content:
+                    logger.warning(f"   ⚠️ [Ollama] Empty response content received! (Attempt {attempt+1}/{max_internal_retries})")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise ValueError("Empty response content from Ollama after retries")
+                
+                # Debug 로깅
+                self._log_llm_interaction(
+                    interaction_type="generate_json",
+                    request_data={"prompt": prompt, "temperature": temperature},
+                    response_data={"content": content, "parsed": None},
+                    model_name=target_model
+                )
+                
+                # [Defensive] Tag Removal
+                raw_content = content
+                content = self._clean_deepseek_tags(content)
+                
+                if not content.strip() and raw_content.strip():
+                    error_msg = f"Model generated {len(raw_content)} chars of reasoning but no final JSON output."
+                    logger.warning(f"⚠️ [Ollama] {error_msg}")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    raise ValueError(error_msg)
+                
+                # [Defensive] JSON Parsing with basic cleanup
+                parsed = None
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError:
+                    # Try to find JSON block if mixed with text
+                    if "```json" in content:
+                        content = content.split("```json")[1].split("```")[0]
+                    elif "```" in content:
+                        content = content.split("```")[1].split("```")[0]
+                    elif "{" in content:
+                        start = content.find("{")
+                        end = content.rfind("}") + 1
+                        content = content[start:end]
+                    
+                    if not content.strip():
+                         logger.error(f"❌ [Ollama] No JSON found. Raw Content:\n{raw_content}")
+                         if attempt < max_internal_retries - 1:
+                            time.sleep(1)
+                            continue
+                         raise ValueError(f"No JSON content found in output (len={len(raw_content)})")
                          
-                 # If we normalized anything, use it. 
-                 # But checks if we actually found required keys. 
-                 # If 'normalized' has the required keys, return it.
-                 # Otherwise return 'parsed' and let the caller handle missing keys 
-                 # (or maybe 'parsed' is just better).
-                 # Let's simple return 'normalized' merging with 'parsed' for safety.
-                 parsed.update(normalized) # Ensure required keys are present with correct casing
-            
-            return parsed
+                    parsed = json.loads(content)
                 
-        except Exception as e:
-            logger.error(f"❌ [Ollama] generate_json failed: {e}")
-            raise
+                # [Defensive] Case-insensitive Key Normalization
+                if response_schema:
+                     normalized = {}
+                     required_keys = response_schema.get("required", [])
+                     parsed_keys_lower = {k.lower(): k for k in parsed.keys()}
+                     
+                     for req_key in required_keys:
+                         req_key_lower = req_key.lower()
+                         if req_key in parsed:
+                             normalized[req_key] = parsed[req_key]
+                         elif req_key_lower in parsed_keys_lower:
+                             original_key = parsed_keys_lower[req_key_lower]
+                             normalized[req_key] = parsed[original_key]
+                             logger.warning(f"⚠️ [Ollama] Normalized key case: {original_key} -> {req_key}")
+                     
+                     # Merge normalized keys back into parsed
+                     parsed.update(normalized) # Ensure required keys are present
+                
+                return parsed
+                
+            except Exception as e:
+                if attempt < max_internal_retries - 1:
+                    logger.warning(f"⚠️ [Ollama] Retryable error during generation: {e}")
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    logger.error(f"❌ [Ollama] generate_json failed after {max_internal_retries} attempts: {e}")
+                    raise
 
     def generate_chat(
         self,
@@ -390,63 +396,96 @@ class OllamaLLMProvider(BaseLLMProvider):
         if response_schema:
             pass # payload["format"] = "json" <-- [Fix] Removed
 
-        try:
-            # [Debug] Log Chat Request
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Chat Messages Check: {len(messages)} messages.")
-            
-            result = self._call_ollama_api("/api/chat", payload)
-            content = result.get("message", {}).get("content", "")
-            
-            # [Debug] Log JSON Response
-            if self.debug_enabled:
-                logger.info(f"📝 [Ollama] Chat Response: {content[:500]}... [Truncated]")
-            
-            # Debug 로깅
-            self._log_llm_interaction(
-                interaction_type="generate_chat",
-                request_data={"messages": messages, "temperature": temperature},
-                response_data={"content": content},
-                model_name=target_model
-            )
-            
-            # [Defensive] Tag Removal
-            content = self._clean_deepseek_tags(content)
+        max_internal_retries = 3
+        
+        for attempt in range(max_internal_retries):
+            try:
+                # [Debug] Log Chat Request
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Chat Messages Check: {len(messages)} messages.")
+                
+                result = self._call_ollama_api("/api/chat", payload)
+                content = result.get("message", {}).get("content", "")
+                
+                # [Debug] Log JSON Response
+                if self.debug_enabled:
+                    logger.info(f"📝 [Ollama] Chat Response: {content[:500]}... [Truncated]")
+                
+                if not content:
+                    logger.warning(f"   ⚠️ [Ollama] Empty chat response received! (Attempt {attempt+1}/{max_internal_retries})")
+                    if attempt < max_internal_retries - 1:
+                        time.sleep(1)
+                        continue
+                    else:
+                        raise ValueError("Empty chat response from Ollama after retries")
 
-            if response_schema:
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError:
-                     if "{" in content:
-                        start = content.find("{")
-                        end = content.rfind("}") + 1
-                        content = content[start:end]
-                     return json.loads(content)
-            
-            return {"text": content}
+                # Debug 로깅
+                self._log_llm_interaction(
+                    interaction_type="generate_chat",
+                    request_data={"messages": messages, "temperature": temperature},
+                    response_data={"content": content},
+                    model_name=target_model
+                )
+                
+                # [Defensive] Tag Removal
+                content = self._clean_deepseek_tags(content)
 
-        except Exception as e:
-             logger.error(f"❌ [Ollama] generate_chat failed: {e}")
-             raise
+                if response_schema:
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError:
+                         # Try to find JSON block
+                         if "```json" in content:
+                            content = content.split("```json")[1].split("```")[0]
+                         elif "```" in content:
+                            content = content.split("```")[1].split("```")[0]
+                         elif "{" in content:
+                            start = content.find("{")
+                            end = content.rfind("}") + 1
+                            content = content[start:end]
+                            
+                         if not content.strip():
+                             logger.error(f"❌ [Ollama] No JSON found in chat. Raw Content:\n{content}")
+                             if attempt < max_internal_retries - 1:
+                                time.sleep(1)
+                                continue
+                             raise ValueError("No JSON content found in chat output")
+                             
+                         return json.loads(content)
+                
+                return {"text": content}
+
+            except Exception as e:
+                if attempt < max_internal_retries - 1:
+                    logger.warning(f"⚠️ [Ollama] Retryable error during chat generation: {e}")
+                    time.sleep(2 ** attempt)
+                else:
+                    logger.error(f"❌ [Ollama] generate_chat failed after {max_internal_retries} attempts: {e}")
+                    raise
 
 
 class GeminiLLMProvider(BaseLLMProvider):
     def __init__(self, project_id: str, gemini_api_key_secret: str, safety_settings):
         super().__init__(safety_settings)
-        import google.generativeai as genai
+        import google.genai as genai
         from . import auth
         
         api_key = auth.get_secret(gemini_api_key_secret, project_id)
         if not api_key:
-            raise RuntimeError(f"GCP Secret '{gemini_api_key_secret}' 로드 실패")
+            raise RuntimeError(f"Secret '{gemini_api_key_secret}' not found in configuration (secrets.json or env vars)")
 
-        genai.configure(api_key=api_key)
+        # google.genai는 Client/GenerativeModel에 직접 키를 전달하므로 전역 configure 불필요
         self._genai = genai
-        # Updated to Gemini 3 Pro for Self-Evolution tasks (Daily Feedback)
-        # Note: As of Dec 2025, stable is 'gemini-3-pro-preview' in API
-        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview")
+        self._api_key = api_key
+        self._client = genai.Client(api_key=api_key)
+        # Updated to Gemini 2.5 Flash for Cost Efficiency (User Request)
+        # Note: 'gemini-3-pro' is too expensive for default usage.
+        self.default_model = os.getenv("LLM_MODEL_NAME", "gemini-2.5-flash")
         self.flash_model = os.getenv("LLM_FLASH_MODEL_NAME", "gemini-2.5-flash")
         self._model_cache: Dict[tuple[str, float, str], Any] = {}
+
+    def _get_api_key(self) -> str:
+        return self._api_key
 
     @property
     def name(self) -> str:
@@ -464,11 +503,10 @@ class GeminiLLMProvider(BaseLLMProvider):
                 "response_mime_type": "application/json",
                 "response_schema": response_schema,
             }
-            self._model_cache[cache_key] = self._genai.GenerativeModel(
-                model_name=model_name,
-                generation_config=generation_config,
-                safety_settings=self.safety_settings,
-            )
+            self._model_cache[cache_key] = {
+                "model_name": model_name,
+                "generation_config": generation_config,
+            }
         return self._model_cache[cache_key]
 
     def generate_json(
@@ -485,14 +523,36 @@ class GeminiLLMProvider(BaseLLMProvider):
             model_candidates.extend(fallback_models)
 
         last_error: Optional[Exception] = None
+        max_retries = 3
+
         for target_model in model_candidates:
-            try:
-                model = self._get_or_create_model(target_model, response_schema, temperature)
-                response = model.generate_content(prompt, safety_settings=self.safety_settings)
-                return json.loads(response.text)
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    model = self._get_or_create_model(target_model, response_schema, temperature)
+                    response = self._client.models.generate_content(
+                        model=model["model_name"],
+                        contents=prompt,
+                        config=model["generation_config"],
+                    )
+                    return json.loads(response.text)
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = (2 ** attempt) + 1  # 2, 3, 5 seconds...
+                            # If error message contains explicit retry delay, we could parse it, but simple backoff is often enough.
+                            # The log showed "Please retry in 30.3s", so we might need a longer wait if we parse it.
+                            # For now, let's just use a more aggressive backoff for 429.
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+                    
+                    # Not a 429 or retries exhausted
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM 호출 실패: {last_error}") from last_error
 
@@ -537,27 +597,39 @@ class GeminiLLMProvider(BaseLLMProvider):
             last_message = "Continue"
 
         last_error: Optional[Exception] = None
-        for target_model in model_candidates:
-            try:
-                generation_config = {"temperature": temperature}
-                if response_schema:
-                    generation_config["response_mime_type"] = "application/json"
-                    generation_config["response_schema"] = response_schema
+        max_retries = 3
 
-                model = self._genai.GenerativeModel(
-                    model_name=target_model,
-                    generation_config=generation_config,
-                    safety_settings=self.safety_settings,
-                )
-                chat = model.start_chat(history=gemini_history)
-                response = chat.send_message(last_message)
-                
-                if response_schema:
-                    return json.loads(response.text)
-                return {"text": response.text}
-            except Exception as exc:
-                last_error = exc
-                logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+        for target_model in model_candidates:
+            # [Defensive] Retry Logic for Rate Limits (429)
+            for attempt in range(max_retries + 1):
+                try:
+                    generation_config = {"temperature": temperature}
+                    if response_schema:
+                        generation_config["response_mime_type"] = "application/json"
+                        generation_config["response_schema"] = response_schema
+
+                    response = self._client.models.generate_content(
+                        model=target_model,
+                        contents=gemini_history + [{"role": "user", "parts": [{"text": last_message}]}],
+                        config=generation_config,
+                    )
+
+                    text = response.text
+                    if response_schema:
+                        return json.loads(text)
+                    return {"text": text}
+                except Exception as exc:
+                    err_str = str(exc)
+                    if "429" in err_str or "quota" in err_str.lower():
+                        if attempt < max_retries:
+                            wait_time = 5 * (attempt + 1) # 5, 10, 15s
+                            logger.warning(f"⚠️ [GeminiProvider] Chat Rate Limit (429) on '{target_model}'. Retrying in {wait_time}s... (Attempt {attempt+1}/{max_retries})")
+                            time.sleep(wait_time)
+                            continue
+
+                    last_error = exc
+                    logger.warning(f"⚠️ [GeminiProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
+                    break # Try next model candidate
 
         raise RuntimeError(f"LLM Chat 호출 실패: {last_error}") from last_error
 
@@ -591,9 +663,11 @@ class OpenAILLMProvider(BaseLLMProvider):
              logger.warning("⚠️ OpenAI API Key not found in env or secrets.json") 
         
         self.client = self._openai_module(api_key=api_key)
-        # GPT-5.2 for THINKING tier (Daily Self-Evolution & Weekly Council)
-        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-5.2")
-        self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-5.2")
+        # [Budget Strategy 2025]
+        # Default (Reasoning Tier): gpt-4o-mini (Cost Efficiency)
+        # Thinking (Judge Tier): gpt-4o (Balanced Cost/Perf)
+        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
+        self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
     
     def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):
         """

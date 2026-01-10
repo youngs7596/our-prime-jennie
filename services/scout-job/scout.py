@@ -20,6 +20,7 @@ import re
 import threading
 import json
 import hashlib
+import warnings
 from typing import Dict, Tuple, List, Optional
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
@@ -39,7 +40,9 @@ logger = logging.getLogger(__name__)
 
 # 공용 라이브러리 임포트를 위한 경로 설정
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # /app
-if PROJECT_ROOT not in sys.path:
+try:
+    import shared
+except ImportError:
     sys.path.insert(0, PROJECT_ROOT)
 
 import shared.auth as auth
@@ -54,23 +57,20 @@ from shared.archivist import Archivist
 
 import chromadb
 from langchain_chroma import Chroma
+
+# langchain_google_genai 내부 google.generativeai FutureWarning 무시
+warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# FinanceDataReader (KOSPI 200 Universe 조회용)
-try:
-    import FinanceDataReader as fdr
-    FDR_AVAILABLE = True
-    logger.info("✅ FinanceDataReader 모듈 로드 성공")
-except ImportError:
-    FDR_AVAILABLE = False
-    logger.warning("⚠️ FinanceDataReader 미설치 - 네이버 금융 스크래핑으로 폴백")
+
 
 # Backtest 모듈 (선택적)
 try:
     from utilities.backtest import Backtester
     logger.info("✅ Backtester 모듈 임포트 성공")
-except ImportError as e:
-    logger.warning(f"⚠️ Backtester 모듈 임포트 실패 (백테스트 기능 비활성화): {e}")
+except ImportError:
+    logger.info("ℹ️ Backtester 모듈 없음 - 백테스트 기능 비활성화")
     Backtester = None
 
 # Chroma 서버
@@ -85,6 +85,7 @@ from scout_cache import (
     REDIS_URL,
     # Redis 함수
     _get_redis, _utcnow, update_pipeline_status, save_pipeline_results,
+    # save_hot_watchlist removed from here
     # CONFIG 테이블 함수
     _get_scope, _make_state_key, _load_json_config, _save_json_config,
     _get_last_llm_run_at, _save_last_llm_run_at,
@@ -100,11 +101,14 @@ from scout_cache import (
 
 # 종목 유니버스 관리 (scout_universe.py)
 from scout_universe import (
-    SECTOR_MAPPING, BLUE_CHIP_STOCKS, FDR_AVAILABLE,
+    SECTOR_MAPPING, BLUE_CHIP_STOCKS,
+
     analyze_sector_momentum, get_hot_sector_stocks,
     get_dynamic_blue_chips, get_momentum_stocks,
+    filter_valid_stocks
 )
-
+import scout_cache
+from shared.watchlist import save_hot_watchlist
 # 파이프라인 태스크 (scout_pipeline.py)
 from scout_pipeline import (
     is_hybrid_scoring_enabled,
@@ -344,12 +348,6 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
 def main():
     start_time = time.time()
     
-    # [Operating Hours Check]
-    from shared.utils import is_operating_hours
-    if not is_operating_hours():
-        logger.info("🕒 현재 운영 시간이 아닙니다. (운영 시간: 평일 07:00 ~ 17:00) 작업을 건너뜁니다.")
-        return
-
     logger.info("--- 🤖 'Scout Job' 실행 시작 ---")
     
     kis_api = None
@@ -378,6 +376,28 @@ def main():
             if not kis_api.authenticate():
                 raise Exception("KIS API 인증에 실패했습니다.")
         
+        # [Check] 실행 시간 제한 (07:00 ~ 16:00)
+        # 테스트/Mock 모드이거나 강제 실행 설정이 아니면 시간 체크 수행
+        disable_check = os.getenv("DISABLE_MARKET_OPEN_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+        
+        if not disable_check and trading_mode.lower() != "mock":
+            import pytz
+            kst = pytz.timezone('Asia/Seoul')
+            now_kst = datetime.now(kst)
+
+            # 주말 체크 (토=5, 일=6)
+            if now_kst.weekday() >= 5:
+                logger.info(f"🛑 [Check] 오늘은 주말({now_kst.strftime('%A')})이므로 실행하지 않습니다. (Scout 종료)")
+                return
+            
+            if 7 <= now_kst.hour < 16:
+                logger.info(f"📅 [Check] 현재 시간({now_kst.strftime('%H:%M')})은 실행 허용 시간(07:00~16:00)입니다.")
+            else:
+                logger.info(f"🛑 [Check] 현재 시간({now_kst.strftime('%H:%M')})은 실행 허용 시간이 아닙니다. (Scout 종료)")
+                return
+        else:
+            logger.info("⏩ 시간/장운영 체크를 건너뜁니다 (mock/test 모드 또는 DISABLE_MARKET_OPEN_CHECK=true).")
+        
         brain = JennieBrain(
             project_id=os.getenv("GCP_PROJECT_ID", "local"),
             gemini_api_key_secret=os.getenv("SECRET_ID_GEMINI_API_KEY")
@@ -391,27 +411,52 @@ def main():
             watchlist_snapshot = database.get_active_watchlist(session)
             
             vectorstore = None
-            try:
-                logger.info("   ... ChromaDB 클라이언트 연결 시도 (Gemini Embeddings) ...")
-                api_key = ensure_gemini_api_key()
-                embeddings = GoogleGenerativeAIEmbeddings(
-                    model="models/gemini-embedding-001", 
-                    google_api_key=api_key
-                )
-                
-                chroma_client = chromadb.HttpClient( # noqa
-                    host=CHROMA_SERVER_HOST, 
-                    port=CHROMA_SERVER_PORT
-                )
-                vectorstore = Chroma(
-                    client=chroma_client, 
-                    collection_name="rag_stock_data", 
-                    embedding_function=embeddings
-                )
-                logger.info("✅ LLM 및 ChromaDB 클라이언트 초기화 완료.")
-            except Exception as e:
-                logger.warning(f"⚠️ ChromaDB 초기화 실패 (RAG 기능 비활성화): {e}")
+            # RAG 활성화 여부 확인 (기본값: True)
+            enable_rag = os.getenv("ENABLE_RAG", "true").lower() == "true"
+            rag_provider = os.getenv("RAG_EMBEDDING_PROVIDER", "local").lower()  # 기본값 local (비용 절감)
+
+            if not enable_rag:
+                logger.info("⏩ [Config] RAG 기능이 비활성화되어 있습니다 (ENABLE_RAG=false).")
                 vectorstore = None
+            else:
+                try:
+                    embeddings = None
+                    if rag_provider == "local":
+                        # Local Embedding (HuggingFace)
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Local Embeddings: jhgan/ko-sroberta-multitask) ...")
+                        try:
+                            from langchain_huggingface import HuggingFaceEmbeddings
+                            embeddings = HuggingFaceEmbeddings(
+                                model_name="jhgan/ko-sroberta-multitask",
+                                model_kwargs={"device": "cpu"},
+                                encode_kwargs={"normalize_embeddings": True}
+                            )
+                        except ImportError:
+                            logger.error("🚨 langchain_huggingface 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
+                            raise
+
+                    else:
+                        # Cloud Embedding (Gemini)
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Gemini Embeddings) ...")
+                        api_key = ensure_gemini_api_key()
+                        embeddings = GoogleGenerativeAIEmbeddings(
+                            model="models/gemini-embedding-001", 
+                            google_api_key=api_key
+                        )
+                    
+                    chroma_client = chromadb.HttpClient( # noqa
+                        host=CHROMA_SERVER_HOST, 
+                        port=CHROMA_SERVER_PORT
+                    )
+                    vectorstore = Chroma(
+                        client=chroma_client, 
+                        collection_name="rag_stock_data", 
+                        embedding_function=embeddings
+                    )
+                    logger.info(f"✅ LLM 및 ChromaDB 클라이언트 초기화 완료 (Provider: {rag_provider}).")
+                except Exception as e:
+                    logger.warning(f"⚠️ ChromaDB 초기화 실패 (RAG 기능 비활성화): {e}")
+                    vectorstore = None
 
             # Phase 1: 트리플 소스 후보 발굴 (v3.8: 섹터 분석 추가)
             logger.info("--- [Phase 1] 트리플 소스 후보 발굴 시작 ---")
@@ -458,9 +503,12 @@ def main():
                         if stock_code and stock_name:
                             if stock_code not in candidate_stocks:
                                 candidate_stocks[stock_code] = {'name': stock_name, 'reasons': []}
-                            candidate_stocks[stock_code]['reasons'].append(f"RAG 포착: {doc.page_content[:20]}...")
+                            candidate_stocks[stock_code]['reasons'].append("RAG 기반 호재 검색")
                 except Exception as e:
-                    logger.warning(f"   (C) RAG 검색 실패: {e}")
+                    logger.warning(f"   (C) RAG 후보 발굴 실패: {e}")
+
+            # NEW: Filter against STOCK_MASTER (Remove ETFs and unregistered stocks)
+            candidate_stocks = filter_valid_stocks(candidate_stocks, session)
 
             # D: 모멘텀
             logger.info("   (D) 모멘텀 팩터 기반 종목 발굴 중...")
@@ -479,6 +527,15 @@ def main():
                     }
             
             logger.info(f"   ✅ 후보군 {len(candidate_stocks)}개 발굴 완료.")
+            
+            # [Filter] 제외 종목 필터링 (v1.1)
+            excluded_stocks = [s.strip() for s in os.getenv("EXCLUDED_STOCKS", "").split(",") if s.strip()]
+            if excluded_stocks:
+                logger.info(f"   🚫 제외 종목 필터 적용: {excluded_stocks}")
+                for ex_code in excluded_stocks:
+                    if ex_code in candidate_stocks:
+                        del candidate_stocks[ex_code]
+                        logger.info(f"      - {ex_code} 제외됨 (사용자 설정)")
             
             # [DEBUG] Truncate for Judge Phase Verification - Removed
             # candidate_stocks = dict(list(candidate_stocks.items())[:3])
@@ -516,15 +573,37 @@ def main():
                 
             def process_flow_data(code):
                 try:
-                    # 최근 1일치(오늘/어제) 데이터만 조회하여 현재 수급 확인
-                    # 장 중이면 오늘 잠정치/확정치, 장 마감 후면 오늘 확정치
-                    trends = kis_api.get_market_data().get_investor_trend(code, start_date=None, end_date=None)
-                    if not trends:
-                        return code, None
+                    # [Tier 1] KIS API via gateway.market_data
+                    try:
+                        trends = kis_api.get_market_data().get_investor_trend(code, start_date=None, end_date=None)
+                    except (AttributeError, Exception):
+                        # [Tier 2] KIS API Direct (If method is missing or fails)
+                        try:
+                            trends = kis_api.get_investor_trend(code, start_date=None, end_date=None)
+                        except Exception:
+                            trends = None
                     
-                    # 가장 최근 데이터 (오늘)
-                    latest = trends[-1]
-                    return code, latest
+                    if trends:
+                        # 가장 최근 데이터 (오늘)
+                        return code, trends[-1]
+                    
+                    # [Tier 3] DB Fallback (Historical Data)
+                    try:
+                        from shared.database.market import get_investor_trading
+                        df = get_investor_trading(session, code, limit=1)
+                        if not df.empty:
+                            row = df.iloc[-1]
+                            return code, {
+                                'date': row['TRADE_DATE'].strftime('%Y%m%d'),
+                                'foreigner_net_buy': int(row['FOREIGN_NET_BUY']),
+                                'institution_net_buy': int(row['INSTITUTION_NET_BUY']),
+                                'individual_net_buy': int(row['INDIVIDUAL_NET_BUY']),
+                                'price': float(row['CLOSE_PRICE'])
+                            }
+                    except Exception as e:
+                        logger.debug(f"   ⚠️ [{code}] DB 수급 조회 실패: {e}")
+                        
+                    return code, None
                 except Exception as e:
                     return code, None
 
@@ -624,10 +703,10 @@ def main():
                             stock_info, quant_scorer, session, kospi_prices
                         )
                     
-                    # Step 2: 정량 기반 1차 필터링 (하위 20% 탈락)
-                    logger.info(f"\n   [Step 2] 정량 기반 1차 필터링 (하위 20% 탈락)")
+                    # Step 2: 정량 기반 1차 필터링 (하위 60% 탈락 → 상위 40% 통과)
+                    logger.info(f"\n   [Step 2] 정량 기반 1차 필터링 (상위 40% 통과)")
                     quant_result_list = list(quant_results.values())
-                    filtered_results = quant_scorer.filter_candidates(quant_result_list, cutoff_ratio=0.2)
+                    filtered_results = quant_scorer.filter_candidates(quant_result_list, cutoff_ratio=0.6)
                     
                     filtered_codes = {r.stock_code for r in filtered_results}
                     logger.info(f"   ✅ 정량 필터 통과: {len(filtered_codes)}개 (평균 점수: {sum(r.total_score for r in filtered_results)/len(filtered_results):.1f}점)")
@@ -640,24 +719,25 @@ def main():
                         final_approved_list.append({'code': '0001', 'name': 'KOSPI', 'is_tradable': False})
                     
                     llm_decision_records: Dict[str, Dict] = {}
-                    # Ollama 사용 시 Concurrency 자동 조절 (GPU 부하 방지)
-                    default_workers = 4
+                    
+                    # 2025-12-24: Cloud vs Ollama 병렬 처리 차등 적용
+                    # Cloud (OpenAI, Gemini, Claude): 8개 병렬 (Rate Limit 내에서 문제없음)
+                    # Ollama (로컬): Hunter 4, Judge 1 (GPU 부하/안정성)
                     is_ollama_active = (
                         os.getenv("TIER_REASONING_PROVIDER", "ollama").lower() == "ollama" or 
-                        os.getenv("TIER_THINKING_PROVIDER", "ollama").lower() == "ollama" or
-                        os.getenv("TIER_FAST_PROVIDER", "gemini").lower() == "ollama"
+                        os.getenv("TIER_THINKING_PROVIDER", "ollama").lower() == "ollama"
                     )
                     
                     if is_ollama_active:
-                        default_workers = 2
-                        logger.info(f"   (Config) 🐢 Ollama Detected! Defaulting Concurrency to {default_workers} (Stability Mode)")
-
-                    llm_max_workers = max(1, _parse_int_env(os.getenv("SCOUT_LLM_MAX_WORKERS"), default_workers))
-                    
-                    # Ollama 32B Stability -> Enforce Sequential Processing
-                    if is_ollama_active:
-                        logger.warning(f"⚠️ [Config] Ollama Stability Enforced: Overriding worker count {llm_max_workers} -> 1")
-                        llm_max_workers = 1
+                        # Ollama 로컬 모드: 보수적 병렬 처리
+                        hunter_max_workers = _parse_int_env(os.getenv("SCOUT_HUNTER_MAX_WORKERS"), 4)
+                        judge_max_workers = _parse_int_env(os.getenv("SCOUT_JUDGE_MAX_WORKERS"), 1)
+                        logger.info(f"   (Config) 🐢 Ollama Mode - Hunter: {hunter_max_workers}, Judge: {judge_max_workers}")
+                    else:
+                        # Cloud 모드: 풀 병렬 처리
+                        hunter_max_workers = _parse_int_env(os.getenv("SCOUT_HUNTER_MAX_WORKERS"), 8)
+                        judge_max_workers = _parse_int_env(os.getenv("SCOUT_JUDGE_MAX_WORKERS"), 8)
+                        logger.info(f"   (Config) ☁️ Cloud Mode - Hunter: {hunter_max_workers}, Judge: {judge_max_workers}")
                     
                     # Phase 1: Hunter (통계 컨텍스트 포함)
                     phase1_results = []
@@ -713,7 +793,7 @@ def main():
                     # =============================================================
                     # Phase 1: Hunter LLM 호출 (Smart Skip 통과 종목만)
                     # =============================================================
-                    with ThreadPoolExecutor(max_workers=llm_max_workers) as executor:
+                    with ThreadPoolExecutor(max_workers=hunter_max_workers) as executor:
                         future_to_code = {}
                         for code in llm_candidates:
                             info = candidate_stocks[code]
@@ -753,7 +833,7 @@ def main():
                     if phase1_passed:
                         logger.info(f"\n   [Step 4] Debate + Judge (하이브리드 점수 결합)")
                         
-                        with ThreadPoolExecutor(max_workers=llm_max_workers) as executor:
+                        with ThreadPoolExecutor(max_workers=judge_max_workers) as executor:
                             future_to_code = {}
                             
                             # Archivist 사용 (위에서 초기화됨)
@@ -802,6 +882,34 @@ def main():
             # 공통 Phase 3: 최종 Watchlist 저장
             logger.info(f"--- [Phase 3] 최종 Watchlist {len(final_approved_list)}개 저장 ---")
             database.save_to_watchlist(session, final_approved_list)
+            
+            # Hot Watchlist 저장 (Price Monitor WebSocket 구독용)
+            # 시장 국면별 score_threshold 계산
+            recon_score_by_regime = {
+                "STRONG_BULL": 58,
+                "BULL": 62,
+                "SIDEWAYS": 65,
+                "BEAR": 70,
+            }
+            hot_score_threshold = recon_score_by_regime.get(
+                current_regime if 'current_regime' in locals() else 'SIDEWAYS', 
+                65
+            )
+            hot_regime = current_regime if 'current_regime' in locals() else 'UNKNOWN'
+            
+            # LLM Score 기준 이상인 종목만 Hot Watchlist로 저장
+            hot_candidates = [
+                s for s in final_approved_list 
+                if s.get('llm_score', 0) >= hot_score_threshold and s.get('code') != '0001'
+            ]
+            # LLM Score 내림차순 정렬 + 상위 15개 제한
+            hot_candidates = sorted(hot_candidates, key=lambda x: x.get('llm_score', 0), reverse=True)[:15]
+            
+            save_hot_watchlist(
+                stocks=hot_candidates,
+                market_regime=hot_regime,
+                score_threshold=hot_score_threshold
+            )
             
             with ThreadPoolExecutor(max_workers=10) as executor:
                 if hasattr(kis_api, 'API_CALL_DELAY'):

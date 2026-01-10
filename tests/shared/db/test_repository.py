@@ -644,3 +644,408 @@ class TestEdgeCases:
         assert watchlist["TEST01"]["market_cap"] is None
         assert watchlist["TEST01"]["llm_score"] == 0  # None -> 0
 
+
+# ============================================================================
+# Tests: KIS Gateway API (Mock)
+# ============================================================================
+
+class TestKisGatewayApi:
+    """KIS Gateway API 관련 테스트 (mocked)"""
+    
+    def test_fetch_current_prices_empty_list(self):
+        """빈 종목 리스트 -> 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        
+        result = fetch_current_prices_from_kis([])
+        
+        assert result == {}
+    
+    def test_fetch_current_prices_success(self, monkeypatch):
+        """실시간 현재가 조회 성공"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        # httpx.Client를 mock
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "success": True,
+            "data": {"stck_prpr": 75000}
+        }
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post.return_value = mock_response
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_current_prices_from_kis(["005930"])
+        
+        assert result == {"005930": 75000.0}
+    
+    def test_fetch_current_prices_with_alternative_fields(self, monkeypatch):
+        """다양한 현재가 필드명 지원"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "success": True,
+            "data": {"price": 150000}  # 다른 필드명
+        }
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post.return_value = mock_response
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_current_prices_from_kis(["000660"])
+        
+        assert result == {"000660": 150000.0}
+    
+    def test_fetch_current_prices_api_failure(self, monkeypatch):
+        """API 실패시 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 500  # 서버 에러
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post.return_value = mock_response
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_current_prices_from_kis(["005930"])
+        
+        assert result == {}
+    
+    def test_fetch_current_prices_network_error(self, monkeypatch):
+        """네트워크 에러시 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import patch
+        
+        with patch('httpx.Client', side_effect=Exception("Network error")):
+            result = fetch_current_prices_from_kis(["005930"])
+        
+        assert result == {}
+    
+    def test_fetch_cash_balance_success(self, monkeypatch):
+        """현금 잔고 조회 성공"""
+        from shared.db.repository import fetch_cash_balance_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "success": True,
+            "data": 5000000.0
+        }
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post.return_value = mock_response
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_cash_balance_from_kis()
+        
+        assert result == 5000000.0
+    
+    def test_fetch_cash_balance_failure(self, monkeypatch):
+        """현금 잔고 조회 실패시 0.0"""
+        from shared.db.repository import fetch_cash_balance_from_kis
+        from unittest.mock import patch
+        
+        with patch('httpx.Client', side_effect=Exception("Network error")):
+            result = fetch_cash_balance_from_kis()
+        
+        assert result == 0.0
+
+
+# ============================================================================
+# Tests: Dashboard V2 API (추가)
+# ============================================================================
+
+class TestDashboardV2Api:
+    """Dashboard V2 API 함수 테스트"""
+    
+    def test_get_portfolio_with_current_prices_empty(self, db_session):
+        """빈 포트폴리오"""
+        from shared.db.repository import get_portfolio_with_current_prices
+        
+        result = get_portfolio_with_current_prices(db_session, use_realtime=False)
+        
+        assert result == []
+    
+    def test_get_portfolio_with_current_prices_no_realtime(self, session_with_portfolio):
+        """실시간 조회 비활성화"""
+        from shared.db.repository import get_portfolio_with_current_prices
+        
+        result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=False)
+        
+        # HOLDING 상태만 반환
+        assert len(result) == 2
+        
+        # 필드 확인
+        samsung = next(r for r in result if r["stock_code"] == "005930")
+        assert samsung["stock_name"] == "삼성전자"
+        assert samsung["quantity"] == 100
+        assert samsung["avg_price"] == 70000
+        assert samsung["current_price"] == 70000  # 실시간 미사용시 avg_price 사용
+        assert samsung["profit"] == 0  # 현재가 == 평균가
+        assert samsung["profit_rate"] == 0
+    
+    def test_get_portfolio_with_current_prices_with_realtime(self, session_with_portfolio, monkeypatch):
+        """실시간 조회 활성화 (mocked)"""
+        from shared.db.repository import get_portfolio_with_current_prices
+        from unittest.mock import patch
+        
+        # fetch_current_prices_from_kis를 mock
+        mock_prices = {"005930": 77000.0, "000660": 165000.0}
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+            result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=True)
+        
+        assert len(result) == 2
+        
+        samsung = next(r for r in result if r["stock_code"] == "005930")
+        assert samsung["current_price"] == 77000
+        # profit = 77000*100 - 70000*100 = 700000
+        assert samsung["profit"] == 700000
+        # profit_rate = 700000 / 7000000 * 100 = 10%
+        assert abs(samsung["profit_rate"] - 10.0) < 0.01
+    
+    def test_get_portfolio_summary_with_realtime(self, session_with_portfolio, monkeypatch):
+        """포트폴리오 요약 (실시간)"""
+        from shared.db.repository import get_portfolio_summary
+        from unittest.mock import patch
+        
+        mock_prices = {"005930": 77000.0, "000660": 165000.0}
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis', return_value=1000000.0):
+                result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
+        
+        # 삼성: 77000 * 100 = 7,700,000
+        # SK: 165000 * 50 = 8,250,000
+        # 총 평가금액: 15,950,000
+        assert result["total_value"] == 15950000 + 1000000  # + 현금
+        assert result["total_invested"] == 14500000
+        assert result["total_profit"] == 1450000  # 15,950,000 - 14,500,000
+        assert result["cash_balance"] == 1000000
+    
+    def test_get_scheduler_jobs_success(self, db_session):
+        """스케줄러 Job 조회 - jobs 테이블 없는 경우"""
+        from shared.db.repository import get_scheduler_jobs
+        
+        # jobs 테이블이 없으면 빈 리스트 반환
+        result = get_scheduler_jobs(db_session)
+        
+        assert result == []
+    
+    def test_watchlist_with_trade_tier_metadata(self, db_session):
+        """WatchList trade_tier 메타데이터 파싱"""
+        from shared.db.models import WatchList
+        from shared.db.repository import get_active_watchlist
+        
+        # is_tradable=1이면 inferred_tier는 TIER1
+        db_session.add(WatchList(
+            stock_code="TEST01",
+            stock_name="테스트",
+            is_tradable=1,
+            llm_reason="테스트 이유\n\n[LLM_METADATA]{\"trade_tier\": \"TIER2\", \"llm_grade\": \"B\"}",
+        ))
+        db_session.commit()
+        
+        watchlist = get_active_watchlist(db_session)
+        
+        # 메타데이터 파싱 확인
+        assert watchlist["TEST01"]["llm_metadata"].get("trade_tier") == "TIER2"
+        assert watchlist["TEST01"]["llm_grade"] == "B"
+        assert watchlist["TEST01"]["is_tradable"] is True
+    
+    def test_watchlist_trade_tier_inferred(self, db_session):
+        """WatchList trade_tier 추론 (is_tradable 기반)"""
+        from shared.db.models import WatchList
+        from shared.db.repository import get_active_watchlist
+        
+        # is_tradable=0이면 BLOCKED
+        db_session.add(WatchList(
+            stock_code="TEST02",
+            stock_name="테스트2",
+            is_tradable=0,
+            llm_reason="거래 불가",
+        ))
+        db_session.commit()
+        
+        watchlist = get_active_watchlist(db_session)
+        
+        assert watchlist["TEST02"]["trade_tier"] == "BLOCKED"
+        assert watchlist["TEST02"]["is_tradable"] is False
+
+
+# ============================================================================
+# Tests: Additional Coverage (미커버 라인)
+# ============================================================================
+
+class TestAdditionalCoverage:
+    """미커버 라인 추가 테스트"""
+    
+    def test_fetch_current_prices_single_stock_failure(self, monkeypatch):
+        """개별 종목 조회 실패 시 continue (라인 54-56)"""
+        from shared.db.repository import fetch_current_prices_from_kis
+        from unittest.mock import MagicMock, patch
+        
+        # 첫 번째 종목은 성공, 두 번째 종목은 예외
+        call_count = [0]
+        def mock_post(url, json):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                # 첫 번째 종목 성공
+                mock_resp = MagicMock()
+                mock_resp.status_code = 200
+                mock_resp.json.return_value = {
+                    "success": True,
+                    "data": {"stck_prpr": 70000}
+                }
+                return mock_resp
+            else:
+                # 두 번째 종목 예외
+                raise Exception("Individual stock fetch error")
+        
+        mock_client = MagicMock()
+        mock_client.__enter__ = MagicMock(return_value=mock_client)
+        mock_client.__exit__ = MagicMock(return_value=False)
+        mock_client.post = mock_post
+        
+        with patch('httpx.Client', return_value=mock_client):
+            result = fetch_current_prices_from_kis(["005930", "000660"])
+        
+        # 첫 번째 종목만 성공
+        assert "005930" in result
+        assert result["005930"] == 70000.0
+        assert "000660" not in result  # 두 번째 종목은 실패
+    
+    def test_get_portfolio_summary_realtime_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_summary 실시간 조회 예외 시 (라인 332-333)"""
+        from shared.db.repository import get_portfolio_summary
+        from unittest.mock import patch
+        
+        # fetch_current_prices_from_kis 예외 발생
+        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+                   side_effect=Exception("Network error")):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis', return_value=0.0):
+                result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
+        
+        # 예외 처리 후 평균가 사용하여 계산
+        assert result["total_invested"] == 14500000
+        assert result["positions_count"] == 2
+    
+    def test_get_portfolio_summary_cash_balance_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_summary 현금 잔고 조회 예외 시 (라인 352-353)"""
+        from shared.db.repository import get_portfolio_summary
+        from unittest.mock import patch
+        
+        mock_prices = {"005930": 77000.0, "000660": 165000.0}
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis', 
+                       side_effect=Exception("Cash balance error")):
+                result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
+        
+        # 현금 잔고 예외 시 0.0 사용
+        assert result["cash_balance"] == 0.0
+    
+    def test_get_portfolio_with_current_prices_realtime_exception(self, session_with_portfolio, monkeypatch):
+        """get_portfolio_with_current_prices 실시간 조회 예외 시 (라인 387-388)"""
+        from shared.db.repository import get_portfolio_with_current_prices
+        from unittest.mock import patch
+        
+        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+                   side_effect=Exception("Network error")):
+            result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=True)
+        
+        # 예외 시 평균가 사용
+        assert len(result) == 2
+        samsung = next(r for r in result if r["stock_code"] == "005930")
+        assert samsung["current_price"] == samsung["avg_price"]
+    
+    def test_get_config_not_silent(self, session_with_config):
+        """get_config silent=False 경로 (라인 496)"""
+        from shared.db.repository import get_config
+        
+        # silent=False (기본값)로 존재하지 않는 키 조회
+        value = get_config(session_with_config, "NON_EXISTENT_KEY", silent=False)
+        
+        assert value is None
+    
+    def test_get_config_exception(self, db_session, mocker):
+        """get_config 예외 처리 (라인 498-500)"""
+        from shared.db.repository import get_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        value = get_config(db_session, "ANY_KEY")
+        
+        assert value is None
+    
+    def test_set_config_with_description(self, session_with_config):
+        """set_config description 업데이트 (라인 525)"""
+        from shared.db.repository import set_config
+        from shared.db.models import Config
+        
+        # 기존 설정 업데이트 with description
+        result = set_config(
+            session_with_config, 
+            "TRADING_MODE", 
+            "REAL", 
+            description="실거래 모드로 변경"
+        )
+        
+        assert result is True
+        
+        # description이 업데이트되었는지 확인
+        config = session_with_config.query(Config).filter(
+            Config.config_key == "TRADING_MODE"
+        ).first()
+        assert config.description == "실거래 모드로 변경"
+    
+    def test_set_config_exception(self, db_session, mocker):
+        """set_config 예외 처리 (라인 540-543)"""
+        from shared.db.repository import set_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        result = set_config(db_session, "ANY_KEY", "ANY_VALUE")
+        
+        assert result is False
+    
+    def test_set_config_long_value(self, db_session):
+        """set_config 긴 값 저장 (라인 538)"""
+        from shared.db.repository import set_config, get_config
+        
+        # 50자 초과 값
+        long_value = "A" * 60
+        
+        result = set_config(db_session, "LONG_KEY", long_value)
+        
+        assert result is True
+        assert get_config(db_session, "LONG_KEY") == long_value
+    
+    def test_delete_config_exception(self, db_session, mocker):
+        """delete_config 예외 처리 (라인 558-561)"""
+        from shared.db.repository import delete_config
+        
+        # session.query를 mock하여 예외 발생
+        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
+        
+        result = delete_config(db_session, "ANY_KEY")
+        
+        assert result is False
+

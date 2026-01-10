@@ -47,11 +47,16 @@ from pybreaker import CircuitBreaker, CircuitBreakerError, CircuitBreakerListene
 import requests
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# shared 패키지 임포트
+try:
+    import shared
+except ImportError:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.auth as auth
 from shared.kis.client import KISClient
 import shared.database as database
+from shared.monitoring_alerts import get_monitoring_alerts
 
 # 로깅 설정
 logging.basicConfig(
@@ -106,10 +111,34 @@ class GatewayCircuitBreakerListener(CircuitBreakerListener):
         if new.name == 'open':
             logger.error(f"🚨 Circuit Breaker OPEN! (연속 {breaker.fail_counter}회 실패)")
             stats['circuit_breaker_trips'] += 1
+            # 🔔 Telegram 알림
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='OPEN',
+                    failure_count=breaker.fail_counter,
+                    next_retry=float(breaker._reset_timeout)
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
         elif new.name == 'closed':
             logger.info(f"✅ Circuit Breaker CLOSED (복구 완료)")
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='CLOSED'
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
         elif new.name == 'half_open':
             logger.info(f"⚠️ Circuit Breaker HALF-OPEN (테스트 요청 시도)")
+            try:
+                get_monitoring_alerts().notify_circuit_breaker_state(
+                    breaker_name='KIS_API',
+                    new_state='HALF_OPEN'
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ 알림 전송 실패: {e}")
 
 # 500 에러 감지를 위한 예외 처리 필요
 # requests.exceptions.HTTPError 등을 감지하도록 설정
@@ -566,6 +595,64 @@ def get_daily_prices():
             "response_time": response_time
         }), 200
             
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ Daily Prices 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/market-data/investor-trend', methods=['POST'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def get_investor_trend():
+    """투자자별 매매동향 조회 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+    
+    try:
+        # 요청 파라미터
+        data = request.get_json() or {}
+        stock_code = data.get('stock_code')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if not stock_code:
+            stats['failed_requests'] += 1
+            return jsonify({"error": "stock_code required"}), 400
+        
+        logger.info(f"📊 [Gateway] Investor Trend 요청: {stock_code}")
+
+        # KIS API 호출
+        # [Fix] Access market_data attribute directly, not via method
+        market_data_module = kis_client.market_data
+        
+        # Method: get_investor_trend(self, stock_code, start_date=None, end_date=None)
+        trends = call_kis_api_with_breaker(
+            market_data_module.get_investor_trend,
+            stock_code,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if trends is None:
+             raise Exception("Failed to fetch investor trend")
+
+        stats['successful_requests'] += 1
+        
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/investor-trend',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success',
+            'stock_code': stock_code
+        })
+        
+        return jsonify({
+            "success": True,
+            "data": trends,
+            "response_time": response_time
+        }), 200
+            
     except CircuitBreakerError as e:
         stats['failed_requests'] += 1
         logger.error(f"🚨 Circuit Breaker OPEN: {e}")
@@ -573,7 +660,55 @@ def get_daily_prices():
         
     except Exception as e:
         stats['failed_requests'] += 1
-        logger.error(f"❌ Daily Prices 오류: {e}", exc_info=True)
+        logger.error(f"❌ Investor Trend 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route('/api/market-data/check-market-open', methods=['GET'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def check_market_open():
+    """장 운영일 확인 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+    
+    try:
+        # KIS API 호출
+        logger.info(f"📅 [Gateway] Market Open Check 요청")
+        
+        # KISClient의 check_market_open 메서드는 내부적으로 캐싱이나 로직이 있을 수 있음
+        # 여기서는 단순히 호출하고 결과를 반환
+        is_open = call_kis_api_with_breaker(
+            kis_client.check_market_open
+        )
+        
+        # bool 반환됨
+        stats['successful_requests'] += 1
+        
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/check-market-open',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success'
+        })
+        
+        return jsonify({
+            "success": True,
+            "data": {
+                "is_open": is_open
+            },
+            "response_time": response_time
+        }), 200
+            
+    except CircuitBreakerError as e:
+        stats['failed_requests'] += 1
+        logger.error(f"🚨 Circuit Breaker OPEN: {e}")
+        return jsonify({"error": "Circuit Breaker OPEN - KIS API 일시적으로 사용 불가"}), 503
+        
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ Market Open Check 오류: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 

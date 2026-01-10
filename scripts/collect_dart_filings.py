@@ -6,14 +6,14 @@
 scripts/collect_dart_filings.py
 
 DART(OpenDartReader) API를 사용해 최근 공시 메타데이터를 수집하여
-`STOCK_DISCLOSURES` 테이블에 저장합니다. (MariaDB/Oracle 겸용)
+`STOCK_DISCLOSURES` 테이블에 저장합니다. (MariaDB 단일 지원)
 """
 
 import argparse
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
 from dotenv import load_dotenv
@@ -44,45 +44,27 @@ REPORT_CODE_CATEGORY = {
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def ensure_table_exists(connection):
     cursor = connection.cursor()
     try:
-        if _is_mariadb():
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                    ID INT AUTO_INCREMENT PRIMARY KEY,
-                    RECEIPT_NO VARCHAR(20) UNIQUE,
-                    STOCK_CODE VARCHAR(20) NOT NULL,
-                    COMPANY_NAME VARCHAR(255),
-                    DISCLOSURE_DATE DATETIME,
-                    REPORT_CODE VARCHAR(10),
-                    CATEGORY VARCHAR(50),
-                    TITLE VARCHAR(1000),
-                    LINK VARCHAR(2000),
-                    SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """)
-        else:
-            try:
-                cursor.execute(f"SELECT 1 FROM {TABLE_NAME} WHERE ROWNUM=1")
-            except Exception:
-                cursor.execute(f"""
-                    CREATE TABLE {TABLE_NAME} (
-                        ID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                        RECEIPT_NO VARCHAR2(20) UNIQUE,
-                        STOCK_CODE VARCHAR2(20) NOT NULL,
-                        COMPANY_NAME VARCHAR2(255),
-                        DISCLOSURE_DATE TIMESTAMP,
-                        REPORT_CODE VARCHAR2(10),
-                        CATEGORY VARCHAR2(50),
-                        TITLE VARCHAR2(1000),
-                        LINK VARCHAR2(2000),
-                        SCRAPED_AT TIMESTAMP DEFAULT SYSTIMESTAMP
-                    )
-                """)
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+                ID INT AUTO_INCREMENT PRIMARY KEY,
+                RECEIPT_NO VARCHAR(20) UNIQUE,
+                STOCK_CODE VARCHAR(20) NOT NULL,
+                COMPANY_NAME VARCHAR(255),
+                DISCLOSURE_DATE DATETIME,
+                REPORT_CODE VARCHAR(10),
+                CATEGORY VARCHAR(50),
+                TITLE VARCHAR(1000),
+                LINK VARCHAR(2000),
+                SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
         connection.commit()
         logger.info(f"✅ 테이블 확인 완료: {TABLE_NAME}")
     except Exception as e:
@@ -93,33 +75,32 @@ def ensure_table_exists(connection):
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
-def load_stock_codes(limit: int = None) -> List[str]:
-    import FinanceDataReader as fdr
-    codes = fdr.StockListing("KOSPI")["Code"].tolist()
-    if limit:
-        return codes[:limit]
-    return codes
-
-
+def load_stock_codes(limit):
+    """DB에서 종목 코드 로드 (KOSPI)"""
+    # [Patch] FDR 이슈로 인해 DB에서 직접 조회로 변경
+    import shared.database as database
+    conn = database.get_db_connection()
+    try:
+        cursor = conn.cursor()
+        query = "SELECT DISTINCT STOCK_CODE FROM STOCK_DAILY_PRICES_3Y ORDER BY STOCK_CODE"
+        if limit:
+            query += f" LIMIT {limit}"
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        codes = []
+        for row in rows:
+            if isinstance(row, dict):
+                codes.append(row['STOCK_CODE'])
+            else:
+                codes.append(row[0])
+        return codes
+    finally:
+        conn.close()
 def fetch_filings(dart_client, stock_code: str, start: str, end: str) -> List[Dict]:
     """
     DART 공시 목록 조회
@@ -191,7 +172,7 @@ def save_reports(connection, reports: List[Dict]):
             report["category"],
             report["title"],
             report["link"],
-            datetime.utcnow(),
+            datetime.now(timezone.utc),
         )
         execute_upsert(
             cursor,
@@ -229,8 +210,8 @@ def main():
     # API 키 우선순위: CLI 인자 > 환경변수 > secrets.json
     api_key = args.api_key or os.getenv("DART_API_KEY")
     if not api_key:
-        # secrets.json에서 읽기 시도
-        api_key = auth.get_secret("dart-api-key")
+        # secrets.json에서 읽기 시도 (hyphen or snake_case)
+        api_key = auth.get_secret("dart-api-key") or auth.get_secret("dart_api_key")
     
     if not api_key:
         logger.error("❌ DART_API_KEY가 설정되지 않았습니다.")
@@ -247,8 +228,7 @@ def main():
         return
 
     dart = OpenDartReader(api_key)  # OpenDartReader 모듈 자체가 클래스
-    db_config = get_db_config()
-    conn = database.get_db_connection(**db_config)
+    conn = database.get_db_connection()
     if not conn:
         logger.error("DB 연결 실패")
         return

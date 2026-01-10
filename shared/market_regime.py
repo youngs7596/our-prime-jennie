@@ -32,9 +32,11 @@ shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 """
 
 import logging
+import os
 import pandas as pd
 from typing import Dict, Optional, Tuple
 from shared import strategy
+from shared.config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -167,15 +169,24 @@ class MarketRegimeDetector:
             
             # SIDEWAYS 점수: 횡보 특성 기반
             sideways_score = 0.0
-            # 이동평균선 근처에 있으면 기본 점수
-            if abs(ma_distance) < ma_threshold:  # MA ±임계값 이내
-                sideways_score += 30
-            # 5일 수익률이 작으면 추가 점수
-            if abs(return_5d) < 1.0:  # ±1% 이내
-                sideways_score += 30
-            # 1일 수익률도 작으면 추가 점수
-            if abs(return_1d) < 0.5:  # ±0.5% 이내
-                sideways_score += 40
+            
+            # [Fix: Cowardly Bot] 추세가 강할 때는 횡보 점수 강제 배제
+            # 이격도가 3% 이상 벌어지면 변동성이 낮아도 횡보장이 아님 (숨쉬기 구간)
+            sideways_cutoff = 2.5 if using_ma10 else 3.0
+            
+            if abs(ma_distance) >= sideways_cutoff:
+                sideways_score = 0.0
+            else:
+                # 이동평균선 근처에 있으면 기본 점수
+                if abs(ma_distance) < ma_threshold:  # MA ±임계값 이내
+                    sideways_score += 30
+                # 5일 수익률이 작으면 추가 점수
+                if abs(return_5d) < 1.0:  # ±1% 이내
+                    sideways_score += 30
+                # 1일 수익률도 작으면 추가 점수
+                if abs(return_1d) < 0.5:  # ±0.5% 이내
+                    sideways_score += 40
+            
             regime_scores[self.REGIME_SIDEWAYS] = sideways_score
             
             # 가장 높은 점수를 가진 시장 상황 선택
@@ -296,7 +307,13 @@ class StrategySelector:
                 self.STRATEGY_MEAN_REVERSION,
                 self.STRATEGY_TREND_FOLLOWING
             ],
-            MarketRegimeDetector.REGIME_BEAR: [] # 🅿️ (P-Parking)
+            # 🅿️ (P-Parking) 기본값은 거래 중단이지만,
+            # [Project Recon] 정찰병(RECON) 경로를 위해 제한적 추세 신호를 열어둘 수 있음.
+            MarketRegimeDetector.REGIME_BEAR: (
+                [self.STRATEGY_TREND_FOLLOWING]
+                if ConfigManager().get_bool("ENABLE_RECON_IN_BEAR", default=True)
+                else []
+            ),
         }
         
         strategies = strategy_map.get(regime, [self.STRATEGY_MEAN_REVERSION])

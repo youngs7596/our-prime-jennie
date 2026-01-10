@@ -67,17 +67,34 @@ def health():
 def scout():
     """
     Scout Job 실행 엔드포인트
-    Cloud Scheduler가 이 엔드포인트를 호출
-    
-    1. 자동 파라미터 최적화 (백테스트 + AI 검증)
-    2. Watchlist 갱신 (트리플 소스 전략)
-    3. 과거 데이터 수집 및 저장
+    비동기 방식으로 전환하여 HTTP 타임아웃 및 Health Check 차단 방지
     """
     try:
-        result = _run_scout_job(trigger_source="http")
-        return jsonify(result), 200
+        if not scheduler_job_publisher:
+            return jsonify({"status": "error", "message": "RabbitMQ Publisher not initialized"}), 503
+        
+        run_id = str(uuid.uuid4())
+        payload = {
+            "job_id": _get_scheduler_job_id(),
+            "scope": os.getenv("SCHEDULER_SCOPE", "real"),
+            "run_id": run_id,
+            "trigger_source": "manual_http",
+            "params": {},
+            "timeout_sec": 3600,
+            "retry_limit": 1,
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        msg_id = scheduler_job_publisher.publish(payload)
+        logger.info("🚀 Scout Job 비동기 트리거됨 (run_id=%s, msg_id=%s)", run_id, msg_id)
+        
+        return jsonify({
+            "status": "triggered",
+            "run_id": run_id,
+            "message": "Scout job pushed to queue for asynchronous processing"
+        }), 202
     except Exception as e:
-        logger.error(f"❌ Scout Job 실패: {e}", exc_info=True)
+        logger.error(f"❌ Scout Job 트리거 실패: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 def _run_scout_job(trigger_source: str):
@@ -120,26 +137,55 @@ def handle_scheduler_job(payload: dict):
         mark_job_run(effective_job_id, scope=job_msg.scope)
 
 
+# 전역 플래그를 사용하여 워커 중복 실행 방지
+_worker_started = False
+_publisher_initialized = False
+
+def init_scheduler_publisher():
+    """RabbitMQ Publisher 초기화 (트리거용)"""
+    global scheduler_job_publisher, _publisher_initialized
+    if _publisher_initialized:
+        return
+    
+    amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+    queue_name = _get_scheduler_queue_name()
+    scheduler_job_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
+    _publisher_initialized = True
+    logger.info("✅ Scout Job Publisher 초기화 완료 (queue=%s)", queue_name)
+
 def start_scheduler_worker():
-    global scheduler_job_worker, scheduler_job_publisher
+    """RabbitMQ Worker 시작 (작업 처리용)"""
+    global scheduler_job_worker, scheduler_job_publisher, _worker_started
+    
+    # Publisher는 무조건 초기화
+    init_scheduler_publisher()
+
+    if _worker_started:
+        return
+    
     if os.getenv("ENABLE_SCOUT_JOB_WORKER", "true").lower() != "true":
-        logger.info("⚠️ Scout Job Scheduler Worker 비활성화 상태")
+        logger.info("⚠️ Scout Job Scheduler Worker 비활성화 상태 (API 모드)")
         return
 
     amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
     queue_name = _get_scheduler_queue_name()
-    scheduler_job_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
     scheduler_job_worker = RabbitMQWorker(
         amqp_url=amqp_url,
         queue_name=queue_name,
         handler=handle_scheduler_job,
     )
     scheduler_job_worker.start()
+    _worker_started = True
     logger.info("✅ Scout Job Scheduler Worker 시작 (queue=%s)", queue_name)
     _bootstrap_scheduler_job()
 
 
 def _bootstrap_scheduler_job():
+    # 환경 변수로 시작 시 자동 실행 여부 제어 (기본: 비활성화)
+    if os.getenv("ENABLE_STARTUP_ONESHOT", "false").lower() != "true":
+        logger.info("⏭️ Startup Oneshot 비활성화 (ENABLE_STARTUP_ONESHOT=false)")
+        return
+    
     if not scheduler_job_publisher:
         logger.warning("⚠️ Scheduler Job Publisher 없음. Bootstrap을 건너뜁니다.")
         return
@@ -165,7 +211,17 @@ def _bootstrap_scheduler_job():
 start_scheduler_worker()
 
 if __name__ == '__main__':
-    # Cloud Run에서는 PORT 환경 변수를 사용
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+    # Worker 모드일 때는 Flask 서버를 띄우지 않음
+    if os.getenv("ENABLE_SCOUT_JOB_WORKER", "true").lower() == "true":
+        logger.info("🛠️ Scout Job Worker 모드로 실행 중 (No Flask)")
+        # 워커 스레드는 이미 start_scheduler_worker()에서 시작됨
+        # 메인 스레드가 즉시 종료되지 않도록 대기
+        import time
+        while True:
+            time.sleep(3600)
+    else:
+        # Cloud Run에서는 PORT 환경 변수를 사용
+        port = int(os.environ.get('PORT', 8080))
+        logger.info("📡 Scout Job API 서버 시작 (Port: %s)", port)
+        app.run(host='0.0.0.0', port=port)
 

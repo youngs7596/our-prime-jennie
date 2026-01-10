@@ -9,9 +9,10 @@ import os
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
+import pandas as pd
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
 import shared.auth as auth
@@ -30,6 +31,7 @@ from shared.strategy_presets import (
     apply_preset_to_config,
     resolve_preset_for_regime,
 )
+from shared.db.factor_repository import FactorRepository
 from strategy import bear_strategies
 
 logger = logging.getLogger(__name__)
@@ -39,8 +41,6 @@ class BuyScanner:
     """매수 신호 스캔 클래스"""
     
     # 상수 정의
-    BB_DISTANCE_THRESHOLD_PCT = 2.0
-    RSI_OVERSOLD_BULL_THRESHOLD = 40
     MOMENTUM_SIGNAL_THRESHOLD = 3.0
     RELATIVE_STRENGTH_THRESHOLD = 2.0
     
@@ -55,6 +55,9 @@ class BuyScanner:
         self.regime_detector = MarketRegimeDetector()
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
+        
+        # Config에서 임계값 로드 (기본값: 2.0)
+        self.bb_distance_threshold_pct = self.config.get_float("BUY_BB_BUFFER_PCT", default=2.0)
         
         # 캐시
         self._kospi_cache = None
@@ -114,73 +117,126 @@ class BuyScanner:
                         "scan_timestamp": datetime.now(timezone.utc).isoformat()
                     }
 
+                # [Phase 4] Hot Watchlist Only 모드 (WebSocket 장애 시 Fallback)
+                # OpportunityWatcher가 정상 작동하면 buy-scanner는 Hot Watchlist만 스캔
+                hot_watchlist_only = self.config.get_bool('HOT_WATCHLIST_ONLY_MODE', default=False)
+                if hot_watchlist_only:
+                    try:
+                        import redis
+                        import json
+                        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+                        r = redis.from_url(redis_url, decode_responses=True)
+                        version_key = r.get("hot_watchlist:active")
+                        if version_key:
+                            hot_data = r.get(version_key)
+                            if hot_data:
+                                payload = json.loads(hot_data)
+                                hot_codes = {s['code'] for s in payload.get('stocks', [])}
+                                # Hot Watchlist에 있는 종목만 필터링
+                                original_count = len(watchlist)
+                                watchlist = {k: v for k, v in watchlist.items() if k in hot_codes}
+                                logger.info(f"🔥 [Hot Watchlist Only] {original_count} → {len(watchlist)}개로 필터")
+                    except Exception as e:
+                        logger.warning(f"Hot Watchlist 로드 실패 (전체 Watchlist 사용): {e}")
+
                 # 하락장에서는 기본 중단, 단 설정에 따라 제한적 스캔 허용
                 if current_regime == MarketRegimeDetector.REGIME_BEAR:
                     if not allow_bear_trading:
-                        logger.warning("📉 하락장 감지! 매수 활동 중단 (ALLOW_BEAR_TRADING=false)")
-                        return {
-                            "candidates": [],
-                            "market_regime": current_regime,
-                            "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                        # [Project Recon] 하락장에서도 RECON tier(정찰병) 후보는 제한적으로 스캔
+                        recon_only = {}
+                        for code, info in watchlist.items():
+                            trade_tier = (
+                                info.get("trade_tier")
+                                or (info.get("llm_metadata") or {}).get("trade_tier")
+                                or ("TIER1" if info.get("is_tradable", True) else "BLOCKED")
+                            )
+                            if trade_tier == "RECON":
+                                recon_only[code] = info
+
+                        if not recon_only:
+                            logger.warning("📉 하락장 감지! 매수 활동 중단 (ALLOW_BEAR_TRADING=false, RECON 후보 없음)")
+                            return {
+                                "candidates": [],
+                                "market_regime": current_regime,
+                                "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+
+                        logger.warning(f"📉 하락장 감지! RECON 정찰 후보만 제한적으로 스캔: {len(recon_only)}개")
+                        watchlist = recon_only
+                        # BEAR 기본 전략이 []인 경우가 있어, 정찰은 추세 신호만 열어둠
+                        active_strategies = [StrategySelector.STRATEGY_TREND_FOLLOWING]
+                    else:
+                        filtered_watchlist = {}
+                        for code, info in watchlist.items():
+                            metadata = info.get('llm_metadata') or {}
+                            bear_strategy = metadata.get('bear_strategy')
+                            llm_grade = metadata.get('llm_grade') or info.get('llm_grade')
+                            if not bear_strategy or not llm_grade:
+                                continue
+                            strategy_meta = bear_strategy.get('market_regime_strategy', {})
+                            if (
+                                strategy_meta.get('decision') == 'TRADABLE'
+                                and strategy_meta.get('strategy_type') != 'DO_NOT_TRADE'
+                                and strategy_meta.get('confidence_score', 0) >= min_bear_confidence
+                                and llm_grade in ('S', 'A', 'B')
+                            ):
+                                enriched = info.copy()
+                                enriched['bear_strategy'] = bear_strategy
+                                enriched['llm_grade'] = llm_grade
+                                enriched['is_tradable'] = True
+                                filtered_watchlist[code] = enriched
+                        if not filtered_watchlist:
+                            logger.warning("📉 하락장 제한적 매수 조건을 충족하는 후보가 없습니다.")
+                            return {
+                                "candidates": [],
+                                "market_regime": current_regime,
+                                "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                            }
+                        watchlist = filtered_watchlist
+                        bear_context = {
+                            "position_ratio": self.config.get_float('BEAR_POSITION_RATIO', default=0.2),
+                            "stop_loss_atr_mult": self.config.get_float('BEAR_STOP_LOSS_ATR_MULT', default=2.0),
+                            "tp_pct": self.config.get_float('BEAR_FIRST_TP_PCT', default=0.03),
+                            "partial_ratio": self.config.get_float('BEAR_PARTIAL_CLOSE_RATIO', default=0.5),
+                            "volume_multiplier": self.config.get_float('BEAR_VOLUME_SPIKE_MULTIPLIER', default=1.5),
+                            "atr_period": 14,
+                            "bear_mode": True,
                         }
-                    filtered_watchlist = {}
-                    for code, info in watchlist.items():
-                        metadata = info.get('llm_metadata') or {}
-                        bear_strategy = metadata.get('bear_strategy')
-                        llm_grade = metadata.get('llm_grade') or info.get('llm_grade')
-                        if not bear_strategy or not llm_grade:
-                            continue
-                        strategy_meta = bear_strategy.get('market_regime_strategy', {})
-                        if (
-                            strategy_meta.get('decision') == 'TRADABLE'
-                            and strategy_meta.get('strategy_type') != 'DO_NOT_TRADE'
-                            and strategy_meta.get('confidence_score', 0) >= min_bear_confidence
-                            and llm_grade in ('S', 'A', 'B')
-                        ):
-                            enriched = info.copy()
-                            enriched['bear_strategy'] = bear_strategy
-                            enriched['llm_grade'] = llm_grade
-                            enriched['is_tradable'] = True
-                            filtered_watchlist[code] = enriched
-                    if not filtered_watchlist:
-                        logger.warning("📉 하락장 제한적 매수 조건을 충족하는 후보가 없습니다.")
-                        return {
-                            "candidates": [],
-                            "market_regime": current_regime,
-                            "scan_timestamp": datetime.now(timezone.utc).isoformat()
+                        risk_setting = {
+                            "stop_loss_pct": -0.02,
+                            "target_profit_pct": 0.03,
+                            "position_size_ratio": bear_context["position_ratio"],
                         }
-                    watchlist = filtered_watchlist
-                    bear_context = {
-                        "position_ratio": self.config.get_float('BEAR_POSITION_RATIO', default=0.2),
-                        "stop_loss_atr_mult": self.config.get_float('BEAR_STOP_LOSS_ATR_MULT', default=2.0),
-                        "tp_pct": self.config.get_float('BEAR_FIRST_TP_PCT', default=0.03),
-                        "partial_ratio": self.config.get_float('BEAR_PARTIAL_CLOSE_RATIO', default=0.5),
-                        "volume_multiplier": self.config.get_float('BEAR_VOLUME_SPIKE_MULTIPLIER', default=1.5),
-                        "atr_period": 14,
-                        "bear_mode": True,
-                    }
-                    risk_setting = {
-                        "stop_loss_pct": -0.02,
-                        "target_profit_pct": 0.03,
-                        "position_size_ratio": bear_context["position_ratio"],
-                    }
-                    logger.info(f"📉 제한적 매수 허용: {len(watchlist)}개 후보 (LLM B등급 이상)")
+                        logger.info(f"📉 제한적 매수 허용: {len(watchlist)}개 후보 (LLM B등급 이상)")
                 
                 # 3. Portfolio 조회 (중복 방지)
                 current_portfolio = get_active_portfolio(session)
                 owned_codes = {item['code'] for item in current_portfolio}
                 
-                # [Tiered Execution] 현금 비중 확인
+                # [Tiered Execution] 현금 비중 확인 (Managed Assets Only)
                 try:
                     available_cash = self.kis.get_cash_balance()
-                    # 포트폴리오 가치 추정 (매수가 기준)
-                    portfolio_value = sum([p.get('quantity', 0) * p.get('buy_price', 0) for p in current_portfolio])
-                    total_assets = available_cash + portfolio_value
                     
-                    cash_ratio = available_cash / total_assets if total_assets > 0 else 0
+                    # [Asset Logic Change]
+                    # 포트폴리오 가치 계산 시, 봇이 관리하는 종목(WatchList에 있는 종목)만 포함합니다.
+                    # 수동 보유 종목(예: 삼성전자 장기보유)이 Total Assets를 왜곡하여 Cash Ratio를 낮추는 문제를 방지합니다.
+                    managed_portfolio = [p for p in current_portfolio if p['code'] in watchlist]
+                    managed_portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in managed_portfolio])
+                    
+                    # 전체 포트폴리오 가치 (로그용)
+                    total_portfolio_value = sum([p.get('quantity', 0) * p.get('avg_price', 0) for p in current_portfolio])
+                    unmanaged_value = total_portfolio_value - managed_portfolio_value
+                    
+                    # 자산 총계 = 현금 + 관리 중인 주식 가치
+                    managed_total_assets = available_cash + managed_portfolio_value
+                    
+                    cash_ratio = available_cash / managed_total_assets if managed_total_assets > 0 else 0
                     tier2_enabled = cash_ratio > 0.3
                     
-                    logger.info(f"💰 자산 현황: 현금 {available_cash:,}원 / 총자산 {total_assets:,}원 (현금비중 {cash_ratio*100:.1f}%)")
+                    logger.info(f"💰 자산 현황: 현금 {available_cash:,}원 (비중 {cash_ratio*100:.1f}%)")
+                    logger.info(f"   - 관리 자산: {managed_total_assets:,}원 (주식: {managed_portfolio_value:,}원)")
+                    logger.info(f"   - 비관리 자산(제외됨): {unmanaged_value:,}원 (총 보유량: {total_portfolio_value:,}원)")
+
                     if tier2_enabled:
                         logger.info("✨ [Tiered Execution] 현금 비중 30% 초과 -> Tier 2 (비주력) 종목 스캔 활성화")
                 except Exception as e:
@@ -189,6 +245,42 @@ class BuyScanner:
                 
                 logger.info(f"스캔 대상: {len(watchlist)}개 종목 (보유: {len(owned_codes)}개 제외)")
                 
+                # [Phase 2] Strategy Manager: Redis Hot Watchlist에 "전략" 주입
+                # Scout Job이 생성한 Watchlist에 현재 시장 국면(Active Strategies)에 맞는 구체적 감시 전략을 추가
+                try:
+                    from shared.watchlist import get_hot_watchlist, save_hot_watchlist, StrategyConfig
+                    
+                    # 1. Redis에서 현재 Hot Watchlist 로드
+                    hot_list_data = get_hot_watchlist()
+                    
+                    if hot_list_data and hot_list_data.get('stocks'):
+                        stocks = hot_list_data['stocks']
+                        
+                        # 2. 시장 국면 전략 -> 구체적 감시 설정(Config) 매핑
+                        # active_strategies는 ["MEAN_REVERSION"] 같은 고수준 이름임
+                        strategy_configs = self._map_strategies_to_configs(active_strategies)
+                        
+                        # 3. 모든 종목에 전략 주입
+                        # (추후 고도화: 종목별 특성에 따라 다른 전략 주입 가능)
+                        for stock in stocks:
+                            # 기존 전략 보존 여부는 정책 결정 필요. 여기서는 덮어쓰기(새 국면 반영)
+                            stock['strategies'] = strategy_configs
+                            
+                            # [Super Prime] Legendary Pattern Trigger 감시 추가
+                            # RSI 과매도 + 외국인 수급 감시
+                            # 모든 종목에 대해 감시하되, 조건 충족 시에만 발동
+                            # 하지만 리소스 절약을 위해 기본 전략에 포함시키는 것이 나음
+                            
+                        # 4. Redis 업데이트
+                        save_hot_watchlist(
+                            stocks=stocks,
+                            market_regime=hot_list_data.get('market_regime', current_regime),
+                            score_threshold=hot_list_data.get('score_threshold', 0)
+                        )
+                        logger.info(f"🧠 [Brain] Hot Watchlist 업데이트 완료: {len(stocks)}개 종목에 전략 {len(strategy_configs)}개 주입")
+                except Exception as e:
+                    logger.error(f"🧠 [Brain] Strategy Injection 실패: {e}", exc_info=True)
+
                 # 4. 종목 스캔 (병렬 처리)
                 buy_candidates = self._scan_stocks_parallel(
                     watchlist, owned_codes, current_regime, active_strategies, session, tier2_enabled, bear_context
@@ -199,15 +291,48 @@ class BuyScanner:
                     buy_candidates.sort(key=lambda x: x.get('factor_score', 0), reverse=True)
                     top_5_candidates = buy_candidates[:5]
                     
-                    logger.info(f"✅ 상위 5개 후보 선정 완료")
-                    for idx, candidate in enumerate(top_5_candidates, 1):
+                    # [Double Buy Prevention] Redis Lock Check
+                    final_candidates = []
+                    # NOTE: shared.database Facade는 get_redis_client()가 아니라
+                    # get_redis_connection()을 제공합니다. (decode_responses=True)
+                    redis_client = database.get_redis_connection()
+
+                    if not redis_client:
+                        logger.warning("⚠️ Redis 미연결: 중복 매수 방지 Lock을 생략합니다. (Ghost Trades 위험 증가)")
+                        final_candidates = top_5_candidates
+                    else:
+                    
+                        for candidate in top_5_candidates:
+                            stock_code = candidate['code']
+                            lock_key = f"buy_lock:{stock_code}"
+                            
+                            # SET NX EX: 원자적 락 획득 (exists→setex 레이스 방지)
+                            # 5분간 유효 - 체결 전(Order Pending) 상태에서의 중복 방지를 위함.
+                            acquired = redis_client.set(lock_key, "locked", ex=300, nx=True)
+                            if not acquired:
+                                logger.warning(f"🚫 [{stock_code}] 중복 매수 방지 Lock 감지됨. 스캔 결과에서 제외.")
+                                continue
+                            
+                            final_candidates.append(candidate)
+                    
+                    if not final_candidates:
+                        logger.info("모든 매수 후보가 중복 Lock으로 인해 제외되었습니다.")
+                        return {
+                            "candidates": [],
+                            "market_regime": current_regime,
+                            "scan_timestamp": datetime.now(timezone.utc).isoformat(),
+                            "strategy_preset": market_analysis.get('strategy_preset'),
+                        }
+
+                    logger.info(f"✅ 상위 {len(final_candidates)}개 후보 선정 완료 (중복 제외됨)")
+                    for idx, candidate in enumerate(final_candidates, 1):
                         logger.info(f"  {idx}. {candidate['name']}({candidate['code']}): {candidate['factor_score']:.2f}")
                     
                     scan_duration = time.time() - scan_start_time
                     logger.info(f"=== 스캔 완료 (소요: {scan_duration:.1f}초) ===")
                     
                     return {
-                        "candidates": [self._serialize_candidate(c) for c in top_5_candidates],
+                        "candidates": [self._serialize_candidate(c) for c in final_candidates],
                         "market_regime": current_regime,
                         "market_context": market_context_dict,
                         "scan_timestamp": datetime.now(timezone.utc).isoformat(),
@@ -255,7 +380,7 @@ class BuyScanner:
                 raise Exception("KOSPI 과거 데이터 부족")
             
             # KOSPI 현재가 조회
-            trading_mode = os.getenv("TRADING_MODE", "MOCK")
+            trading_mode = self.config.get("TRADING_MODE", default="MOCK")
             if trading_mode == "MOCK":
                 kospi_current_price = float(kospi_prices_df['CLOSE_PRICE'].iloc[-1])
                 logger.info(f"MOCK 모드: KOSPI 현재가 = {kospi_current_price}")
@@ -330,13 +455,28 @@ class BuyScanner:
         filter_stats_lock = Lock()
         
         # 1. 거래 가능한 종목 필터링
-        # [Tiered Execution] tier2_enabled가 True면 is_tradable 여부 상관없이(False도 포함) 스캔
+        # [Tiered Execution] tier2_enabled가 True면 Judge 미통과 종목도 스캔(Tier2)
+        # [Project Recon] trade_tier=RECON 종목은 tier2_enabled 여부와 무관하게 스캔 대상으로 포함
         tradable_codes = []
         for stock_code, stock_info in watchlist.items():
-            is_tradable = stock_info.get('is_tradable', True) or tier2_enabled
+            trade_tier = (
+                stock_info.get("trade_tier")
+                or (stock_info.get("llm_metadata") or {}).get("trade_tier")
+                or ("TIER1" if stock_info.get("is_tradable", True) else "BLOCKED")
+            )
+
+            allowed = False
             if bear_context is not None:
-                is_tradable = stock_info.get('bear_strategy') is not None
-            if is_tradable and stock_code not in owned_codes:
+                # 기존 BEAR 경로: LLM bear_strategy가 있는 종목만
+                # Project Recon: RECON tier는 BEAR에서도 "정찰 후보"로 포함 가능
+                allowed = (stock_info.get('bear_strategy') is not None) or (trade_tier == "RECON")
+            else:
+                if trade_tier in ("TIER1", "RECON"):
+                    allowed = True
+                elif tier2_enabled:
+                    allowed = True
+
+            if allowed and stock_code not in owned_codes:
                 tradable_codes.append(stock_code)
         
         # 2. 최근 거래 종목 제외
@@ -353,6 +493,11 @@ class BuyScanner:
         with session_scope(readonly=True) as db_session:
             daily_prices_dict = database.get_daily_prices_batch(db_session, stock_codes_to_scan, limit=120, table_name="STOCK_DAILY_PRICES_3Y")
             kospi_prices_df = database.get_daily_prices(db_session, "0001", limit=120, table_name="STOCK_DAILY_PRICES_3Y")
+            
+            # [Super Prime] 수급 데이터 일괄 조회 by FactorRepository
+            factor_repo = FactorRepository(db_session)
+            # 최근 30일치만 조회해도 충분 (20일 체크)
+            supply_demand_dict = factor_repo.get_supply_demand_data(stock_codes_to_scan, days=30)
         
         # 5. 병렬 스캔
         max_workers = min(10, len(stock_codes_to_scan))
@@ -369,7 +514,9 @@ class BuyScanner:
                         current_regime,
                         active_strategies,
                         kospi_prices_df,
-                        bear_context
+                        bear_context,
+                        supply_demand_dict.get(stock_code),
+                        tier2_enabled
                     )
                     futures[future] = stock_code
             
@@ -387,7 +534,7 @@ class BuyScanner:
     
     def _analyze_stock(self, stock_code, stock_info, daily_prices_df, 
                       current_regime, active_strategies, kospi_prices_df,
-                      bear_context=None) -> dict:
+                      bear_context=None, supply_demand_df=None, tier2_enabled=False) -> dict:
         """
         단일 종목 분석 (실시간 가격 반영)
         
@@ -404,6 +551,14 @@ class BuyScanner:
             if snapshot and snapshot.get('price'):
                 current_price = float(snapshot['price'])
                 
+                # 거래량 키 호환성: gateway/klient에 따라 다를 수 있어 안전하게 처리
+                snapshot_volume = (
+                    snapshot.get('volume')
+                    or snapshot.get('acc_vol')
+                    or snapshot.get('accumulated_volume')
+                    or snapshot.get('trade_volume')
+                )
+                
                 # [Fast Hands] 2. DataFrame에 현재가 반영 (In-Memory Update)
                 # daily_prices_df의 마지막 행이 오늘 날짜인지 확인
                 if not daily_prices_df.empty:
@@ -418,6 +573,12 @@ class BuyScanner:
                             daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('HIGH_PRICE')] = max(float(daily_prices_df['HIGH_PRICE'].iloc[-1]), float(snapshot['high']))
                         if snapshot.get('low'):
                             daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('LOW_PRICE')] = min(float(daily_prices_df['LOW_PRICE'].iloc[-1]), float(snapshot['low']))
+                        # 장중 거래량도 가능한 경우 반영 (Tier2 거래량 조건 품질 개선)
+                        if snapshot_volume is not None and 'VOLUME' in daily_prices_df.columns:
+                            try:
+                                daily_prices_df.iloc[-1, daily_prices_df.columns.get_loc('VOLUME')] = float(snapshot_volume)
+                            except Exception:
+                                pass
                     else:
                         # 오늘 데이터가 없으면 행 추가
                         import pandas as pd
@@ -427,7 +588,8 @@ class BuyScanner:
                             'CLOSE_PRICE': current_price,
                             'HIGH_PRICE': float(snapshot.get('high', current_price)),
                             'LOW_PRICE': float(snapshot.get('low', current_price)),
-                            'OPEN_PRICE': float(snapshot.get('open', current_price)) # OPEN_PRICE 컬럼이 있다면
+                            'OPEN_PRICE': float(snapshot.get('open', current_price)), # OPEN_PRICE 컬럼이 있다면
+                            'VOLUME': float(snapshot_volume) if snapshot_volume is not None else None,
                         }])
                         # 공통 컬럼만 선택하여 병합
                         common_cols = daily_prices_df.columns.intersection(new_row.columns)
@@ -473,17 +635,75 @@ class BuyScanner:
                 key_metrics_dict['bear_mode'] = True
                 key_metrics_dict['llm_strategy_type'] = strategy_hint
             else:
-                buy_signal_type, key_metrics_dict = self._detect_signals(
-                    stock_code, daily_prices_df, last_close_price, rsi_value, current_regime, active_strategies, kospi_prices_df
+                # is_tradable=False인 경우 Tier2 스캔 (복합 조건 필요)
+                trade_tier = (
+                    stock_info.get("trade_tier")
+                    or (stock_info.get("llm_metadata") or {}).get("trade_tier")
+                    or ("TIER1" if stock_info.get("is_tradable", True) else "BLOCKED")
                 )
+                is_tradable = trade_tier == "TIER1"
+                buy_signal_type, key_metrics_dict = self._detect_signals(
+                    stock_code, daily_prices_df, last_close_price, rsi_value, 
+                    current_regime, active_strategies, kospi_prices_df, is_tradable
+                )
+            # Project Recon: key_metrics에 tier 정보를 남겨 Executor/텔레그램/로그에서 가시성 확보
+                if key_metrics_dict is None:
+                    key_metrics_dict = {}
+                key_metrics_dict["trade_tier"] = trade_tier
+                
+                # [Super Prime] Legendary Pattern Check
+                # 조건: 골든크로스 발생 시 + 과거 Trigger 패턴 존재 여부 확인
+                if buy_signal_type == 'GOLDEN_CROSS':
+                    is_legendary = self._check_legendary_pattern(stock_code, daily_prices_df, supply_demand_df)
+                    if is_legendary:
+                        buy_signal_type = 'GOLDEN_CROSS_SUPER_PRIME' # 신호 타입 변경으로 명확히 구분
+                        key_metrics_dict["is_super_prime"] = True
+                        factors['is_super_prime'] = True
+                        logger.info(f"🚨 [{stock_code}] SUPER PRIME 신호 감지! (Golden Cross + Legendary Trigger)")
             
             if not buy_signal_type:
                 return None
             
+            # [Strategy Refinement] Hunter Score Based Filtering & Boosting
+            # 메타데이터에서 순수 Hunter Score 추출 (없으면 기존 llm_score 사용)
+            metadata = stock_info.get('llm_metadata') or {}
+            hunter_score = metadata.get('hunter_score')
+            
+            if hunter_score is None:
+                # Fallback: 메타데이터에 없으면 llm_score(Hybrid) 사용
+                hunter_score = stock_info.get('llm_score', 0)
+            
+            # ensure float
+            try:
+                hunter_score = float(hunter_score)
+            except (ValueError, TypeError):
+                hunter_score = 0.0
+            
+            # 1. Low Score Filtering (70점 미만 제외)
+            # Tier 2(비주력) 모드이거나 Bear 전략인 경우는 예외
+            if hunter_score < 70 and not tier2_enabled and not bear_signal_payload:
+                logger.warning(f"📉 [{stock_code}] Hunter Score 미달({hunter_score}점 < 70점) - 매수 제외")
+                return None
+
             # 팩터 점수 계산
             factor_score, factors = self._calculate_factor_score(
                 stock_code, stock_info, daily_prices_df, kospi_prices_df, current_regime
             )
+
+            # 2. High Score Boosting (90점 이상 가산점)
+            if hunter_score >= 90:
+                boost = factor_score * 0.15  # 15% 가산
+                factor_score += boost
+                logger.info(f"🚀 [{stock_code}] Hunter Score({hunter_score}) 초우량 신호: +{boost:.1f}점 (Super Prime)")
+                factors['hunter_score_bonus'] = boost
+            
+            # [Super Prime] Boosting
+            # Super Prime이면 점수 대폭 가산 (예: +20점)
+            if factors.get('is_super_prime'):
+                boost = 20.0
+                factor_score += boost
+                logger.info(f"🚨 [{stock_code}] Super Prime 보너스 적용: +{boost}점 (최종: {factor_score:.1f})")
+                factors['super_prime_bonus'] = boost
             
             # [New] 실시간 뉴스 감성 점수 반영
             sentiment_data = database.get_sentiment_score(stock_code)
@@ -532,17 +752,84 @@ class BuyScanner:
                 'key_metrics_dict': key_metrics_dict,
                 'factor_score': factor_score,
                 'factors': factors,
-                'current_price': float(last_close_price)
+                'current_price': float(last_close_price),
+                # Project Recon
+                'trade_tier': (key_metrics_dict or {}).get("trade_tier"),
+                'is_super_prime': factors.get('is_super_prime', False)
             }
             
         except Exception as e:
             logger.error(f"[{stock_code}] 분석 오류: {e}")
             return None
+
+    def _check_legendary_pattern(self, stock_code, daily_prices_df, supply_demand_df) -> bool:
+        """
+        [Super Prime] 전설의 타이밍 패턴 여부 확인
+        조건: 최근 20일 이내에 (RSI <= 30 AND 외국인 순매수 >= 20일 평균 거래량의 5%) 발생
+        """
+        try:
+            if supply_demand_df is None or supply_demand_df.empty:
+                return False
+                
+            if daily_prices_df.empty:
+                return False
+
+            # 데이터 병합 (Date 기준)
+            # supply_demand_df: TRADE_DATE, FOREIGN_NET_BUY
+            # daily_prices_df: PRICE_DATE, VOLUME, CLOSE_PRICE
+            
+            # 날짜 형식 통일 및 인덱스 설정
+            df_price = daily_prices_df.copy()
+            df_price['date_str'] = df_price['PRICE_DATE'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)[:10])
+            
+            df_supply = supply_demand_df.copy()
+            df_supply['date_str'] = df_supply['TRADE_DATE'].apply(lambda x: x.strftime('%Y-%m-%d') if hasattr(x, 'strftime') else str(x)[:10])
+            
+            merged = pd.merge(df_price, df_supply, on='date_str', how='inner')
+            merged = merged.sort_values('date_str')
+            
+            # RSI 계산 (이미 계산된 값이 있을 수 있지만 안전하게 다시 계산하거나 매핑)
+            # daily_prices_df에 RSI가 없으므로 계산 필요
+            delta = merged['CLOSE_PRICE'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            merged['RSI'] = 100 - (100 / (1 + rs))
+            
+            # 20일 평균 거래량 계산
+            merged['VOL_MA20'] = merged['VOLUME'].rolling(window=20).mean()
+            
+            # 최근 20일 데이터 확인
+            recent_20 = merged.tail(20)
+            
+            for idx, row in recent_20.iterrows():
+                rsi = row['RSI']
+                foreign_buy = row['FOREIGN_NET_BUY']
+                vol_ma20 = row['VOL_MA20']
+                
+                if pd.isna(rsi) or pd.isna(vol_ma20) or vol_ma20 == 0:
+                    continue
+                    
+                # 조건: RSI <= 30 AND Foreign Buy >= 5% of Vol MA20
+                if rsi <= 30 and foreign_buy >= (vol_ma20 * 0.05):
+                    logger.info(f"✨ [{stock_code}] Legendary Pattern Trigger Found on {row['date_str']}! "
+                                f"(RSI: {rsi:.1f}, ForeignBuy: {foreign_buy}, VolMA20: {vol_ma20:.0f})")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            logger.warning(f"[{stock_code}] Legendary Pattern Check Failed: {e}")
+            return False
     
     def _detect_signals(self, stock_code, daily_prices_df, last_close_price, rsi_value, 
-                       current_regime, active_strategies, kospi_prices_df) -> tuple:
+                       current_regime, active_strategies, kospi_prices_df, 
+                       is_tradable=True) -> tuple:
         """
         매수 신호 감지
+        
+        Args:
+            is_tradable: Scout Judge 통과 여부. False면 Tier2로 복합 조건 필요.
         
         Returns:
             (signal_type, key_metrics_dict) or (None, None)
@@ -565,7 +852,7 @@ class BuyScanner:
                             "bollinger_lower": float(bollinger_lower),
                             "strategy": "MEAN_REVERSION"
                         }
-                    elif bb_distance_pct <= self.BB_DISTANCE_THRESHOLD_PCT and current_regime == MarketRegimeDetector.REGIME_BULL:
+                    elif bb_distance_pct <= self.bb_distance_threshold_pct and current_regime == MarketRegimeDetector.REGIME_BULL:
                         logger.debug(f"[{stock_code}] BB_LOWER_NEAR 신호 감지 (강세장).")
                         return 'BB_LOWER_NEAR', {
                             "close_price": float(last_close_price),
@@ -576,9 +863,9 @@ class BuyScanner:
                 
                 # RSI 과매도
                 if rsi_value:
-                    rsi_threshold = self.config.get_int('BUY_RSI_OVERSOLD_THRESHOLD', default=30)
+                    rsi_threshold = self.config.get_int_for_symbol(stock_code, 'BUY_RSI_OVERSOLD_THRESHOLD', default=30)
                     if current_regime == MarketRegimeDetector.REGIME_BULL:
-                        rsi_threshold = self.RSI_OVERSOLD_BULL_THRESHOLD
+                        rsi_threshold = self.config.get_int_for_symbol(stock_code, 'BUY_RSI_OVERSOLD_BULL_THRESHOLD', default=40)
                     
                     logger.debug(f"[{stock_code}] RSI: {rsi_value:.2f}, RSI 과매도 임계값: {rsi_threshold}")
                     if rsi_value <= rsi_threshold:
@@ -598,10 +885,26 @@ class BuyScanner:
                 )
                 logger.debug(f"[{stock_code}] 골든 크로스 확인: {is_golden_cross}")
                 if is_golden_cross:
+                    # [Tier2 안전장치] Judge 미통과 종목은 복합 조건 필수
+                    if not is_tradable:
+                        tier2_result = self._check_tier2_conditions(
+                            stock_code, daily_prices_df, last_close_price, rsi_value, current_regime
+                        )
+                        if not tier2_result['passed']:
+                            logger.info(f"[{stock_code}] 🛡️ Tier2 안전장치 미충족 - 골든크로스 무시 "
+                                       f"(충족: {tier2_result['met_count']}/{tier2_result.get('required_min', 3)}개)")
+                            continue  # 다음 전략으로 넘어감
+                        logger.info(f"[{stock_code}] ✅ Tier2 안전장치 통과! {tier2_result['conditions_met']}")
+                    
                     logger.debug(f"[{stock_code}] GOLDEN_CROSS 신호 감지.")
                     return 'GOLDEN_CROSS', {
                         "signal": "GOLDEN_CROSS_5_20",
-                        "strategy": "TREND_FOLLOWING"
+                        "strategy": "TREND_FOLLOWING",
+                        # Tier2 경로 여부 및 조건 상세 기록 (Executor/텔레그램/로그에서 가시성 확보)
+                        "tier2_bypass": not is_tradable,
+                        "tier2_met_count": tier2_result.get("met_count") if (not is_tradable and 'tier2_result' in locals()) else None,
+                        "tier2_conditions_met": tier2_result.get("conditions_met") if (not is_tradable and 'tier2_result' in locals()) else None,
+                        "tier2_conditions_failed": tier2_result.get("conditions_failed") if (not is_tradable and 'tier2_result' in locals()) else None,
                     }
             
             elif strategy_type == StrategySelector.STRATEGY_MOMENTUM:
@@ -628,6 +931,127 @@ class BuyScanner:
                         }
         
         return None, None
+    
+    def _check_tier2_conditions(self, stock_code, daily_prices_df, current_price, 
+                                rsi_value, current_regime) -> dict:
+        """
+        Tier2 (Judge 미통과) 골든크로스 매수를 위한 복합 안전장치 체크
+        
+        조건 (최소 2개 이상 충족 필요):
+        1. 거래량: 오늘 거래량 >= 20일 평균 * 1.2배
+        2. RSI: 40 <= RSI <= 70 (중립 구간)
+        3. 시장 국면: Bear가 아닐 것 (Neutral 이상)
+        4. 120일선 위: 현재가 >= 120일 이평선
+        
+        Returns:
+            {
+                'passed': bool,
+                'met_count': int,
+                'conditions_met': list[str],
+                'conditions_failed': list[str]
+            }
+        """
+        conditions_met = []
+        conditions_failed = []
+        
+        try:
+            # Tier2 파라미터 (전역 기본값 유지 + 종목별 오버라이드 지원)
+            tier2_volume_multiplier = self.config.get_float_for_symbol(stock_code, "TIER2_VOLUME_MULTIPLIER", default=1.2)
+            tier2_rsi_min = self.config.get_float_for_symbol(stock_code, "TIER2_RSI_MIN", default=40.0)
+            tier2_rsi_max = self.config.get_float_for_symbol(stock_code, "TIER2_RSI_MAX", default=70.0)
+            tier2_min_conditions = self.config.get_int_for_symbol(stock_code, "TIER2_MIN_CONDITIONS", default=3)
+
+            # 1. 거래량 조건
+            if len(daily_prices_df) >= 20 and 'VOLUME' in daily_prices_df.columns:
+                current_volume = daily_prices_df['VOLUME'].iloc[-1]
+                avg_volume_20 = daily_prices_df['VOLUME'].tail(20).mean()
+                
+                # 장중 거래량은 부분 누적일 수 있어 '예상 종가 거래량'으로 보정 (보수적으로)
+                try:
+                    last_dt = daily_prices_df['PRICE_DATE'].iloc[-1]
+                    last_date_str = last_dt.strftime('%Y-%m-%d') if hasattr(last_dt, 'strftime') else str(last_dt)[:10]
+                    today_str = datetime.now().strftime('%Y-%m-%d')
+                    if last_date_str == today_str:
+                        from datetime import datetime as _dt
+                        import pytz
+                        kst = pytz.timezone("Asia/Seoul")
+                        now = _dt.now(kst)
+                        market_open = now.replace(hour=9, minute=0, second=0, microsecond=0)
+                        market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+                        if market_open <= now <= market_close:
+                            elapsed = (now - market_open).total_seconds()
+                            total = (market_close - market_open).total_seconds()
+                            frac = max(0.25, min(1.0, elapsed / total))  # 너무 이른 시간 과대 보정 방지
+                            projected_volume = float(current_volume or 0) / frac
+                        else:
+                            projected_volume = float(current_volume or 0)
+                    else:
+                        projected_volume = float(current_volume or 0)
+                except Exception:
+                    projected_volume = float(current_volume or 0)
+
+                if avg_volume_20 > 0 and projected_volume >= avg_volume_20 * tier2_volume_multiplier:
+                    conditions_met.append(f"거래량 {projected_volume/avg_volume_20:.1f}x(보정)")
+                else:
+                    ratio = projected_volume / avg_volume_20 if avg_volume_20 > 0 else 0
+                    conditions_failed.append(f"거래량 {ratio:.1f}x < {tier2_volume_multiplier}x")
+            else:
+                conditions_failed.append("거래량 데이터 부족")
+            
+            # 2. RSI 조건 (중립 구간)
+            if rsi_value is not None:
+                if tier2_rsi_min <= float(rsi_value) <= tier2_rsi_max:
+                    conditions_met.append(f"RSI {rsi_value:.1f} (중립)")
+                else:
+                    conditions_failed.append(f"RSI {rsi_value:.1f} (범위 외: {tier2_rsi_min:.0f}~{tier2_rsi_max:.0f})")
+            else:
+                conditions_failed.append("RSI 계산 불가")
+            
+            # 3. 시장 국면 조건 (Bear 아닐 것)
+            if current_regime != MarketRegimeDetector.REGIME_BEAR:
+                conditions_met.append(f"시장국면 {current_regime}")
+            else:
+                conditions_failed.append(f"시장국면 BEAR")
+            
+            # 4. 120일선 위 조건 (장기 상승 추세)
+            if len(daily_prices_df) >= 120:
+                ma_120 = daily_prices_df['CLOSE_PRICE'].tail(120).mean()
+                if current_price >= ma_120:
+                    conditions_met.append(f"120일선 위 ({current_price/ma_120*100-100:+.1f}%)")
+                else:
+                    conditions_failed.append(f"120일선 아래 ({current_price/ma_120*100-100:.1f}%)")
+            else:
+                # 데이터 부족 시 60일선으로 대체
+                if len(daily_prices_df) >= 60:
+                    ma_60 = daily_prices_df['CLOSE_PRICE'].tail(60).mean()
+                    if current_price >= ma_60:
+                        conditions_met.append(f"60일선 위 ({current_price/ma_60*100-100:+.1f}%)")
+                    else:
+                        conditions_failed.append(f"60일선 아래 ({current_price/ma_60*100-100:.1f}%)")
+                else:
+                    conditions_failed.append("장기 이평선 데이터 부족")
+            
+            met_count = len(conditions_met)
+            passed = met_count >= tier2_min_conditions
+            
+            logger.debug(f"[{stock_code}] Tier2 조건 체크: 충족 {met_count}개 - {conditions_met}, 미충족 - {conditions_failed}")
+            
+            return {
+                'passed': passed,
+                'met_count': met_count,
+                'required_min': tier2_min_conditions,
+                'conditions_met': conditions_met,
+                'conditions_failed': conditions_failed
+            }
+            
+        except Exception as e:
+            logger.error(f"[{stock_code}] Tier2 조건 체크 오류: {e}")
+            return {
+                'passed': False,
+                'met_count': 0,
+                'conditions_met': [],
+                'conditions_failed': [f"오류: {str(e)}"]
+            }
     
     def _calculate_factor_score(self, stock_code, stock_info, daily_prices_df, 
                                kospi_prices_df, current_regime) -> tuple:
@@ -689,11 +1113,91 @@ class BuyScanner:
             'eps_growth': stock_info.get('eps_growth'),
             'llm_score': stock_info.get('llm_score', 0),
             'llm_reason': stock_info.get('llm_reason', ''),
-            'bear_strategy': stock_info.get('bear_strategy')
+            'llm_metadata': stock_info.get('llm_metadata', {}),
+            'bear_strategy': stock_info.get('bear_strategy'),
+            # Project Recon
+            'trade_tier': (
+                stock_info.get('trade_tier')
+                or (stock_info.get('llm_metadata') or {}).get('trade_tier')
+                or serialized.get('trade_tier')
+            ),
         }
         
         # 최상위 레벨에도 편의상 추가
         serialized['llm_score'] = stock_info.get('llm_score', 0)
         serialized['llm_reason'] = stock_info.get('llm_reason', '')
+        # Judge 통과 여부 (is_tradable: hybrid_score >= 75)
+        serialized['is_tradable'] = stock_info.get('is_tradable', False)
+        # Project Recon
+        serialized['trade_tier'] = serialized['stock_info'].get('trade_tier')
         
         return serialized
+
+    def _map_strategies_to_configs(self, active_strategies: list) -> list:
+        """
+        시장 국면 전략 이름을 구체적인 감시 설정(StrategyConfig)으로 변환
+        
+        Args:
+            active_strategies: ["MEAN_REVERSION", "TREND_FOLLOWING", ...]
+        
+        Returns:
+            [{"id": "BB_LOWER", "params": {...}}, ...]
+        """
+        configs = []
+        
+        # 1. 공통 설정
+        # Super Prime (Legendary Pattern) 감시는 항상 포함 (조건 충족 시만 발동되므로)
+        # 2026-01-09: 리소스 최적화를 위해 별도 Strategy ID로 관리하지 않고 
+        # Price Monitor가 RSI/수급 데이터 수신 시 내부적으로 체크하도록 함.
+        # 다만, 명시적으로 "SUPER_PRIME" 전략을 주입하여 우선순위를 높일 수 있음.
+        
+        for strategy_type in active_strategies:
+            if strategy_type == StrategySelector.STRATEGY_MEAN_REVERSION:
+                # 1) BB 하단
+                configs.append({
+                    "id": "BB_LOWER",
+                    "params": {
+                        "period": self.config.get_int('BUY_BOLLINGER_PERIOD', default=20),
+                        "buffer_pct": self.config.get_float('BUY_BB_BUFFER_PCT', default=2.0)
+                    }
+                })
+                # 2) RSI 과매도
+                configs.append({
+                    "id": "RSI_OVERSOLD",
+                    "params": {
+                        "threshold": self.config.get_int('BUY_RSI_OVERSOLD_THRESHOLD', default=30),
+                        "bull_threshold": self.config.get_int('BUY_RSI_OVERSOLD_BULL_THRESHOLD', default=40)
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_TREND_FOLLOWING:
+                # 1) 골든 크로스
+                configs.append({
+                    "id": "GOLDEN_CROSS",
+                    "params": {
+                        "short_window": self.config.get_int('BUY_GOLDEN_CROSS_SHORT', default=5),
+                        "long_window": self.config.get_int('BUY_GOLDEN_CROSS_LONG', default=20)
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_MOMENTUM:
+                # 1) 모멘텀
+                configs.append({
+                    "id": "MOMENTUM",
+                    "params": {
+                        "period": 5,
+                        "threshold": self.MOMENTUM_SIGNAL_THRESHOLD
+                    }
+                })
+            
+            elif strategy_type == StrategySelector.STRATEGY_RELATIVE_STRENGTH:
+                # 1) 상대 강도
+                configs.append({
+                    "id": "RELATIVE_STRENGTH",
+                    "params": {
+                        "period": 5,
+                        "threshold": self.RELATIVE_STRENGTH_THRESHOLD
+                    }
+                })
+        
+        return configs

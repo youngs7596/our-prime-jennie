@@ -35,11 +35,12 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-jennie-darker bg-grid-pattern flex items-center justify-center p-4">
-      {/* Background Effects */}
+    <div className="min-h-screen bg-raydium-dark bg-grid-pattern flex items-center justify-center p-4">
+      {/* Background Effects - Raydium Neon Glow */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-jennie-purple/30 rounded-full blur-[128px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-jennie-pink/30 rounded-full blur-[128px] animate-pulse" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-raydium-purple/30 rounded-full blur-[150px] animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-raydium-cyan/20 rounded-full blur-[150px] animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-raydium-blue/10 rounded-full blur-[200px]" />
       </div>
       <div className="noise-overlay" />
 
@@ -56,19 +57,19 @@ export function LoginPage() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="flex flex-col items-center mb-8"
         >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-jennie-pink to-jennie-purple flex items-center justify-center mb-4 glow animate-float">
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-raydium-purple to-raydium-cyan flex items-center justify-center mb-4 shadow-neon-purple animate-float">
             <span className="text-white font-bold text-3xl font-display">J</span>
           </div>
           <h1 className="text-3xl font-display font-bold gradient-text">
             My Prime Jennie
           </h1>
-          <p className="text-muted-foreground mt-2">AI Trading Dashboard</p>
+          <p className="text-raydium-cyan/70 mt-2">AI Trading Dashboard</p>
         </motion.div>
 
         {/* Login Card */}
-        <Card glow className="border-white/10">
+        <Card neon="purple" className="border-raydium-purple/30">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">로그인</CardTitle>
+            <CardTitle className="text-xl gradient-text">로그인</CardTitle>
             <CardDescription>
               지휘 통제실에 접속하려면 로그인하세요
             </CardDescription>
@@ -104,7 +105,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-raydium-purpleLight transition-colors"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -119,7 +120,7 @@ export function LoginPage() {
                 <motion.p
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-profit-negative text-center"
+                  className="text-sm text-red-400 text-center"
                 >
                   {error}
                 </motion.p>
@@ -151,4 +152,3 @@ export function LoginPage() {
     </div>
   )
 }
-

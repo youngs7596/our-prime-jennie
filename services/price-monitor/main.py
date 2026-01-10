@@ -57,6 +57,7 @@ from shared.scheduler_client import mark_job_run
 from shared.notification import TelegramBot
 
 from monitor import PriceMonitor
+# from opportunity_watcher import OpportunityWatcher
 
 # 로깅 설정
 logging.basicConfig(
@@ -77,6 +78,7 @@ rabbitmq_sell_queue = None
 tasks_publisher = None
 scheduler_job_worker = None
 scheduler_job_publisher = None
+buy_signals_publisher = None  # Hot Watchlist 매수 신호용
 monitor_lock = threading.Lock()
 
 
@@ -132,6 +134,10 @@ def initialize_service():
             telegram_bot=telegram_bot
         )
         logger.info("✅ Price Monitor 초기화 완료")
+        
+        # 7. OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
+        # 매수 역할은 buy-scanner가 담당, price-monitor는 매도만 담당
+        logger.info("ℹ️ OpportunityWatcher는 buy-scanner로 이관됨 (매도 전용 모드)")
         
         logger.info("=== Price Monitor Service 초기화 완료 ===")
         _start_scheduler_worker()

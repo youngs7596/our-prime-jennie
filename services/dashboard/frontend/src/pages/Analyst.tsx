@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { TrendingUp, BarChart2, CheckCircle, Target } from 'lucide-react'
+import { TrendingUp, BarChart2, CheckCircle, Target, ChevronLeft, ChevronRight } from 'lucide-react'
 import { analystApi } from '@/lib/api'
 
 // Helper for conditional classes
@@ -32,30 +32,82 @@ interface AnalystData {
         decision: string
         hunter_score: number
         market_regime: string
+        return_1d: number | null
         return_5d: number | null
+        return_20d: number | null
+        tags?: string[]
+        score_history?: number[]
     }>
+    total_count?: number
+    limit?: number
+    offset?: number
 }
+
+const Sparkline = ({ data, color = "#8884d8" }: { data: number[], color?: string }) => {
+    if (!data || data.length < 2) return null;
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1;
+    const height = 20;
+    const width = 60;
+
+    // Normalize data to points string
+    const points = data.map((val, idx) => {
+        const x = (idx / (data.length - 1)) * width;
+        const y = height - ((val - min) / range) * height;
+        return `${x},${y}`;
+    }).join(' ');
+
+    return (
+        <svg width={width} height={height} className="overflow-visible">
+            <polyline
+                points={points}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+};
 
 export function AnalystPage() {
     const [data, setData] = useState<AnalystData | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [offset, setOffset] = useState(0)
+    const [limit] = useState(50)
+    const [totalCount, setTotalCount] = useState(0)
 
     useEffect(() => {
         fetchData()
-    }, [])
+    }, [offset])
 
     const fetchData = async () => {
         try {
             setLoading(true)
-            const res = await analystApi.getPerformance()
+            const res = await analystApi.getPerformance(limit, offset, 30)
             setData(res)
+            setTotalCount(res.total_count || 0)
             setError(null)
         } catch (err: any) {
             console.error(err)
             setError('Failed to load analyst performance data.')
         } finally {
             setLoading(false)
+        }
+    }
+
+    const goToPrevPage = () => {
+        if (offset >= limit) {
+            setOffset(offset - limit)
+        }
+    }
+
+    const goToNextPage = () => {
+        if (offset + limit < totalCount) {
+            setOffset(offset + limit)
         }
     }
 
@@ -210,9 +262,12 @@ export function AnalystPage() {
                                 <th className="px-6 py-3">Date</th>
                                 <th className="px-6 py-3">Stock</th>
                                 <th className="px-6 py-3">Decision</th>
-                                <th className="px-6 py-3">Score</th>
+                                <th className="px-6 py-3">Score & Trend</th>
+                                <th className="px-6 py-3">Key Drivers</th>
                                 <th className="px-6 py-3">Regime</th>
-                                <th className="px-6 py-3 text-right">T+5 Return</th>
+                                <th className="px-4 py-3 text-right">T+1</th>
+                                <th className="px-4 py-3 text-right">T+5</th>
+                                <th className="px-4 py-3 text-right">T+20</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
@@ -233,31 +288,99 @@ export function AnalystPage() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={cn(
-                                            "font-medium",
-                                            row.hunter_score >= 80 ? "text-jennie-purple" : row.hunter_score >= 60 ? "text-profit-positive" : "text-muted-foreground"
-                                        )}>
-                                            {row.hunter_score}
-                                        </span>
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "font-medium text-lg",
+                                                    row.hunter_score >= 80 ? "text-jennie-purple" : row.hunter_score >= 60 ? "text-profit-positive" : "text-muted-foreground"
+                                                )}>
+                                                    {row.hunter_score}
+                                                </span>
+                                                {row.score_history && row.score_history.length > 1 && (
+                                                    <div className="tooltip" data-tip={`Trend: ${row.score_history.join(' → ')}`}>
+                                                        <Sparkline
+                                                            data={row.score_history}
+                                                            color={row.score_history[row.score_history.length - 1] >= row.score_history[0] ? "#10b981" : "#ef4444"}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-wrap gap-1">
+                                            {row.tags && row.tags.length > 0 ? (
+                                                row.tags.map((tag, i) => (
+                                                    <span key={i} className="badge badge-outline badge-xs border-white/20 text-white/70">
+                                                        #{tag}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">-</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 text-muted-foreground">
                                         {row.market_regime || 'Unknown'}
                                     </td>
-                                    <td className={cn(
-                                        "px-6 py-4 text-right font-medium",
-                                        (row.return_5d || 0) > 0 ? "text-profit-positive" : (row.return_5d || 0) < 0 ? "text-profit-negative" : "text-muted-foreground"
-                                    )}>
-                                        {row.return_5d !== null ? `${row.return_5d > 0 ? '+' : ''}${row.return_5d.toFixed(2)}%` : 'Pending'}
+                                    <td className="px-4 py-4 text-right font-medium text-sm">
+                                        {row.return_1d !== null && row.return_1d !== undefined ? (
+                                            <span className={row.return_1d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
+                                                {row.return_1d > 0 ? '+' : ''}{row.return_1d.toFixed(1)}%
+                                            </span>
+                                        ) : (
+                                            <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 text-right font-medium text-sm">
+                                        {row.return_5d !== null && row.return_5d !== undefined ? (
+                                            <span className={row.return_5d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
+                                                {row.return_5d > 0 ? '+' : ''}{row.return_5d.toFixed(1)}%
+                                            </span>
+                                        ) : (
+                                            <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-4 text-right font-medium text-sm">
+                                        {row.return_20d !== null && row.return_20d !== undefined ? (
+                                            <span className={row.return_20d >= 0 ? "text-profit-positive" : "text-profit-negative"}>
+                                                {row.return_20d > 0 ? '+' : ''}{row.return_20d.toFixed(1)}%
+                                            </span>
+                                        ) : (
+                                            <span className="badge badge-ghost badge-xs opacity-50">Pending</span>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
                             {data.recent_decisions.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">No recent decisions found.</td>
+                                    <td colSpan={8} className="px-6 py-8 text-center text-muted-foreground">No recent decisions found.</td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
+                </div>
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between p-4 border-t border-white/10">
+                    <span className="text-sm text-muted-foreground">
+                        Showing {offset + 1} - {Math.min(offset + limit, totalCount)} of {totalCount}
+                    </span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={goToPrevPage}
+                            disabled={offset === 0}
+                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                        >
+                            <ChevronLeft className="w-4 h-4" /> Prev
+                        </button>
+                        <button
+                            onClick={goToNextPage}
+                            disabled={offset + limit >= totalCount}
+                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-sm"
+                        >
+                            Next <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

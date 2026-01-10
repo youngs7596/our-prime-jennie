@@ -104,6 +104,13 @@ def save_pipeline_results(results: list):
         logger.debug(f"Redis 결과 저장 실패: {e}")
 
 
+from shared.watchlist import (
+    save_hot_watchlist, 
+    get_hot_watchlist, 
+    refilter_hot_watchlist_by_regime
+)
+
+
 # =============================================================================
 # CONFIG 테이블 기반 상태 관리
 # =============================================================================

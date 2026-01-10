@@ -8,7 +8,10 @@ import { SystemPage } from '@/pages/System'
 import { NewsPage } from '@/pages/News'
 import { AnalystPage } from '@/pages/Analyst'
 import FactorsPage from '@/pages/Factors'
+import VisualLogic from '@/pages/VisualLogic'
 import { SettingsPage } from '@/pages/Settings'
+import { ArchitecturePage } from '@/pages/Architecture'
+import SuperPrimePage from '@/pages/SuperPrime'
 import { useAuthStore } from '@/store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -46,7 +49,10 @@ function App() {
           <Route path="news" element={<NewsPage />} />
           <Route path="analyst" element={<AnalystPage />} />
           <Route path="logic" element={<FactorsPage />} />
+          <Route path="visual-logic" element={<VisualLogic />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="architecture" element={<ArchitecturePage />} />
+          <Route path="super-prime" element={<SuperPrimePage />} />
         </Route>
 
         {/* Fallback */}

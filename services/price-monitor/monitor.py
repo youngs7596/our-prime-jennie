@@ -9,14 +9,27 @@ from datetime import datetime
 from threading import Event
 
 # shared 패키지 임포트
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.database as database
 import shared.strategy as strategy
 import shared.redis_cache as redis_cache
+from shared.redis_cache import (
+    update_high_watermark, 
+    delete_high_watermark,
+    get_scale_out_level,
+    set_scale_out_level,
+    delete_scale_out_level,
+    get_rsi_overbought_sold,
+    set_rsi_overbought_sold,
+    delete_rsi_overbought_sold,
+)
 from shared.db.connection import session_scope
 from shared.db import repository as repo
 from shared.notification import TelegramBot
+
+# OpportunityWatcher는 buy-scanner로 이관됨 (매수 역할 분리)
+# from opportunity_watcher import OpportunityWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -45,28 +58,38 @@ class PriceMonitor:
         logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_WEBSOCKET={self.use_websocket}")
         
         self.portfolio_cache = {}
+        
+        # [Phase: WebSocket 역할 분리] OpportunityWatcher는 buy-scanner로 이관됨
+        # price-monitor는 매도 신호 감지에만 집중
+        
+        # Silent Stall 감지용
+        self.last_ws_data_time = 0
     
     def start_monitoring(self, dry_run: bool = True):
         logger.info("=== 가격 모니터링 시작 ===")
         try:
             # 시장 운영 여부 확인 (휴장/주말/장외면 바로 중단)
-            try:
-                if hasattr(self.kis, "check_market_open"):
-                    if not self.kis.check_market_open():
-                        logger.warning("💤 시장 미운영(휴장/주말/장외)으로 모니터링을 건너뜁니다.")
-                        return
-                else:
-                    # Gateway 클라이언트 등 최소한의 주말/시간 필터
-                    from datetime import datetime
-                    import pytz
-                    kst = pytz.timezone("Asia/Seoul")
-                    now = datetime.now(kst)
-                    if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
-                        logger.warning("💤 시장 미운영 시간(주말/장외)으로 모니터링을 건너뜁니다.")
-                        return
-            except Exception as e:
-                logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
-                return
+            # 시장 운영 여부 확인 (휴장/주말/장외면 바로 중단)
+            disable_market_open_check = self.config.get_bool("DISABLE_MARKET_OPEN_CHECK", default=False)
+            
+            if not disable_market_open_check:
+                try:
+                    if hasattr(self.kis, "check_market_open"):
+                        if not self.kis.check_market_open():
+                            logger.warning("💤 시장 미운영(휴장/주말/장외)으로 모니터링을 건너뜁니다.")
+                            return
+                    else:
+                        # Gateway 클라이언트 등 최소한의 주말/시간 필터
+                        from datetime import datetime
+                        import pytz
+                        kst = pytz.timezone("Asia/Seoul")
+                        now = datetime.now(kst)
+                        if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
+                            logger.warning("💤 시장 미운영 시간(주말/장외)으로 모니터링을 건너뜁니다.")
+                            return
+                except Exception as e:
+                    logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
+                    return
 
             if self.use_websocket:
                 self._monitor_with_websocket(dry_run)
@@ -98,8 +121,12 @@ class PriceMonitor:
                 portfolio_codes = list(set(item['code'] for item in portfolio))
                 self.portfolio_cache = {item['id']: item for item in portfolio}
                 
+                # [Phase: WebSocket 역할 분리] 보유 포트폴리오만 감시 (매도 전용)
+                # Hot Watchlist 매수 감시는 buy-scanner가 담당
+                all_codes = portfolio_codes
+                
                 self.kis.websocket.start_realtime_monitoring(
-                    portfolio_codes=portfolio_codes,
+                    portfolio_codes=all_codes,
                     on_price_func=self._on_websocket_price_update
                 )
                 
@@ -113,9 +140,21 @@ class PriceMonitor:
                 logger.info("   (WS) ✅ WebSocket 연결 확인! 실시간 감시 시작.")
                 
                 last_status_log_time = time.time()
+                self.last_ws_data_time = time.time()  # 연결 시점 초기화
+                last_heartbeat_time = 0  # Heartbeat 타이머
+                
                 while self.kis.websocket.connection_event.is_set() and not self.stop_event.is_set():
                     time.sleep(1)
                     now = time.time()
+                    
+                    # Silent Stall 감지 (데이터가 60초간 안 들어오면 재연결)
+                    # 단, 구독 종목이 있을 때만 체크
+                    if len(all_codes) > 0 and (now - self.last_ws_data_time > 60):
+                        logger.warning(f"   (WS) ⚠️ Silent Stall 감지! (60초간 데이터 수신 없음) 재연결 시도.")
+                        self.kis.websocket.stop()
+                        break
+                    # Dashboard Heartbeat 제거 (매수 감시는 buy-scanner가 담당)
+
                     if now - last_status_log_time >= 600:
                         logger.info(f"   (WS) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
                         last_status_log_time = now
@@ -190,40 +229,134 @@ class PriceMonitor:
             profit_pct = ((current_price - buy_price) / buy_price) * 100
             daily_prices = database.get_daily_prices(session, stock_code, limit=30)
             
-            # 1. ATR Trailing Stop
+            # ATR 계산 (여러 조건에서 사용)
+            atr = None
             if not daily_prices.empty and len(daily_prices) >= 15:
                 atr = strategy.calculate_atr(daily_prices, period=14)
-                if atr:
-                    mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
-                    stop_price = buy_price - (mult * atr)
-                    if current_price < stop_price:
-                        return {"signal": True, "reason": f"ATR Stop (Price {current_price} < {stop_price:.0f})", "quantity_pct": 100.0}
             
-            # Fallback: Fixed Stop Loss
+            # =====================================================================
+            # 1. 손절 조건 (Stop Loss)
+            # =====================================================================
+            
+            # 1-1. ATR Trailing Stop (손절)
+            if atr:
+                mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
+                stop_price = buy_price - (mult * atr)
+                if current_price < stop_price:
+                    return {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
+            
+            # 1-2. Fallback: Fixed Stop Loss
             stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-5.0)
             
-            # [Jennie's Fix] Stop Loss는 항상 음수여야 합니다. 양수로 설정된 경우 음수로 변환합니다.
-            # 예: 사용자가 5.0(5% 손절)으로 설정하면 -5.0으로 처리하여 2% 수익 구간에서 매도되는 사고 방지
+            # [Jennie's Fix] Stop Loss는 항상 음수여야 합니다.
             if stop_loss > 0:
                 stop_loss = -stop_loss
 
             if profit_pct <= stop_loss:
                 return {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
 
-            # 2. RSI Overbought (Scale-out)
+            # =====================================================================
+            # 2. 트레일링 익절 (Trailing Take Profit) - 신규 추가
+            # =====================================================================
+            
+            # High Watermark 업데이트 (최고가 추적)
+            watermark = update_high_watermark(stock_code, current_price, buy_price)
+            high_price = watermark.get('high_price', current_price)
+            
+            # 트레일링 익절 조건 체크
+            trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
+            activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
+            
+            if trailing_enabled and atr:
+                # 최고가 기준 수익률
+                high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+                
+                # 활성화 조건: 최고가 기준 수익이 activation_pct 이상일 때
+                if high_profit_pct >= activation_pct:
+                    trailing_mult = self.config.get_float('TRAILING_TAKE_PROFIT_ATR_MULT', default=1.5)
+                    trailing_stop_price = high_price - (atr * trailing_mult)
+                    
+                    # 트레일링 익절 발동: 현재가가 트레일링 스탑가 이하
+                    if current_price <= trailing_stop_price:
+                        return {
+                            "signal": True,
+                            "reason": f"Trailing TP: High {high_price:,.0f} → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
+                            "quantity_pct": 100.0
+                        }
+
+            # =====================================================================
+            # 3. 분할 익절 (Scale-out) - 수익률 단계별 부분 매도
+            # =====================================================================
+            scale_out_enabled = self.config.get_bool('SCALE_OUT_ENABLED', default=True)
+            
+            if scale_out_enabled and profit_pct > 0:
+                current_level = get_scale_out_level(stock_code)
+                
+                # 각 레벨별 설정 조회
+                level_1_pct = self.config.get_float('SCALE_OUT_LEVEL_1_PCT', default=5.0)
+                level_1_sell = self.config.get_float('SCALE_OUT_LEVEL_1_SELL_PCT', default=25.0)
+                level_2_pct = self.config.get_float('SCALE_OUT_LEVEL_2_PCT', default=10.0)
+                level_2_sell = self.config.get_float('SCALE_OUT_LEVEL_2_SELL_PCT', default=25.0)
+                level_3_pct = self.config.get_float('SCALE_OUT_LEVEL_3_PCT', default=15.0)
+                level_3_sell = self.config.get_float('SCALE_OUT_LEVEL_3_SELL_PCT', default=25.0)
+                
+                # 아직 레벨 1 미도달
+                if current_level < 1 and profit_pct >= level_1_pct:
+                    set_scale_out_level(stock_code, 1)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L1: +{profit_pct:.1f}% (목표 +{level_1_pct}%)",
+                        "quantity_pct": level_1_sell
+                    }
+                
+                # 레벨 1 완료, 레벨 2 미도달
+                if current_level < 2 and profit_pct >= level_2_pct:
+                    set_scale_out_level(stock_code, 2)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L2: +{profit_pct:.1f}% (목표 +{level_2_pct}%)",
+                        "quantity_pct": level_2_sell
+                    }
+                
+                # 레벨 2 완료, 레벨 3 미도달
+                if current_level < 3 and profit_pct >= level_3_pct:
+                    set_scale_out_level(stock_code, 3)
+                    return {
+                        "signal": True,
+                        "reason": f"Scale-out L3: +{profit_pct:.1f}% (목표 +{level_3_pct}%)",
+                        "quantity_pct": level_3_sell
+                    }
+
+            # =====================================================================
+            # 4. RSI 과열 (추가 Scale-out)
+            # =====================================================================
             if not daily_prices.empty and len(daily_prices) >= 15:
                 prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
                 rsi = strategy.calculate_rsi(prices[::-1], period=14)
-                threshold = self.config.get_float('SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
-                if rsi and rsi >= threshold:
-                    return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f})", "quantity_pct": 50.0}
+                threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
+                
+                # [Jennie's Fix] 최소 수익률 조건 추가 (사용자 요청: 3%)
+                min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
+                
+                # 이미 RSI 분할 매도를 했는지 확인
+                rsi_already_sold = get_rsi_overbought_sold(stock_code)
 
-            # 3. Target Profit
-            target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
-            if profit_pct >= target:
-                return {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
+                if rsi and rsi >= threshold and profit_pct >= min_rsi_profit and not rsi_already_sold:
+                    # Redis에 매도 상태 기록
+                    set_rsi_overbought_sold(stock_code, True)
+                    return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f}, Profit: {profit_pct:.1f}%)", "quantity_pct": 50.0}
+
+            # =====================================================================
+            # 5. 고정 목표 익절 (트레일링 비활성화 시 폴백)
+            # =====================================================================
+            if not trailing_enabled:
+                target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
+                if profit_pct >= target:
+                    return {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
             
-            # 4. Death Cross
+            # =====================================================================
+            # 6. Death Cross
+            # =====================================================================
             if not daily_prices.empty and len(daily_prices) >= 20:
                 import pandas as pd
                 new_row = pd.DataFrame([{'PRICE_DATE': datetime.now(), 'CLOSE_PRICE': current_price, 'OPEN_PRICE': current_price, 'HIGH_PRICE': current_price, 'LOW_PRICE': current_price}])
@@ -231,7 +364,9 @@ class PriceMonitor:
                 if strategy.check_death_cross(df):
                     return {"signal": True, "reason": "Death Cross", "quantity_pct": 100.0}
             
-            # 5. Max Holding Days
+            # =====================================================================
+            # 7. Max Holding Days
+            # =====================================================================
             if holding.get('buy_date'):
                 days = (datetime.now() - datetime.strptime(holding['buy_date'], '%Y%m%d')).days
                 if days >= self.config.get_int('MAX_HOLDING_DAYS', default=30):
@@ -244,10 +379,13 @@ class PriceMonitor:
 
     def _on_websocket_price_update(self, stock_code, current_price, current_high):
         try:
-            # logger.debug(f"   (WS) [{stock_code}] {current_price}")
-            holdings = [h for h in self.portfolio_cache.values() if h['code'] == stock_code]
-            if not holdings: return
+            # Silent Stall 감지용 타임스탬프 갱신
+            self.last_ws_data_time = time.time()
             
+            # logger.debug(f"   (WS) [{stock_code}] {current_price}")
+            
+            # 1. 보유 종목 매도 신호 체크
+            holdings = [h for h in self.portfolio_cache.values() if h['code'] == stock_code]
             for h in holdings:
                 with session_scope(readonly=True) as session:
                     signal = self._check_sell_signal(session,
@@ -257,8 +395,26 @@ class PriceMonitor:
                 if signal:
                     logger.info(f"🔔 (WS) 매도 신호: {h.get('name', stock_code)}")
                     self._publish_sell_order(signal, h, current_price)
-                    # 중복 매도 방지 위해 캐시 제거
-                    self.portfolio_cache.pop(h['id'], None)
+                    
+                    # [Jennie's Fix] 전량 매도인 경우에만 캐시 제거 및 Redis 초기화
+                    q_pct = signal.get('quantity_pct', 100.0)
+                    if q_pct >= 100.0:
+                        logger.info(f"   (WS) 전량 매도로 모니터링 캐시 제거: {stock_code}")
+                        self.portfolio_cache.pop(h['id'], None)
+                        
+                        # Redis 상태 초기화 (다음 매매를 위해)
+                        delete_rsi_overbought_sold(stock_code)
+                        delete_high_watermark(stock_code)
+                        delete_scale_out_level(stock_code)
+                    else:
+                        # 분할 매도인 경우 수량만 업데이트하고 모니터링 유지
+                        old_qty = h['quantity']
+                        sell_qty = int(old_qty * (q_pct / 100.0)) or 1
+                        h['quantity'] -= sell_qty
+                        logger.info(f"   (WS) 분할 매도({q_pct}%): {old_qty} -> {h['quantity']} (모니터링 유지)")
+            
+            # 매수 신호 감시는 buy-scanner가 담당 (Phase: WebSocket 역할 분리)
+                    
         except Exception as e:
             logger.error(f"❌ (WS) 오류: {e}")
 

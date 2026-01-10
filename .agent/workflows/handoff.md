@@ -2,6 +2,7 @@
 description: 현재 세션을 종료하고, .ai/sessions에 컨텍스트를 저장한 후 Git 동기화를 수행합니다
 ---
 1. 현재 세션에서 수행한 작업을 분석합니다.
+   - (정본 규칙) 루트 `rules.md`의 “세션 종료(Handoff)” 절차를 따릅니다.
 2. `CHANGELOG.md`에 오늘 작업 내용을 한 줄 요약으로 업데이트합니다.
 3. `.ai/sessions/session-YYYY-MM-DD-HH-MM.md` 경로에 새로운 세션 파일을 생성합니다.
    - 형식:

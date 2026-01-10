@@ -7,7 +7,7 @@ scripts/collect_naver_news.py
 
 KOSPI 종목별 네이버 금융 뉴스를 순회하며 기사 메타데이터를 수집/저장합니다.
  - 단계별 Sleep 및 User-Agent 로테이션으로 차단 리스크 최소화
- - MariaDB / Oracle 모두 지원 (execute_upsert 사용)
+ - MariaDB 단일 지원 (Oracle/분기 제거, execute_upsert 사용)
  - 감성/카테고리는 후속 파이프라인에서 업데이트 가능 (기본값: 중립)
 """
 
@@ -17,7 +17,7 @@ import os
 import random
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
@@ -49,47 +49,28 @@ TABLE_NAME = "STOCK_NEWS_SENTIMENT"
 
 
 def _is_mariadb() -> bool:
-    return os.getenv("DB_TYPE", "ORACLE").upper() == "MARIADB"
+    # 단일화: MariaDB만 사용
+    return True
 
 
 def ensure_table_exists(connection):
     cursor = connection.cursor()
     try:
-        if _is_mariadb():
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                    ID INT AUTO_INCREMENT PRIMARY KEY,
-                    ARTICLE_URL VARCHAR(2000) UNIQUE,
-                    STOCK_CODE VARCHAR(20) NOT NULL,
-                    NEWS_DATE DATETIME NOT NULL,
-                    PRESS VARCHAR(255),
-                    HEADLINE VARCHAR(1000),
-                    SUMMARY TEXT,
-                    SOURCE VARCHAR(50) DEFAULT 'NAVER',
-                    CATEGORY VARCHAR(50),
-                    SENTIMENT_SCORE INT DEFAULT 50,
-                    SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            """)
-        else:
-            try:
-                cursor.execute(f"SELECT 1 FROM {TABLE_NAME} WHERE ROWNUM=1")
-            except Exception:
-                cursor.execute(f"""
-                    CREATE TABLE {TABLE_NAME} (
-                        ID NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                        ARTICLE_URL VARCHAR2(2000) UNIQUE,
-                        STOCK_CODE VARCHAR2(20) NOT NULL,
-                        NEWS_DATE TIMESTAMP NOT NULL,
-                        PRESS VARCHAR2(255),
-                        HEADLINE VARCHAR2(1000),
-                        SUMMARY CLOB,
-                        SOURCE VARCHAR2(50) DEFAULT 'NAVER',
-                        CATEGORY VARCHAR2(50),
-                        SENTIMENT_SCORE NUMBER DEFAULT 50,
-                        SCRAPED_AT TIMESTAMP DEFAULT SYSTIMESTAMP
-                    )
-                """)
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
+                ID INT AUTO_INCREMENT PRIMARY KEY,
+                ARTICLE_URL VARCHAR(2000) UNIQUE,
+                STOCK_CODE VARCHAR(20) NOT NULL,
+                NEWS_DATE DATETIME NOT NULL,
+                PRESS VARCHAR(255),
+                HEADLINE VARCHAR(1000),
+                SUMMARY TEXT,
+                SOURCE VARCHAR(50) DEFAULT 'NAVER',
+                CATEGORY VARCHAR(50),
+                SENTIMENT_SCORE INT DEFAULT 50,
+                SCRAPED_AT DATETIME DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """)
         connection.commit()
         logger.info(f"✅ 테이블 확인 완료: {TABLE_NAME}")
     except Exception as e:
@@ -206,7 +187,7 @@ def save_articles(connection, articles: List[Dict]):
                 article.get("press"),
                 article.get("headline"),
                 article.get("summary"),
-                datetime.utcnow(),
+                datetime.now(timezone.utc),
                 "NAVER",
                 article.get("category"),
                 article.get("sentiment_score", 50),
@@ -271,23 +252,8 @@ def collect_news_for_stock(stock_code: str,
 
 
 def get_db_config():
-    if _is_mariadb():
-        return {
-            "db_user": "dummy",
-            "db_password": "dummy",
-            "db_service_name": "dummy",
-            "wallet_path": "dummy",
-        }
-    project_id = os.getenv("GCP_PROJECT_ID")
-    db_user = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_USER"), project_id)
-    db_password = auth.get_secret(os.getenv("SECRET_ID_ORACLE_DB_PASSWORD"), project_id)
-    wallet_path = os.path.join(PROJECT_ROOT, os.getenv("OCI_WALLET_DIR_NAME", "wallet"))
-    return {
-        "db_user": db_user,
-        "db_password": db_password,
-        "db_service_name": os.getenv("OCI_DB_SERVICE_NAME"),
-        "wallet_path": wallet_path,
-    }
+    # 레거시 호환용(현재 미사용): MariaDB 단일화로 더 이상 외부 설정 dict를 만들 필요가 없습니다.
+    return {}
 
 
 def parse_args():
@@ -306,8 +272,7 @@ def main():
 
     logger.info(f"🔎 네이버 뉴스 크롤링 시작 (기간: {args.days}일, 종목 {args.codes}개)")
 
-    db_config = get_db_config()
-    conn = database.get_db_connection(**db_config)
+    conn = database.get_db_connection()
     if not conn:
         logger.error("DB 연결 실패로 종료합니다.")
         return

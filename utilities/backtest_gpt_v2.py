@@ -138,6 +138,9 @@ def prepare_indicators(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
+    df = df.sort_index()
+    df = df.ffill().bfill()
+    
     delta = df["CLOSE_PRICE"].diff()
     up = delta.clip(lower=0)
     down = -delta.clip(upper=0)
@@ -198,6 +201,71 @@ def piecewise_linear(points: List[Tuple[float, float]], t: float) -> float:
 
 
 # ---------------------------------------------------------------------------
+# 데이터 로더 (추가)
+# ---------------------------------------------------------------------------
+
+def load_investor_trading(connection, stock_code: str, days: int = 400) -> pd.DataFrame:
+    """외국인/기관 수급 데이터 로드"""
+    query = """
+        SELECT TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY
+        FROM STOCK_INVESTOR_TRADING
+        WHERE STOCK_CODE = %s
+          AND TRADE_DATE >= CURDATE() - INTERVAL %s DAY
+        ORDER BY TRADE_DATE ASC
+    """
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query, (stock_code, days))
+        rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame()
+        
+        if isinstance(rows[0], dict):
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.DataFrame(rows, columns=["TRADE_DATE", "FOREIGN_NET_BUY", "INSTITUTION_NET_BUY"])
+            
+        df["TRADE_DATE"] = pd.to_datetime(df["TRADE_DATE"])
+        df.set_index("TRADE_DATE", inplace=True)
+        return df
+    except Exception as e:
+        logger.warning(f"수급 데이터 로드 실패 ({stock_code}): {e}")
+        return pd.DataFrame()
+    finally:
+        cursor.close()
+
+def load_financial_metrics(connection, stock_code: str) -> pd.DataFrame:
+    """분기별 재무 지표 로드"""
+    query = """
+        SELECT QUARTER_DATE, EPS, ROE, PER, PBR, NET_INCOME, TOTAL_EQUITY
+        FROM FINANCIAL_METRICS_QUARTERLY
+        WHERE STOCK_CODE = %s
+        ORDER BY QUARTER_DATE ASC
+    """
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query, (stock_code,))
+        rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame()
+            
+        if isinstance(rows[0], dict):
+            df = pd.DataFrame(rows)
+        else:
+            df = pd.DataFrame(rows, columns=["QUARTER_DATE", "EPS", "ROE", "PER", "PBR", "NET_INCOME", "TOTAL_EQUITY"])
+            
+        df["QUARTER_DATE"] = pd.to_datetime(df["QUARTER_DATE"])
+        # 발표일 기준이 없으므로, 편의상 분기말 + 45일을 데이터 사용 가능일로 가정 (보수적 접근)
+        df["AVAIL_DATE"] = df["QUARTER_DATE"] + pd.Timedelta(days=45)
+        df.set_index("AVAIL_DATE", inplace=True)
+        return df.sort_index()
+    except Exception as e:
+        logger.warning(f"재무 데이터 로드 실패 ({stock_code}): {e}")
+        return pd.DataFrame()
+    finally:
+        cursor.close()
+
+# ---------------------------------------------------------------------------
 # 데이터 모델
 # ---------------------------------------------------------------------------
 
@@ -256,6 +324,8 @@ class ScannerLite:
         bb_buffer_pct: float,
         top_n: int,
         watchlist_cache: Dict[str, Dict] = None,  # LLM 점수 조회용
+        investor_cache: Dict[str, pd.DataFrame] = None, # [New] 수급 데이터
+        financial_cache: Dict[str, pd.DataFrame] = None, # [New] 재무 데이터
     ):
         self.price_cache = price_cache
         self.regime_detector = regime_detector
@@ -266,7 +336,9 @@ class ScannerLite:
         self.breakout_buffer_pct = breakout_buffer_pct
         self.bb_buffer_pct = bb_buffer_pct
         self.top_n = top_n
-        self.watchlist_cache = watchlist_cache or {}  # Watchlist 캐시
+        self.watchlist_cache = watchlist_cache or {}
+        self.investor_cache = investor_cache or {}
+        self.financial_cache = financial_cache or {}
 
     def detect_regime(self, kospi_slice: pd.DataFrame) -> Tuple[str, List[str]]:
         close_df = kospi_slice[["CLOSE_PRICE"]].rename(columns={"CLOSE_PRICE": "CLOSE_PRICE"})
@@ -370,7 +442,19 @@ class ScannerLite:
                 # 장중에는 당일 종가를 알 수 없으므로 전일까지의 데이터만 사용
                 df_window_for_factor = df_window.iloc[:-1] if len(df_window) > 1 else df_window
                 kospi_slice_for_factor = kospi_slice.iloc[:-1] if len(kospi_slice) > 1 else kospi_slice
-                factor_score = self._compute_factor_score(df_window_for_factor, kospi_slice_for_factor, regime)
+                
+                # [New] 추가 데이터 조회 (전일 기준)
+                investor_df = self.investor_cache.get(code)
+                financial_df = self.financial_cache.get(code)
+                
+                factor_score = self._compute_factor_score(
+                    df_window_for_factor, 
+                    kospi_slice_for_factor, 
+                    regime,
+                    investor_df,
+                    financial_df,
+                    current_date # 기준일 (이 날짜 이전 데이터만 사용)
+                )
                 llm_score = self._estimate_llm_score(code, factor_score, score, signal)
                 name = self.stock_names.get(code, code)
                 metadata = {**metadata, "name": name}
@@ -395,15 +479,71 @@ class ScannerLite:
         stock_window: pd.DataFrame,
         kospi_slice: pd.DataFrame,
         regime: str,
+        investor_df: Optional[pd.DataFrame] = None,
+        financial_df: Optional[pd.DataFrame] = None,
+        date_cursor: datetime = None
     ) -> float:
         try:
+            # 0. 데이터 준비
+            roe = None
+            per = None
+            pbr = None
+            sales_growth = None # 데이터 부족으로 제외
+            eps_growth = None
+            
+            if financial_df is not None and not financial_df.empty:
+                # date_cursor(오늘) 이전에 "이용 가능해진(AVAIL_DATE)" 가장 최신 재무 데이터 조회
+                # AVAIL_DATE는 분기말 + 45일로 설정됨
+                available_financials = financial_df.loc[:date_cursor]
+                if not available_financials.empty:
+                    latest = available_financials.iloc[-1]
+                    roe = float(latest['ROE']) if latest['ROE'] else None
+                    per = float(latest['PER']) if latest['PER'] else None
+                    pbr = float(latest['PBR']) if latest['PBR'] else None
+                    # EPS Growth 계산 (전년 동기 대비) - 여기서는 단순화하여 생략하거나 로직 추가 가능
+            
+            # 수급 데이터 (최근 5일 순매수 강도?)
+            # FactorScorer v3.5에는 명시적인 수급 인자 입력이 없으므로 Quality나 Technical에 녹이거나
+            # 혹은 별도 로직이 필요하지만, 여기서는 calculate_quality_score 등에 
+            # 전달할 sales_growth 자리에 수급 모멘텀을 대리로 넣거나 하는 트릭 대신
+            # 정석대로 FactorScorer를 호출.
+            
+            # 주의: 현재 FactorScorer.calculate_quality_score는 ROE, Sales Growth, EPS Growth를 받음
+            # 수급 데이터는 FactorScorer가 직접 받지 않음 (Technical Score 내부 로직 확인 필요)
+            # -> FactorScorer 코드를 보니 수급(Investor)은 반영되지 않음.
+            # -> 따라서 여기서는 Financial Data만이라도 제대로 반영.
+            
             kospi_window = kospi_slice.tail(len(stock_window))
             momentum, _ = self.factor_scorer.calculate_momentum_score(stock_window, kospi_window)
-            quality, _ = self.factor_scorer.calculate_quality_score(roe=None, sales_growth=None, eps_growth=None, daily_prices_df=stock_window)
-            value, _ = self.factor_scorer.calculate_value_score(pbr=None, per=None)
+            
+            quality, _ = self.factor_scorer.calculate_quality_score(
+                roe=roe, 
+                sales_growth=None, 
+                eps_growth=None, 
+                daily_prices_df=stock_window
+            )
+            
+            value, _ = self.factor_scorer.calculate_value_score(pbr=pbr, per=per)
             technical, _ = self.factor_scorer.calculate_technical_score(stock_window)
+            
+            # [보너스] 수급 가산점 (FactorScorer 외부에서 보정)
+            # 외국인/기관 쌍끌이 매수 여부 확인
+            investor_bonus = 0.0
+            if investor_df is not None and not investor_df.empty and date_cursor:
+                # 전일 ~ 5일 전 수급 확인
+                recent_inv = investor_df.loc[:date_cursor].tail(5)
+                if not recent_inv.empty:
+                    f_sum = recent_inv['FOREIGN_NET_BUY'].sum()
+                    i_sum = recent_inv['INSTITUTION_NET_BUY'].sum()
+                    if f_sum > 0 and i_sum > 0:
+                        investor_bonus = 5.0 # 쌍끌이 보너스
+                        
             final_score, _ = self.factor_scorer.calculate_final_score(momentum, quality, value, technical, regime)
-            return final_score / 10.0
+            
+            final_score += investor_bonus * 10 # 1000점 만점이므로 50점 가산
+            
+            return min(100.0, final_score / 10.0)
+            
         except Exception as exc:
             logger.debug(f"팩터 점수 계산 실패: {exc}")
             return 50.0
@@ -530,6 +670,12 @@ class PortfolioEngine:
     # 수수료율 상수 (한국투자증권 OpenAPI 기준)
     FEE_BUY = 0.0000841   # 0.00841%
     FEE_SELL = 0.0005841  # 0.05841%
+    
+    # 슬리피지 상수 (시장가 체결 시 불리한 가격 적용)
+    # 매수: 호가 스프레드 + 시장 충격으로 0.3% 불리하게
+    # 매도: 동일하게 0.3% 불리하게
+    SLIPPAGE_BUY = 0.003   # +0.3% (더 비싸게 매수)
+    SLIPPAGE_SELL = 0.003  # -0.3% (더 싸게 매도)
 
     def execute_buy(
         self,
@@ -541,7 +687,10 @@ class PortfolioEngine:
         sector: str,
         risk_setting: Dict,
     ) -> bool:
-        price = candidate.price
+        # 슬리피지 적용: 시장가 매수 시 불리한 가격으로 체결
+        base_price = candidate.price
+        price = base_price * (1 + self.SLIPPAGE_BUY)  # 0.3% 더 비싸게
+        
         cost = qty * price
         fee = cost * self.FEE_BUY
         total_cost = cost + fee
@@ -601,7 +750,10 @@ class PortfolioEngine:
             row = get_row_at_or_before(price_cache[code], trade_date)
             if row is None:
                 continue
-            price = float(price_lookup(code))
+            base_price = float(price_lookup(code))
+            # 슬리피지 적용: 시장가 매도 시 불리한 가격으로 체결
+            price = base_price * (1 - self.SLIPPAGE_SELL)  # 0.3% 더 싸게
+            
             atr = float(row.get("ATR", pos.atr)) if not pd.isna(row.get("ATR")) else pos.atr
             if not pd.isna(atr):
                 trailing = price - atr * self.stop_loss_atr_mult
@@ -730,7 +882,10 @@ class BacktestGPT:
         self.regime_detector = MarketRegimeDetector()
         self.strategy_selector = StrategySelector()
         self.factor_scorer = FactorScorer()
+        self.factor_scorer = FactorScorer()
         self.price_cache: Dict[str, pd.DataFrame] = {}
+        self.investor_cache: Dict[str, pd.DataFrame] = {} # [New]
+        self.financial_cache: Dict[str, pd.DataFrame] = {} # [New]
         self.calendar: List[datetime] = []
         self.scanner: Optional[ScannerLite] = None
         self.portfolio: Optional[PortfolioEngine] = None
@@ -778,6 +933,11 @@ class BacktestGPT:
             if df.empty:
                 continue
             self.price_cache[code] = prepare_indicators(df)
+            
+            # [New] 추가 데이터 로드
+            self.investor_cache[code] = load_investor_trading(self.connection, code)
+            self.financial_cache[code] = load_financial_metrics(self.connection, code)
+            
         self._load_stock_metadata()
 
     def _build_calendar(self, days: Optional[int]) -> None:
@@ -788,22 +948,31 @@ class BacktestGPT:
             start = max(start, end - timedelta(days=days))
         full_calendar = list(kospi_df.loc[start:end].index)
         
-        # Out-of-Sample 테스트: train/test 분할
-        train_ratio = getattr(self.args, 'train_ratio', 1.0)
-        if train_ratio < 1.0 and len(full_calendar) > 10:
-            split_idx = int(len(full_calendar) * train_ratio)
-            self.train_calendar = full_calendar[:split_idx]
-            self.test_calendar = full_calendar[split_idx:]
-            self.oos_start_date = self.test_calendar[0] if self.test_calendar else None
-            logger.info(f"📊 Out-of-Sample 분할: Train {len(self.train_calendar)}일 | Test {len(self.test_calendar)}일")
-            logger.info(f"   Train: {self.train_calendar[0].strftime('%Y-%m-%d')} ~ {self.train_calendar[-1].strftime('%Y-%m-%d')}")
-            logger.info(f"   Test:  {self.test_calendar[0].strftime('%Y-%m-%d')} ~ {self.test_calendar[-1].strftime('%Y-%m-%d')}")
-        else:
-            self.train_calendar = full_calendar
-            self.test_calendar = []
-            self.oos_start_date = None
+        full_calendar = list(kospi_df.loc[start:end].index)
         
-        self.calendar = full_calendar
+        # Train/Test Split Logic
+        split_ratio = self.args.train_ratio
+        split_idx = int(len(full_calendar) * split_ratio)
+        
+        if self.args.mode == "train":
+            self.calendar = full_calendar[:split_idx]
+            logger.info(f"📊 [TRAIN MODE] 전체 {len(full_calendar)}일 중 앞 {len(self.calendar)}일 시뮬레이션")
+            logger.info(f"   기간: {self.calendar[0].strftime('%Y-%m-%d')} ~ {self.calendar[-1].strftime('%Y-%m-%d')}")
+        elif self.args.mode == "test":
+            self.calendar = full_calendar[split_idx:]
+            logger.info(f"🧪 [TEST MODE] 전체 {len(full_calendar)}일 중 뒤 {len(self.calendar)}일 시뮬레이션")
+            if self.calendar:
+                logger.info(f"   기간: {self.calendar[0].strftime('%Y-%m-%d')} ~ {self.calendar[-1].strftime('%Y-%m-%d')}")
+            else:
+                logger.warning("   ⚠️ 테스트 기간이 비어 있습니다. (기간이 너무 짧거나 비율 설정 문제)")
+        else:
+            self.calendar = full_calendar
+            logger.info(f"📈 [FULL MODE] 전체 {len(self.calendar)}일 시뮬레이션")
+            
+        # OOS Reporting용 (Full 모드일 때만 의미 있음)
+        self.train_calendar = full_calendar[:split_idx]
+        self.test_calendar = full_calendar[split_idx:]
+        self.oos_start_date = self.test_calendar[0] if self.test_calendar else None
 
     def _init_components(self) -> None:
         stock_names = {code: meta.get("name", code) for code, meta in self.stock_metadata.items()}
@@ -812,12 +981,14 @@ class BacktestGPT:
             regime_detector=self.regime_detector,
             strategy_selector=self.strategy_selector,
             factor_scorer=self.factor_scorer,
-            stock_names=stock_names,
+            stock_names={k: v.get("name", k) for k, v in self.stock_metadata.items()},
             rsi_threshold=self.args.rsi_buy,
             breakout_buffer_pct=self.args.breakout_buffer_pct,
             bb_buffer_pct=self.args.bb_buffer_pct,
             top_n=self.args.top_n,
-            watchlist_cache=self.watchlist_cache,  # LLM 점수 조회용
+            watchlist_cache=self.watchlist_cache,
+            investor_cache=self.investor_cache,
+            financial_cache=self.financial_cache
         )
         self.portfolio = PortfolioEngine(
             initial_capital=self.args.initial_capital,
@@ -1081,6 +1252,13 @@ class BacktestGPT:
         return curve[slot_idx]
 
     def _generate_intraday_curve(self, code: str, date: pd.Timestamp) -> List[float]:
+        """
+        장중 가격 곡선 생성 (Look-ahead Bias 제거 버전)
+        
+        [중요 변경]
+        - 기존: 당일 OHLC 전체를 사용 → 미래 정보(H/L/C) 참조 문제
+        - 개선: 시가(Open)만 사용 + 전일 ATR 기반 변동폭 추정
+        """
         df = self.price_cache.get(code)
         slots = len(self.slot_offsets) or 1
         if df is None or df.empty:
@@ -1091,17 +1269,58 @@ class BacktestGPT:
             last_price = float(df["CLOSE_PRICE"].iloc[-1])
             return [last_price] * slots
 
-        close_price = float(row.get("CLOSE_PRICE", 0)) or 0.0
-        open_price = float(row.get("OPEN_PRICE", close_price)) or close_price
-        high_price = float(row.get("HIGH_PRICE", max(open_price, close_price))) or max(open_price, close_price)
-        low_price = float(row.get("LOW_PRICE", min(open_price, close_price))) or min(open_price, close_price)
+        # 시가만 사용 (장중에 알 수 있는 유일한 정보)
+        open_price = float(row.get("OPEN_PRICE", 0)) or 0.0
+        if open_price <= 0:
+            open_price = float(row.get("CLOSE_PRICE", 0)) or 0.0
 
-        # 보수적으로 범위 보정
-        high_price = max(high_price, open_price, close_price)
-        low_price = min(low_price, open_price, close_price)
+        # 전일 ATR로 변동폭 추정 (당일 H/L 사용 금지)
+        prev_idx = df.index.get_loc(date) - 1 if date in df.index else -1
+        if prev_idx >= 0:
+            prev_row = df.iloc[prev_idx]
+            atr = float(prev_row.get("ATR", open_price * 0.02)) if not pd.isna(prev_row.get("ATR")) else open_price * 0.02
+        else:
+            atr = open_price * 0.02  # 기본 2% 변동 가정
 
-        return self._simulate_intraday_path(open_price, high_price, low_price, close_price, slots)
+        return self._simulate_intraday_path_v2(open_price, atr, slots)
 
+    def _simulate_intraday_path_v2(
+        self,
+        open_price: float,
+        atr: float,
+        slots: int
+    ) -> List[float]:
+        """
+        시가 기반 장중 가격 경로 생성 (Look-ahead Bias 없음)
+        
+        - 시가에서 시작하여 ATR 범위 내에서 랜덤 워크
+        - 결정론적 시드 사용으로 재현성 보장
+        """
+        if slots <= 1:
+            return [open_price]
+
+        path = [open_price]
+        current = open_price
+        
+        # 매 슬롯마다 ATR의 5% 범위 내에서 변동
+        step_volatility = atr * 0.05
+        
+        for i in range(1, slots):
+            # 결정론적 노이즈 (재현성을 위해 sin 함수 사용)
+            noise = math.sin(i * 1.618) * step_volatility
+            
+            # 평균 회귀 효과 (시가에서 너무 멀어지면 되돌아오는 경향)
+            mean_revert = (open_price - current) * 0.1
+            
+            current = current + noise + mean_revert
+            current = max(current, open_price * 0.9)  # 시가 대비 -10% 이하 방지
+            current = min(current, open_price * 1.1)  # 시가 대비 +10% 이상 방지
+            
+            path.append(max(0.0, current))
+
+        return path[:slots]
+
+    # 기존 메서드는 유지 (하위 호환성)
     def _simulate_intraday_path(
         self,
         open_price: float,
@@ -1110,15 +1329,11 @@ class BacktestGPT:
         close_price: float,
         slots: int
     ) -> List[float]:
+        """[Deprecated] 기존 OHLC 기반 시뮬레이션 - _simulate_intraday_path_v2 사용 권장"""
         if slots <= 1:
             return [close_price]
 
-        # V자 또는 A자 형태의 결정론적 경로 생성
-        # 시가 -> 저가 -> 고가 -> 종가 (V자 형태)
-        # 시가 -> 고가 -> 저가 -> 종가 (A자 형태)
-        # 여기서는 간단하게 V자 형태를 기본으로 사용
         key_points = [open_price, low_price, high_price, close_price]
-
         segments = len(key_points) - 1
         steps_remaining = slots - 1
         extras = steps_remaining % segments if segments > 0 else 0
@@ -1189,8 +1404,10 @@ class BacktestGPT:
         )
         logger.info("누적 거래 횟수: %d회 | 보유 중인 포지션: %d개", stats["trades"], stats["open_positions"])
         
-        # Out-of-Sample 기간 성과 별도 출력
-        if self.oos_start_date is not None and self.test_calendar:
+        # Out-of-Sample Reporting logic
+        # Full 모드일 때만 "Train vs Test" 비교를 위해 OOS 결과를 별도로 보여줌
+        # Train/Test 모드일 때는 위 "전체 기간" 결과가 곧 해당 모드의 결과임
+        if self.args.mode == "full" and self.oos_start_date and self.test_calendar:
             oos_eod_entries = [e for e in eod_entries if e.get("date") >= self.oos_start_date]
             if oos_eod_entries:
                 # OOS 시작 시점의 자산 (Train 기간 종료 시점)
@@ -1222,19 +1439,13 @@ class BacktestGPT:
                 stats["oos_days"] = oos_days
                 
                 logger.info("")
-                logger.info("=== 🎯 Out-of-Sample 결과 (테스트 기간) ===")
+                logger.info("=== 🎯 Out-of-Sample 결과 (테스트 구간) ===")
                 logger.info(f"테스트 기간: {self.test_calendar[0].strftime('%Y-%m-%d')} ~ {self.test_calendar[-1].strftime('%Y-%m-%d')} ({oos_days}일)")
                 logger.info(f"OOS 시작 자산: {oos_start_equity:,.0f}원 → 종료: {oos_end_equity:,.0f}원")
                 logger.info(f"OOS 수익률: {oos_return_pct:.2f}%")
                 logger.info(f"OOS MDD: {oos_mdd * 100:.2f}%")
                 logger.info(f"OOS 월간 수익률: {oos_monthly:.2f}%")
-                
-                # OOS 기간만 보고 싶은 경우 stats 교체
-                if getattr(self.args, 'oos_only', False):
-                    logger.info("⚠️ --oos-only 옵션 활성화: OOS 결과만 반환합니다.")
-                    stats["total_return_pct"] = oos_return_pct
-                    stats["mdd_pct"] = oos_mdd * 100
-                    stats["monthly_return_pct"] = oos_monthly
+
         logger.info("--- ✅ 백테스트 완료 ---")
 
         try:
@@ -1318,11 +1529,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=67, help="랜덤 시드 (기본값 67)")
     
     # Out-of-Sample 테스트 옵션
-    parser.add_argument("--train-ratio", type=float, default=1.0,
-                        help="학습 기간 비율 (0.0~1.0). 예: 0.7이면 앞 70%는 학습, 뒤 30%는 테스트. "
-                             "1.0이면 전체 기간을 학습+테스트로 사용 (기본값)")
+    parser.add_argument("--mode", type=str, choices=["full", "train", "test"], default="full",
+                        help="실행 모드: full(전체), train(학습용 앞 70%%), test(검증용 뒤 30%%)")
+    parser.add_argument("--train-ratio", type=float, default=0.7,
+                        help="학습 기간 비율 (기본값 0.7). mode가 train/test일 때 사용됨.")
     parser.add_argument("--oos-only", action="store_true",
-                        help="Out-of-Sample 기간 성과만 출력 (--train-ratio < 1.0 일 때만 유효)")
+                        help="[Deprecated] Use --mode test instead.")
     
     args = parser.parse_args()
     apply_strategy_defaults(args)

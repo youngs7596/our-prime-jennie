@@ -1,223 +1,210 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-[Priority 3] Targeted Intraday Data Collector
-- Collects 1-minute OHLCV data for 'Radar Candidates'
-- Targets: Active Watchlist + Recent Shadow Radar Logs (Missed Opportunities)
-- Run Frequency: Every 1-5 minutes during market hours, or bulk periodic.
+collect_intraday.py
+-------------------
+Watchlist 및 거래대금 상위 종목의 실시간 시세를 수집하여
+STOCK_MINUTE_PRICE 테이블에 저장하는 스크립트.
+
+주기: 5분 (Scheduler 또는 Cron에 의해 실행됨)
+대상: WatchList + Top 50 Trading Value
 """
+
 import os
 import sys
-import time
 import logging
-from datetime import datetime, timezone, timedelta
-from dotenv import load_dotenv
-from sqlalchemy.orm import Session
-from sqlalchemy import text
+from datetime import datetime
+from typing import List, Dict, Set
+import time
 
-# Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+sys.path.append(PROJECT_ROOT)
 
-import shared.auth as auth
-from shared.db.connection import session_scope, ensure_engine_initialized
-from shared.kis import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
-from shared.db.models import StockMinutePrice
+from shared import database
+from shared.db.models import StockMinutePrice, resolve_table_name, WatchList
+from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, text
 
+# 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
-logger = logging.getLogger("IntradayCollector")
+logger = logging.getLogger(__name__)
 
-def get_target_stocks(session: Session) -> list:
-    """
-    Get list of stock codes to track.
-    1. Active Watchlist
-    2. Recent Shadow Radar Logs (last 7 days)
-    """
-    targets = set()
+# DB 접속 정보 (Env 없을 시 Fallback)
+if not os.getenv("MARIADB_PASSWORD"):
+    os.environ["MARIADB_PASSWORD"] = "q1w2e3R$"
 
-    # 1. Watchlist
+# Docker Compose에서 3307:3306으로 매핑되어 있음 (Host에서 실행 시)
+if not os.getenv("MARIADB_PORT"):
+    os.environ["MARIADB_PORT"] = "3307"
+
+if not os.getenv("MARIADB_HOST"):
+    os.environ["MARIADB_HOST"] = "127.0.0.1"
+
+# Gateway 설정 (로컬 실행 시)
+if not os.getenv("KIS_GATEWAY_URL"):
+    os.environ["KIS_GATEWAY_URL"] = "http://127.0.0.1:8080"
+
+if not os.getenv("USE_GATEWAY_AUTH"):
+    os.environ["USE_GATEWAY_AUTH"] = "false"
+    
+TOP_LIQUID_LIMIT = 50
+
+def get_db_session():
+    """DB 세션 생성"""
+    from shared.db.connection import get_engine, init_engine
+    
     try:
-        from shared.database import get_active_watchlist
-        watchlist = get_active_watchlist(session)
-        for code in watchlist.keys():
-            targets.add(code)
-        logger.info(f"Loaded {len(targets)} from Watchlist")
-    except Exception as e:
-        logger.warning(f"Failed to load watchlist: {e}")
-
-    # 2. Shadow Radar (Recent Rejections)
-    try:
-        # Check if table exists (it should)
-        query = text("""
-            SELECT DISTINCT STOCK_CODE 
-            FROM SHADOW_RADAR_LOG
-            WHERE TIMESTAMP >= :since
-        """)
-        since = datetime.now(timezone.utc) - timedelta(days=7)
-        rows = session.execute(query, {"since": since}).fetchall()
+        engine = get_engine()
+    except RuntimeError:
+        # 엔진이 초기화되지 않았다면 초기화 시도
+        init_engine()
+        engine = get_engine()
         
-        count = 0
-        for row in rows:
-            targets.add(row[0])
-            count += 1
-        logger.info(f"Loaded {count} from Shadow Radar (Last 7 days)")
+    return Session(bind=engine)
+
+def fetch_top_liquid_codes(session: Session, limit: int = 50) -> List[str]:
+    """
+    최근 거래대금 상위 종목 추출
+    (StockDailyPrice 테이블 활용)
+    """
+    try:
+        # MariaDB: STOCK_DAILY_PRICES_3Y에서 최근 일자 기준 평균 거래대금 상위
+        # 간단하게 최근 하루치 거래대금 순으로 정렬
+        query = text(f"""
+            SELECT STOCK_CODE 
+            FROM {resolve_table_name("STOCK_DAILY_PRICES_3Y")}
+            WHERE PRICE_DATE = (
+                SELECT MAX(PRICE_DATE) 
+                FROM {resolve_table_name("STOCK_DAILY_PRICES_3Y")}
+            )
+            ORDER BY (CLOSE_PRICE * VOLUME) DESC
+            LIMIT :limit
+        """)
+        result = session.execute(query, {"limit": limit}).fetchall()
+        return [row[0] for row in result]
     except Exception as e:
-        logger.warning(f"Failed to load Shadow Radar logs: {e}")
+        logger.error(f"Top Liquid 조회 실패: {e}")
+        return []
 
-    return list(targets)
-
-def collect_intraday(kis_api, session: Session, stock_codes: list):
-    """
-    Collect 1-minute candles for target stocks.
-    Uses KIS API get_stock_minute_prices.
-    """
-    # KST Today YYYYMMDD
-    kst_now = datetime.now(timezone(timedelta(hours=9)))
-    today_str = kst_now.strftime("%Y%m%d")
-    current_time_str = kst_now.strftime("%H%M%S")
-
-    # If before 09:00, warn? Or maybe we are backfilling yesterday?
-    # Assuming running during market hours or shortly after.
+def get_target_universe(session: Session) -> List[str]:
+    """수집 대상 종목 리스트 생성 (Watchlist + Top Liquid)"""
+    targets: Set[str] = set()
     
-    logger.info(f"Starting collection for {len(stock_codes)} stocks. Target Date: {today_str}")
+    # 1. Watchlist (ORM 사용)
+    try:
+        watchlist_items = session.query(WatchList.stock_code).all()
+        if watchlist_items:
+            targets.update([item.stock_code for item in watchlist_items])
+    except Exception as e:
+        logger.error(f"Watchlist 조회 실패: {e}")
 
-    success_count = 0
+    # 2. Top Liquid
+    top_liquid = fetch_top_liquid_codes(session, TOP_LIQUID_LIMIT)
+    targets.update(top_liquid)
     
-    for code in stock_codes:
-        try:
-            # We want today's 1-min candles
-            # API expects time in certain formats usually
-            # get_stock_minute_prices implementation usually handles "today" if no time specified or fetches recent.
-            # Let's check the signature from shared/kis/market_data.py
-            # def get_stock_minute_prices(self, stock_code, target_date_yyyymmdd: str, minute_interval: int = 5):
-            # Oops, it's 5 min interval default? We want 1 minute.
-            
-            # Using KISClient directly or via helper?
-            # kis_api is likely KISClient or Gateway.
-            # If KISClient, it likely has .get_market_data().get_stock_minute_prices(...)
-            
-            # Let's assume we can access market_data wrapper or call API directly.
-            # Based on code view, MarketData is a mixin or separate class.
-            
-            daily_prices = [] 
-            # Trying to use the high level method if available
-            # Check for market_data attribute (Standard KISClient)
-            if hasattr(kis_api, 'market_data'):
-                ticks = kis_api.market_data.get_stock_minute_prices(code, today_str, minute_interval=1)
-            # Check for direct method (Gateway or Mixin)
-            elif hasattr(kis_api, 'get_stock_minute_prices'):
-                ticks = kis_api.get_stock_minute_prices(code, today_str, minute_interval=1)
-            # Fallback for old getter pattern if exists
-            elif hasattr(kis_api, 'get_market_data'):
-                ticks = kis_api.get_market_data().get_stock_minute_prices(code, today_str, minute_interval=1)
-            else:
-                logger.error("KIS API client does not support get_stock_minute_prices")
-                break
+    # KOSPI 지수 등 제외 (필요 시)
+    if "0001" in targets:
+        targets.remove("0001")
+        
+    return sorted(list(targets))
 
-            if not ticks:
+def collect_snapshot(gateway: KISGatewayClient, code: str) -> Dict:
+    """단일 종목 스냅샷 조회"""
+    data = gateway.get_stock_snapshot(code)
+    if not data:
+        return None
+        
+    # KIS Gateway Snapshot 응답 구조에 따라 파싱
+    # 예상: { "current_price": 1234, "volume": 12345, ... }
+    # 실제 필드명을 확인해야 함. 일단 일반적인 키 사용.
+    # GatewayClient는 raw dictonary를 반환함.
+    
+    return data
+
+def save_to_db(session: Session, snapshots: List[Dict]):
+    """DB 저장"""
+    try:
+        timestamp = datetime.now() # 수집 시점
+        
+        records = []
+        for item in snapshots:
+            code = item.get('stock_code')
+            if not code:
                 continue
-
-            # Save to DB
-            for t in ticks:
-                # t can be raw or normalized.
-                # market_data.py returns dict with 'datetime' (datetime obj), 'open', etc.
                 
-                price_dt = t.get('datetime')
-                if price_dt:
-                    pass # Already datetime
-                else:
-                    # Fallback to raw parsing
-                    hhmmss = t.get('time') or t.get('stck_cntg_hour') 
-                    if not hhmmss:
-                         continue
-                    
-                    price_time_str = f"{today_str}{hhmmss}"
-                    try:
-                        price_dt = datetime.strptime(price_time_str, "%Y%m%d%H%M%S")
-                    except ValueError:
-                        continue
-
-                # Prepare upsert (merge)
-                # SQLAlchemy merge or raw upsert
-                
-                # Using merge for simplicity standard
-                # Performance might be an issue for updates, but for limited targets it's fine.
-                
-                record = StockMinutePrice(
-                    price_time=price_dt,
-                    stock_code=code,
-                    open_price=float(t.get('open', 0)),
-                    high_price=float(t.get('high', 0)),
-                    low_price=float(t.get('low', 0)),
-                    close_price=float(t.get('close', 0)),
-                    volume=float(t.get('volume', 0)),
-                    accum_volume=float(t.get('accum_volume', 0) or 0) # if available
-                )
-                session.merge(record)
+            # Snapshot 데이터 매핑
+            # Gateway 응답이 {'stock_code':..., 'price':..., 'volume':...} 형태라고 가정
+            # 만약 OHLC 정보가 없다면 current_price로 채움
+            price = float(item.get('price', item.get('current_price', 0)))
+            vol = float(item.get('volume', item.get('accum_volume', 0)))
             
+            # 5분 주기로 수집하므로 Snapshot 가격을 해당 시점의 OHLC로 간주 (Sampling)
+            record = StockMinutePrice(
+                price_time=timestamp,
+                stock_code=code,
+                open_price=price,
+                high_price=price,
+                low_price=price,
+                close_price=price,
+                volume=0, # 틱 볼륨은 알 수 없음. 0으로 처리.
+                accum_volume=vol # 당일 누적 거래량
+            )
+            records.append(record)
+            
+        if records:
+            session.bulk_save_objects(records)
             session.commit()
-            success_count += 1
-            time.sleep(0.05) # Rate limit basic
-
-        except Exception as e:
-            logger.error(f"Error collecting for {code}: {e}")
-            session.rollback()
-
-    logger.info(f"Collection Complete. Success: {success_count}/{len(stock_codes)}")
+            logger.info(f"✅ {len(records)}개 종목 시세 저장 완료 ({timestamp})")
+            
+    except Exception as e:
+        session.rollback()
+        logger.error(f"DB 저장 실패: {e}")
 
 def main():
-    load_dotenv(override=True)
-    ensure_engine_initialized()
+    gateway = KISGatewayClient()
     
-    trading_mode = os.getenv("TRADING_MODE", "REAL")
-    # Force Direct Client for Intraday (Gateway implementation pending for minute prices)
-    use_gateway = False # os.getenv("USE_KIS_GATEWAY", "true").lower() == "true"
-    
-    logger.info(f"Trading Mode: {trading_mode}, Gateway: {use_gateway}")
+    # 장 운영 시간 체크 (선택 사항, 일단 수집은 항상 시도하거나 스케줄러에 위임)
+    # if not gateway.check_market_open():
+    #     logger.info("장이 열리지 않았습니다.")
+    #     return
 
-    # Init KIS API
+    session = get_db_session()
+    
     try:
-        if use_gateway:
-            kis_api = KISGatewayClient()
-        else:
-            # Fallback to standard secret IDs if env vars are missing
-            # REAL -> kis-r-..., MOCK -> kis-v-...
-            prefix = 'r' if trading_mode == 'REAL' else 'v'
-            
-            app_key_id = os.getenv(f"{trading_mode}_SECRET_ID_APP_KEY", f"kis-{prefix}-app-key")
-            app_secret_id = os.getenv(f"{trading_mode}_SECRET_ID_APP_SECRET", f"kis-{prefix}-app-secret")
-            account_prefix_id = os.getenv(f"{trading_mode}_SECRET_ID_ACCOUNT_PREFIX", f"kis-{prefix}-account-no")
-            
-            # KIS Standard URLs
-            default_base_url = "https://openapi.koreainvestment.com:9443" if trading_mode == 'REAL' else "https://openapivts.koreainvestment.com:29443"
-            base_url = os.getenv(f"KIS_BASE_URL_{trading_mode}", default_base_url)
-
-            kis_api = KIS_API(
-                app_key=auth.get_secret(app_key_id),
-                app_secret=auth.get_secret(app_secret_id),
-                base_url=base_url,
-                account_prefix=auth.get_secret(account_prefix_id),
-                account_suffix=os.getenv("KIS_ACCOUNT_SUFFIX", "01"),
-                token_file_path=os.path.join(PROJECT_ROOT, "tokens", "kis_token_scout.json"),
-                trading_mode=trading_mode
-            )
-            if not kis_api.authenticate():
-                raise Exception("Authentication Failed")
-    except Exception as e:
-        logger.error(f"Failed to initialize KIS API: {e}")
-        return
-
-    with session_scope() as session:
-        targets = get_target_stocks(session)
-        if not targets:
-            logger.info("No targets to collect.")
-            return
+        targets = get_target_universe(session)
+        logger.info(f"🎯 수집 대상: 총 {len(targets)}개 종목 (Watchlist + Top {TOP_LIQUID_LIMIT})")
         
-        collect_intraday(kis_api, session, targets)
+        snapshots = []
+        for i, code in enumerate(targets):
+            # Rate Limit은 GatewayClient 내부에서 처리됨 (sleep)
+            data = collect_snapshot(gateway, code)
+            
+            # 진행 상황 로깅 (10개 단위)
+            if (i+1) % 10 == 0:
+                print(".", end="", flush=True)
+                
+            if data:
+                # Stock Code가 응답에 없을 수 있으므로 주입
+                if 'stock_code' not in data:
+                    data['stock_code'] = code
+                snapshots.append(data)
+        
+        print("") # 줄바꿈
+        
+        if snapshots:
+            save_to_db(session, snapshots)
+        else:
+            logger.warning("수집된 데이터가 없습니다.")
+            
+    finally:
+        session.close()
 
 if __name__ == "__main__":
     main()

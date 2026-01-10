@@ -44,10 +44,11 @@ class TestConfigManagerInit:
         assert config_manager._db_cache == {}
     
     def test_init_has_defaults(self, config_manager):
-        """기본값 딕셔너리 존재"""
+        """기본값 딕셔너리 존재 (메타데이터 포함 구조)"""
         assert 'SCAN_INTERVAL_SEC' in config_manager._defaults
         assert 'BUY_RSI_OVERSOLD_THRESHOLD' in config_manager._defaults
-        assert 'MAX_HOLDING_STOCKS' in config_manager._defaults
+        # 새로운 구조: {"value": 값, "desc": "설명", "category": "카테고리"}
+        assert 'value' in config_manager._defaults['SCAN_INTERVAL_SEC']
 
 
 # ============================================================================
@@ -58,10 +59,11 @@ class TestConfigManagerGet:
     """ConfigManager.get() 메서드 테스트"""
     
     def test_get_from_defaults(self, config_manager):
-        """기본값에서 조회"""
+        """기본값에서 조회 (메타데이터 포함 구조)"""
         # _defaults에서 직접 기본값 확인
         assert 'SCAN_INTERVAL_SEC' in config_manager._defaults
-        assert config_manager._defaults['SCAN_INTERVAL_SEC'] == 600
+        # 새로운 구조: {"value": 값, "desc": "설명", "category": "카테고리"}
+        assert config_manager._defaults['SCAN_INTERVAL_SEC']['value'] == 600
     
     def test_get_with_default_parameter(self, config_manager):
         """default 파라미터 사용"""
@@ -197,6 +199,61 @@ class TestTypedGetters:
             config_manager._memory_cache['BOOL_KEY'] = (false_val, time.time())
             result = config_manager.get_bool('BOOL_KEY')
             assert result is False, f"'{false_val}' should be False"
+
+
+# ============================================================================
+# Tests: 종목별(per-symbol) getter
+# ============================================================================
+
+class TestPerSymbolGetters:
+    """ConfigManager 종목별 getter 메서드 테스트"""
+
+    def test_get_for_symbol_prefers_symbol_key(self, config_manager):
+        """SYMBOL_{code}__{key}가 있으면 전역보다 우선"""
+        config_manager.set("BUY_RSI_OVERSOLD_THRESHOLD", 30)
+        config_manager.set("SYMBOL_005930__BUY_RSI_OVERSOLD_THRESHOLD", "25")
+
+        v = config_manager.get_int_for_symbol("005930", "BUY_RSI_OVERSOLD_THRESHOLD", default=30)
+        assert v == 25
+
+    def test_get_for_symbol_falls_back_to_global(self, config_manager):
+        """종목별 값이 없으면 전역 키로 fallback"""
+        config_manager.set("BUY_RSI_OVERSOLD_THRESHOLD", 31)
+
+        v = config_manager.get_int_for_symbol("005930", "BUY_RSI_OVERSOLD_THRESHOLD", default=30)
+        assert v == 31
+
+    def test_get_for_symbol_reads_file_override(self, config_manager, tmp_path):
+        """symbol_overrides.json에 있으면 전역 키보다 우선"""
+        # tmp_path/config/symbol_overrides.json 생성
+        cfg_dir = tmp_path / "config"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "symbol_overrides.json").write_text(
+            '{"symbols": {"005930": {"BUY_RSI_OVERSOLD_THRESHOLD": 28}}}',
+            encoding="utf-8",
+        )
+
+        # 프로젝트 루트 추정을 tmp_path로 강제
+        with patch.object(config_manager, "_project_root_dir", return_value=str(tmp_path)):
+            # 전역 값은 31로 두되, 파일 override(28)가 우선 적용되는지 확인
+            config_manager.set("BUY_RSI_OVERSOLD_THRESHOLD", 31)
+            v = config_manager.get_int_for_symbol("005930", "BUY_RSI_OVERSOLD_THRESHOLD", default=30)
+            assert v == 28
+
+    def test_get_for_symbol_symbol_key_overrides_file(self, config_manager, tmp_path):
+        """종목별 키가 파일 override보다 우선"""
+        cfg_dir = tmp_path / "config"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "symbol_overrides.json").write_text(
+            '{"symbols": {"005930": {"BUY_RSI_OVERSOLD_THRESHOLD": 28}}}',
+            encoding="utf-8",
+        )
+
+        with patch.object(config_manager, "_project_root_dir", return_value=str(tmp_path)):
+            config_manager.set("BUY_RSI_OVERSOLD_THRESHOLD", 31)
+            config_manager.set("SYMBOL_005930__BUY_RSI_OVERSOLD_THRESHOLD", "26")
+            v = config_manager.get_int_for_symbol("005930", "BUY_RSI_OVERSOLD_THRESHOLD", default=30)
+            assert v == 26
 
 
 # ============================================================================

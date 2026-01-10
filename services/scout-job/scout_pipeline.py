@@ -12,8 +12,12 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 import shared.database as database
+from shared.config import ConfigManager
+from shared.fact_checker import get_fact_checker
+from shared.monitoring_alerts import get_monitoring_alerts
 
 logger = logging.getLogger(__name__)
+_cfg = ConfigManager()
 
 
 def _utcnow() -> datetime:
@@ -22,8 +26,8 @@ def _utcnow() -> datetime:
 
 
 def is_hybrid_scoring_enabled() -> bool:
-    """Scout v1.0 하이브리드 스코어링 활성화 여부 확인 (SCOUT_V5_ENABLED 환경변수 - 하위호환)"""
-    return os.getenv("SCOUT_V5_ENABLED", "false").lower() == "true"
+    """Scout v1.0 하이브리드 스코어링 활성화 여부 확인 (SCOUT_V5_ENABLED)"""
+    return _cfg.get_bool("SCOUT_V5_ENABLED", default=False)
 
 
 def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_df=None):
@@ -120,14 +124,6 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
 
 # Smart Skip Filter - LLM 호출 사전 필터링
 
-# 설정값 (환경변수로 조절 가능) - 보수적 기준
-# "최대치를 받아도 커트라인(60점)을 못 넘을 종목만 스킵"
-SMART_SKIP_QUANT_MIN = float(os.getenv("SMART_SKIP_QUANT_MIN", "25"))  # 매우 낮은 정량 점수만
-SMART_SKIP_RSI_MAX = float(os.getenv("SMART_SKIP_RSI_MAX", "80"))  # 극단적 과매수만
-SMART_SKIP_SENTIMENT_MIN = float(os.getenv("SMART_SKIP_SENTIMENT_MIN", "-50"))  # 극심한 악재만
-SMART_SKIP_CACHED_HUNTER_MIN = float(os.getenv("SMART_SKIP_CACHED_HUNTER_MIN", "30"))  # 아주 낮은 이전 점수만
-
-
 def should_skip_hunter(quant_result, 
                        cached_hunter_score: Optional[float] = None,
                        news_sentiment: Optional[float] = None,
@@ -159,22 +155,27 @@ def should_skip_hunter(quant_result,
         return False, ""
     
     # 조건 1: Quant Score가 너무 낮음
-    if quant_result.total_score < SMART_SKIP_QUANT_MIN:
-        return True, f"Quant점수 낮음 ({quant_result.total_score:.1f}점 < {SMART_SKIP_QUANT_MIN})"
+    smart_skip_quant_min = _cfg.get_float("SMART_SKIP_QUANT_MIN", default=25)
+    smart_skip_rsi_max = _cfg.get_float("SMART_SKIP_RSI_MAX", default=80)
+    smart_skip_sentiment_min = _cfg.get_float("SMART_SKIP_SENTIMENT_MIN", default=-50)
+    smart_skip_cached_hunter_min = _cfg.get_float("SMART_SKIP_CACHED_HUNTER_MIN", default=30)
+
+    if quant_result.total_score < smart_skip_quant_min:
+        return True, f"Quant점수 낮음 ({quant_result.total_score:.1f}점 < {smart_skip_quant_min})"
     
     # 조건 2: RSI 과매수 (기술적 점수에서 RSI 추출)
     rsi = quant_result.details.get('rsi')
-    if rsi is not None and rsi > SMART_SKIP_RSI_MAX:
-        return True, f"RSI 과매수 ({rsi:.1f} > {SMART_SKIP_RSI_MAX})"
+    if rsi is not None and rsi > smart_skip_rsi_max:
+        return True, f"RSI 과매수 ({rsi:.1f} > {smart_skip_rsi_max})"
     
     # 조건 3: 강한 악재 뉴스
-    if news_sentiment is not None and news_sentiment < SMART_SKIP_SENTIMENT_MIN:
+    if news_sentiment is not None and news_sentiment < smart_skip_sentiment_min:
         return True, f"악재 뉴스 (감성점수 {news_sentiment})"
     
     # 조건 4: 이전 캐시에서 크게 탈락 (조건 변화 없을 때)
     # 단, 오늘 처음 보는 종목은 스킵하지 않음
-    if cached_hunter_score is not None and cached_hunter_score < SMART_SKIP_CACHED_HUNTER_MIN:
-        return True, f"이전 Hunter 낮음 ({cached_hunter_score:.0f}점 < {SMART_SKIP_CACHED_HUNTER_MIN})"
+    if cached_hunter_score is not None and cached_hunter_score < smart_skip_cached_hunter_min:
+        return True, f"이전 Hunter 낮음 ({cached_hunter_score:.0f}점 < {smart_skip_cached_hunter_min})"
     
     return False, ""
 
@@ -230,19 +231,101 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
     # 정량 컨텍스트 포함 Hunter 호출
     hunter_result = brain.get_jennies_analysis_score_v5(decision_info, quant_context, feedback_context)
     hunter_score = hunter_result.get('score', 0)
+    hunter_reason = hunter_result.get('reason', '')
+    
+    # [Fact-Checker] LLM 분석 결과를 뉴스 원문과 교차 검증 (옵션)
+    if _cfg.get_bool("ENABLE_AI_AUDITOR", default=False):
+        try:
+            # 뉴스 원문에 정량 데이터 + 스냅샷 컨텍스트를 추가하여 검증
+            snapshot_context = (
+                f"PER: {snapshot.get('per')} | PBR: {snapshot.get('pbr')} | "
+                f"시가총액: {snapshot.get('market_cap')} | "
+                f"ROE: {snapshot.get('roe')} | "
+                f"영업이익률: {snapshot.get('operating_margin')}"
+            )
+            fact_check_source = f"{news_from_chroma}\n\n[정량 분석 리포트]\n{quant_context}\n\n[재무 데이터]\n{snapshot_context}"
+            
+            fact_result = get_fact_checker().check(
+                original_news=fact_check_source,
+                llm_analysis=hunter_reason,
+                stock_name=info['name']
+            )
+            if fact_result.has_hallucination:
+                logger.warning(f"   👻 [Fact-Check] 환각 탐지: {info['name']}({code}) - 신뢰도: {fact_result.confidence:.0%}")
+                logger.warning(f"      경고: {fact_result.warnings[:2]}")
+                # 환각 탐지 시 Telegram 알림 (환경변수로 on/off 가능)
+                if _cfg.get_bool('FACT_CHECK_ALERT_ENABLED', default=False):
+                    get_monitoring_alerts().notify_hallucination_detected(
+                        stock_name=info['name'],
+                        confidence=fact_result.confidence,
+                        warnings=fact_result.warnings
+                    )
+        except Exception as e:
+            logger.debug(f"   ⚠️ [Fact-Check] 검증 오류 ({code}): {e}")
+    else:
+        logger.debug(f"   ⏩ [Fact-Check] 스킵 (ENABLE_AI_AUDITOR=False)")
     
     # 경쟁사 수혜 가산점 적용 (최대 +10점)
     if competitor_bonus > 0:
         hunter_score = min(100, hunter_score + competitor_bonus)
-        logger.info(f"   🎯 [경쟁사 수혜] {info['name']}({code}) +{competitor_bonus}점 가산 ({competitor_reason})")
+        # 로그는 아래 상세 로그에서 출력
     
     passed = hunter_score >= 60
     if hunter_score == 0: passed = False
     
+    # 상세 로그 생성
+    def _build_hunter_detail_log():
+        """Hunter 분석 상세 로그 생성 (옵션 B 스타일)"""
+        lines = []
+        
+        # 1. 정량 점수 분해
+        quant_breakdown = (
+            f"모멘텀:{quant_result.momentum_score:.1f}/25 | "
+            f"품질:{quant_result.quality_score:.1f}/20 | "
+            f"가치:{quant_result.value_score:.1f}/15 | "
+            f"기술:{quant_result.technical_score:.1f}/10 | "
+            f"뉴스:{quant_result.news_stat_score:.1f}/15 | "
+            f"수급:{quant_result.supply_demand_score:.1f}/15"
+        )
+        lines.append(f"   📊 정량점수 분해: {quant_breakdown}")
+        
+        # 2. 핵심 지표 (details에서 추출)
+        details = quant_result.details or {}
+        tech_details = details.get('technical', {})
+        value_details = details.get('value', {})
+        supply_details = details.get('supply_demand', {})
+        
+        rsi = tech_details.get('rsi')
+        per = value_details.get('per')
+        pbr = value_details.get('pbr')
+        foreign_ratio = supply_details.get('foreign_ratio')  # 거래량 대비 %
+        
+        indicators = []
+        if per is not None:
+            indicators.append(f"PER:{per:.1f}")
+        if pbr is not None:
+            indicators.append(f"PBR:{pbr:.2f}")
+        if rsi is not None:
+            indicators.append(f"RSI:{rsi:.0f}")
+        if foreign_ratio is not None:
+            sign = "+" if foreign_ratio > 0 else ""
+            indicators.append(f"외인순매수:{sign}{foreign_ratio:.1f}%")
+        
+        if indicators:
+            lines.append(f"   📈 핵심지표: {' | '.join(indicators)}")
+        
+        # 3. 경쟁사 수혜 (있는 경우)
+        if competitor_bonus > 0:
+            lines.append(f"   🎯 경쟁사 수혜: +{competitor_bonus}점 ({competitor_reason})")
+        
+        return "\n".join(lines)
+    
     if passed:
-        logger.info(f"   ✅ [Hunter 통과] {info['name']}({code}) - Quant:{quant_result.total_score:.0f} → Hunter:{hunter_score}점")
+        logger.info(f"   ✅ [Hunter 통과] {info['name']}({code}) - Hunter: {hunter_score}점 (Quant: {quant_result.total_score:.0f}점)")
+        logger.info(_build_hunter_detail_log())
     else:
-        logger.debug(f"   ❌ [Hunter 탈락] {info['name']}({code}) - Quant:{quant_result.total_score:.0f} → Hunter:{hunter_score}점")
+        logger.debug(f"   ❌ [Hunter 탈락] {info['name']}({code}) - Hunter: {hunter_score}점 (Quant: {quant_result.total_score:.0f}점)")
+        logger.debug(_build_hunter_detail_log())
         
         # [Priority 2] Shadow Radar Logging
         if archivist and hunter_score > 0: # 0점은 에러/데이터부족일 수 있으므로 제외할지 고민 -> 일단 0점도 기록하되 reason 확인
@@ -323,6 +406,48 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     
     is_tradable = hybrid_score >= 75
     approved = hybrid_score >= 50
+
+    # -------------------------------------------------------------------------
+    # [Project Recon] Trade Tier 산정
+    # - TIER1: Judge 통과 (is_tradable=True, hybrid >= 75)
+    # - RECON: hybrid 60~74 + "추세 신호" 존재 → 소액 정찰 진입 후보
+    # - BLOCKED: 그 외
+    #
+    # NOTE:
+    # - is_tradable의 의미(=Judge 통과)는 유지합니다.
+    # - trade_tier는 llm_metadata에 저장되어 buy-scanner/buy-executor에서 활용합니다.
+    # -------------------------------------------------------------------------
+    recon_signals: list[str] = []
+    try:
+        details = getattr(quant_result, "details", {}) or {}
+        tech_details = details.get("technical", {}) or {}
+
+        volume_ratio = tech_details.get("volume_ratio")
+        ma20_slope_5d = tech_details.get("ma20_slope_5d")
+
+        if tech_details.get("golden_cross_5_20"):
+            recon_signals.append("GOLDEN_CROSS_5_20")
+        recon_volume_min = _cfg.get_float("RECON_VOLUME_RATIO_MIN", default=1.5)
+        if isinstance(volume_ratio, (int, float)) and volume_ratio >= recon_volume_min:
+            recon_signals.append(f"VOLUME_TREND_{float(volume_ratio):.2f}x")
+        if isinstance(ma20_slope_5d, (int, float)) and float(ma20_slope_5d) > 0:
+            recon_signals.append("MA20_SLOPE_UP")
+
+        mom = getattr(quant_result, "momentum_score", None)
+        recon_mom_min = _cfg.get_float("RECON_MOMENTUM_MIN", default=20)
+        if mom is not None and float(mom) >= recon_mom_min:
+            recon_signals.append(f"MOMENTUM_{float(mom):.1f}/25")
+    except Exception:
+        recon_signals = []
+
+    is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)
+    
+    # [Project Recon] RECON tier도 거래 가능(is_tradable=True)으로 설정
+    # 단, trade_tier로 TIER1과 구분하여 buy-executor에서 비중/손절 차등 적용
+    if is_recon:
+        is_tradable = True
+    
+    trade_tier = "TIER1" if (hybrid_score >= 75) else ("RECON" if is_recon else "BLOCKED")
     
     # [Market Regime] 하락장/횡보장은 기준을 낮추는 대신, 오히려 관망(No Trade)이 최선일 수 있음.
     # 사용자의 지적대로 "억지로 거래를 만드는 것"은 리스크를 키우므로 원복함.
@@ -338,10 +463,31 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     else:
         final_grade = 'D'
     
+    # 상세 로그 생성
+    def _build_judge_detail_log():
+        """Judge 분석 상세 로그 생성 (옵션 B 스타일)"""
+        lines = []
+        
+        # 1. 점수 흐름
+        weight_info = "(60:40)" if score_diff < 30 else "(Safety Lock)"
+        lines.append(f"   📊 점수 흐름: Hunter:{hunter_score} → Quant:{quant_score:.0f} + LLM:{llm_score} = Hybrid:{hybrid_score:.1f} {weight_info}")
+        
+        # 2. Judge 판단 이유 (reason 축약 - 최대 60자)
+        reason_short = reason[:60] + "..." if len(reason) > 60 else reason
+        lines.append(f"   💬 Judge 판단: {reason_short}")
+        
+        # 3. 거래 가능 여부
+        tradable_emoji = "✅" if is_tradable else "❌"
+        lines.append(f"   ⚡ 거래 가능: {tradable_emoji} (75점 기준)")
+        
+        return "\n".join(lines)
+    
     if approved:
-        logger.info(f"   ✅ [Judge 승인] {info['name']}({code}) - Hybrid:{hybrid_score:.1f}점 ({final_grade})")
+        logger.info(f"   ✅ [Judge 승인] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급)")
+        logger.info(_build_judge_detail_log())
     else:
-        logger.info(f"   ❌ [Judge 거절] {info['name']}({code}) - Hybrid:{hybrid_score:.1f}점 ({final_grade})")
+        logger.info(f"   ❌ [Judge 거절] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급)")
+        logger.info(_build_judge_detail_log())
         
         # [Priority 2] Shadow Radar Logging (Judge Reject)
         if archivist:
@@ -368,6 +514,9 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         'hybrid_score': hybrid_score,
         'hunter_score': hunter_score,
         'condition_win_rate': quant_result.condition_win_rate,
+        # Project Recon
+        'trade_tier': trade_tier,
+        'recon_signals': recon_signals,
     }
     
     # 스냅샷에서 재무 데이터 추출
@@ -414,6 +563,7 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         'llm_reason': reason,
         'approved': approved,
         'llm_metadata': metadata,
+        'trade_tier': trade_tier,
         # 재무 데이터 추가
         'per': snapshot.get('per'),
         'pbr': snapshot.get('pbr'),
@@ -582,6 +732,7 @@ def fetch_kis_data_task(stock, kis_api):
     """KIS API로부터 종목 데이터 조회"""
     try:
         stock_code = stock['code']
+        trade_date = None
         
         if hasattr(kis_api, 'API_CALL_DELAY'):
             time.sleep(kis_api.API_CALL_DELAY)
@@ -598,6 +749,7 @@ def fetch_kis_data_task(stock, kis_api):
                     date_val = dp.get('price_date') if 'price_date' in dp.index else dp.get('date')
                     
                     if close_price is not None:
+                        trade_date = trade_date or date_val
                         daily_prices.append({
                             'p_date': date_val, 'p_code': stock_code,
                             'p_price': close_price, 'p_high': high_price, 'p_low': low_price
@@ -611,6 +763,7 @@ def fetch_kis_data_task(stock, kis_api):
                         date_val = dp.get('price_date') or dp.get('date')
                         
                         if close_price is not None:
+                            trade_date = trade_date or date_val
                             daily_prices.append({
                                 'p_date': date_val, 'p_code': stock_code,
                                 'p_price': close_price, 'p_high': high_price, 'p_low': low_price
@@ -622,8 +775,12 @@ def fetch_kis_data_task(stock, kis_api):
             if hasattr(kis_api, 'API_CALL_DELAY'):
                 time.sleep(kis_api.API_CALL_DELAY)
             if snapshot:
+                # trade_date가 없으면 오늘 날짜로 채움 (DDL 기본키 요구)
+                if trade_date is None:
+                    trade_date = datetime.now(timezone.utc).date()
                 fundamentals = {
-                    'code': stock_code,
+                    'stock_code': stock_code,
+                    'trade_date': trade_date,
                     'per': snapshot.get('per'),
                     'pbr': snapshot.get('pbr'),
                     'market_cap': snapshot.get('market_cap')

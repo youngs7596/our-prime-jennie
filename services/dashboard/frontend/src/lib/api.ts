@@ -97,6 +97,34 @@ export const systemApi = {
     const response = await api.get(`/system/logs/${containerName}?limit=${limit}&since=${since}`)
     return response.data
   },
+  getRealtimeMonitor: async () => {
+    const response = await api.get('/system/realtime-monitor')
+    return response.data
+  },
+}
+
+// Scheduler Control API (스케줄러 작업 직접 제어)
+export const schedulerApi = {
+  getJobs: async () => {
+    const response = await api.get('/scheduler/jobs')
+    return response.data
+  },
+  runJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/run`, { trigger_source: 'dashboard' })
+    return response.data
+  },
+  pauseJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/pause`)
+    return response.data
+  },
+  resumeJob: async (jobId: string) => {
+    const response = await api.post(`/scheduler/jobs/${jobId}/resume`)
+    return response.data
+  },
+  updateJob: async (jobId: string, data: { cron_expr?: string; enabled?: boolean; description?: string }) => {
+    const response = await api.put(`/scheduler/jobs/${jobId}`, data)
+    return response.data
+  },
 }
 
 export const scoutApi = {
@@ -148,6 +176,18 @@ export const llmApi = {
   },
 }
 
+// Config Registry API
+export const configApi = {
+  list: async () => {
+    const response = await api.get('/config')
+    return response.data
+  },
+  update: async (key: string, value: any, description?: string) => {
+    const response = await api.put(`/config/${key}`, { value, description })
+    return response.data
+  },
+}
+
 // NEW: 3 Sages Council API
 
 export const councilApi = {
@@ -158,8 +198,8 @@ export const councilApi = {
 }
 
 export const analystApi = {
-  getPerformance: async () => {
-    const response = await api.get('/analyst/performance')
+  getPerformance: async (limit = 50, offset = 0, lookbackDays = 30) => {
+    const response = await api.get(`/analyst/performance?limit=${limit}&offset=${offset}&lookback_days=${lookbackDays}`)
     return response.data
   },
 }

@@ -910,3 +910,310 @@ def delete_price_alert(stock_code: str, redis_client=None) -> bool:
     except Exception as e:
         logger.error(f"❌ [Redis] 가격 알림 삭제 실패: {e}")
         return False
+
+
+# ============================================================================
+# High Watermark (트레일링 익절용 최고가 추적)
+# ============================================================================
+
+HIGH_WATERMARK_PREFIX = "high_watermark:"
+
+
+def update_high_watermark(
+    stock_code: str,
+    current_price: float,
+    buy_price: float,
+    redis_client=None
+) -> Dict[str, Any]:
+    """
+    [Redis] 종목의 최고가(High Watermark)를 업데이트합니다.
+    
+    트레일링 익절을 위해 보유 기간 중 최고가를 추적합니다.
+    현재가가 기존 최고가보다 높으면 갱신합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        current_price: 현재 가격
+        buy_price: 매수 가격 (최초 기준가)
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        {
+            'high_price': 최고가,
+            'buy_price': 매수가,
+            'profit_from_high_pct': 최고가 대비 현재가 하락률,
+            'updated': 갱신 여부
+        }
+    """
+    r = get_redis_connection(redis_client)
+    
+    # Redis 없을 경우 기본값 반환
+    if not r:
+        return {
+            "high_price": current_price,
+            "buy_price": buy_price,
+            "profit_from_high_pct": 0.0,
+            "updated": False
+        }
+    
+    key = f"{HIGH_WATERMARK_PREFIX}{stock_code}"
+    
+    try:
+        existing = r.get(key)
+        if existing:
+            data = json.loads(existing)
+            high_price = data.get("high_price", buy_price)
+        else:
+            high_price = buy_price
+        
+        # 최고가 갱신 체크
+        updated = False
+        if current_price > high_price:
+            high_price = current_price
+            updated = True
+        
+        # 최고가 대비 하락률 계산
+        profit_from_high_pct = ((current_price - high_price) / high_price) * 100 if high_price > 0 else 0.0
+        
+        # Redis 저장 (TTL 30일 - 보유 기간 내 유효)
+        data = {
+            "high_price": high_price,
+            "buy_price": buy_price,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        r.setex(key, 2592000, json.dumps(data))  # 30일
+        
+        # [FIX] DB PORTFOLIO.CURRENT_HIGH_PRICE도 갱신
+        if updated:
+            try:
+                from shared.db.connection import session_scope
+                from sqlalchemy import text
+                with session_scope() as session:
+                    session.execute(text("""
+                        UPDATE portfolio
+                        SET CURRENT_HIGH_PRICE = :high_price, UPDATED_AT = NOW()
+                        WHERE STOCK_CODE = :code AND STATUS = 'HOLDING'
+                    """), {"high_price": high_price, "code": stock_code})
+                    session.commit()
+            except Exception as db_e:
+                logger.warning(f"⚠️ DB High Price 갱신 실패 (Redis는 성공): {db_e}")
+        
+        return {
+            "high_price": high_price,
+            "buy_price": buy_price,
+            "profit_from_high_pct": round(profit_from_high_pct, 2),
+            "updated": updated
+        }
+    except Exception as e:
+        logger.error(f"❌ [Redis] High Watermark 업데이트 실패: {e}")
+        return {
+            "high_price": current_price,
+            "buy_price": buy_price,
+            "profit_from_high_pct": 0.0,
+            "updated": False
+        }
+
+
+def get_high_watermark(
+    stock_code: str,
+    redis_client=None
+) -> Dict[str, Any]:
+    """
+    [Redis] 종목의 최고가(High Watermark)를 조회합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        {'high_price': None, 'buy_price': None, 'updated_at': None} (기본값)
+    """
+    default_result = {"high_price": None, "buy_price": None, "updated_at": None}
+    
+    r = get_redis_connection(redis_client)
+    if not r:
+        return default_result
+    
+    key = f"{HIGH_WATERMARK_PREFIX}{stock_code}"
+    try:
+        data_json = r.get(key)
+        if data_json:
+            return json.loads(data_json)
+        return default_result
+    except Exception as e:
+        logger.error(f"❌ [Redis] High Watermark 조회 실패: {e}")
+        return default_result
+
+
+def delete_high_watermark(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 종목의 High Watermark를 삭제합니다. (매도 완료 시 호출)
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    try:
+        key = f"{HIGH_WATERMARK_PREFIX}{stock_code}"
+        deleted = r.delete(key)
+        if deleted:
+            logger.debug(f"🗑️ [Redis] High Watermark 삭제: {stock_code}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] High Watermark 삭제 실패: {e}")
+        return False
+
+
+# ============================================================================
+# Scale-out (분할 익절) 상태 추적
+# ============================================================================
+
+SCALE_OUT_PREFIX = "scale_out:"
+
+
+def get_scale_out_level(
+    stock_code: str,
+    redis_client=None
+) -> int:
+    """
+    [Redis] 종목의 분할 익절 진행 레벨을 조회합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        현재 익절 레벨 (0: 미진행, 1: 1차 익절 완료, 2: 2차 익절 완료, 3: 3차 익절 완료)
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return 0
+    
+    key = f"{SCALE_OUT_PREFIX}{stock_code}"
+    try:
+        level = r.get(key)
+        return int(level) if level else 0
+    except Exception as e:
+        logger.error(f"❌ [Redis] Scale-out 레벨 조회 실패: {e}")
+        return 0
+
+
+def set_scale_out_level(
+    stock_code: str,
+    level: int,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 종목의 분할 익절 레벨을 설정합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        level: 익절 레벨 (1, 2, 3)
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    key = f"{SCALE_OUT_PREFIX}{stock_code}"
+    try:
+        r.setex(key, 2592000, str(level))  # 30일 TTL
+        logger.debug(f"✅ [Redis] Scale-out 레벨 설정: {stock_code} → Level {level}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] Scale-out 레벨 설정 실패: {e}")
+        return False
+
+
+def delete_scale_out_level(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 종목의 분할 익절 상태를 삭제합니다. (전량 매도 시 호출)
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    try:
+        key = f"{SCALE_OUT_PREFIX}{stock_code}"
+        r.delete(key)
+        logger.debug(f"🗑️ [Redis] Scale-out 상태 삭제: {stock_code}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] Scale-out 상태 삭제 실패: {e}")
+        return False
+
+
+# ============================================================================
+# RSI 과열 매도 상태 추적
+# ============================================================================
+
+RSI_SOLD_PREFIX = "rsi_sold:"
+
+
+def get_rsi_overbought_sold(
+    stock_code: str,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 분할 매도 진행 여부를 조회합니다.
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    key = f"{RSI_SOLD_PREFIX}{stock_code}"
+    try:
+        val = r.get(key)
+        return val == "1"
+    except Exception as e:
+        logger.error(f"❌ [Redis] RSI 매도 상태 조회 실패: {e}")
+        return False
+
+
+def set_rsi_overbought_sold(
+    stock_code: str,
+    is_sold: bool = True,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 분할 매도 상태를 설정합니다.
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    key = f"{RSI_SOLD_PREFIX}{stock_code}"
+    try:
+        if is_sold:
+            r.setex(key, 2592000, "1")  # 30일 TTL
+        else:
+            r.delete(key)
+        logger.debug(f"✅ [Redis] RSI 매도 상태 설정: {stock_code} → {is_sold}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] RSI 매도 상태 설정 실패: {e}")
+        return False
+
+
+def delete_rsi_overbought_sold(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 종목의 RSI 과열 매도 상태를 삭제합니다. (전량 매도 시 호출)
+    """
+    return set_rsi_overbought_sold(stock_code, is_sold=False, redis_client=redis_client)

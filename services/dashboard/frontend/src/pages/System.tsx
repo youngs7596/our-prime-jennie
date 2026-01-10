@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Server,
@@ -14,11 +14,16 @@ import {
   Activity,
   X,
   Terminal,
+  Play,
+  Pause,
+  Power,
+  Settings,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { systemApi } from '@/lib/api'
+import { systemApi, schedulerApi, configApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
+import { toast } from 'react-hot-toast'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -33,24 +38,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 }
 
-const getStatusColor = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'active':
-    case 'running':
-    case 'up':
-    case 'healthy':
-      return 'text-profit-positive'
-    case 'inactive':
-    case 'stopped':
-    case 'down':
-      return 'text-muted-foreground'
-    case 'error':
-    case 'unhealthy':
-      return 'text-profit-negative'
-    default:
-      return 'text-jennie-gold'
-  }
-}
+
 
 const getStatusIcon = (status: string) => {
   switch (status.toLowerCase()) {
@@ -73,8 +61,17 @@ const getStatusIcon = (status: string) => {
 
 export function SystemPage() {
   const [selectedContainer, setSelectedContainer] = useState<string | null>(null)
-  
-  const { data: schedulerJobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  // 스케줄러 작업 목록 (새 API 사용)
+  const { data: schedulerJobsData, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
+    queryKey: ['scheduler-jobs'],
+    queryFn: schedulerApi.getJobs,
+    refetchInterval: 30000,
+  })
+
+  // 기존 시스템 상태 (호환성 유지)
+  const { data: schedulerJobs, refetch: refetchSystemStatus } = useQuery({
     queryKey: ['system-status'],
     queryFn: systemApi.getStatus,
     refetchInterval: 30000,
@@ -92,6 +89,13 @@ export function SystemPage() {
     refetchInterval: 30000,
   })
 
+  // Realterm Monitor Query
+  const { data: realtimeDetails, isLoading: realtimeLoading, refetch: refetchRealtime } = useQuery({
+    queryKey: ['realtime-monitor'],
+    queryFn: systemApi.getRealtimeMonitor,
+    refetchInterval: 5000,
+  })
+
   const { data: containerLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
     queryKey: ['container-logs', selectedContainer],
     queryFn: () => selectedContainer ? systemApi.getContainerLogs(selectedContainer) : null,
@@ -99,10 +103,82 @@ export function SystemPage() {
     refetchInterval: 5000, // 5초마다 자동 새로고침
   })
 
+  // 운영 설정 조회
+  const queryClient = useQueryClient()
+  const { data: configData } = useQuery({
+    queryKey: ['config-list'],
+    queryFn: configApi.list,
+    refetchInterval: 60000,
+  })
+
+  // 운영 설정 업데이트 mutation
+  const updateConfigMutation = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: boolean }) =>
+      configApi.update(key, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config-list'] })
+      toast.success('설정이 저장되었습니다')
+    },
+    onError: (error) => {
+      toast.error('설정 저장 실패: ' + (error as Error).message)
+    },
+  })
+
+  // DISABLE_MARKET_OPEN_CHECK 값 추출
+  // DISABLE_MARKET_OPEN_CHECK 값 추출
+  const disableMarketCheck = Array.isArray(configData)
+    ? configData.find((c: { key: string; value: boolean }) => c.key === 'DISABLE_MARKET_OPEN_CHECK')?.value ?? false
+    : false
+
   const handleRefreshAll = () => {
     refetchJobs()
+    refetchSystemStatus()
     refetchDocker()
     refetchRabbitMQ()
+    refetchRealtime()
+  }
+
+  // 스케줄러 작업 제어 핸들러
+  const handleRunJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.runJob(jobId)
+      toast.success('작업이 실행되었습니다')
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 실행 실패:', error)
+      toast.error('작업 실행 실패')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handlePauseJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.pauseJob(jobId)
+      toast.success('작업이 일시정지되었습니다')
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 일시정지 실패:', error)
+      toast.error('작업 일시정지 실패')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleResumeJob = async (jobId: string) => {
+    setActionLoading(jobId)
+    try {
+      await schedulerApi.resumeJob(jobId)
+      toast.success('작업이 재개되었습니다')
+      refetchJobs()
+    } catch (error) {
+      console.error('작업 재개 실패:', error)
+      toast.error('작업 재개 실패')
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   const handleContainerClick = (containerName: string) => {
@@ -197,6 +273,54 @@ export function SystemPage() {
         </Card>
       </div>
 
+      {/* Real-time Watcher Status (New) */}
+      <motion.div variants={itemVariants}>
+        <Card className="border-jennie-gold/30 bg-jennie-gold/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-jennie-gold">
+              <Activity className="w-5 h-5 animate-pulse" />
+              Real-time Watcher Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {realtimeLoading ? (
+              <div className="h-12 w-full bg-white/5 animate-pulse rounded" />
+            ) : (!realtimeDetails || realtimeDetails.status === 'offline') ? (
+              <div className="text-center py-4 text-muted-foreground">
+                <p>⚠️ 모니터링 데이터 없음 (Price Monitor가 실행 중인지 확인하세요)</p>
+                {realtimeDetails?.message && <p className="text-xs mt-1">{realtimeDetails.message}</p>}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">🔥 Hot Watchlist</p>
+                  <p className="text-lg font-bold text-white">{realtimeDetails.metrics?.hot_watchlist_size ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">📶 Tick Count</p>
+                  <p className="text-lg font-bold text-white">{realtimeDetails.metrics?.tick_count ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">🔔 Signals</p>
+                  <p className="text-lg font-bold text-jennie-gold">{realtimeDetails.metrics?.signal_count ?? 0}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">📊 Market Regime</p>
+                  <p className="text-lg font-bold text-jennie-blue">{realtimeDetails.metrics?.market_regime ?? 'UNK'}</p>
+                </div>
+                <div className="p-3 bg-black/20 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">⏱️ Last Active</p>
+                  <p className="text-xs font-mono mt-1 text-white">
+                    {realtimeDetails.metrics?.updated_at ?
+                      formatRelativeTime(realtimeDetails.metrics.updated_at) : '-'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Docker Containers */}
       <motion.div variants={itemVariants}>
         <Card>
@@ -248,57 +372,112 @@ export function SystemPage() {
         </Card>
       </motion.div>
 
-      {/* Scheduler Jobs */}
+      {/* Scheduler Jobs - 제어 버튼 포함 */}
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-jennie-purple" />
-              Scheduler Jobs
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-jennie-purple" />
+                Scheduler Jobs
+              </div>
+              <span className="text-xs font-normal text-muted-foreground">
+                클릭하여 작업 제어
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {jobsLoading ? (
               <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-16 rounded-lg bg-white/5 animate-pulse" />
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-20 rounded-lg bg-white/5 animate-pulse" />
                 ))}
               </div>
             ) : (
               <div className="space-y-3">
-                {schedulerJobs?.map((job: any) => (
+                {(schedulerJobsData || [])?.map((job: any) => (
                   <div
-                    key={job.service_name}
+                    key={job.job_id}
                     className="p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        {getStatusIcon(job.status)}
+                        {getStatusIcon(job.enabled ? 'active' : 'inactive')}
                         <div>
-                          <h4 className="font-semibold">{job.service_name}</h4>
+                          <h4 className="font-semibold">{job.job_id}</h4>
                           <p className="text-xs text-muted-foreground">
-                            {job.message}
+                            {job.description || job.queue}
+                          </p>
+                          <p className="text-xs text-jennie-blue font-mono mt-1">
+                            {job.cron_expr}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={cn('text-sm font-medium', getStatusColor(job.status))}>
-                          {job.status === 'active' ? '활성' : '비활성'}
-                        </p>
-                        {job.next_run && (
-                          <p className="text-xs text-muted-foreground">
-                            다음 실행: {formatRelativeTime(job.next_run)}
-                          </p>
+                      <div className="flex items-center gap-2">
+                        {/* 즉시 실행 버튼 */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRunJob(job.job_id)}
+                          disabled={actionLoading === job.job_id}
+                          className="gap-1 text-xs"
+                          title="즉시 실행"
+                        >
+                          <Play className="w-3 h-3" />
+                          실행
+                        </Button>
+                        {/* 일시정지/재개 버튼 */}
+                        {job.enabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePauseJob(job.job_id)}
+                            disabled={actionLoading === job.job_id}
+                            className="gap-1 text-xs text-jennie-gold"
+                            title="일시정지"
+                          >
+                            <Pause className="w-3 h-3" />
+                            정지
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResumeJob(job.job_id)}
+                            disabled={actionLoading === job.job_id}
+                            className="gap-1 text-xs text-profit-positive"
+                            title="재개"
+                          >
+                            <Power className="w-3 h-3" />
+                            재개
+                          </Button>
                         )}
                       </div>
                     </div>
-                    {job.last_run && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        마지막 실행: {formatRelativeTime(job.last_run)}
-                      </p>
-                    )}
+                    <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+                      <span>
+                        상태: <span className={cn('font-medium', job.enabled ? 'text-profit-positive' : 'text-muted-foreground')}>
+                          {job.enabled ? '활성' : '비활성'}
+                        </span>
+                        {job.last_status && ` · ${job.last_status}`}
+                      </span>
+                      <div className="flex gap-4">
+                        {job.last_run_at && (
+                          <span>마지막: {formatRelativeTime(job.last_run_at)}</span>
+                        )}
+                        {job.next_due_at && (
+                          <span>다음: {formatRelativeTime(job.next_due_at)}</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
+                {(!schedulerJobsData || schedulerJobsData.length === 0) && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>등록된 스케줄러 작업이 없습니다</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -374,6 +553,60 @@ export function SystemPage() {
               <div className="p-3 rounded-lg bg-white/5">
                 <p className="text-xs text-muted-foreground">Backup DB</p>
                 <p className="font-medium">Oracle Cloud (ATP)</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Operations Settings */}
+      <motion.div variants={itemVariants}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5 text-jennie-gold" />
+              운영 설정
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* DISABLE_MARKET_OPEN_CHECK 토글 */}
+              <div className="flex items-center justify-between p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                <div>
+                  <h4 className="font-semibold text-sm">장 시간 체크 비활성화</h4>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    활성화 시 장 운영 시간(09:00~15:30) 외에도 서비스가 실행됩니다.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    updateConfigMutation.mutate({
+                      key: 'DISABLE_MARKET_OPEN_CHECK',
+                      value: !disableMarketCheck,
+                    })
+                  }}
+                  disabled={updateConfigMutation.isPending}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                    disableMarketCheck ? 'bg-jennie-gold' : 'bg-white/20',
+                    updateConfigMutation.isPending && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                      disableMarketCheck ? 'translate-x-6' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+              {/* 현재 상태 표시 */}
+              <div className="text-xs text-muted-foreground text-center">
+                현재 상태: {disableMarketCheck ? (
+                  <span className="text-jennie-gold font-medium">장외 시간 실행 허용 (테스트 모드)</span>
+                ) : (
+                  <span className="text-profit-positive font-medium">장 시간만 실행 (정상 운영)</span>
+                )}
               </div>
             </div>
           </CardContent>

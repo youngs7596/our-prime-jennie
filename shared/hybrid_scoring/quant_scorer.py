@@ -672,9 +672,13 @@ class QuantScorer:
             logger.error(f"   (QuantScorer) 가치 점수 계산 오류: {e}", exc_info=True)
             return 7.5, {'error': str(e)}
     
-    def calculate_technical_score(self, 
-                                   daily_prices_df: pd.DataFrame,
-                                   sector: str = '미분류') -> Tuple[float, Dict]:
+    def calculate_technical_score(
+        self,
+        daily_prices_df: pd.DataFrame,
+        sector: str = "미분류",
+        *,
+        momentum_score: float | None = None,
+    ) -> Tuple[float, Dict]:
         """
         기술적 점수 계산 (10점 만점)
         
@@ -732,6 +736,27 @@ class QuantScorer:
                     rsi_score = 1.5 - (rsi - 50) * 0.05
                 else:
                     rsi_score = max(0, 0.5 - (rsi - 70) * 0.025)
+
+                # -----------------------------------------------------------------
+                # [Project Recon] 추세 초입 보호(감점 면제)
+                # - 모멘텀이 충분히 강한 종목은 RSI 50~70 구간을 "과열"이 아니라 "상승 탄력"으로 해석
+                # - 가산점이 아니라 감점 면제(최소 점수 보장) 방식으로 보수적으로 적용
+                # -----------------------------------------------------------------
+                recon_momentum_threshold = float(self.config.get_float("RECON_MOMENTUM_MIN", 20.0))
+                if (
+                    momentum_score is not None
+                    and momentum_score >= recon_momentum_threshold
+                    and 50 <= rsi <= 70
+                    and rsi <= 75  # 과열 구간(>75)은 예외 없이 감점 유지
+                ):
+                    # 기존 로직에서 RSI 60~70은 점수가 지나치게 깎일 수 있으므로 최소 1.5점 보장
+                    before = rsi_score
+                    rsi_score = max(rsi_score, 1.5)
+                    factors["rsi_penalty_exempted"] = True
+                    factors["rsi_penalty_exempted_reason"] = (
+                        f"모멘텀({momentum_score:.1f}>= {recon_momentum_threshold}) + RSI({rsi:.1f}) → 추세 초입 감점 면제"
+                    )
+                    factors["rsi_score_before_exempt"] = round(before, 2)
                 
                 # 섹터별 RSI 가중치 적용
                 sector_multiplier = self.SECTOR_RSI_MULTIPLIER.get(sector, 1.0)
@@ -750,6 +775,27 @@ class QuantScorer:
                 total_score += 1.5
                 factors['rsi_score'] = 1.5
             
+            # [Recon Signal] 골든 크로스(5/20) 및 MA20 기울기 (추세 신호)
+            try:
+                from shared import strategy as _strategy_mod
+                factors["golden_cross_5_20"] = bool(
+                    _strategy_mod.check_golden_cross(daily_prices_df, short_period=5, long_period=20)
+                )
+            except Exception:
+                factors["golden_cross_5_20"] = False
+
+            try:
+                if len(daily_prices_df) >= 25:
+                    close_prices = daily_prices_df["CLOSE_PRICE"]
+                    ma20 = close_prices.rolling(window=20).mean()
+                    # 최근 5영업일 MA20 변화량으로 기울기 근사
+                    ma20_slope = float(ma20.iloc[-1] - ma20.iloc[-6])
+                    factors["ma20_slope_5d"] = round(ma20_slope, 4)
+                else:
+                    factors["ma20_slope_5d"] = None
+            except Exception:
+                factors["ma20_slope_5d"] = None
+
             # 3. 볼린저 밴드 (3점)
             if len(daily_prices_df) >= 20:
                 close_prices = daily_prices_df['CLOSE_PRICE']
@@ -1170,7 +1216,12 @@ class QuantScorer:
                 sector = self._get_stock_sector(stock_code)
             
             # 4. 기술적 점수 (10점) - 섹터별 RSI 가중치 적용
-            technical_score, technical_details = self.calculate_technical_score(daily_prices_df, sector)
+            # [Project Recon] 모멘텀 기반 RSI 감점 면제에 사용
+            technical_score, technical_details = self.calculate_technical_score(
+                daily_prices_df,
+                sector,
+                momentum_score=momentum_score,
+            )
             all_details['technical'] = technical_details
             
             # 5. 뉴스 통계 점수 (15점)

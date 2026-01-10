@@ -59,6 +59,30 @@ def fetch_current_prices_from_kis(stock_codes: List[str]) -> Dict[str, float]:
     
     return prices
 
+
+def fetch_cash_balance_from_kis() -> float:
+    """
+    KIS Gateway API를 통해 현금 잔고(주문가능금액)를 조회합니다.
+    
+    Returns:
+        float: 주문 가능 현금 (원)
+    """
+    import httpx
+    
+    kis_gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(f"{kis_gateway_url}/api/account/cash-balance", json={})
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    return float(result.get("data", 0.0))
+    except Exception as e:
+        logger.warning(f"KIS Gateway 현금 잔고 조회 실패: {e}")
+    
+    return 0.0
+
 LLM_METADATA_MARKER = "[LLM_METADATA]"
 
 
@@ -89,6 +113,9 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
 
     for row in rows:
         reason, metadata = _parse_llm_reason(row.llm_reason or "")
+        inferred_tier = "TIER1" if bool(row.is_tradable) else "BLOCKED"
+        # Project Recon v1.1: DB 컬럼 우선, 없으면 메타데이터/추론으로 폴백
+        trade_tier = getattr(row, "trade_tier", None) or metadata.get("trade_tier") or inferred_tier
         watchlist[row.stock_code] = {
             "name": row.stock_name,
             "is_tradable": bool(row.is_tradable),
@@ -98,6 +125,7 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
             "llm_score": float(row.llm_score) if row.llm_score is not None else 0,
             "llm_reason": reason,
             "llm_metadata": metadata,
+            "trade_tier": trade_tier,
             "llm_grade": metadata.get("llm_grade"),
             "bear_strategy": metadata.get("bear_strategy"),
         }
@@ -112,7 +140,7 @@ def get_active_portfolio(session: Session) -> List[dict]:
     """
     query = (
         select(models.Portfolio)
-        .where(models.Portfolio.status == "HOLDING")
+        .where(models.Portfolio.status.in_(["HOLDING", "PARTIAL"]))
         .order_by(models.Portfolio.id.asc())
     )
     rows = session.execute(query).scalars().all()
@@ -270,7 +298,29 @@ def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str
         .distinct()
     )
     rows = session.execute(query).scalars().all()
+    rows = session.execute(query).scalars().all()
     return set(rows)
+
+
+def check_duplicate_order(session: Session, stock_code: str, trade_type: str, time_window_minutes: int = 5) -> bool:
+    """
+    최근 N분 내 동일 종목/유형의 주문 여부 확인 (Idempotency Check)
+    """
+    # [Hybrid Fix] Python timedelta 사용
+    from datetime import datetime, timedelta, timezone
+    
+    threshold_dt = datetime.now(timezone.utc) - timedelta(minutes=time_window_minutes)
+    
+    exists_query = (
+        select(models.TradeLog.stock_code)
+        .where(models.TradeLog.stock_code == stock_code)
+        .where(models.TradeLog.trade_type == trade_type)
+        .where(models.TradeLog.trade_timestamp >= threshold_dt)
+        .limit(1)
+    )
+    result = session.execute(exists_query).first()
+    return result is not None
+
 
 
 # =============================================================================
@@ -315,16 +365,14 @@ def get_portfolio_summary(session: Session, use_realtime: bool = True) -> dict:
     total_profit = total_value - total_invested
     profit_rate = (total_profit / total_invested * 100) if total_invested > 0 else 0
     
-    # CONFIG 테이블에서 현금 잔고 조회 시도
+    # KIS Gateway에서 실시간 현금 잔고 조회
     cash_balance = 0.0
-    try:
-        config = session.execute(
-            select(models.Config).where(models.Config.config_key == "CASH_BALANCE")
-        ).scalar_one_or_none()
-        if config:
-            cash_balance = float(config.config_value or 0)
-    except Exception:
-        pass
+    if use_realtime:
+        try:
+            cash_balance = fetch_cash_balance_from_kis()
+            logger.info(f"✅ 현금 잔고 조회 완료: {cash_balance:,.0f}원")
+        except Exception as e:
+            logger.warning(f"⚠️ 현금 잔고 조회 실패: {e}")
     
     return {
         "total_value": total_value + cash_balance,

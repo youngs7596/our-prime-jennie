@@ -11,14 +11,22 @@ Fixtures:
 - mock_db_connection: DB 연결 mock
 """
 
+# ⭐ 중요: flask를 다른 모듈보다 먼저 import하여 sys.path 오염 방지
+# import flask
+# import flask_limiter
+
 import os
 import sys
 import pytest
+# Pre-load pandas and numpy to prevent C-extension reload errors when sys.modules is patched
+import pandas as pd
+import numpy as np
 
 # 프로젝트 루트를 sys.path에 추가 (shared 모듈 import 가능하게)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    # sys.path.insert(0, PROJECT_ROOT)
+    pass
 
 
 # ============================================================================
@@ -204,3 +212,70 @@ def mock_env_vars(monkeypatch):
     
     return _set_env_vars
 
+
+@pytest.fixture(autouse=True)
+def isolated_env():
+    """
+    모든 테스트가 격리된 환경변수 상태에서 실행되도록 보장합니다.
+    테스트 실행 전의 환경변수를 저장했다가, 테스트 종료 후 원상복구합니다.
+    """
+    old_environ = dict(os.environ)
+    yield
+    os.environ.clear()
+    os.environ.update(old_environ)
+
+@pytest.fixture(autouse=True)
+def reset_singletons():
+    """
+    알려진 싱글톤/전역 상태를 리셋하여 테스트 간 격리를 강화합니다.
+    """
+    import logging
+    # 1. Redis Cache
+    try:
+        from shared import redis_cache
+        if hasattr(redis_cache, "reset_redis_connection"):
+            redis_cache.reset_redis_connection()
+    except Exception:
+        pass
+
+    # 2. Database Connection
+    try:
+        from shared.db import connection
+        # Try graceful dispose
+        if hasattr(connection, "dispose_engine"):
+            try:
+                connection.dispose_engine()
+            except Exception:
+                pass
+        # Force Reset
+        if hasattr(connection, "_engine"):
+            connection._engine = None
+        if hasattr(connection, "_session_factory"):
+            connection._session_factory = None
+    except Exception:
+        pass
+        
+    # 3. Auth Cache
+    try:
+        from shared import auth
+        if hasattr(auth, "clear_secret_cache"):
+            auth.clear_secret_cache()
+    except Exception:
+        pass
+        
+    # 4. LLM Factory
+    try:
+        from shared.llm_factory import LLMFactory
+        LLMFactory._instance = None
+    except Exception:
+        pass
+        
+    # 5. Config
+    try:
+        from shared import config
+        if hasattr(config, "reset_global_config"):
+            config.reset_global_config()
+        elif hasattr(config, "_global_config"):
+            config._global_config = None
+    except Exception:
+        pass

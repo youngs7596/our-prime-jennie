@@ -311,21 +311,36 @@ def add_missing_holdings(session: Session, missing_items: List[Dict], dry_run: b
     
     for item in missing_items:
         if dry_run:
-            logger.info(f"[DRY RUN] {item['code']} {item['name']}: 신규 추가 예정 ({item['quantity']}주 @ {item['avg_price']:,.0f}원)")
+            logger.info(f"[DRY RUN] {item['code']} {item['name']}: 신규 추가/갱신 예정 ({item['quantity']}주 @ {item['avg_price']:,.0f}원)")
         else:
-            new_portfolio = Portfolio(
-                stock_code=item['code'],
-                stock_name=item['name'],
-                quantity=item['quantity'],
-                average_buy_price=item['avg_price'],
-                total_buy_amount=item['quantity'] * item['avg_price'],
-                current_high_price=item['current_price'],
-                status='HOLDING',
-                sell_state='SYNCED_FROM_ACCOUNT',
-                stop_loss_price=item['avg_price'] * 0.98  # 기본 손절 -2%
-            )
-            session.add(new_portfolio)
-            logger.info(f"✅ {item['code']} {item['name']}: 신규 추가 완료 ({item['quantity']}주 @ {item['avg_price']:,.0f}원)")
+            # 중복 방지를 위해 먼저 조회
+            existing_portfolio = session.query(Portfolio).filter(Portfolio.stock_code == item['code']).first()
+            
+            if existing_portfolio:
+                # 이미 존재하면(예: SOLD 상태) 업데이트
+                existing_portfolio.quantity = item['quantity']
+                existing_portfolio.average_buy_price = item['avg_price']
+                existing_portfolio.total_buy_amount = item['quantity'] * item['avg_price']
+                existing_portfolio.current_high_price = item['current_price']
+                existing_portfolio.status = 'HOLDING'
+                existing_portfolio.updated_at = datetime.now()
+                logger.info(f"✅ {item['code']} {item['name']}: 기존 기록 존재 - HOLDING으로 복원 완료")
+            else:
+                # 진짜 신규 추가
+                new_portfolio = Portfolio(
+                    stock_code=item['code'],
+                    stock_name=item['name'],
+                    quantity=item['quantity'],
+                    average_buy_price=item['avg_price'],
+                    total_buy_amount=item['quantity'] * item['avg_price'],
+                    current_high_price=item['current_price'],
+                    status='HOLDING',
+                    sell_state='SYNCED_FROM_ACCOUNT',
+                    stop_loss_price=item['avg_price'] * 0.98  # 기본 손절 -2%
+                )
+                session.add(new_portfolio)
+                logger.info(f"✅ {item['code']} {item['name']}: 신규 추가 완료")
+            
             added_count += 1
     
     if not dry_run and added_count > 0:
