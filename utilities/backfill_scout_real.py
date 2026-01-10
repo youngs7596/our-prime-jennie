@@ -83,6 +83,7 @@ from shared.db.connection import session_scope, ensure_engine_initialized
 from shared.llm import JennieBrain
 import pandas as pd # pandas import 추가 (MockKISClient에서 사용)
 from shared.database.trading import save_to_watchlist_history
+from sqlalchemy import text
 
 # import services.scout_job.scout as scout_main
 # import services.scout_job.scout_pipeline as scout_pipeline
@@ -108,6 +109,10 @@ class MockKISClient:
 
     def get_stock_snapshot(self, code):
         """DB에서 해당 날짜의 종가, 시가총액(추정) 등을 반환"""
+        original_get_daily_prices = None
+        original_get_dynamic = None
+        original_analyze_sector = None
+        original_fetch_news = None
         try:
             with session_scope() as session:
                 # 1. 가격 데이터 조회
@@ -329,7 +334,48 @@ def _force_local_llm_gateway():
     os.environ["OLLAMA_GATEWAY_URL"] = "http://localhost:11500"
     logger.info("🔧 [Config] Ollama Gateway 강제 설정 완료 (비용 0원 모드)")
 
-def run_backfill(start_date_str, end_date_str, use_local_llm=True):
+def _load_trading_days(session, start_date: date, end_date: date) -> list[date]:
+    rows = session.execute(
+        text(
+            """
+            SELECT DISTINCT PRICE_DATE
+            FROM STOCK_DAILY_PRICES_3Y
+            WHERE PRICE_DATE BETWEEN :start AND :end
+            ORDER BY PRICE_DATE ASC
+            """
+        ),
+        {"start": start_date, "end": end_date},
+    ).fetchall()
+    days = []
+    for row in rows:
+        value = row[0]
+        if isinstance(value, datetime):
+            days.append(value.date())
+        else:
+            days.append(pd.to_datetime(value).date())
+    return days
+
+
+def _watchlist_exists(session, target_date: str) -> bool:
+    row = session.execute(
+        text("SELECT 1 FROM WATCHLIST_HISTORY WHERE SNAPSHOT_DATE = :date LIMIT 1"),
+        {"date": target_date},
+    ).fetchone()
+    return bool(row)
+
+
+def run_backfill(
+    start_date_str,
+    end_date_str,
+    use_local_llm=True,
+    *,
+    universe_size=200,
+    quant_cutoff_ratio=0.6,
+    max_llm_candidates=50,
+    max_workers=1,
+    sleep_seconds=1.0,
+    skip_existing=False,
+):
     """백필 메인 루프"""
     ensure_engine_initialized()
     
@@ -424,105 +470,131 @@ def run_backfill(start_date_str, end_date_str, use_local_llm=True):
     
     start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
     end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-    current_date = start_date
     
     brain = JennieBrain(project_id="local", gemini_api_key_secret="SECRET_ID_GEMINI_API_KEY")
-    
-    while current_date <= end_date:
+    with session_scope() as session:
+        trading_days = _load_trading_days(session, start_date, end_date)
+
+    for current_date in trading_days:
         target_date_str = current_date.strftime("%Y-%m-%d")
         logger.info(f"\n{'='*60}\n🚀 Backfill Step: {target_date_str}\n{'='*60}")
-        
-        # 주말 체크 (토=5, 일=6)
-        if current_date.weekday() >= 5:
-            logger.info("⏩ 주말 스킵")
-        else:
-            try:
-                with session_scope() as session:
-                    # 1. Environment & Mock Setup
-                    kis_api = MockKISClient(target_date_str)
-                    
-                    # Monkey Patching
-                    original_get_daily_prices = database.get_daily_prices
-                    original_get_dynamic = scout_universe.get_dynamic_blue_chips
-                    original_analyze_sector = scout_universe.analyze_sector_momentum
-                    original_fetch_news = scout_main.fetch_stock_news_from_chroma
-                    
-                    # Apply Patches
-                    database.get_daily_prices = partial(original_get_daily_prices, end_date=target_date_str)
-                    scout_universe.get_dynamic_blue_chips = partial(mock_get_dynamic_blue_chips, target_date=target_date_str, session=session)
-                    scout_universe.analyze_sector_momentum = partial(mock_analyze_sector_momentum)
-                    scout_main.fetch_stock_news_from_chroma = partial(mock_fetch_stock_news, target_date=target_date_str, session=session)
-                    
-                    # Force Skip Disabled
-                    scout_pipeline.should_skip_hunter = MagicMock(return_value=False)
 
-                    # --- Scout Main Logic Simulation (Simplified) ---
+        original_get_daily_prices = None
+        original_get_dynamic = None
+        original_analyze_sector = None
+        original_fetch_news = None
+
+        try:
+            with session_scope() as session:
+                if skip_existing and _watchlist_exists(session, target_date_str):
+                    logger.info(f"⏭️ {target_date_str}: 이미 백필됨 (스킵)")
+                    continue
+
+                # 1. Environment & Mock Setup
+                kis_api = MockKISClient(target_date_str)
+                
+                # Monkey Patching
+                original_get_daily_prices = database.get_daily_prices
+                original_get_dynamic = scout_universe.get_dynamic_blue_chips
+                original_analyze_sector = scout_universe.analyze_sector_momentum
+                original_fetch_news = scout_main.fetch_stock_news_from_chroma
+                
+                # Apply Patches
+                database.get_daily_prices = partial(original_get_daily_prices, end_date=target_date_str)
+                scout_universe.get_dynamic_blue_chips = partial(mock_get_dynamic_blue_chips, target_date=target_date_str, session=session)
+                scout_universe.analyze_sector_momentum = partial(mock_analyze_sector_momentum)
+                scout_main.fetch_stock_news_from_chroma = partial(mock_fetch_stock_news, target_date=target_date_str, session=session)
+                
+                # Force Skip Disabled
+                scout_pipeline.should_skip_hunter = MagicMock(return_value=False)
+
+                # --- Scout Main Logic Simulation (Simplified) ---
+                
+                # 1. Candidate Selection using Mocked Universe
+                candidate_stocks = {}
+                for stock in scout_universe.get_dynamic_blue_chips(limit=universe_size):
+                    candidate_stocks[stock['code']] = {
+                        'name': stock['name'],
+                        'sector': stock.get('sector'),
+                        'reasons': ['KOSPI 시총 상위']
+                    }
                     
-                    # 1. Candidate Selection using Mocked Universe
-                    candidate_stocks = {}
-                    universe_size = 50 # 백필 속도를 위해 축소 (Top 50)
+                # 2. Enrich & Prefetch
+                # Mock snapshot logic needs to be manually injected here because scout.py uses kis_api directly
+                # scout.py's prefetch_all_data uses the kis_api defined in main() so we pass our mock
+                snapshot_cache, news_cache = scout_main.prefetch_all_data(candidate_stocks, kis_api, vectorstore=None)
+
+                # 3. Pipeline Execution (Phase 1 -> Phase 2)
+                # Quant Scoring
+                from shared.hybrid_scoring import QuantScorer
+                # 시장 레짐 계산 (KOSPI 기준)
+                from shared.market_regime import MarketRegimeDetector
+                regime_detector = MarketRegimeDetector()
+                kospi_prices = database.get_daily_prices(session, "0001", limit=60)
+                market_regime = "SIDEWAYS"
+                if not kospi_prices.empty:
+                    close_df = kospi_prices[["CLOSE_PRICE"]]
+                    current_price = float(close_df["CLOSE_PRICE"].iloc[-1])
+                    market_regime, _ = regime_detector.detect_regime(close_df, current_price, quiet=True)
+
+                quant_scorer = QuantScorer(session, market_regime=market_regime)
+                
+                quant_results = {}
+                kospi_prices = database.get_daily_prices(session, "0001", limit=60)
+                
+                for code, info in candidate_stocks.items():
+                    stock_info = {'code': code, 'info': info, 'snapshot': snapshot_cache.get(code)}
+                    quant_results[code] = scout_pipeline.process_quant_scoring_task(
+                        stock_info, quant_scorer, session, kospi_prices
+                    )
                     
-                    for stock in scout_universe.get_dynamic_blue_chips(limit=universe_size):
-                        candidate_stocks[stock['code']] = {
-                            'name': stock['name'],
-                            'sector': stock.get('sector'),
-                            'reasons': ['KOSPI 시총 상위']
-                        }
-                        
-                    # 2. Enrich & Prefetch
-                    # Mock snapshot logic needs to be manually injected here because scout.py uses kis_api directly
-                    # scout.py's prefetch_all_data uses the kis_api defined in main() so we pass our mock
-                    snapshot_cache, news_cache = scout_main.prefetch_all_data(candidate_stocks, kis_api, vectorstore=None)
-                    
-                    # 3. Pipeline Execution (Phase 1 -> Phase 2)
-                    # Quant Scoring
-                    from shared.hybrid_scoring import QuantScorer
-                    quant_scorer = QuantScorer(session, market_regime="SIDEWAYS") # Regime also needs mocking if desired
-                    
-                    quant_results = {}
-                    kospi_prices = database.get_daily_prices(session, "0001", limit=60) 
-                    
-                    for code, info in candidate_stocks.items():
-                        stock_info = {'code': code, 'info': info, 'snapshot': snapshot_cache.get(code)}
-                        quant_results[code] = scout_pipeline.process_quant_scoring_task(
-                            stock_info, quant_scorer, session, kospi_prices
+                # Filter (Top 40%)
+                filtered_results = quant_scorer.filter_candidates(
+                    list(quant_results.values()),
+                    cutoff_ratio=quant_cutoff_ratio,
+                )
+                filtered_results = sorted(filtered_results, key=lambda r: r.total_score, reverse=True)
+                if max_llm_candidates and len(filtered_results) > max_llm_candidates:
+                    filtered_results = filtered_results[:max_llm_candidates]
+                filtered_codes = [r.stock_code for r in filtered_results]
+
+                # LLM Analysis
+                final_candidates = []
+                logger.info(f"[DEBUG] Starting LLM Phase for {len(filtered_codes)} candidates")
+
+                # Batch processing to prevent OOM
+                # Use ThreadPool with Mock objects
+                def process_llm(code):
+                    try:
+                        logger.info(f"[DEBUG] Processing {code}...")
+                        info = candidate_stocks[code]
+                        quant_result = quant_results[code]
+
+                        # Phase 1 Hunter
+                        p1_res = scout_pipeline.process_phase1_hunter_v5_task(
+                            {'code': code, 'info': info}, brain, quant_result, snapshot_cache, news_cache, archivist=None
                         )
-                        
-                    # Filter (Top 40%)
-                    filtered_results = quant_scorer.filter_candidates(list(quant_results.values()), cutoff_ratio=0.6)
-                    filtered_codes = {r.stock_code for r in filtered_results}
-                    
-                    # LLM Analysis
-                    final_candidates = []
-                    logger.info(f"[DEBUG] Starting LLM Phase for {len(filtered_codes)} candidates")
-                    
-                    # Batch processing to prevent OOM
-                    # Use ThreadPool with Mock objects
-                    def process_llm(code):
-                        try:
-                            logger.info(f"[DEBUG] Processing {code}...")
-                            info = candidate_stocks[code]
-                            quant_result = quant_results[code]
-                            
-                            # Phase 1 Hunter
-                            p1_res = scout_pipeline.process_phase1_hunter_v5_task(
-                                {'code': code, 'info': info}, brain, quant_result, snapshot_cache, news_cache, archivist=None
+                        logger.info(f"[DEBUG] {code} Phase 1 Result: {p1_res.get('passed')}")
+
+                        if p1_res['passed']:
+                            # Phase 2 Debate/Judge
+                            p2_res = scout_pipeline.process_phase23_judge_v5_task(
+                                p1_res, brain, archivist=None
                             )
-                            logger.info(f"[DEBUG] {code} Phase 1 Result: {p1_res.get('passed')}")
-                            
-                            if p1_res['passed']:
-                                # Phase 2 Debate/Judge
-                                p2_res = scout_pipeline.process_phase23_judge_v5_task(
-                                    p1_res, brain, archivist=None
-                                )
-                                return p2_res
-                            return None
-                        except Exception as e:
-                            logger.error(f"[DEBUG] process_llm failed for {code}: {e}", exc_info=True)
-                            return None
-                        
-                    # Limit concurrency for LLM stability
-                    with ThreadPoolExecutor(max_workers=3) as executor:
+                            return p2_res
+                        return None
+                    except Exception as e:
+                        logger.error(f"[DEBUG] process_llm failed for {code}: {e}", exc_info=True)
+                        return None
+
+                # Limit concurrency for LLM stability
+                if max_workers <= 1:
+                    for code in filtered_codes:
+                        res = process_llm(code)
+                        if res:
+                            final_candidates.append(res)
+                else:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
                         futures = [executor.submit(process_llm, code) for code in filtered_codes]
                         for future in futures:
                             res = future.result()
@@ -536,17 +608,20 @@ def run_backfill(start_date_str, end_date_str, use_local_llm=True):
                     else:
                         logger.info(f"ℹ️ {target_date_str}: 선정된 종목 없음")
 
-            except Exception as e:
-                logger.error(f"❌ {target_date_str} 처리 중 오류: {e}", exc_info=True)
-            finally:
-                # Restore Patches
+        except Exception as e:
+            logger.error(f"❌ {target_date_str} 처리 중 오류: {e}", exc_info=True)
+        finally:
+            # Restore Patches (only if patched)
+            if original_get_daily_prices:
                 database.get_daily_prices = original_get_daily_prices
+            if original_get_dynamic:
                 scout_universe.get_dynamic_blue_chips = original_get_dynamic
+            if original_analyze_sector:
                 scout_universe.analyze_sector_momentum = original_analyze_sector
+            if original_fetch_news:
                 scout_main.fetch_stock_news_from_chroma = original_fetch_news
-                
-        current_date += timedelta(days=1)
-        time.sleep(1) # Cool down
+
+        time.sleep(sleep_seconds) # Cool down
 
 if __name__ == "__main__":
     import argparse
@@ -554,6 +629,22 @@ if __name__ == "__main__":
     parser.add_argument("--start", type=str, required=True, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--end", type=str, required=True, help="End date (YYYY-MM-DD)")
     parser.add_argument("--cloud", action="store_true", help="Use Cloud LLM instead of Local Gateway")
+    parser.add_argument("--universe", type=int, default=200, help="Universe size (default: 200)")
+    parser.add_argument("--quant-cutoff", type=float, default=0.6, help="Quant cutoff ratio (default: 0.6)")
+    parser.add_argument("--max-llm-candidates", type=int, default=50, help="Max LLM candidates per day")
+    parser.add_argument("--max-workers", type=int, default=1, help="LLM parallel workers (default: 1)")
+    parser.add_argument("--sleep", type=float, default=1.0, help="Sleep seconds between days")
+    parser.add_argument("--skip-existing", action="store_true", help="Skip dates already in WATCHLIST_HISTORY")
     args = parser.parse_args()
     
-    run_backfill(args.start, args.end, use_local_llm=not args.cloud)
+    run_backfill(
+        args.start,
+        args.end,
+        use_local_llm=not args.cloud,
+        universe_size=args.universe,
+        quant_cutoff_ratio=args.quant_cutoff,
+        max_llm_candidates=args.max_llm_candidates,
+        max_workers=args.max_workers,
+        sleep_seconds=args.sleep,
+        skip_existing=args.skip_existing,
+    )

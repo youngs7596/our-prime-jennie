@@ -51,6 +51,7 @@ from utilities.backtest_gpt_v2 import (
     SellAction,
     PortfolioEngine,
     ScannerLite,
+    build_sell_policy,
     load_price_series,
     prepare_indicators,
     get_row_at_or_before,
@@ -712,14 +713,38 @@ class E2EBacktestEngine:
         self.connection = connection
         self.start_date = start_date
         self.end_date = end_date
-        
+
+        # 운영 설정값 로드 (실제 트레이딩 설정값 우선 적용)
+        self.config = ConfigManager()
+        cfg_buy_limit = self.config.get("MAX_BUY_COUNT_PER_DAY", default=None)
+        cfg_max_portfolio = self.config.get("MAX_PORTFOLIO_SIZE", default=None)
+        cfg_max_stock_pct = self.config.get("MAX_POSITION_VALUE_PCT", default=None)
+        cfg_max_sector_pct = self.config.get("MAX_SECTOR_PCT", default=None)
+        cfg_stop_loss_pct = self.config.get("SELL_STOP_LOSS_PCT", default=None)
+        cfg_target_profit_pct = self.config.get("PROFIT_TARGET_FULL", default=None)
+
+        def _pct_to_ratio(value):
+            if value is None:
+                return None
+            try:
+                return float(value) / 100.0
+            except (TypeError, ValueError):
+                return None
+
+        cfg_max_stock_ratio = _pct_to_ratio(cfg_max_stock_pct)
+        cfg_max_sector_ratio = _pct_to_ratio(cfg_max_sector_pct)
+        cfg_stop_loss_ratio = _pct_to_ratio(cfg_stop_loss_pct)
+        cfg_target_profit_ratio = _pct_to_ratio(cfg_target_profit_pct)
+        if cfg_stop_loss_ratio is not None:
+            cfg_stop_loss_ratio = abs(cfg_stop_loss_ratio)
+
         # 설정
-        self.daily_buy_limit = daily_buy_limit
-        self.max_portfolio_size = max_portfolio_size
-        self.max_sector_pct = max_sector_pct
-        self.max_stock_pct = max_stock_pct
-        self.target_profit_pct = target_profit_pct
-        self.stop_loss_pct = stop_loss_pct
+        self.daily_buy_limit = int(cfg_buy_limit) if cfg_buy_limit is not None else daily_buy_limit
+        self.max_portfolio_size = int(cfg_max_portfolio) if cfg_max_portfolio is not None else max_portfolio_size
+        self.max_sector_pct = cfg_max_sector_ratio if cfg_max_sector_ratio is not None else max_sector_pct
+        self.max_stock_pct = cfg_max_stock_ratio if cfg_max_stock_ratio is not None else max_stock_pct
+        self.target_profit_pct = cfg_target_profit_ratio if cfg_target_profit_ratio is not None else target_profit_pct
+        self.stop_loss_pct = cfg_stop_loss_ratio if cfg_stop_loss_ratio is not None else stop_loss_pct
         self.rsi_overbought = rsi_overbought
         self.scout_top_n = scout_top_n
         self.scout_min_score = scout_min_score
@@ -730,6 +755,7 @@ class E2EBacktestEngine:
         self.use_llm_decisions = use_llm_decisions  # LLM 결정 활용 옵션
         self.max_volume_pct = max_volume_pct
         self.volume_full_fill = volume_full_fill
+        self.sell_policy = build_sell_policy(self.config)
         
         # 일중 시뮬레이션 옵션
         self.use_intraday_sim = True  # 일중 시뮬레이션 사용
@@ -740,10 +766,10 @@ class E2EBacktestEngine:
         # Portfolio Engine (기존 백테스트 재사용)
         self.portfolio = PortfolioEngine(
             initial_capital=initial_capital,
-            max_position_pct=max_stock_pct,
-            max_positions=max_portfolio_size,
-            target_profit_pct=target_profit_pct,
-            stop_loss_pct=stop_loss_pct,
+            max_position_pct=self.max_stock_pct,
+            max_positions=self.max_portfolio_size,
+            target_profit_pct=self.target_profit_pct,
+            stop_loss_pct=self.stop_loss_pct,
             stop_loss_atr_mult=2.0,
             max_hold_days=60,
         )
@@ -1165,14 +1191,12 @@ class E2EBacktestEngine:
             
             # 1. Scout 시뮬레이션 (매일 아침)
             # === Prime Council 제안: LLM 결정 우선 활용 ===
+            scout_result = None
             if self.use_llm_decisions and i > 0 and daily_universe:
-                # LLM 결정 로드 (DECISION_LEDGER → WATCHLIST_HISTORY Fallback)
                 llm_decisions = scout_sim.load_llm_decisions_for_date(
                     current_date, daily_universe
                 )
-                
                 if llm_decisions:
-                    # LLM 결정을 Scout Watchlist로 변환
                     llm_watchlist = []
                     for code, decision in llm_decisions.items():
                         self._ensure_code_loaded(code)
@@ -1182,13 +1206,11 @@ class E2EBacktestEngine:
                                 "name": self.stock_names.get(code, code),
                                 "estimated_score": decision["estimated_score"],
                                 "factor_score": decision["hunter_score"],
-                                "news_sentiment": 50.0,  # LLM이 이미 판단
+                                "news_sentiment": 50.0,
                                 "news_count": 0,
                                 "llm_source": decision["source"],
                             })
-                    
                     if llm_watchlist:
-                        # LLM BUY 결정 종목만으로 Hot Watchlist 구성
                         llm_watchlist.sort(key=lambda x: x["estimated_score"], reverse=True)
                         regime = self._detect_regime(current_date)
                         scout_result = ScoutSnapshot(
@@ -1200,13 +1222,7 @@ class E2EBacktestEngine:
                             f"🤖 [{current_date.strftime('%Y-%m-%d')}] LLM 결정 활용: "
                             f"{len(llm_watchlist)}개 BUY 신호"
                         )
-                    else:
-                        # LLM BUY 결정이 없으면 Factor Score로 Fallback
-                        scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
-                else:
-                    # LLM 결정 없으면 Factor Score로 Fallback
-                    scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
-            elif self.use_watchlist_history and i > 0:
+            if scout_result is None and self.use_watchlist_history and i > 0:
                 snapshot_date = trading_days[i - 1]
                 history_items = self._load_watchlist_history_snapshot(snapshot_date)
                 if history_items:
@@ -1218,20 +1234,18 @@ class E2EBacktestEngine:
                         regime=regime,
                         hot_watchlist=history_items[: self.scout_top_n],
                     )
-                else:
-                    scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
-            else:
+            if scout_result is None:
                 scout_result = scout_sim.simulate_scout_for_date(current_date, universe_codes=daily_universe)
             self.scout_snapshots.append(scout_result)
             
             # 1-2. Regime 기반 동적 파라미터 적용 (Phase A-2)
             regime = scout_result.regime
             regime_params = get_regime_params(regime)
-            current_buy_limit = regime_params["daily_buy_limit"]
+            current_buy_limit = min(regime_params["daily_buy_limit"], self.daily_buy_limit)
             current_buy_threshold = regime_params["buy_signal_threshold"]
-            current_target_profit = regime_params["target_profit_pct"]
-            current_stop_loss = regime_params["stop_loss_pct"]
-            current_max_portfolio = regime_params["max_portfolio_size"]
+            current_target_profit = self.target_profit_pct
+            current_stop_loss = self.stop_loss_pct
+            current_max_portfolio = min(regime_params["max_portfolio_size"], self.max_portfolio_size)
             
             hot_watchlist_codes = {item["code"] for item in scout_result.hot_watchlist}
             
@@ -1411,6 +1425,7 @@ class E2EBacktestEngine:
                             "target_profit_pct": current_target_profit,
                         },
                         rsi_thresholds=(70, 75, 80),
+                        sell_policy=self.sell_policy,
                     )
             else:
                 # 기존 종가 기준 매도
@@ -1443,6 +1458,7 @@ class E2EBacktestEngine:
                         "target_profit_pct": current_target_profit,
                     },
                     rsi_thresholds=(70, 75, 80),
+                    sell_policy=self.sell_policy,
                 )
             
             # 4. 일일 자산 기록 (종가 기준)

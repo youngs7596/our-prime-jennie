@@ -42,6 +42,37 @@ from shared.strategy_presets import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+
+def build_sell_policy(config: ConfigManager) -> Dict[str, float]:
+    """실제 운영 설정값 기반 매도 정책 구성."""
+    trailing_enabled = config.get_bool("TRAILING_TAKE_PROFIT_ENABLED", default=True)
+    trailing_activation_pct = config.get_float("TRAILING_TAKE_PROFIT_ACTIVATION_PCT", default=5.0)
+    trailing_atr_mult = config.get_float("TRAILING_TAKE_PROFIT_ATR_MULT", default=1.5)
+    scale_out_enabled = config.get_bool("SCALE_OUT_ENABLED", default=True)
+    scale_out_levels = [
+        (config.get_float("SCALE_OUT_LEVEL_1_PCT", default=5.0), config.get_float("SCALE_OUT_LEVEL_1_SELL_PCT", default=25.0)),
+        (config.get_float("SCALE_OUT_LEVEL_2_PCT", default=10.0), config.get_float("SCALE_OUT_LEVEL_2_SELL_PCT", default=25.0)),
+        (config.get_float("SCALE_OUT_LEVEL_3_PCT", default=15.0), config.get_float("SCALE_OUT_LEVEL_3_SELL_PCT", default=25.0)),
+    ]
+    rsi_overbought_threshold = config.get_float("SELL_RSI_OVERBOUGHT_THRESHOLD", default=75.0)
+    rsi_min_profit_pct = config.get_float("SELL_RSI_MIN_PROFIT_PCT", default=3.0)
+    fixed_stop_loss_pct = config.get_float("SELL_STOP_LOSS_PCT", default=5.0)
+    target_profit_pct = config.get_float("PROFIT_TARGET_FULL", default=8.0)
+    atr_stop_mult = config.get_float("ATR_MULTIPLIER_INITIAL_STOP", default=2.0)
+
+    return {
+        "trailing_enabled": trailing_enabled,
+        "trailing_activation_pct": trailing_activation_pct,
+        "trailing_atr_mult": trailing_atr_mult,
+        "scale_out_enabled": scale_out_enabled,
+        "scale_out_levels": scale_out_levels,
+        "rsi_overbought_threshold": rsi_overbought_threshold,
+        "rsi_min_profit_pct": rsi_min_profit_pct,
+        "fixed_stop_loss_pct": fixed_stop_loss_pct,
+        "target_profit_pct": target_profit_pct,
+        "atr_stop_mult": atr_stop_mult,
+    }
+
 SMART_UNIVERSE_PATH = os.path.join(PROJECT_ROOT, "smart_universe.json")
 BLUECHIP_FALLBACK = [
     {"code": "005930", "name": "삼성전자"},
@@ -312,6 +343,8 @@ class Position:
     original_quantity: int
     sold_ratio: float = 0.0
     high_price: float = 0.0
+    scale_out_level: int = 0
+    rsi_overbought_sold: bool = False
 
 
 @dataclass
@@ -763,8 +796,25 @@ class PortfolioEngine:
         price_cache: Dict[str, pd.DataFrame],
         risk_setting: Dict,
         rsi_thresholds: Tuple[float, float, float],
+        sell_policy: Optional[Dict[str, float]] = None,
     ) -> List[SellAction]:
         actions: List[SellAction] = []
+        sell_policy = sell_policy or {}
+        trailing_enabled = bool(sell_policy.get("trailing_enabled", True))
+        trailing_activation_pct = float(sell_policy.get("trailing_activation_pct", 5.0))
+        trailing_atr_mult = float(sell_policy.get("trailing_atr_mult", 1.5))
+        scale_out_enabled = bool(sell_policy.get("scale_out_enabled", True))
+        scale_out_levels = sell_policy.get("scale_out_levels") or [
+            (5.0, 25.0),
+            (10.0, 25.0),
+            (15.0, 25.0),
+        ]
+        rsi_overbought_threshold = float(sell_policy.get("rsi_overbought_threshold", rsi_thresholds[1]))
+        rsi_min_profit_pct = float(sell_policy.get("rsi_min_profit_pct", 3.0))
+        fixed_stop_loss_pct = float(sell_policy.get("fixed_stop_loss_pct", 5.0))
+        target_profit_pct = float(sell_policy.get("target_profit_pct", self.target_profit_pct * 100.0))
+        atr_stop_mult = float(sell_policy.get("atr_stop_mult", self.stop_loss_atr_mult))
+
         for code, pos in list(self.positions.items()):
             row = get_row_at_or_before(price_cache[code], trade_date)
             if row is None:
@@ -775,44 +825,45 @@ class PortfolioEngine:
             
             atr = float(row.get("ATR", pos.atr)) if not pd.isna(row.get("ATR")) else pos.atr
             if not pd.isna(atr):
-                trailing = price - atr * self.stop_loss_atr_mult
-                if trailing > pos.stop_loss_price:
-                    pos.stop_loss_price = trailing
+                atr = float(atr)
+
+            if pos.high_price <= 0:
+                pos.high_price = pos.avg_price
             pos.high_price = max(pos.high_price, price)
 
-            # 수익률 계산 시 수수료 고려 (매수 수수료는 이미 cash에서 차감됨, 매도 수수료 예상치 반영)
-            # 보수적인 판단을 위해 매도 수수료를 뺀 금액으로 수익률 계산
-            estimated_proceeds = (price * pos.quantity) * (1 - self.FEE_SELL)
-            cost_basis = pos.avg_price * pos.quantity
-            profit = (estimated_proceeds - cost_basis) / cost_basis
+            profit_pct = ((price - pos.avg_price) / pos.avg_price) * 100 if pos.avg_price > 0 else 0.0
             
             reason: Optional[str] = None
             quantity = pos.quantity
             partial = False
 
-            if price <= pos.stop_loss_price:
-                reason = "ATR_STOP"
-            elif profit <= risk_setting.get("stop_loss_pct", -self.base_stop_loss_pct):
-                reason = "DYNAMIC_STOP"
-            elif profit >= risk_setting.get("target_profit_pct", self.target_profit_pct):
-                reason = "TARGET_PROFIT"
-            else:
-                rsi = row.get("RSI")
-                if not pd.isna(rsi) and pos.sold_ratio < 0.99:
-                    increment = 0.0
-                    reason_map = None
-                    if rsi >= rsi_thresholds[2] and pos.sold_ratio < 0.8:
-                        increment = 0.2
-                        reason_map = "RSI_TAKE_PROFIT_80"
-                    elif rsi >= rsi_thresholds[1] and pos.sold_ratio < 0.5:
-                        increment = 0.5
-                        reason_map = "RSI_TAKE_PROFIT_75"
-                    elif rsi >= rsi_thresholds[0] and pos.sold_ratio < 0.3:
-                        increment = 0.3
-                        reason_map = "RSI_TAKE_PROFIT_70"
+            # 1. ATR 손절
+            if atr and atr_stop_mult:
+                stop_price = pos.avg_price - (atr_stop_mult * atr)
+                if price < stop_price:
+                    reason = "ATR_STOP"
 
-                    if increment > 0 and reason_map:
-                        target_ratio = min(1.0, pos.sold_ratio + increment)
+            # 2. 고정 손절 (퍼센트 기준)
+            if reason is None:
+                stop_loss_pct = -abs(fixed_stop_loss_pct)
+                if profit_pct <= stop_loss_pct:
+                    reason = "FIXED_STOP"
+
+            # 3. 트레일링 익절
+            if reason is None and trailing_enabled and atr:
+                high_profit_pct = ((pos.high_price - pos.avg_price) / pos.avg_price) * 100 if pos.avg_price > 0 else 0.0
+                if high_profit_pct >= trailing_activation_pct:
+                    trailing_stop_price = pos.high_price - (atr * trailing_atr_mult)
+                    if price <= trailing_stop_price:
+                        reason = "TRAILING_TP"
+
+            # 4. 분할 익절
+            if reason is None and scale_out_enabled and profit_pct > 0:
+                for idx, (level_pct, sell_pct) in enumerate(scale_out_levels, start=1):
+                    if pos.scale_out_level >= idx:
+                        continue
+                    if profit_pct >= float(level_pct):
+                        target_ratio = min(1.0, pos.sold_ratio + (float(sell_pct) / 100.0))
                         sell_ratio = target_ratio - pos.sold_ratio
                         sell_qty = max(1, int(pos.original_quantity * sell_ratio))
                         sell_qty = min(sell_qty, pos.quantity)
@@ -820,13 +871,14 @@ class PortfolioEngine:
                             proceeds = sell_qty * price
                             fee = proceeds * self.FEE_SELL
                             net_proceeds = proceeds - fee
-                            
+
                             self.cash += net_proceeds
                             pos.quantity -= sell_qty
                             pos.sold_ratio = target_ratio
+                            pos.scale_out_level = idx
                             partial = True
                             quantity = sell_qty
-                            reason = reason_map
+                            reason = f"SCALE_OUT_L{idx}"
                             actions.append(SellAction(code, sell_qty, price, reason, True))
                             self.trade_log.append(
                                 {
@@ -841,11 +893,59 @@ class PortfolioEngine:
                             )
                             logger.info(
                                 f"✂️ [SELL_PARTIAL] {code} | {slot_timestamp:%Y-%m-%d %H:%M} | "
-                                f"{sell_qty}주 @ {price:,.0f}원 | 수수료 {fee:,.0f}원 | 이유 {reason} | 누적 매도 {target_ratio * 100:.0f}%"
+                                f"{sell_qty}주 @ {price:,.0f}원 | 수수료 {fee:,.0f}원 | 이유 {reason} | "
+                                f"누적 매도 {target_ratio * 100:.0f}%"
                             )
-                            if pos.quantity <= 0:
-                                del self.positions[code]
+                        break
+                if reason:
+                    if pos.quantity <= 0:
+                        del self.positions[code]
+                    continue
+
+            # 5. RSI 과열 분할 익절
+            if reason is None:
+                rsi = row.get("RSI")
+                if not pd.isna(rsi) and not pos.rsi_overbought_sold:
+                    if rsi >= rsi_overbought_threshold and profit_pct >= rsi_min_profit_pct:
+                        sell_qty = max(1, int(pos.original_quantity * 0.5))
+                        sell_qty = min(sell_qty, pos.quantity)
+                        if sell_qty > 0:
+                            proceeds = sell_qty * price
+                            fee = proceeds * self.FEE_SELL
+                            net_proceeds = proceeds - fee
+
+                            self.cash += net_proceeds
+                            pos.quantity -= sell_qty
+                            pos.sold_ratio = min(1.0, pos.sold_ratio + (sell_qty / pos.original_quantity))
+                            pos.rsi_overbought_sold = True
+                            partial = True
+                            quantity = sell_qty
+                            reason = "RSI_OVERBOUGHT"
+                            actions.append(SellAction(code, sell_qty, price, reason, True))
+                            self.trade_log.append(
+                                {
+                                    "type": "SELL",
+                                    "code": code,
+                                    "price": price,
+                                    "quantity": sell_qty,
+                                    "reason": reason,
+                                    "date": slot_timestamp,
+                                    "fee": fee,
+                                }
+                            )
+                            logger.info(
+                                f"✂️ [SELL_PARTIAL] {code} | {slot_timestamp:%Y-%m-%d %H:%M} | "
+                                f"{sell_qty}주 @ {price:,.0f}원 | 수수료 {fee:,.0f}원 | 이유 {reason} | "
+                                f"누적 매도 {pos.sold_ratio * 100:.0f}%"
+                            )
+                        if pos.quantity <= 0:
+                            del self.positions[code]
                         continue
+
+            # 6. 고정 목표 익절 (트레일링 비활성화 시)
+            if reason is None and not trailing_enabled:
+                if profit_pct >= target_profit_pct:
+                    reason = "TARGET_PROFIT"
 
                 # Death Cross 체크 (MA5 < MA20 하향 크로스)
                 ma5 = row.get("MA_5")
@@ -882,7 +982,7 @@ class PortfolioEngine:
                 del self.positions[code]
                 logger.info(
                     f"💸 [SELL_EXIT] {code} | {slot_timestamp:%Y-%m-%d %H:%M} | "
-                    f"{quantity}주 @ {price:,.0f}원 | 수수료 {fee:,.0f}원 | 이유 {reason} | 손익 {profit * 100:.2f}%"
+                    f"{quantity}주 @ {price:,.0f}원 | 수수료 {fee:,.0f}원 | 이유 {reason} | 손익 {profit_pct:.2f}%"
                 )
 
         return actions
@@ -916,6 +1016,7 @@ class BacktestGPT:
             self.args.sell_rsi_2,
             self.args.sell_rsi_3,
         )
+        self.sell_policy = build_sell_policy(self.config)
         self.max_buys_per_day = self.args.max_buys_per_day
         self.max_holdings = self.args.max_holdings
         self.llm_threshold = self.args.llm_threshold
@@ -1137,6 +1238,7 @@ class BacktestGPT:
                     self.price_cache,
                     risk_setting,
                     self.rsi_sell_thresholds,
+                    self.sell_policy,
                 )
 
                 equity = self.portfolio.total_value(current_date, self.price_cache, price_lookup)
