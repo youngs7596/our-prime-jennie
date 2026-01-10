@@ -3,7 +3,10 @@
 ## 2026-01-10
 - **Scout E2E 백테스트 시뮬레이터 개발**: 뉴스 데이터 + Factor Score 기반 Scout 종목 선정 시뮬레이션 구현
   - `utilities/backtest_scout_e2e.py`: ScoutSimulator (Factor+뉴스), E2EBacktestEngine (Buy/Sell 시뮬레이션) 구현
+- 로컬 LLM 기반 WATCHLIST_HISTORY 백필 및 KOSPI 지수 백필 스크립트 추가, 백테스트 현실화 옵션 보강
   - `utilities/auto_optimize_backtest_scout_e2e.py`: Grid 기반 자동 파라미터 최적화 스크립트 생성
+  - `utilities/backfill_scout_real.py`: 실제 Scout 파이프라인(Hunter/Debate/Judge)과 과거 데이터(Time Machine)를 연동한 정밀 백필 스크립트 구현 (Monkey Patching + Local LLM Gateway 적용)
+  - **Fix**: 백필 과정 중 Schema/Collation 오류 수정 및 `MockKISClient`의 누락된 컬럼 처리 보강
   - **Phase A**: 기술적 매수 신호 (`check_technical_entry`), Regime 동적 파라미터 (`REGIME_PARAMS`) 구현
   - **Phase B**: 비선형 Scout 점수 (과락+가산점), 트레일링 스톱, 일중 시뮬레이션 (18슬롯) 추가
   - **실제 거래 분석**: tradelog 테이블 확인 결과 실제 시스템은 삼전 +45%, 기아 +21% 등 수익 중

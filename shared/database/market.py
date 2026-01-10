@@ -233,19 +233,28 @@ def update_all_stock_fundamentals(session, all_fundamentals_params: List[dict]):
         session.rollback()
 
 
-def get_daily_prices(connection, stock_code: str, limit: int = 30, table_name: str = "STOCK_DAILY_PRICES_3Y") -> pd.DataFrame:
+def get_daily_prices(connection, stock_code: str, limit: int = 30, table_name: str = "STOCK_DAILY_PRICES_3Y", end_date=None) -> pd.DataFrame:
     from sqlalchemy.orm import Session
     from sqlalchemy import text
     
+    # end_date 필터 조건 추가
+    date_filter = ""
+    params = {"stock_code": stock_code, "limit": limit}
+    
+    if end_date:
+        date_filter = "AND PRICE_DATE <= :end_date"
+        params["end_date"] = end_date
+
     # SQLAlchemy Session인 경우
     if isinstance(connection, Session):
         result = connection.execute(text(f"""
             SELECT PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME
             FROM {table_name}
             WHERE STOCK_CODE = :stock_code
+            {date_filter}
             ORDER BY PRICE_DATE DESC
             LIMIT :limit
-        """), {"stock_code": stock_code, "limit": limit})
+        """), params)
         rows = result.fetchall()
         
         if not rows:
@@ -259,13 +268,22 @@ def get_daily_prices(connection, stock_code: str, limit: int = 30, table_name: s
     
     # Raw connection인 경우
     cursor = connection.cursor()
+    # 파라미터 리스트 변환 (순서 중요: code, end_date(if exists), limit)
+    query_params = [stock_code]
+    raw_date_filter = ""
+    if end_date:
+        raw_date_filter = "AND PRICE_DATE <= %s"
+        query_params.append(end_date)
+    query_params.append(limit)
+
     cursor.execute(f"""
         SELECT PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME
         FROM {table_name}
         WHERE STOCK_CODE = %s
+        {raw_date_filter}
         ORDER BY PRICE_DATE DESC
         LIMIT %s
-    """, [stock_code, limit])
+    """, query_params)
     rows = cursor.fetchall()
     cursor.close()
     
@@ -282,7 +300,7 @@ def get_daily_prices(connection, stock_code: str, limit: int = 30, table_name: s
     return df
 
 
-def get_daily_prices_batch(connection, stock_codes: list, limit: int = 120, table_name: str = "STOCK_DAILY_PRICES_3Y"):
+def get_daily_prices_batch(connection, stock_codes: list, limit: int = 120, table_name: str = "STOCK_DAILY_PRICES_3Y", end_date=None):
     """
     여러 종목의 일봉을 한 번에 조회하여 dict[code] = DataFrame 형태로 반환
     """
@@ -300,10 +318,16 @@ def get_daily_prices_batch(connection, stock_codes: list, limit: int = 120, tabl
         placeholder = ','.join([f':code{i}' for i in range(len(stock_codes))])
         params = {f'code{i}': code for i, code in enumerate(stock_codes)}
         
+        date_filter = ""
+        if end_date:
+            date_filter = "AND PRICE_DATE <= :end_date"
+            params['end_date'] = end_date
+        
         query_result = connection.execute(text(f"""
             SELECT STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME
             FROM {table_name}
             WHERE STOCK_CODE IN ({placeholder})
+            {date_filter}
             ORDER BY STOCK_CODE, PRICE_DATE DESC
         """), params)
         rows = query_result.fetchall()
@@ -339,12 +363,20 @@ def get_daily_prices_batch(connection, stock_codes: list, limit: int = 120, tabl
     # MariaDB에서 리스트 파라미터 처리가 드라이버(PyMySQL/MySQLConnector)에 따라 다를 수 있어 안전하게 문자열 치환 사용
     # *주의: SQL Injection 방지를 위해 stock_codes 내용 검증 필요하나, 내부 로직상 안전하다 가정
     placeholder = ','.join(['%s'] * len(stock_codes))
+    
+    query_params = list(stock_codes)
+    raw_date_filter = ""
+    if end_date:
+        raw_date_filter = "AND PRICE_DATE <= %s"
+        query_params.append(end_date)
+        
     cursor.execute(f"""
         SELECT STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME
         FROM {table_name}
         WHERE STOCK_CODE IN ({placeholder})
+        {raw_date_filter}
         ORDER BY STOCK_CODE, PRICE_DATE DESC
-    """, stock_codes)
+    """, query_params)
     rows = cursor.fetchall()
     cursor.close()
     
