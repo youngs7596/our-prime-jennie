@@ -12,6 +12,9 @@
 - **오염 데이터 정리**: `WATCHLIST_HISTORY` 테이블에서 2025-07 ~ 2026-01 기간의 오염된 백필 데이터 521건 삭제.
 - **Data Integrity (Fundamentals)**: `STOCK_FUNDAMENTALS` 테이블에 누락된 PER/PBR 데이터 83,000+건 복구. `FINANCIAL_METRICS_QUARTERLY`와 `STOCK_DAILY_PRICES_3Y`를 결합하여 동적 계산하는 `populate_fundamentals_from_quarterly.py` 구현 및 실행.
 - **Rules Update**: `rules.md`에 "데이터 우선 원칙 (Internal Data First)" 추가. 외부 API 호출 전 내부 재무 데이터를 우선 활용하도록 명시.
+- **News Crawler JennieBrain 수정**: `services/news-crawler/crawler.py`에서 더 이상 사용하지 않는 `shared.gemini` import 제거로 JennieBrain 초기화 오류 해결. 로컬 LLM(Ollama)을 통한 감성 분석 정상 작동 확인.
+- **Scout Fundamentals 일괄 저장**: `scout.py`에 Phase 1.7 추가. 스냅샷 조회 직후 전체 ~200개 종목의 PER/PBR 데이터를 `STOCK_FUNDAMENTALS` 테이블에 자동 저장하여 일일 재무 데이터 축적 및 백테스트 정확도 향상.
+
 
 
 

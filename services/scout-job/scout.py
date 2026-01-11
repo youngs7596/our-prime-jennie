@@ -550,6 +550,26 @@ def main():
             logger.info("--- [Phase 1.6] 데이터 사전 조회 (스냅샷/뉴스) ---")
             snapshot_cache, news_cache = prefetch_all_data(candidate_stocks, kis_api, vectorstore)
 
+            # [NEW] Phase 1.7: 스냅샷에서 재무지표(PER/PBR) 추출 → STOCK_FUNDAMENTALS 저장
+            # 이유: 전체 200개 종목의 재무 데이터를 일일 단위로 축적하여 백테스트 정확도 향상
+            logger.info("--- [Phase 1.7] 재무지표 저장 (STOCK_FUNDAMENTALS) ---")
+            from datetime import date
+            fundamentals_to_save = []
+            today = date.today()
+            for code, snapshot in snapshot_cache.items():
+                if snapshot and (snapshot.get('per') or snapshot.get('pbr')):
+                    fundamentals_to_save.append({
+                        'stock_code': code,
+                        'trade_date': today,
+                        'per': snapshot.get('per'),
+                        'pbr': snapshot.get('pbr'),
+                        'roe': None,  # KIS API 스냅샷에는 ROE가 없음
+                        'market_cap': snapshot.get('market_cap')
+                    })
+            if fundamentals_to_save:
+                database.update_all_stock_fundamentals(session, fundamentals_to_save)
+                logger.info(f"   (DB) ✅ 재무지표 {len(fundamentals_to_save)}개 종목 저장 완료")
+
             # 뉴스 해시를 candidate_stocks에 반영 (해시 계산에 포함)
             # 뉴스 내용이 바뀌면 해시가 달라져 LLM 재호출됨
             news_hash_count = 0

@@ -50,7 +50,6 @@ try:
     from shared.llm import JennieBrain # 감성 분석을 위한 JennieBrain 임포트
     from shared.db.connection import session_scope, ensure_engine_initialized
     from shared.db.models import WatchList as WatchListModel
-    from shared.gemini import ensure_gemini_api_key
     # 경쟁사 수혜 분석 모듈
     # from shared.news_classifier import NewsClassifier, get_classifier
     # from shared.hybrid_scoring.competitor_analyzer import CompetitorAnalyzer
@@ -60,7 +59,6 @@ except ImportError as e: # type: ignore
     auth = None
     database = None
     JennieBrain = None
-    ensure_gemini_api_key = None
     NewsClassifier = None
     get_classifier = None
     CompetitorAnalyzer = None
@@ -69,7 +67,6 @@ except Exception as e:
     auth = None
     database = None
     JennieBrain = None
-    ensure_gemini_api_key = None
     NewsClassifier = None
     get_classifier = None
     CompetitorAnalyzer = None
