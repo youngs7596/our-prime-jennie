@@ -357,6 +357,76 @@ def issue_token():
     }), 200
 
 
+# WebSocket Approval Key 캐시 (발급 충돌 방지)
+ws_approval_key_cache = {
+    'key': None,
+    'expires_at': 0
+}
+WS_APPROVAL_KEY_CACHE_TTL = 30  # 30초 캐싱
+
+
+@limiter.exempt
+@app.route('/api/ws-approval-key', methods=['POST'])
+def issue_ws_approval_key():
+    """
+    WebSocket Approval Key 발급 API
+    
+    다른 서비스들이 Gateway를 통해 WebSocket Approval Key를 받아 사용합니다.
+    30초 캐싱으로 중복 발급을 방지하고, KIS API 호출 충돌을 해결합니다.
+    
+    Request Body:
+        - force_new (bool): 강제로 새 키 발급 여부
+    
+    Response:
+        - approval_key: WebSocket 접속용 승인 키
+        - cached: 캐시된 키인지 여부
+        - mode: REAL/MOCK
+    """
+    global ws_approval_key_cache
+    
+    if not kis_client:
+        return jsonify({"error": "KIS client not initialized"}), 503
+    
+    data = request.get_json(silent=True) or {}
+    force_new = bool(data.get("force_new"))
+    
+    current_time = time.time()
+    
+    # 캐시된 키가 유효한 경우 재사용
+    if not force_new and ws_approval_key_cache['key'] and current_time < ws_approval_key_cache['expires_at']:
+        logger.info(f"🔑 [Gateway] WebSocket Approval Key 캐시 사용 (남은 시간: {ws_approval_key_cache['expires_at'] - current_time:.0f}초)")
+        return jsonify({
+            "approval_key": ws_approval_key_cache['key'],
+            "cached": True,
+            "mode": TRADING_MODE,
+        }), 200
+    
+    # 새 키 발급
+    try:
+        logger.info(f"🔑 [Gateway] WebSocket Approval Key 신규 발급 시도...")
+        approval_key = kis_client.auth.get_ws_approval_key()
+        
+        if not approval_key:
+            logger.error("❌ [Gateway] WebSocket Approval Key 발급 실패")
+            return jsonify({"error": "Failed to acquire WebSocket approval key"}), 500
+        
+        # 캐시에 저장
+        ws_approval_key_cache['key'] = approval_key
+        ws_approval_key_cache['expires_at'] = current_time + WS_APPROVAL_KEY_CACHE_TTL
+        
+        logger.info(f"✅ [Gateway] WebSocket Approval Key 발급 완료 (TTL: {WS_APPROVAL_KEY_CACHE_TTL}초)")
+        
+        return jsonify({
+            "approval_key": approval_key,
+            "cached": False,
+            "mode": TRADING_MODE,
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"❌ [Gateway] WebSocket Approval Key 발급 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # API Endpoints (Rate Limiting + Circuit Breaker 적용)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

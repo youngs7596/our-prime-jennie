@@ -354,6 +354,9 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       # WebSocket 모드 활성화 (실제 KIS WebSocket 연결)
       - USE_WEBSOCKET_MODE=true
+      # Gateway를 통한 토큰 발급 (Access Token + WebSocket Approval Key 충돌 방지)
+      - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
+      - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
 
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
@@ -602,6 +605,8 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - GUNICORN_CMD_ARGS=--timeout 600
       - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
+      # Gateway를 통한 WebSocket Approval Key 발급 (토큰 충돌 방지)
+      - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
 
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host

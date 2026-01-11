@@ -16,6 +16,10 @@ USE_DISTRIBUTED_AUTH = os.getenv('USE_DISTRIBUTED_AUTH', 'true').lower() == 'tru
 TOKEN_PROVIDER_URL = os.getenv('KIS_TOKEN_PROVIDER_URL')
 TOKEN_PROVIDER_TIMEOUT = float(os.getenv('KIS_TOKEN_PROVIDER_TIMEOUT', '5'))
 
+# WebSocket Approval Key Gateway URL (kis-gateway의 /api/ws-approval-key)
+WS_APPROVAL_KEY_PROVIDER_URL = os.getenv('KIS_WS_APPROVAL_KEY_PROVIDER_URL')
+
+
 if USE_DISTRIBUTED_AUTH:
     try:
         from .auth_distributed import DistributedKISAuth
@@ -172,8 +176,37 @@ class KISAuth:
             return None
 
     def get_ws_approval_key(self):
-        """실시간 웹소켓 접속을 위한 승인 키를 발급받습니다."""
+        """
+        실시간 웹소켓 접속을 위한 승인 키를 발급받습니다.
+        
+        우선순위:
+        1. KIS Gateway의 /api/ws-approval-key (캐싱/중앙 관리)
+        2. 직접 KIS API 호출 (Fallback)
+        """
+        # 우선순위 1: Gateway를 통한 발급 (캐싱/중앙 관리)
+        if WS_APPROVAL_KEY_PROVIDER_URL:
+            try:
+                res = requests.post(
+                    WS_APPROVAL_KEY_PROVIDER_URL,
+                    json={"force_new": False},
+                    timeout=TOKEN_PROVIDER_TIMEOUT,
+                )
+                res.raise_for_status()
+                data = res.json()
+                approval_key = data.get("approval_key")
+                if approval_key:
+                    cached = data.get("cached", False)
+                    logger.info(f"   (Auth) ✅ WebSocket Approval Key 획득 (Gateway, cached={cached})")
+                    return approval_key
+                else:
+                    logger.warning(f"⚠️ (Auth) Gateway 응답에 approval_key 없음: {data}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"⚠️ (Auth) Gateway WebSocket Key 호출 실패, 직접 발급 시도: {e}")
+        
+        # 우선순위 2: 직접 KIS API 호출 (Fallback)
         URL = f"{self.client.BASE_URL}/oauth2/Approval"
         data = {"grant_type": "client_credentials", "appkey": self.client.APP_KEY, "secretkey": self.client.APP_SECRET}
         res_data = self.client.request('POST', URL, data=data, tr_id="KIS-WS-AUTH")
+        if res_data and res_data.get('approval_key'):
+            logger.info("   (Auth) ✅ WebSocket Approval Key 획득 (Direct API)")
         return res_data.get('approval_key') if res_data else None

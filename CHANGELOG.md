@@ -1,10 +1,21 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-11
+- **Scout Job/Backfill 안정화**: `scout-job` import 오류 수정 및 백필 데이터 정합성(유니버스 부족, 외인 순매수 0%) 문제 해결.
+- CHANGELOG 날짜 정렬 및 항목 들여쓰기 정리
+- **WebSocket Approval Key Gateway 통합**: KIS Gateway에 `/api/ws-approval-key` 엔드포인트 추가. `buy-scanner`와 `price-monitor`가 Gateway를 통해 WebSocket Key를 발급받도록 개선하여 토큰 발급 충돌 방지 및 30초 캐싱으로 중복 발급 감소.
+  - `services/kis-gateway/main.py`: WebSocket Approval Key 발급 API 추가
+  - `shared/kis/auth.py`: Gateway 우선 호출 및 Fallback 로직 구현
+  - `docker-compose.yml`: `KIS_WS_APPROVAL_KEY_PROVIDER_URL` 환경변수 추가
+- **Bug Fix**: 백필 스크립트(`backfill_scout_real.py`)에서 외인순매수 이중 `* 100` 버그 수정. `QuantScorer`가 이미 퍼센트 변환을 수행하므로 순매수량(주 단위)을 그대로 전달하도록 수정하여 "외인순매수: +2052%"와 같은 비정상적 수치 해결.
+
+
 ## 2026-01-10
 - **Scout E2E 백테스트 시뮬레이터 개발**: 뉴스 데이터 + Factor Score 기반 Scout 종목 선정 시뮬레이션 구현
   - `utilities/backtest_scout_e2e.py`: ScoutSimulator (Factor+뉴스), E2EBacktestEngine (Buy/Sell 시뮬레이션) 구현
 - 로컬 LLM 기반 WATCHLIST_HISTORY 백필 및 KOSPI 지수 백필 스크립트 추가, 백테스트 현실화 옵션 보강
- - 백테스트 매도 로직 실전 일치 및 backfill_scout_real.py 안정화/확장
+- 백테스트 매도 로직 실전 일치 및 backfill_scout_real.py 안정화/확장
+  - **LLM 결정 통합**: Backtest Engine에 Hunter/Judge/Debate 결정 반영, 시뮬레이터-실시장 괴리 검증.
   - `utilities/auto_optimize_backtest_scout_e2e.py`: Grid 기반 자동 파라미터 최적화 스크립트 생성
   - `utilities/backfill_scout_real.py`: 실제 Scout 파이프라인(Hunter/Debate/Judge)과 과거 데이터(Time Machine)를 연동한 정밀 백필 스크립트 구현 (Monkey Patching + Local LLM Gateway 적용)
   - **Fix**: 백필 과정 중 Schema/Collation 오류 수정 및 `MockKISClient`의 누락된 컬럼 처리 보강
@@ -84,8 +95,6 @@
 - **Frontend Build Fix**: `LogicVisualization.tsx`의 TypeScript 오류(`findDay` unused) 수정 및 컴파일 정상화.
 - **Architecture Diagram**: Dashboard 내 `PrimeJennieArchitecture` 컴포넌트 및 페이지(`/architecture`) 추가, 사이드바 연동 완료 (v2 Architecture 시각화).
 - **Frontend Build Fix (TS6133)**: `PrimeJennieArchitecture.tsx`의 미사용 `React` import 제거로 빌드 오류 해결.
-- **2026-01-11**: Fixed `scout-job` import error and resolved backfill data integrity issues (low universe count, zero foreign net buy) to enable reliable historical backfilling.
-- **2026-01-10**: Integrated LLM decisions into Backtest Engine (Hunter/Judge/Debate). Verified divergence between Simulator and Real Market (KOSPI) during bull runs.
 - **Menu Fix**: 사이드바 내 중복된 `Visual Logic` 메뉴 항목 제거.
 - **Super Prime Strategy Verified**: `scanner.py`의 Super Prime 로직(RSI <= 30 & Volume) Unit Test(`test_super_prime.py`) 작성 및 검증 완료. `pandas` import 누락 수정.
 - **Feature (Super Prime)**: `SuperPrime.tsx` 신규 페이지 추가 및 `/super-prime` 라우팅, 사이드바 메뉴('🏆') 추가 (Samsung Pharm Legendary Pattern 시각화).
