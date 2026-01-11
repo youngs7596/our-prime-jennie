@@ -341,6 +341,16 @@ ruff check .
     - **Parallel Processing (Workers=5)**: ~32초/배치 (Items/sec ≈ 0.15) - **Loser** (VRAM Thrashing, Context Switching 비용 과다)
   - **가이드**: `news-crawler` 등 대량 처리 시 `ThreadPoolExecutor` 대신 순차 루프를 사용하고, 프롬프트 내에서 다건(One-Shot Example 포함)을 한 번에 처리하세요.
 
+### 3. 데이터 우선 원칙 (Internal Data First)
+- **재무 데이터 (Financials)**:
+  - 외부 API(KIS, Naver) 호출 전, **내부 DB 데이터를 우선 사용**합니다. 이미 수집/복구된 고품질 데이터가 존재합니다.
+  - **`STOCK_FUNDAMENTALS`**: 일별 주가 기반 파생 지표 (PER, PBR, ROE, 시총).
+    - 2024.01 ~ 2026.01 데이터 완비 (총 83,000+건).
+    - 산출 방식: `Daily Close / Quarterly EPS(or BPS)` 동적 계산.
+  - **`FINANCIAL_METRICS_QUARTERLY`**: 분기별 원천 재무제표 (EPS, BPS, ROE, 순이익 등).
+    - 2022.12 ~ 2025.09 데이터 보유.
+  - **활용 가이드**: 백테스트나 분석 시 API를 호출하지 말고 위 테이블을 조인하여 사용하세요.
+
 ---
 
 

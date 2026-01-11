@@ -10,6 +10,8 @@
 - **Bug Fix (외인순매수 계산)**: 백필 스크립트(`backfill_scout_real.py`)에서 `FOREIGN_NET_BUY`(금액)를 주가로 나눠 주 수량으로 변환하는 로직 추가. 이전에는 금액을 거래량으로 나눠서 +460,823% 같은 비정상 수치가 발생함.
 - **Cloud LLM 비용 절감**: `scout_pipeline.py`에서 `fact_checker`(Gemini Flash 호출) import 및 AI Auditor 블록 완전 제거, `shared/fact_checker.py` 삭제.
 - **오염 데이터 정리**: `WATCHLIST_HISTORY` 테이블에서 2025-07 ~ 2026-01 기간의 오염된 백필 데이터 521건 삭제.
+- **Data Integrity (Fundamentals)**: `STOCK_FUNDAMENTALS` 테이블에 누락된 PER/PBR 데이터 83,000+건 복구. `FINANCIAL_METRICS_QUARTERLY`와 `STOCK_DAILY_PRICES_3Y`를 결합하여 동적 계산하는 `populate_fundamentals_from_quarterly.py` 구현 및 실행.
+- **Rules Update**: `rules.md`에 "데이터 우선 원칙 (Internal Data First)" 추가. 외부 API 호출 전 내부 재무 데이터를 우선 활용하도록 명시.
 
 
 
