@@ -45,12 +45,7 @@ logger = logging.getLogger("BackfillScout")
 from unittest.mock import MagicMock
 import types
 
-# 1. Mock 'shared.gemini' (Missing module)
-# scout.py imports 'ensure_gemini_api_key' from 'shared.gemini'
-# avoiding ImportError by injecting a mock module into sys.modules
-mock_gemini = types.ModuleType("shared.gemini")
-mock_gemini.ensure_gemini_api_key = MagicMock(return_value="mock_api_key")
-sys.modules["shared.gemini"] = mock_gemini
+
 
 # 2. Mock 'shared.kis.auth_distributed' (If missing)
 mock_auth_dist = types.ModuleType("shared.kis.auth_distributed")
@@ -128,13 +123,27 @@ class MockKISClient:
                 # 2. 마스터 정보 조회 (이름, 상장주식수 등)
                 # 재무제표 테이블 조회 시도
                 # STOCK_FUNDAMENTALS (STOCK_CODE, TRADE_DATE, PER, PBR...)
+                # [Fix] 백필 초기 구간 데이터 부재 시, 가장 최신(미래) 데이터라도 가져오도록 Fallback
                 from sqlalchemy import text
-                fund_res = session.execute(text("""
+                fund_query = """
                     SELECT PER, PBR, MARKET_CAP, ROE 
                     FROM STOCK_FUNDAMENTALS
                     WHERE STOCK_CODE = :code AND TRADE_DATE <= :date
                     ORDER BY TRADE_DATE DESC LIMIT 1
-                """), {"code": code, "date": self.target_date}).fetchone()
+                """
+                fund_res = session.execute(text(fund_query), {"code": code, "date": self.target_date}).fetchone()
+                
+                # [Fallback] 데이터 없으면 미래 데이터라도 조회 (12/26 데이터 등)
+                if not fund_res:
+                    fund_fallback_query = """
+                        SELECT PER, PBR, MARKET_CAP, ROE 
+                        FROM STOCK_FUNDAMENTALS
+                        WHERE STOCK_CODE = :code
+                        ORDER BY TRADE_DATE DESC LIMIT 1
+                    """
+                    fund_res = session.execute(text(fund_fallback_query), {"code": code}).fetchone()
+                    if fund_res:
+                        logger.warning(f"   ⚠️ [Fallback] {code} {self.target_date} 재무 데이터 없음 -> 최신 데이터 사용")
                 
                 per = float(fund_res[0]) if fund_res and fund_res[0] else 0.0
                 pbr = float(fund_res[1]) if fund_res and fund_res[1] else 0.0
@@ -143,7 +152,40 @@ class MockKISClient:
                 if market_cap == 0 and price > 0:
                     # 시총 정보가 없으면 가격만이라도 반환 (크롤링 대체 시 필수)
                     market_cap = price * 1000000 # 임의값 (정렬용)
-                    
+
+                # [Fix] 외인순매수 (foreign_net_buy) 추가
+                foreign_net_buy = 0.0
+                try:
+                    inv_query = """
+                        SELECT FOREIGN_NET_BUY
+                        FROM STOCK_INVESTOR_TRADING
+                        WHERE STOCK_CODE = :code AND TRADE_DATE <= :date
+                        ORDER BY TRADE_DATE DESC LIMIT 1
+                    """
+                    inv_res = session.execute(text(inv_query), {"code": code, "date": self.target_date}).fetchone()
+                    if inv_res and inv_res[0]:
+                        net_buy_qty = float(inv_res[0])
+                        volume = float(row['VOLUME'])
+                        # 거래량 대비 외인순매수 비중 계산 (%)
+                        if volume > 0:
+                            foreign_net_buy = (net_buy_qty / volume) * 100
+                    else:
+                         # Fallback for Investor Trading if missing for target date
+                        inv_fallback_query = """
+                            SELECT FOREIGN_NET_BUY
+                            FROM STOCK_INVESTOR_TRADING
+                            WHERE STOCK_CODE = :code
+                            ORDER BY TRADE_DATE DESC LIMIT 1
+                        """
+                        inv_fb_res = session.execute(text(inv_fallback_query), {"code": code}).fetchone()
+                        if inv_fb_res and inv_fb_res[0]:
+                             net_buy_qty = float(inv_fb_res[0])
+                             volume = float(row['VOLUME'])
+                             if volume > 0:
+                                foreign_net_buy = (net_buy_qty / volume) * 100
+                except Exception as e:
+                    logger.warning(f"   ⚠️ [Mock] {code} 외인수급 조회 실패: {e}")
+
                 return {
                     "price": price,
                     "diff": 0.0, # 전일비 계산 생략
@@ -156,7 +198,7 @@ class MockKISClient:
                     "sales_growth": 0.0, # 데이터 없음
                     "eps_growth": 0.0, # 데이터 없음
                     "operating_margin": 0.0, # 데이터 없음
-                    "foreign_net_buy": 0 # 수급 데이터 별도 조회
+                    "foreign_net_buy": foreign_net_buy, # 추가된 필드
                 }
         except Exception as e:
             logger.error(f"[DEBUG-KIS] Start Snapshot Failed for {code}: {e}", exc_info=True)
@@ -168,32 +210,41 @@ class MockKISClient:
     def get_investor_trend(self, code, start_date=None, end_date=None):
         """DB에서 투자자 동향 조회"""
         try:
-            from shared.database.market import get_investor_trading
-            # 세션 생성
+            # [Fix] STOCK_INVESTOR_TRADING 테이블 직접 조회
+            # shared.database.market.get_investor_trading을 쓰지 않고 직접 쿼리 (테이블명 명시)
+            from sqlalchemy import text
+            trends = []
+            
             with session_scope() as session:
-                # get_investor_trading은 end_date 파라미터가 없으므로 limit으로 가져와서 메모리 필터링
-                df = get_investor_trading(session, code, limit=30)
-                if df.empty:
+                query = text("""
+                    SELECT TRADE_DATE, CLOSE_PRICE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY, INDIVIDUAL_NET_BUY
+                    FROM STOCK_INVESTOR_TRADING
+                    WHERE STOCK_CODE = :code AND TRADE_DATE <= :date
+                    ORDER BY TRADE_DATE DESC
+                    LIMIT 30
+                """)
+                rows = session.execute(query, {"code": code, "date": self.target_date}).fetchall()
+                
+                if not rows:
                     return []
                 
-                # target_date 이하만 필터링
-                target_ts = pd.Timestamp(self.target_date)
-                df = df[df['TRADE_DATE'] <= target_ts]
-                
-                trends = []
-                for _, row in df.iterrows():
-                    trends.append({
-                        'date': row['TRADE_DATE'].strftime('%Y%m%d'),
-                        'start_price': 0, # DB에 시가 없으면 0
-                        'close_price': row['CLOSE_PRICE'],
-                        'foreigner_net_buy': row['FOREIGN_NET_BUY'],
-                        'institution_net_buy': row['INSTITUTION_NET_BUY'],
-                        'individual_net_buy': row['INDIVIDUAL_NET_BUY'],
+                # 날짜 오름차순 정렬을 위해 리스트업
+                temp_list = []
+                for row in rows:
+                    temp_list.append({
+                        'date': row[0].strftime('%Y%m%d'),
+                        'start_price': 0,
+                        'close_price': row[1],
+                        'foreigner_net_buy': int(row[2]),
+                        'institution_net_buy': int(row[3]),
+                        'individual_net_buy': int(row[4]),
                     })
-                # 날짜 오름차순
-                trends.sort(key=lambda x: x['date'])
+                
+                # 역순(최신순)으로 가져왔으므로 다시 오름차순 정렬
+                trends = sorted(temp_list, key=lambda x: x['date'])
                 return trends
-        except Exception:
+        except Exception as e:
+            logger.error(f"[Mock] get_investor_trend failed: {e}")
             return []
 
 # ============================================================================
@@ -217,17 +268,36 @@ def mock_get_dynamic_blue_chips(limit=200, target_date=None, session=None):
             JOIN STOCK_MASTER M ON F.STOCK_CODE = M.STOCK_CODE COLLATE utf8mb4_general_ci
             WHERE F.TRADE_DATE = (
                 SELECT MAX(TRADE_DATE) 
-                FROM STOCK_FUNDAMENTALS 
-                WHERE TRADE_DATE <= :date
+                FROM STOCK_FUNDAMENTALS sub
+                WHERE sub.STOCK_CODE = F.STOCK_CODE AND sub.TRADE_DATE <= :date
             )
             ORDER BY F.MARKET_CAP DESC
             LIMIT :limit
         """
+        # [Fix] 위 쿼리에서 결과가 없으면(초기 데이터 부재), 미래 데이터(전체 Max)라도 써서 유니버스 구성
+        # 이를 위해 Python 레벨에서 로직 분기
         rows = session.execute(text(universe_query), {"date": target_date, "limit": limit}).fetchall()
         
-        # 2. Fallback to Price * Shares if no fundamentals
-        if not rows:
-            logger.info(f"   (Mock) Fundamentals empty for {target_date}, trying fallback (Price * Shares)...")
+        # [Fix 2] 데이터가 아예 없거나, 너무 적으면(50% 미만) Fallback 트리거
+        if not rows or len(rows) < limit * 0.5:
+            logger.info(f"   ⚠️ {target_date} 유니버스 데이터 부족({len(rows)}개) -> 최신(미래) 펀더멘털로 Fallback")
+            fallback_univ_query = """
+                SELECT F.STOCK_CODE, M.STOCK_NAME, F.MARKET_CAP
+                FROM STOCK_FUNDAMENTALS F
+                JOIN STOCK_MASTER M ON F.STOCK_CODE = M.STOCK_CODE COLLATE utf8mb4_general_ci
+                WHERE F.TRADE_DATE = (
+                    SELECT MAX(TRADE_DATE) 
+                    FROM STOCK_FUNDAMENTALS sub 
+                    WHERE sub.STOCK_CODE = F.STOCK_CODE
+                )
+                ORDER BY F.MARKET_CAP DESC
+                LIMIT :limit
+            """
+            rows = session.execute(text(fallback_univ_query), {"limit": limit}).fetchall()
+        
+        # 2. Fallback to Price * Shares if no fundamentals OR still insufficient
+        if not rows or len(rows) < limit * 0.5:
+            logger.info(f"   (Mock) Fundamentals insufficient ({len(rows) if rows else 0}개) for {target_date}, trying fallback (Price * Shares)...")
             # 3. Prices Range
             min_p = session.execute(text("SELECT MIN(PRICE_DATE) FROM STOCK_DAILY_PRICES_3Y")).scalar()
             max_p = session.execute(text("SELECT MAX(PRICE_DATE) FROM STOCK_DAILY_PRICES_3Y")).scalar()

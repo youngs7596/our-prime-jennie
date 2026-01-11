@@ -1040,7 +1040,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    profiles: [ "gpu" ] # GPU가 있는 환경에서만 실행 (infra와 분리)
+    profiles: [ "gpu", "infra" ] # GPU 환경 및 인프라 프로파일 추가
     deploy:
       resources:
         reservations:

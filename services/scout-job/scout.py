@@ -52,7 +52,7 @@ from shared.kis import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.llm import JennieBrain
 from shared.financial_data_collector import batch_update_watchlist_financial_data
-from shared.gemini import ensure_gemini_api_key
+
 from shared.archivist import Archivist
 
 import chromadb
@@ -438,7 +438,9 @@ def main():
                     else:
                         # Cloud Embedding (Gemini)
                         logger.info("   ... ChromaDB 클라이언트 연결 시도 (Gemini Embeddings) ...")
-                        api_key = ensure_gemini_api_key()
+                        api_key = auth.get_secret("gemini-api-key")
+                        if not api_key:
+                             raise ValueError("Gemini API Key not found")
                         embeddings = GoogleGenerativeAIEmbeddings(
                             model="models/gemini-embedding-001", 
                             google_api_key=api_key

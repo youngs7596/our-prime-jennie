@@ -84,6 +84,8 @@
 - **Frontend Build Fix**: `LogicVisualization.tsx`의 TypeScript 오류(`findDay` unused) 수정 및 컴파일 정상화.
 - **Architecture Diagram**: Dashboard 내 `PrimeJennieArchitecture` 컴포넌트 및 페이지(`/architecture`) 추가, 사이드바 연동 완료 (v2 Architecture 시각화).
 - **Frontend Build Fix (TS6133)**: `PrimeJennieArchitecture.tsx`의 미사용 `React` import 제거로 빌드 오류 해결.
+- **2026-01-11**: Fixed `scout-job` import error and resolved backfill data integrity issues (low universe count, zero foreign net buy) to enable reliable historical backfilling.
+- **2026-01-10**: Integrated LLM decisions into Backtest Engine (Hunter/Judge/Debate). Verified divergence between Simulator and Real Market (KOSPI) during bull runs.
 - **Menu Fix**: 사이드바 내 중복된 `Visual Logic` 메뉴 항목 제거.
 - **Super Prime Strategy Verified**: `scanner.py`의 Super Prime 로직(RSI <= 30 & Volume) Unit Test(`test_super_prime.py`) 작성 및 검증 완료. `pandas` import 누락 수정.
 - **Feature (Super Prime)**: `SuperPrime.tsx` 신규 페이지 추가 및 `/super-prime` 라우팅, 사이드바 메뉴('🏆') 추가 (Samsung Pharm Legendary Pattern 시각화).
