@@ -7,7 +7,10 @@
   - `services/kis-gateway/main.py`: WebSocket Approval Key 발급 API 추가
   - `shared/kis/auth.py`: Gateway 우선 호출 및 Fallback 로직 구현
   - `docker-compose.yml`: `KIS_WS_APPROVAL_KEY_PROVIDER_URL` 환경변수 추가
-- **Bug Fix**: 백필 스크립트(`backfill_scout_real.py`)에서 외인순매수 이중 `* 100` 버그 수정. `QuantScorer`가 이미 퍼센트 변환을 수행하므로 순매수량(주 단위)을 그대로 전달하도록 수정하여 "외인순매수: +2052%"와 같은 비정상적 수치 해결.
+- **Bug Fix (외인순매수 계산)**: 백필 스크립트(`backfill_scout_real.py`)에서 `FOREIGN_NET_BUY`(금액)를 주가로 나눠 주 수량으로 변환하는 로직 추가. 이전에는 금액을 거래량으로 나눠서 +460,823% 같은 비정상 수치가 발생함.
+- **Cloud LLM 비용 절감**: `scout_pipeline.py`에서 `fact_checker`(Gemini Flash 호출) import 및 AI Auditor 블록 완전 제거, `shared/fact_checker.py` 삭제.
+- **오염 데이터 정리**: `WATCHLIST_HISTORY` 테이블에서 2025-07 ~ 2026-01 기간의 오염된 백필 데이터 521건 삭제.
+
 
 
 ## 2026-01-10

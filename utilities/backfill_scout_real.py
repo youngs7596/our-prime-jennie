@@ -164,11 +164,13 @@ class MockKISClient:
                     """
                     inv_res = session.execute(text(inv_query), {"code": code, "date": self.target_date}).fetchone()
                     if inv_res and inv_res[0]:
-                        net_buy_qty = float(inv_res[0])
-                        volume = float(row['VOLUME'])
-                        # 거래량 대비 외인순매수 비중 계산 (주 단위 그대로 전달, QuantScorer가 % 변환)
-                        if volume > 0:
-                            foreign_net_buy = net_buy_qty  # QuantScorer가 avg_volume으로 나눠서 비율 계산
+                        # [Fix] FOREIGN_NET_BUY는 금액(원)이므로, 주 수량으로 변환 (금액 / 주가)
+                        # QuantScorer는 주 수량을 기대하고 avg_volume(주)으로 나눠서 비율 계산함
+                        net_buy_amount = float(inv_res[0])  # 금액(원)
+                        if price > 0:
+                            foreign_net_buy = int(net_buy_amount / price)  # 주 수량으로 변환
+                        else:
+                            foreign_net_buy = 0
                     else:
                          # Fallback for Investor Trading if missing for target date
                         inv_fallback_query = """
@@ -179,10 +181,11 @@ class MockKISClient:
                         """
                         inv_fb_res = session.execute(text(inv_fallback_query), {"code": code}).fetchone()
                         if inv_fb_res and inv_fb_res[0]:
-                             net_buy_qty = float(inv_fb_res[0])
-                             volume = float(row['VOLUME'])
-                             if volume > 0:
-                                foreign_net_buy = net_buy_qty  # QuantScorer가 avg_volume으로 나눠서 비율 계산
+                             net_buy_amount = float(inv_fb_res[0])  # 금액(원)
+                             if price > 0:
+                                 foreign_net_buy = int(net_buy_amount / price)  # 주 수량으로 변환
+                             else:
+                                 foreign_net_buy = 0
                 except Exception as e:
                     logger.warning(f"   ⚠️ [Mock] {code} 외인수급 조회 실패: {e}")
 
