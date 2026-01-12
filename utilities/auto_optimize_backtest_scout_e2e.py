@@ -43,27 +43,26 @@ logger = logging.getLogger("scout_e2e_optimizer")
 # ---------------------------------------------------------------------------
 
 PARAMETER_GRID = {
-    # === Scout 설정 ===
-    "scout_min_score": [60, 65, 70, 75],        # Scout 통과 최소 점수
-    "scout_top_n": [20, 30, 40],                # Hot Watchlist 크기
+    # === 고정 (점수 기준) ===
+    "scout_min_score": [70],                      # 점수 유지
     
-    # === Buy Executor 설정 ===
-    "daily_buy_limit": [2, 3, 4],               # 일일 매수 한도
-    "max_portfolio_size": [8, 10, 12],          # 최대 포트폴리오 크기
-    "max_stock_pct": [0.12, 0.15, 0.18],        # 종목당 최대 비중
+    # === 테스트: 거래 제한 ===
+    "daily_buy_limit": [3, 5, 8, 99],             # 99 = 무제한
+    "max_portfolio_size": [10, 15, 20, 30],       # 포트폴리오 크기
     
-    # === Sell Executor 설정 ===
-    "target_profit_pct": [0.10, 0.15, 0.20],    # 목표 수익률
-    "stop_loss_pct": [0.05, 0.07, 0.10],        # 손절 비율
-    
-    # === 매수 신호 임계값 ===
-    "buy_signal_threshold": [65, 70, 75],       # 매수 신호 트리거 점수 (기본 70)
+    # === 나머지 고정 ===
+    "scout_top_n": [20],
+    "max_stock_pct": [0.12],
+    "target_profit_pct": [0.10],
+    "stop_loss_pct": [0.07],
+    "buy_signal_threshold": [70],
 }
 
 # 파라미터별 설명 (로그용)
 PARAM_DESCRIPTIONS = {
     "scout_min_score": "Scout 통과 최소 점수",
     "scout_top_n": "Hot Watchlist 크기",
+    "min_llm_score": "Buy Executor 최소 LLM 점수",
     "daily_buy_limit": "일일 매수 한도",
     "max_portfolio_size": "최대 포트폴리오 크기",
     "max_stock_pct": "종목당 최대 비중",

@@ -962,14 +962,34 @@ class QuantScorer:
                 factors['news_stat_score'] = round(news_stat_score, 2)
                 factors['confidence_weight'] = confidence_weight
             else:
-                # 통계 없으면 중립 (3.5점) - 기존 5점에서 축소
-                total_score += 3.5
-                factors['news_stat_score'] = 3.5
-                factors['news_stat_note'] = '통계 데이터 없음'
+                # [Optimization] 데이터 없음 (New Item or Data Gap)
+                # 사용자 요청: "뉴스가 없다면 80% 정도 점수를 줘라" (15점 만점 중 12점 목표)
+                # - 통계 점수 (7점 만점): 5.6점 (80%)
+                # - 감성 점수 (8점 만점): 6.4점 (80%)
+                stat_score = 5.6
+                factors['news_stat_note'] = '데이터 부족 (기본 80% 적용)'
             
-            # 2. 현재 감성 점수 보정 (3점) - 기존 5점에서 축소
-            # 0~100을 0~3점으로 변환
-            sentiment_score = current_sentiment_score / 100 * 3
+            total_score += stat_score
+            
+            factors['news_win_rate'] = None
+            factors['news_sample_count'] = 0
+            factors['news_confidence'] = 'LOW'
+            factors['news_stat_score'] = round(stat_score, 2)
+            factors['confidence_weight'] = 0.0
+
+            # 2. 현재 감성 점수 보정 (8점) - 기존 3점에서 확대
+            # 0~100을 0~8점으로 변환
+            if current_sentiment_score > 0:
+                # 50점(중립) -> 6.4점 (80%) 로직 적용
+                if current_sentiment_score == 50:
+                    sentiment_score = 6.4
+                else:
+                    sentiment_score = current_sentiment_score / 100 * 8.0
+            else:
+                 # 감성 점수 없음 (0) -> 기본 6.4점 (80%)
+                sentiment_score = 6.4
+                factors['news_sentiment_note'] = '감성분석 없음 (기본 80% 적용)'
+
             
             # 역신호 카테고리 패널티 (분석 결과 기각으로 로직 제거)
             # if is_reverse_signal and current_sentiment_score >= 70:

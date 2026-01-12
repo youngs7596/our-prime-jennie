@@ -1,5 +1,9 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-12
+- **Backfill Data & Scoring Fix**: 백필 데이터 누락 문제(뉴스 쿼리 대소문자) 해결 및 뉴스 데이터 부족 시 점수 보정(80%) 로직 적용으로 `WATCHLIST_HISTORY` 데이터 정합성 확보.
+- **Sage Recommendations Verified**: `MIN_LLM_SCORE` 60점 하향 및 Tier 2 포지션 가중치(0.5) 적용 검증 완료.
+
 ## 2026-01-11
 - **Scout Job/Backfill 안정화**: `scout-job` import 오류 수정 및 백필 데이터 정합성(유니버스 부족, 외인 순매수 0%) 문제 해결.
 - CHANGELOG 날짜 정렬 및 항목 들여쓰기 정리

@@ -353,40 +353,58 @@ def mock_fetch_stock_news(vectorstore, stock_code, stock_name, k=3, target_date=
     DB (NEWS_SENTIMENT)에서 해당 날짜 이전의 최신 뉴스를 조회
     """
     if not session or not target_date:
-        return "뉴스 데이터 없음"
+        return "뉴스 데이터 없음 (Session/Date None)"
         
     from sqlalchemy import text
     try:
-        # 해당 종목의 target_date 및 그 전 3일치 뉴스 조회
-        start_date = (datetime.strptime(target_date, "%Y-%m-%d") - timedelta(days=3)).strftime("%Y-%m-%d")
+        # 해당 종목의 target_date 포함 최근 3일치 뉴스 조회
+        end_dt = target_date + " 23:59:59"
+        start_dt = (datetime.strptime(target_date, "%Y-%m-%d") - timedelta(days=3)).strftime("%Y-%m-%d")
         
+        # 일부 DB 설정(lower_case_table_names)에 따라 대소문자 민감할 수 있음 -> 대문자로 통일
         query = text("""
             SELECT NEWS_TITLE, PUBLISHED_AT
             FROM NEWS_SENTIMENT
             WHERE STOCK_CODE = :code 
-              AND PUBLISHED_AT BETWEEN :start_date AND :end_date
+              AND PUBLISHED_AT >= :start_date 
+              AND PUBLISHED_AT <= :end_date
             ORDER BY PUBLISHED_AT DESC
             LIMIT :k
         """)
-        rows = session.execute(query, {
+        
+        result = session.execute(query, {
             "code": stock_code, 
-            "start_date": start_date, 
-            "end_date": target_date + " 23:59:59",
+            "start_date": start_dt, 
+            "end_date": end_dt,
             "k": k
-        }).fetchall()
+        })
+        
+        rows = result.fetchall()
         
         if not rows:
-            return "최근 관련 뉴스 없음"
+            # [Backfill Strategy] 뉴스가 정말로 없는 경우 (Data Gap)
+            # 사용자의 요청: "뉴스가 있는 종목의 80% 정도 점수를 줘라"
+            # -> LLM에게 "데이터 누락이므로 '보통(Neutral)' 이상의 점수를 부여하라"고 지시
+            fallback_msg = (
+                "※ [SYSTEM NOTICE for Backfill]\n"
+                "Historical news data is missing for this period (Data Gap).\n"
+                "Assume the news sentiment is 'Neutral to Slightly Positive' (matching Market Regime).\n"
+                "Do NOT penalize the score for missing news.\n"
+                "Assign a news score equivalent to ~80% of an average active stock."
+            )
+            return fallback_msg
             
         news_items = []
         for i, row in enumerate(rows, 1):
-            title = row[0]
-            # date_str = row[1].strftime("%Y-%m-%d")
+            # SQLAlchemy Row 접근 (인덱스 0: TITLE, 1: DATE)
+            title = row[0] 
+            # date_val = row[1]
             news_items.append(f"[뉴스{i}] {title}")
             
         return " | ".join(news_items)
         
     except Exception as e:
+        logger.error(f"뉴스 조회 오류 ({stock_code}): {e}")
         return f"뉴스 조회 오류: {str(e)}"
 
 # ============================================================================
@@ -490,7 +508,8 @@ def run_backfill(
 
             # 1. Strategy Gate Check
             hunter_score = stock_info.get('hunter_score', 0)
-            JUDGE_THRESHOLD = 70
+            # [Backfill Mode] 모든 데이터 수집을 위해 기준 대폭 완화
+            JUDGE_THRESHOLD = 0  # 40 -> 0 (Fail도 기록하기 위함)
             if hunter_score < JUDGE_THRESHOLD:
                 # logger.info(f"🚫 [Gatekeeper] Judge Skipped. Hunter Score {hunter_score} < {JUDGE_THRESHOLD}")
                 return {
@@ -531,6 +550,7 @@ def run_backfill(
                 prompt = build_hunter_prompt_v5(stock_info, quant_context, feedback_context)
                 logger.info(f"[DEBUG] Generating JSON with provider: {provider}")
                 result = provider.generate_json(prompt, ANALYSIS_RESPONSE_SCHEMA, temperature=0.2)
+                logger.info(f"[DEBUG] Hunter Raw Result: {result}")
                 return result
             except Exception as e:
                 logger.error(f"❌ [Hunter] Local LLM Failed (Fallback Blocked): {e}")
@@ -647,7 +667,10 @@ def run_backfill(
                         p1_res = scout_pipeline.process_phase1_hunter_v5_task(
                             {'code': code, 'info': info}, brain, quant_result, snapshot_cache, news_cache, archivist=None
                         )
-                        logger.info(f"[DEBUG] {code} Phase 1 Result: {p1_res.get('passed')}")
+                        
+                        # [Backfill Fix] Hunter 점수가 낮아도 무조건 통과시켜 데이터 저장 (강제 True)
+                        p1_res['passed'] = True
+                        logger.info(f"[DEBUG] {code} Phase 1 Result: {p1_res.get('passed')} (Forced True for Backfill)")
 
                         if p1_res['passed']:
                             # Phase 2 Debate/Judge

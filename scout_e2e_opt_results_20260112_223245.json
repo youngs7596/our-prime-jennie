@@ -1,0 +1,299 @@
+{
+  "timestamp": "2026-01-12T22:36:44.722374",
+  "args": {
+    "start_date": "2025-07-01",
+    "end_date": "2026-01-09",
+    "capital": 500000000.0
+  },
+  "results": [
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 8,
+        "max_portfolio_size": 10,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 235.06047677993774
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 99,
+        "max_portfolio_size": 30,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 235.16096329689026
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 5,
+        "max_portfolio_size": 10,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.1771857738495
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 5,
+        "max_portfolio_size": 30,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 235.1975452899933
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 5,
+        "max_portfolio_size": 20,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.2078516483307
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 99,
+        "max_portfolio_size": 20,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 5.97,
+      "mdd_pct": 2.5,
+      "total_trades": 62,
+      "score": 19.849999999999998,
+      "elapsed": 235.21163702011108
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 8,
+        "max_portfolio_size": 30,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.2154746055603
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 5,
+        "max_portfolio_size": 15,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.2264335155487
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 8,
+        "max_portfolio_size": 15,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 235.2456557750702
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 99,
+        "max_portfolio_size": 15,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.25098299980164
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 8,
+        "max_portfolio_size": 20,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.26783537864685
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 3,
+        "max_portfolio_size": 10,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 235.7636251449585
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 99,
+        "max_portfolio_size": 10,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 238.25968146324158
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 3,
+        "max_portfolio_size": 15,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 238.8716812133789
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 3,
+        "max_portfolio_size": 20,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.05,
+      "mdd_pct": 2.57,
+      "total_trades": 66,
+      "score": 24.97,
+      "elapsed": 238.876855134964
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "daily_buy_limit": 3,
+        "max_portfolio_size": 30,
+        "scout_top_n": 20,
+        "max_stock_pct": 0.12,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07,
+        "buy_signal_threshold": 70
+      },
+      "total_return_pct": 7.42,
+      "mdd_pct": 2.15,
+      "total_trades": 66,
+      "score": 28.5,
+      "elapsed": 238.89322471618652
+    }
+  ],
+  "best": {
+    "params": {
+      "scout_min_score": 70,
+      "daily_buy_limit": 5,
+      "max_portfolio_size": 10,
+      "scout_top_n": 20,
+      "max_stock_pct": 0.12,
+      "target_profit_pct": 0.1,
+      "stop_loss_pct": 0.07,
+      "buy_signal_threshold": 70
+    },
+    "total_return_pct": 7.42,
+    "mdd_pct": 2.15,
+    "total_trades": 66,
+    "score": 28.5,
+    "elapsed": 235.1771857738495
+  }
+}

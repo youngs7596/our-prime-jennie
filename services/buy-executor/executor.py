@@ -3,11 +3,10 @@
 # Buy Executor - 매수 결재 및 주문 실행 로직
 
 import logging
-import sys
-import os
+import json
+import traceback
 from datetime import datetime, timezone, timedelta
 
-# shared 패키지 임포트
 # shared 패키지 임포트
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -154,14 +153,23 @@ class BuyExecutor:
             llm_scored_at = stock_info_data.get('llm_scored_at') or selected_candidate.get('llm_scored_at')
             if llm_scored_at:
                 try:
-
                     scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
-                    age_hours = (datetime.now(timezone.utc) - scored_dt).total_seconds() / 3600
-                    if age_hours > 24:
-                        # 24시간 이상 된 점수 → 보수적 처리 (10점 감점)
-                        penalty = 10
+                    now_utc = datetime.now(timezone.utc)
+                    age_hours = (now_utc - scored_dt).total_seconds() / 3600
+                    
+                    # [개선] 영업일 기준 계산 (주말 제외)
+                    business_days = 0
+                    current_date = scored_dt.date()
+                    while current_date < now_utc.date():
+                        if current_date.weekday() < 5:  # 월(0)~금(4)
+                            business_days += 1
+                        current_date += timedelta(days=1)
+                    
+                    if business_days >= 1:
+                        # 영업일 기준: 1일 경과 시 -5점, 2일 이상 시 -10점
+                        penalty = 5 if business_days == 1 else 10
                         current_score = max(0, current_score - penalty)
-                        logger.warning(f"⚠️ [Stale Score] {age_hours:.1f}시간 경과 → {penalty}점 감점 (현재: {current_score}점)")
+                        logger.warning(f"⚠️ [Stale Score] {business_days}영업일 경과 ({age_hours:.1f}시간) → {penalty}점 감점 (현재: {current_score}점)")
                 except Exception as e:
                     logger.debug(f"llm_scored_at 파싱 실패: {e}")
             
@@ -369,6 +377,12 @@ class BuyExecutor:
                 # 동적 리스크 설정 적용 (비중 조절)
                 position_size_ratio = risk_setting.get('position_size_ratio', 1.0)
 
+                # [TIER 비중 차등화] TIER1(1.0) > TIER2(0.5) > RECON(0.3)
+                if trade_tier == "TIER2":
+                    tier2_mult = self.config.get_float("TIER2_POSITION_MULT", default=0.5)
+                    position_size_ratio *= tier2_mult
+                    logger.info(f"📏 TIER2 비율 적용: {tier2_mult}")
+                
                 # [Project Recon] 정찰병(소액) 비중 적용 + 타이트 손절 설정(메타 기록용)
                 if trade_tier == "RECON":
                     recon_mult = self.config.get_float("RECON_POSITION_MULT", default=0.3)

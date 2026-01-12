@@ -1,0 +1,238 @@
+{
+  "timestamp": "2026-01-12T21:18:05.989142",
+  "args": {
+    "start_date": "2025-07-01",
+    "end_date": "2026-01-09",
+    "capital": 10000000
+  },
+  "results": [
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 228.75298595428467
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.49,
+      "mdd_pct": 2.24,
+      "total_trades": 57,
+      "score": 13.490000000000002,
+      "elapsed": 229.37120151519775
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.77,
+      "mdd_pct": 3.03,
+      "total_trades": 195,
+      "score": 11.729999999999999,
+      "elapsed": 230.59184741973877
+    },
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 231.13026523590088
+    },
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 231.16965651512146
+    },
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 231.965190410614
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.78,
+      "mdd_pct": 3.03,
+      "total_trades": 195,
+      "score": 11.780000000000003,
+      "elapsed": 232.78331065177917
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.49,
+      "mdd_pct": 2.24,
+      "total_trades": 57,
+      "score": 13.490000000000002,
+      "elapsed": 232.7832772731781
+    },
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 232.78470158576965
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.78,
+      "mdd_pct": 1.71,
+      "total_trades": 57,
+      "score": 17.060000000000002,
+      "elapsed": 232.86783623695374
+    },
+    {
+      "params": {
+        "scout_min_score": 80,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": -0.77,
+      "mdd_pct": 0.89,
+      "total_trades": 2,
+      "score": -59.72,
+      "elapsed": 232.93315362930298
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.23,
+      "mdd_pct": 3.03,
+      "total_trades": 196,
+      "score": 9.030000000000003,
+      "elapsed": 233.02466106414795
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.78,
+      "mdd_pct": 1.71,
+      "total_trades": 57,
+      "score": 17.060000000000002,
+      "elapsed": 233.37940001487732
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.23,
+      "mdd_pct": 3.03,
+      "total_trades": 196,
+      "score": 9.030000000000003,
+      "elapsed": 233.62047958374023
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.1,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.78,
+      "mdd_pct": 1.71,
+      "total_trades": 57,
+      "score": 17.060000000000002,
+      "elapsed": 234.091078042984
+    },
+    {
+      "params": {
+        "scout_min_score": 70,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.07
+      },
+      "total_return_pct": 4.5,
+      "mdd_pct": 2.24,
+      "total_trades": 57,
+      "score": 13.54,
+      "elapsed": 234.28984785079956
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.2,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.18,
+      "mdd_pct": 3.03,
+      "total_trades": 196,
+      "score": 8.78,
+      "elapsed": 175.47527813911438
+    },
+    {
+      "params": {
+        "scout_min_score": 60,
+        "target_profit_pct": 0.15,
+        "stop_loss_pct": 0.05
+      },
+      "total_return_pct": 4.79,
+      "mdd_pct": 3.03,
+      "total_trades": 195,
+      "score": 11.83,
+      "elapsed": 174.89498162269592
+    }
+  ],
+  "best": {
+    "params": {
+      "scout_min_score": 70,
+      "target_profit_pct": 0.2,
+      "stop_loss_pct": 0.05
+    },
+    "total_return_pct": 4.78,
+    "mdd_pct": 1.71,
+    "total_trades": 57,
+    "score": 17.060000000000002,
+    "elapsed": 232.86783623695374
+  }
+}

@@ -17,6 +17,7 @@ REGISTRY = {
 
     # ===== Recon / Trend (운영 튜닝) =====
     "RECON_POSITION_MULT": {"value": 0.3, "type": "float", "desc": "정찰병 포지션 비중 배수", "category": "Recon", "db_priority": True},
+    "TIER2_POSITION_MULT": {"value": 0.5, "type": "float", "desc": "TIER2 포지션 비중 배수", "category": "Recon", "db_priority": True},
     "RECON_STOP_LOSS_PCT": {"value": -0.025, "type": "float", "desc": "정찰병 손절 기준 (%)", "category": "Recon", "db_priority": True},
     "RECON_MOMENTUM_MIN": {"value": 20.0, "type": "float", "desc": "정찰 모멘텀 최소 점수(25점 만점 환산)", "category": "Recon", "db_priority": True},
     "RECON_VOLUME_RATIO_MIN": {"value": 1.5, "type": "float", "desc": "정찰 거래량 추세 최소 배수", "category": "Recon", "db_priority": True},
