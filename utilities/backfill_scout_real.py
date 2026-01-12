@@ -466,11 +466,10 @@ def run_backfill(
     max_workers=1,
     sleep_seconds=1.0,
     skip_existing=False,
+    skip_phase2=False, # New Argument
 ):
     """백필 메인 루프"""
     ensure_engine_initialized()
-    
-    # Remove Debug Block
     
     # 로컬 LLM 강제 설정
     if use_local_llm:
@@ -511,7 +510,6 @@ def run_backfill(
             # [Backfill Mode] 모든 데이터 수집을 위해 기준 대폭 완화
             JUDGE_THRESHOLD = 0  # 40 -> 0 (Fail도 기록하기 위함)
             if hunter_score < JUDGE_THRESHOLD:
-                # logger.info(f"🚫 [Gatekeeper] Judge Skipped. Hunter Score {hunter_score} < {JUDGE_THRESHOLD}")
                 return {
                     'score': hunter_score, 
                     'grade': self._calculate_grade(hunter_score), 
@@ -538,19 +536,20 @@ def run_backfill(
         def safe_get_jennies_analysis_score_v5(self, stock_info, quant_context=None, feedback_context=None):
             # Fallback 없는 버전
             from shared.llm import LLMTier # ensure import
-            provider = self._get_provider(LLMTier.REASONING)
+            provider = self._get_provider(LLMTier.REASONING) # Using REASONING (FAST is for news logic mostly)
+            # Note: TIER_REASONING usually points to 'fast' if defined, or we can use TIER_FAST_PROVIDER
+            # In _force_local_llm_gateway, we mapped all to 'ollama' + specific model env vars
             if provider is None: 
                 logger.error(f"❌ [Hunter] Provider is None for TIER {LLMTier.REASONING}")
                 return {'score': 0, 'grade': 'D', 'reason': 'Provider Error'}
             try:
-                # prompt = scout_main.build_hunter_prompt_v5(stock_info, quant_context, feedback_context)
                 from shared.llm_prompts import build_hunter_prompt_v5
                 from shared.llm_constants import ANALYSIS_RESPONSE_SCHEMA
                 
                 prompt = build_hunter_prompt_v5(stock_info, quant_context, feedback_context)
                 logger.info(f"[DEBUG] Generating JSON with provider: {provider}")
                 result = provider.generate_json(prompt, ANALYSIS_RESPONSE_SCHEMA, temperature=0.2)
-                logger.info(f"[DEBUG] Hunter Raw Result: {result}")
+                # logger.info(f"[DEBUG] Hunter Raw Result: {result}")
                 return result
             except Exception as e:
                 logger.error(f"❌ [Hunter] Local LLM Failed (Fallback Blocked): {e}")
@@ -601,9 +600,9 @@ def run_backfill(
                 # Force Skip Disabled
                 scout_pipeline.should_skip_hunter = MagicMock(return_value=False)
 
-                # --- Scout Main Logic Simulation (Simplified) ---
+                # --- Scout Main Logic Simulation ---
                 
-                # 1. Candidate Selection using Mocked Universe
+                # 1. Candidate Selection
                 candidate_stocks = {}
                 for stock in scout_universe.get_dynamic_blue_chips(limit=universe_size):
                     candidate_stocks[stock['code']] = {
@@ -613,14 +612,10 @@ def run_backfill(
                     }
                     
                 # 2. Enrich & Prefetch
-                # Mock snapshot logic needs to be manually injected here because scout.py uses kis_api directly
-                # scout.py's prefetch_all_data uses the kis_api defined in main() so we pass our mock
                 snapshot_cache, news_cache = scout_main.prefetch_all_data(candidate_stocks, kis_api, vectorstore=None)
 
-                # 3. Pipeline Execution (Phase 1 -> Phase 2)
-                # Quant Scoring
+                # 3. Quant Scoring
                 from shared.hybrid_scoring import QuantScorer
-                # 시장 레짐 계산 (KOSPI 기준)
                 from shared.market_regime import MarketRegimeDetector
                 regime_detector = MarketRegimeDetector()
                 kospi_prices = database.get_daily_prices(session, "0001", limit=60)
@@ -633,7 +628,7 @@ def run_backfill(
                 quant_scorer = QuantScorer(session, market_regime=market_regime)
                 
                 quant_results = {}
-                kospi_prices = database.get_daily_prices(session, "0001", limit=60)
+                # kospi_prices re-fetch not needed
                 
                 for code, info in candidate_stocks.items():
                     stock_info = {'code': code, 'info': info, 'snapshot': snapshot_cache.get(code)}
@@ -641,7 +636,7 @@ def run_backfill(
                         stock_info, quant_scorer, session, kospi_prices
                     )
                     
-                # Filter (Top 40%)
+                # Filter (Top 40% usually, but for backfill maybe top N)
                 filtered_results = quant_scorer.filter_candidates(
                     list(quant_results.values()),
                     cutoff_ratio=quant_cutoff_ratio,
@@ -651,58 +646,102 @@ def run_backfill(
                     filtered_results = filtered_results[:max_llm_candidates]
                 filtered_codes = [r.stock_code for r in filtered_results]
 
-                # LLM Analysis
-                final_candidates = []
-                logger.info(f"[DEBUG] Starting LLM Phase for {len(filtered_codes)} candidates")
+                logger.info(f"[DEBUG] Starting LLM Phase for {len(filtered_codes)} candidates (Batch Mode)")
 
-                # Batch processing to prevent OOM
-                # Use ThreadPool with Mock objects
-                def process_llm(code):
+                # =========================================================
+                # BATCH PROCESSING LOGIC
+                # =========================================================
+                
+                phase1_results = []
+                
+                # --- Batch 1: Hunter (All Stocks) ---
+                logger.info(f"--- [Batch 1] Running Hunter for {len(filtered_codes)} stocks ---")
+                
+                def run_hunter_task(code):
                     try:
-                        logger.info(f"[DEBUG] Processing {code}...")
                         info = candidate_stocks[code]
                         quant_result = quant_results[code]
-
-                        # Phase 1 Hunter
+                        
                         p1_res = scout_pipeline.process_phase1_hunter_v5_task(
                             {'code': code, 'info': info}, brain, quant_result, snapshot_cache, news_cache, archivist=None
                         )
-                        
-                        # [Backfill Fix] Hunter 점수가 낮아도 무조건 통과시켜 데이터 저장 (강제 True)
+                        # Force Pass
                         p1_res['passed'] = True
-                        logger.info(f"[DEBUG] {code} Phase 1 Result: {p1_res.get('passed')} (Forced True for Backfill)")
+                        return p1_res
+                    except Exception as e:
+                        logger.error(f"Hunter Failed {code}: {e}")
+                        return None
 
-                        if p1_res['passed']:
-                            # Phase 2 Debate/Judge
+                # Execute Batch 1
+                if max_workers <= 1:
+                    for code in filtered_codes:
+                        res = run_hunter_task(code)
+                        if res: phase1_results.append(res)
+                else:
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        futures = [executor.submit(run_hunter_task, c) for c in filtered_codes]
+                        for f in futures:
+                            res = f.result()
+                            if res: phase1_results.append(res)
+                
+                logger.info(f"✅ [Batch 1] Hunter Completed. {len(phase1_results)} results.")
+
+                final_candidates = []
+                
+                # --- Batch 2: Judge (All Stocks) ---
+                if skip_phase2:
+                    logger.info("⏩ [Batch 2] SKIPPED (Fast Mode). Using Hunter results as Final.")
+                    for p1_res in phase1_results:
+                        # Dummy P2 Result
+                        dummy_p2 = {
+                            'code': p1_res['code'],
+                            'name': p1_res['name'],
+                            'is_tradable': p1_res['hunter_score'] >= 75,
+                            'llm_score': p1_res['hunter_score'],
+                            'llm_reason': f"[FastBackfill] Hunter Score: {p1_res['hunter_score']}, Reason: {p1_res['hunter_reason']}",
+                            'approved': p1_res['hunter_score'] >= 60,
+                            'llm_metadata': {'source': 'hunter_fast_backfill', 'hybrid_score': p1_res['hunter_score']},
+                            'trade_tier': 'TIER1' if p1_res['hunter_score'] >= 75 else 'BLOCKED',
+                            # Enrichment
+                            'per': p1_res['decision_info'].get('per'),
+                            'pbr': p1_res['decision_info'].get('pbr'),
+                            'market_cap': p1_res['decision_info'].get('market_cap'),
+                         }
+                        final_candidates.append(dummy_p2)
+                else:
+                    logger.info(f"--- [Batch 2] Running Debate/Judge for {len(phase1_results)} stocks ---")
+                    
+                    def run_judge_task(p1_res):
+                        try:
+                            # Use same max_workers (or sequential inside if needed)
                             p2_res = scout_pipeline.process_phase23_judge_v5_task(
                                 p1_res, brain, archivist=None
                             )
                             return p2_res
-                        return None
-                    except Exception as e:
-                        logger.error(f"[DEBUG] process_llm failed for {code}: {e}", exc_info=True)
-                        return None
+                        except Exception as e:
+                            logger.error(f"Judge Failed {p1_res['code']}: {e}")
+                            return None
 
-                # Limit concurrency for LLM stability
-                if max_workers <= 1:
-                    for code in filtered_codes:
-                        res = process_llm(code)
-                        if res:
-                            final_candidates.append(res)
-                else:
-                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        futures = [executor.submit(process_llm, code) for code in filtered_codes]
-                        for future in futures:
-                            res = future.result()
-                            if res:
-                                final_candidates.append(res)
-                                
-                    # 4. Save to History
-                    if final_candidates:
-                        save_to_watchlist_history(session, final_candidates, snapshot_date=target_date_str)
-                        logger.info(f"💾 {target_date_str}: {len(final_candidates)}개 종목 히스토리 저장 완료")
+                    # Execute Batch 2
+                    if max_workers <= 1:
+                        for p1 in phase1_results:
+                            res = run_judge_task(p1)
+                            if res: final_candidates.append(res)
                     else:
-                        logger.info(f"ℹ️ {target_date_str}: 선정된 종목 없음")
+                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            futures = [executor.submit(run_judge_task, p1) for p1 in phase1_results]
+                            for f in futures:
+                                res = f.result()
+                                if res: final_candidates.append(res)
+
+                    logger.info(f"✅ [Batch 2] Judge Completed. {len(final_candidates)} results.")
+                
+                # 4. Save to History
+                if final_candidates:
+                    save_to_watchlist_history(session, final_candidates, snapshot_date=target_date_str)
+                    logger.info(f"💾 {target_date_str}: {len(final_candidates)}개 종목 히스토리 저장 완료")
+                else:
+                    logger.info(f"ℹ️ {target_date_str}: 선정된 종목 없음")
 
         except Exception as e:
             logger.error(f"❌ {target_date_str} 처리 중 오류: {e}", exc_info=True)
@@ -731,6 +770,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-workers", type=int, default=1, help="LLM parallel workers (default: 1)")
     parser.add_argument("--sleep", type=float, default=1.0, help="Sleep seconds between days")
     parser.add_argument("--skip-existing", action="store_true", help="Skip dates already in WATCHLIST_HISTORY")
+    parser.add_argument("--skip-phase2", action="store_true", help="Skip Phase 2 (Debate/Judge) for faster backfill")
     args = parser.parse_args()
     
     run_backfill(
@@ -743,4 +783,5 @@ if __name__ == "__main__":
         max_workers=args.max_workers,
         sleep_seconds=args.sleep,
         skip_existing=args.skip_existing,
+        skip_phase2=args.skip_phase2,
     )

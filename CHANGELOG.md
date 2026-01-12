@@ -1,5 +1,8 @@
 # 📅 변경 이력 (Change Log)
 
+## 2026-01-13
+- **Backfill Optimization**: `backfill_scout_real.py`를 리팩토링하여 LLM 호출을 종목별 순차 실행에서 단계별 일괄 실행(Hunter Batch → Judge Batch) 구조로 변경하고, 빠른 백필을 위한 `--skip-phase2` 옵션 추가.
+
 ## 2026-01-12
 - **Backfill Data & Scoring Fix**: 백필 데이터 누락 문제(뉴스 쿼리 대소문자) 해결 및 뉴스 데이터 부족 시 점수 보정(80%) 로직 적용으로 `WATCHLIST_HISTORY` 데이터 정합성 확보.
 - **Sage Recommendations Verified**: `MIN_LLM_SCORE` 60점 하향 및 Tier 2 포지션 가중치(0.5) 적용 검증 완료.
