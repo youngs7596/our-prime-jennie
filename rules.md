@@ -370,3 +370,23 @@ ruff check .
 ### 3. Split-Brain Mocking 방지
 - 객체가 동적으로 로드되는 모듈을 테스트할 때, `patch('string.path')`가 엉뚱한 객체를 모킹할 수 있습니다.
 - **권장**: 로드된 모듈 인스턴스를 확보한 뒤 `patch.object(instance, 'attribute')`를 사용하여 **확실한 타겟**을 모킹하세요.
+
+---
+
+## Git 브랜치 전략 (Git Branching Strategy)
+
+> ⚠️ **중요**: 이 프로젝트의 메인 개발 브랜치는 `development`입니다.
+
+1.  **`development` (기본 개발 브랜치)**:
+    - 모든 기능 개발, 버그 수정, 리팩토링은 이 브랜치에서 진행합니다.
+    - Jenkins CI/CD는 이 브랜치의 변경 사항을 감지하여 빌드 및 테스트를 수행합니다.
+    - **가장 최신(Bleeding Edge)** 상태를 유지합니다.
+
+2.  **`main` (안정 배포 브랜치)**:
+    - `development`에서 검증된 코드를 병합(Merge/Push)받는 **Downstream** 브랜치입니다.
+    - 직접 `main` 브랜치에 커밋하거나 `development`를 `main` 기반으로 Rebase하는 것을 지양합니다.
+    - `handoff` 시 `git push origin development`를 우선 사용합니다.
+
+3.  **Handoff 시 주의사항**:
+    - 절대 `development` 브랜치를 `main` 브랜치 기준으로 Rebase(`git pull --rebase origin main`)하지 마십시오.
+    - 이는 `development`의 선행 커밋 역사를 덮어쓰거나 불필요한 변경 내역(Changes)을 발생시킬 수 있습니다.
