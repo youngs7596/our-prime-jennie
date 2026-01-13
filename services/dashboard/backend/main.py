@@ -36,7 +36,7 @@ from shared.db.repository import (
     get_recent_trades,
     get_scheduler_jobs,
 )
-from shared.db.models import Portfolio, WatchList, TradeLog
+from shared.db.models import WatchList, TradeLog
 
 # --- 로깅 설정 (가장 먼저!) ---
 logging.basicConfig(
