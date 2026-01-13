@@ -40,4 +40,8 @@ pybreaker>=1.2.0
 apscheduler>=3.10.4
 croniter
 
+
+# Environment
+python-dotenv>=1.0.0
+
 # Exclude Flask, FastAPI, Uvicorn to avoid conflicting with Airflow's internal dependencies

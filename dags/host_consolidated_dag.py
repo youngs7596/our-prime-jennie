@@ -22,6 +22,8 @@ COMMON_ENV = {
     'MARIADB_USER': 'root',
     'REDIS_HOST': 'redis',
     'REDIS_PORT': '6379',
+    'KIS_GATEWAY_URL': 'http://host.docker.internal:8080',
+    'OLLAMA_GATEWAY_URL': 'http://host.docker.internal:11500',
     'TZ': 'Asia/Seoul',
 }
 
@@ -68,7 +70,7 @@ with DAG(
     # Host crontab used localhost:8086, inside docker it is http://daily-briefing:8086
     trigger_briefing = BashOperator(
         task_id='trigger_briefing_api',
-        bash_command='curl -s -X POST http://daily-briefing:8086/report',
+        bash_command='curl -s -X POST http://host.docker.internal:8086/report',
     )
 
 # 4. AI Performance Analysis (Weekday 07:00 KST -> 22:00 UTC Prev Day)
