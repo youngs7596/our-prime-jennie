@@ -169,6 +169,142 @@ stats = {
 }
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# KIS WebSocket Streamer (Redis Streams Producer)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+import redis as redis_lib
+import threading
+
+STREAM_NAME = "kis:prices"
+STREAM_MAXLEN = 10000  # 최대 메시지 수 (XTRIM)
+
+class KISWebSocketStreamer:
+    """
+    KIS WebSocket → Redis Streams 실시간 스트리머.
+    
+    단일 WebSocket 연결을 유지하며, 수신된 가격 데이터를
+    Redis Streams로 발행합니다. (Fan-out 아키텍처)
+    """
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+    
+    def __init__(self):
+        if self._initialized:
+            return
+        
+        self.redis_client = None
+        self.subscription_codes = set()
+        self.is_running = False
+        self.ws_thread = None
+        self._initialized = True
+        logger.info("🔌 [Streamer] KISWebSocketStreamer 초기화")
+    
+    def _ensure_redis(self):
+        if self.redis_client is None:
+            self.redis_client = redis_lib.from_url(REDIS_URL, decode_responses=True)
+            logger.info(f"🔌 [Streamer] Redis 연결 완료: {REDIS_URL}")
+    
+    def add_subscriptions(self, codes: list):
+        """구독 종목 추가"""
+        new_codes = set(codes) - self.subscription_codes
+        if new_codes:
+            self.subscription_codes.update(new_codes)
+            logger.info(f"📡 [Streamer] 구독 종목 추가: {len(new_codes)}개 (전체: {len(self.subscription_codes)}개)")
+            
+            # WebSocket이 이미 실행 중이면 재시작 (새 종목 반영)
+            if self.is_running:
+                self._restart_websocket()
+        
+        return list(self.subscription_codes)
+    
+    def _restart_websocket(self):
+        """WebSocket 재연결 (구독 갱신)"""
+        logger.info("🔄 [Streamer] WebSocket 재시작 (구독 갱신)")
+        self.stop()
+        time.sleep(1)
+        self.start()
+    
+    def start(self):
+        """WebSocket 연결 시작 및 Redis Streaming"""
+        if self.is_running:
+            return
+        
+        if not self.subscription_codes:
+            logger.warning("⚠️ [Streamer] 구독 종목 없음, 시작하지 않음")
+            return
+        
+        self._ensure_redis()
+        self.is_running = True
+        
+        def ws_loop():
+            logger.info(f"🚀 [Streamer] WebSocket 루프 시작 ({len(self.subscription_codes)}개 종목)")
+            
+            def on_price(code, price, high):
+                try:
+                    self.redis_client.xadd(
+                        STREAM_NAME,
+                        {"code": code, "price": str(price), "high": str(high)},
+                        maxlen=STREAM_MAXLEN,
+                        approximate=True
+                    )
+                except Exception as e:
+                    logger.error(f"❌ [Streamer] Redis XADD 실패: {e}")
+            
+            try:
+                kis_client.websocket.start_realtime_monitoring(
+                    portfolio_codes=list(self.subscription_codes),
+                    on_price_func=on_price
+                )
+                
+                # 연결 대기
+                if not kis_client.websocket.connection_event.wait(timeout=15):
+                    logger.error("❌ [Streamer] WebSocket 연결 타임아웃")
+                    self.is_running = False
+                    return
+                
+                logger.info("✅ [Streamer] WebSocket 연결 성공!")
+                
+                # 연결 유지 루프
+                while self.is_running and kis_client.websocket.is_connected():
+                    time.sleep(5)
+                
+                logger.info("🛑 [Streamer] WebSocket 루프 종료")
+                
+            except Exception as e:
+                logger.error(f"❌ [Streamer] WebSocket 루프 오류: {e}")
+            finally:
+                self.is_running = False
+        
+        self.ws_thread = threading.Thread(target=ws_loop, daemon=True)
+        self.ws_thread.start()
+    
+    def stop(self):
+        """WebSocket 종료"""
+        self.is_running = False
+        if kis_client and kis_client.websocket:
+            kis_client.websocket.stop()
+    
+    def get_status(self):
+        return {
+            "is_running": self.is_running,
+            "subscription_count": len(self.subscription_codes),
+            "codes": list(self.subscription_codes)[:20]  # 처음 20개만
+        }
+
+
+# Streamer 싱글톤 인스턴스
+ws_streamer: KISWebSocketStreamer = None
+
+
 def initialize_kis_client():
     """KIS Client 초기화"""
     global kis_client
@@ -425,6 +561,74 @@ def issue_ws_approval_key():
     except Exception as e:
         logger.error(f"❌ [Gateway] WebSocket Approval Key 발급 오류: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Realtime Streaming API (Redis Streams)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+@limiter.exempt
+@app.route('/api/realtime/subscribe', methods=['POST'])
+def subscribe_realtime():
+    """
+    실시간 구독 요청 API.
+    
+    다운스트림 서비스들이 Gateway를 통해 종목 구독을 요청합니다.
+    Gateway는 KIS WebSocket에 구독하고 Redis Stream으로 발행합니다.
+    
+    Request Body:
+        - codes (list): 구독할 종목 코드 리스트
+        
+    Response:
+        - subscribed_codes: 현재 구독 중인 전체 종목
+        - streamer_status: 스트리머 상태
+    """
+    global ws_streamer
+    
+    if not kis_client:
+        return jsonify({"error": "KIS client not initialized"}), 503
+    
+    data = request.get_json(silent=True) or {}
+    codes = data.get("codes", [])
+    
+    if not codes:
+        return jsonify({"error": "codes list required"}), 400
+    
+    # 스트리머 초기화 (첫 호출 시)
+    if ws_streamer is None:
+        ws_streamer = KISWebSocketStreamer()
+    
+    # 구독 추가
+    all_codes = ws_streamer.add_subscriptions(codes)
+    
+    # 스트리머 시작 (아직 실행 중이 아니면)
+    if not ws_streamer.is_running:
+        ws_streamer.start()
+    
+    return jsonify({
+        "success": True,
+        "subscribed_count": len(all_codes),
+        "new_codes": codes,
+        "streamer_status": ws_streamer.get_status()
+    }), 200
+
+
+@limiter.exempt
+@app.route('/api/realtime/status', methods=['GET'])
+def realtime_status():
+    """실시간 스트리머 상태 조회"""
+    global ws_streamer
+    
+    if ws_streamer is None:
+        return jsonify({
+            "status": "not_initialized",
+            "message": "No subscriptions yet"
+        }), 200
+    
+    return jsonify({
+        "status": "ok",
+        "streamer": ws_streamer.get_status()
+    }), 200
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

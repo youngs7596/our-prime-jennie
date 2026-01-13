@@ -1,6 +1,10 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-13
+- **Redis Streams WebSocket 아키텍처**: KIS API 동시 연결 제한(Connection reset by peer) 해결을 위해 단일 WebSocket 공유 아키텍처 구현.
+  - `kis-gateway`: `KISWebSocketStreamer` 싱글톤 및 `/api/realtime/subscribe` 엔드포인트 추가. KIS WebSocket → Redis Streams 발행.
+  - `shared/kis/stream_consumer.py`: Redis Consumer Groups 기반 `StreamPriceConsumer` 클래스 신규 생성.
+  - `buy-scanner`, `price-monitor`: `USE_REDIS_STREAMS=true` 환경변수로 Redis Streams 모드 지원 (기존 Direct WebSocket과 공존).
 - **Backfill Optimization**: `backfill_scout_real.py`를 리팩토링하여 LLM 호출을 종목별 순차 실행에서 단계별 일괄 실행(Hunter Batch → Judge Batch) 구조로 변경하고, 빠른 백필을 위한 `--skip-phase2` 옵션 추가.
 - **Bug Fix (Portfolio Size)**: `buy-executor`에서 포트폴리오 크기가 실제 4개이나 10개로 잘못 인식되는 버그 수정 (`MAX_PORTFOLIO_SIZE`=30 증설, DB 중복 데이터 확인).
 - **Airflow Utility Jobs Migration**: 누락된 5개 유틸리티 작업(`collect_intraday`, `analyst_feedback_update`, `collect_prices_fdr`, `collect_investor_trading`, `collect_dart_filings`)을 `dags/utility_jobs_dag.py`로 통합하고 UTC 스케줄 등록 완료.

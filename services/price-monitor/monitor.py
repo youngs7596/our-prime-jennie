@@ -33,6 +33,13 @@ from shared.notification import TelegramBot
 
 logger = logging.getLogger(__name__)
 
+# Redis Streams 지원 (WebSocket 공유 아키텍처)
+try:
+    from shared.kis.stream_consumer import StreamPriceConsumer
+    REDIS_STREAMS_AVAILABLE = True
+except ImportError:
+    REDIS_STREAMS_AVAILABLE = False
+
 
 class PriceMonitor:
     """실시간 가격 감시 클래스"""
@@ -53,9 +60,13 @@ class PriceMonitor:
         
         trading_mode = os.getenv("TRADING_MODE", "MOCK")
         self.use_websocket = (trading_mode == "REAL")
+        self.use_redis_streams = os.getenv("USE_REDIS_STREAMS", "false").lower() == "true"
         self.alert_check_interval = int(os.getenv("PRICE_ALERT_CHECK_INTERVAL", "15"))
         
-        logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_WEBSOCKET={self.use_websocket}")
+        # Redis Streams 모드용 consumer
+        self.stream_consumer = None
+        
+        logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_WEBSOCKET={self.use_websocket}, USE_REDIS_STREAMS={self.use_redis_streams}")
         
         self.portfolio_cache = {}
         
@@ -91,7 +102,10 @@ class PriceMonitor:
                     logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
                     return
 
-            if self.use_websocket:
+            # 모니터링 모드 결정
+            if self.use_redis_streams and REDIS_STREAMS_AVAILABLE:
+                self._monitor_with_redis_streams(dry_run)
+            elif self.use_websocket:
                 self._monitor_with_websocket(dry_run)
             else:
                 self._monitor_with_polling(dry_run)
@@ -103,6 +117,69 @@ class PriceMonitor:
     def stop_monitoring(self):
         logger.info("모니터링 중단 신호 수신")
         self.stop_event.set()
+        if self.stream_consumer:
+            self.stream_consumer.stop()
+    
+    def _monitor_with_redis_streams(self, dry_run: bool):
+        """Redis Streams 모드로 실시간 모니터링 (kis-gateway 공유 WebSocket)"""
+        logger.info("=== Redis Streams 모드로 실시간 모니터링 시작 ===")
+        
+        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+        gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+        
+        self.stream_consumer = StreamPriceConsumer(redis_url=redis_url)
+        last_alert_check = 0
+        
+        while not self.stop_event.is_set():
+            try:
+                with session_scope(readonly=True) as session:
+                    portfolio = repo.get_active_portfolio(session)
+                
+                if not portfolio:
+                    logger.info("   (Streams) 보유 종목이 없습니다. 60초 후 다시 확인합니다.")
+                    time.sleep(60)
+                    continue
+                
+                portfolio_codes = list(set(item['code'] for item in portfolio))
+                self.portfolio_cache = {item['id']: item for item in portfolio}
+                
+                logger.info(f"   (Streams) {len(portfolio_codes)}개 종목 구독 요청 → Gateway...")
+                
+                # Gateway에 구독 요청 및 Redis Streams 소비 시작
+                self.stream_consumer.start_consuming(
+                    on_price_func=self._on_websocket_price_update,
+                    consumer_group="price-monitor-group",
+                    consumer_name=f"price-monitor-{os.getpid()}",
+                    codes_to_subscribe=portfolio_codes,
+                    gateway_url=gateway_url
+                )
+                
+                logger.info("   (Streams) ✅ Redis Streams 소비 시작!")
+                
+                last_status_log_time = time.time()
+                self.last_ws_data_time = time.time()
+                
+                while self.stream_consumer.is_connected() and not self.stop_event.is_set():
+                    time.sleep(1)
+                    now = time.time()
+                    
+                    if now - last_status_log_time >= 600:
+                        logger.info(f"   (Streams) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
+                        last_status_log_time = now
+                    if now - last_alert_check >= self.alert_check_interval:
+                        self._process_price_alerts()
+                        last_alert_check = now
+                
+                if self.stop_event.is_set():
+                    break
+                
+                logger.warning("   (Streams) 연결 끊김. 재연결 시도.")
+                
+            except Exception as e:
+                logger.error(f"❌ (Streams) 모니터링 오류: {e}", exc_info=True)
+                time.sleep(60)
+        
+        self.stream_consumer.stop()
     
     def _monitor_with_websocket(self, dry_run: bool):
         logger.info("=== WebSocket 모드로 실시간 모니터링 시작 ===")

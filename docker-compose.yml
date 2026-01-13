@@ -305,6 +305,9 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       # WebSocket 모드 활성화 (실제 KIS WebSocket 연결)
       - USE_WEBSOCKET_MODE=true
+      # ⭐ Redis Streams 모드: Gateway 통해 공유 WebSocket 사용
+      - USE_REDIS_STREAMS=true
+      - KIS_GATEWAY_URL=http://127.0.0.1:8080
       # Gateway를 통한 토큰 발급 (Access Token + WebSocket Approval Key 충돌 방지)
       - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
       - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
@@ -546,6 +549,9 @@ services:
       - PORT=8088
       - SECRETS_FILE=/app/config/secrets.json
       - GUNICORN_CMD_ARGS=--timeout 600
+      # ⭐ Redis Streams 모드: Gateway 통해 공유 WebSocket 사용
+      - USE_REDIS_STREAMS=true
+      - KIS_GATEWAY_URL=http://127.0.0.1:8080
       - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
       # Gateway를 통한 WebSocket Approval Key 발급 (토큰 충돌 방지)
       - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
@@ -1009,9 +1015,6 @@ services:
       context: .
       dockerfile: services/airflow/Dockerfile
     profiles: [ "real" ]
-    depends_on:
-      mariadb:
-        condition: service_healthy
     networks:
       - msa-network
     extra_hosts:

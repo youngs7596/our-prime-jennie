@@ -51,6 +51,13 @@ from shared.scheduler_client import mark_job_run
 from scanner import BuyScanner
 from opportunity_watcher import BuyOpportunityWatcher
 
+# Redis Streams 지원 (WebSocket 공유 아키텍처)
+try:
+    from shared.kis.stream_consumer import StreamPriceConsumer
+    REDIS_STREAMS_AVAILABLE = True
+except ImportError:
+    REDIS_STREAMS_AVAILABLE = False
+
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -74,6 +81,10 @@ opportunity_watcher = None
 websocket_thread = None
 is_websocket_mode = False
 websocket_lock = threading.Lock()
+
+# Redis Streams 모드 전역 변수
+stream_consumer: 'StreamPriceConsumer' = None
+use_redis_streams = False
 
 
 def initialize_service():
@@ -132,7 +143,9 @@ def initialize_service():
         rabbitmq_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
         logger.info("✅ RabbitMQ Publisher 초기화 완료 (queue=%s)", queue_name)
 
-        # 6. WebSocket 모드: BuyOpportunityWatcher 초기화
+        # 6. 실시간 모드 결정: Redis Streams vs Direct WebSocket
+        use_redis_streams = os.getenv("USE_REDIS_STREAMS", "false").lower() == "true"
+        
         if is_websocket_mode:
             redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
             opportunity_watcher = BuyOpportunityWatcher(
@@ -140,10 +153,15 @@ def initialize_service():
                 tasks_publisher=rabbitmq_publisher,
                 redis_url=redis_url
             )
-            logger.info("✅ BuyOpportunityWatcher 초기화 완료 (Mock WebSocket: %s)", is_mock_websocket)
             
-            # WebSocket 감시 시작
-            _start_websocket_monitoring()
+            if use_redis_streams and REDIS_STREAMS_AVAILABLE:
+                # ⭐ Redis Streams 모드: Gateway 통해 공유 WebSocket 사용
+                logger.info("🔄 Redis Streams 모드 활성화 (kis-gateway 공유 WebSocket)")
+                _start_redis_streams_monitoring()
+            else:
+                # 기존 Direct WebSocket 모드
+                logger.info("✅ BuyOpportunityWatcher 초기화 완료 (Mock WebSocket: %s)", is_mock_websocket)
+                _start_websocket_monitoring()
         else:
             # 7. Scheduler Job Worker (폴링 모드)
             if os.getenv("ENABLE_BUY_SCANNER_JOB_WORKER", "true").lower() == "true":
@@ -166,6 +184,93 @@ def initialize_service():
     except Exception as e:
         logger.critical(f"❌ 초기화 실패: {e}", exc_info=True)
         return False
+
+
+def _start_redis_streams_monitoring():
+    """Redis Streams 기반 실시간 감시 시작 (kis-gateway 공유 WebSocket)"""
+    global stream_consumer, websocket_thread
+    
+    redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    
+    stream_consumer = StreamPriceConsumer(redis_url=redis_url)
+    
+    def streams_loop():
+        logger.info("=== Redis Streams 매수 신호 감시 시작 ===")
+        last_heartbeat_time = 0
+        
+        while not opportunity_watcher.stop_event.is_set():
+            try:
+                # Hot Watchlist 로드
+                opportunity_watcher.load_hot_watchlist()
+                hot_codes = opportunity_watcher.get_watchlist_codes()
+                
+                if not hot_codes:
+                    logger.info("   (Streams) Hot Watchlist 비어있음. 60초 후 다시 확인합니다.")
+                    time.sleep(60)
+                    continue
+                
+                logger.info(f"   (Streams) {len(hot_codes)}개 종목 구독 요청 → Gateway...")
+                
+                # Gateway에 구독 요청 및 Redis Streams 소비 시작
+                stream_consumer.start_consuming(
+                    on_price_func=_on_stream_price_update,
+                    consumer_group="buy-scanner-group",
+                    consumer_name=f"buy-scanner-{os.getpid()}",
+                    codes_to_subscribe=hot_codes,
+                    gateway_url=gateway_url
+                )
+                
+                logger.info("   (Streams) ✅ Redis Streams 소비 시작!")
+                
+                last_watchlist_check = time.time()
+                
+                # 감시 루프
+                while stream_consumer.is_connected() and not opportunity_watcher.stop_event.is_set():
+                    time.sleep(1)
+                    now = time.time()
+                    
+                    # Heartbeat 발행 (5초마다)
+                    if now - last_heartbeat_time >= 5:
+                        opportunity_watcher.publish_heartbeat()
+                        last_heartbeat_time = now
+                    
+                    # Watchlist 업데이트 체크 (30초마다)
+                    if now - last_watchlist_check >= 30:
+                        if opportunity_watcher.check_for_update():
+                            logger.info("🔄 (Streams) Hot Watchlist 업데이트 감지! 재구독합니다.")
+                            # 새 종목만 추가 구독 요청
+                            new_codes = opportunity_watcher.get_watchlist_codes()
+                            stream_consumer.request_subscription(new_codes, gateway_url)
+                        last_watchlist_check = now
+                
+                if opportunity_watcher.stop_event.is_set():
+                    break
+                    
+                logger.warning("   (Streams) 연결 끊김. 재시작 시도.")
+                
+            except Exception as e:
+                logger.error(f"❌ (Streams) 감시 루프 오류: {e}", exc_info=True)
+                time.sleep(60)
+        
+        stream_consumer.stop()
+        logger.info("=== Redis Streams 매수 신호 감시 종료 ===")
+    
+    websocket_thread = threading.Thread(target=streams_loop, daemon=True)
+    websocket_thread.start()
+
+
+def _on_stream_price_update(stock_code: str, current_price: float, current_high: float):
+    """Redis Streams 가격 업데이트 콜백"""
+    if not opportunity_watcher:
+        return
+    
+    # 매수 신호 체크
+    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+    
+    if signal:
+        # 매수 신호 발행
+        opportunity_watcher.publish_signal(signal)
 
 
 def _start_websocket_monitoring():
