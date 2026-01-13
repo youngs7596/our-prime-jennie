@@ -22,6 +22,7 @@
 - **Portfolio Architecture Verified**: Integration Test(`test_e2e_pipeline.py`)에서 발생하던 `RuntimeError`(DB Dialect mismatch)를 해결하기 위해 `trading.py`에 SQLite 호환 로직(`_is_sqlite`) 추가 및 `repository.py`의 `get_active_portfolio` 쿼리 대상 수정 완료.
 - **Hotfix (Dashboard Backend)**: ActivePortfolio 마이그레이션 후 `dashboard-backend`에서 발생한 `ImportError`(legacy `Portfolio`) 수정 및 Docker 이미지 리빌드.
 - **Test Environment Safety**: `ACTIVE_PORTFOLIO` 테이블을 `_MOCK_TABLES`에 추가하여 Mock 모드(`TRADING_MODE=MOCK`) 실행 시 운영 데이터 오염 방지 및 E2E 테스트(`test_e2e_pipeline.py`) 안정성 확보.
+- **Jenkins Build Stability**: `Jenkinsfile`에 `COMPOSE_PARALLEL_LIMIT='2'` 설정을 추가하여 BuildKit 병렬 빌드 시 발생하는 캐시 경합(Race Condition) 오류(`failed to prepare extraction snapshot`) 해결.
 
 
 ## 2026-01-12

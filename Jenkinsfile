@@ -5,6 +5,8 @@ pipeline {
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         // docker-compose.yml의 name: my-prime-jennie와 일치
         COMPOSE_PROJECT_NAME = 'my-prime-jennie'
+        // Docker BuildKit Concurrency Limit (Fix for 'parent snapshot does not exist' race condition)
+        COMPOSE_PARALLEL_LIMIT = '2'
     }
 
     options {
