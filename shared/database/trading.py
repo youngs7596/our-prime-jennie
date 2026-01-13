@@ -312,88 +312,106 @@ def get_watchlist_history(session, snapshot_date):
 
 def get_active_portfolio(session) -> List[Dict]:
     """
-    활성 포트폴리오 조회
-    - SQLAlchemy Session 또는 raw connection 모두 지원
+    활성 포트폴리오 조회 (ACTIVE_PORTFOLIO 테이블 사용)
     """
     from sqlalchemy import text
     from sqlalchemy.orm import Session
+    from shared.db.models import resolve_table_name, ActivePortfolio
     
-    table_name = db_models.resolve_table_name("PORTFOLIO")
-    sql = f"""
-        SELECT ID, STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, AVERAGE_BUY_PRICE, 0,
-               CREATED_AT, STOP_LOSS_PRICE, CURRENT_HIGH_PRICE
-        FROM {table_name}
-        WHERE QUANTITY > 0
-    """
-    
-    if isinstance(session, Session):
-        result = session.execute(text(sql))
-        rows = result.fetchall()
-    else:
-        cursor = session.cursor()
-        cursor.execute(sql)
-        rows = cursor.fetchall()
-        cursor.close()
-    
-    portfolio = []
-    for row in rows:
-        portfolio.append({
-            "id": row[0],
-            "code": row[1],
-            "stock_code": row[1],
-            "name": row[2],
-            "stock_name": row[2],
-            "quantity": row[3],
-            "buy_price": row[4],
-            "avg_price": row[5],
-            "current_price": row[6],
-            "buy_date": row[7],
-            "stop_loss_price": row[8],
-            "high_price": row[9],
-        })
-    return portfolio
+    try:
+        if isinstance(session, Session):
+            rows = session.query(ActivePortfolio).all()
+            portfolio = []
+            for row in rows:
+                portfolio.append({
+                    "id": str(row.stock_code), # ID는 이제 stock_code와 동일 취급 (PK)
+                    "code": row.stock_code,
+                    "stock_code": row.stock_code,
+                    "name": row.stock_name,
+                    "stock_name": row.stock_name,
+                    "quantity": row.quantity,
+                    "buy_price": row.average_buy_price,
+                    "avg_price": row.average_buy_price,
+                    "current_price": row.current_high_price, 
+                    "buy_date": row.created_at,
+                    "stop_loss_price": row.stop_loss_price,
+                    "high_price": row.current_high_price,
+                })
+            return portfolio
+        else:
+            # Legacy raw connection support
+            table_name = resolve_table_name("ACTIVE_PORTFOLIO")
+            sql = f"""
+                SELECT STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, 
+                       CREATED_AT, STOP_LOSS_PRICE, CURRENT_HIGH_PRICE
+                FROM {table_name}
+            """
+            cursor = session.cursor()
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            cursor.close()
+            
+            portfolio = []
+            for row in rows:
+                portfolio.append({
+                    "id": row[0],
+                    "code": row[0],
+                    "stock_code": row[0],
+                    "name": row[1],
+                    "stock_name": row[1],
+                    "quantity": row[2],
+                    "buy_price": row[3],
+                    "avg_price": row[3],
+                    "current_price": row[6],
+                    "buy_date": row[4],
+                    "stop_loss_price": row[5],
+                    "high_price": row[6],
+                })
+            return portfolio
+    except Exception as e:
+        logger.error(f"❌ DB: get_active_portfolio 실패! (에러: {e})")
+        return []
 
 
 def remove_from_portfolio(session, stock_code, quantity):
     """
-    포트폴리오에서 종목 매도 처리 (SQLAlchemy)
+    포트폴리오에서 종목 매도 처리 (ACTIVE_PORTFOLIO 사용)
     """
     from sqlalchemy import text
+    from shared.db.models import resolve_table_name
     
     try:
-        portfolio_table = db_models.resolve_table_name("PORTFOLIO")
+        table_name = resolve_table_name("ACTIVE_PORTFOLIO")
         
-        result = session.execute(text(f"""
-            SELECT ID, QUANTITY, AVERAGE_BUY_PRICE 
-            FROM {portfolio_table} 
-            WHERE STOCK_CODE = :stock_code AND STATUS = 'HOLDING'
+        # 보유 수량 확인
+        row = session.execute(text(f"""
+            SELECT QUANTITY, AVERAGE_BUY_PRICE 
+            FROM {table_name} 
+            WHERE STOCK_CODE = :stock_code
             FOR UPDATE
-        """), {"stock_code": stock_code})
-        row = result.fetchone()
+        """), {"stock_code": stock_code}).fetchone()
         
         if not row:
             logger.warning(f"⚠️ DB: 매도 처리 실패 - 보유 중인 종목이 아님 ({stock_code})")
             return False
         
-        portfolio_id, current_qty, avg_price = row[0], row[1], row[2]
+        current_qty, avg_price = row[0], row[1]
         
         if current_qty <= quantity:
-            # 전량 매도
+            # 전량 매도 -> 레코드 삭제
             session.execute(text(f"""
-                UPDATE {portfolio_table} 
-                SET STATUS = 'SOLD', SELL_STATE = 'SOLD', QUANTITY = 0, UPDATED_AT = NOW() 
-                WHERE ID = :portfolio_id
-            """), {"portfolio_id": portfolio_id})
-            logger.info(f"✅ DB: 전량 매도 처리 완료 ({stock_code}, {current_qty}주)")
+                DELETE FROM {table_name} WHERE STOCK_CODE = :stock_code
+            """), {"stock_code": stock_code})
+            logger.info(f"✅ DB: 전량 매도 및 ACTIVE_PORTFOLIO 삭제 완료 ({stock_code}, {current_qty}주)")
         else:
-            # 부분 매도
+            # 부분 매도 -> 수량 업데이트
             new_qty = current_qty - quantity
             new_total_amount = new_qty * avg_price
             session.execute(text(f"""
-                UPDATE {portfolio_table} 
+                UPDATE {table_name} 
                 SET QUANTITY = :new_qty, TOTAL_BUY_AMOUNT = :new_total_amount, UPDATED_AT = NOW() 
-                WHERE ID = :portfolio_id
-            """), {"new_qty": new_qty, "new_total_amount": new_total_amount, "portfolio_id": portfolio_id})
+                WHERE STOCK_CODE = :stock_code
+            """), {"new_qty": new_qty, "new_total_amount": new_total_amount, "stock_code": stock_code})
             logger.info(f"✅ DB: 부분 매도 처리 완료 ({stock_code}, {quantity}주 매도, 잔여 {new_qty}주)")
             
         session.commit()
@@ -414,14 +432,15 @@ def _execute_trade_and_log_sqlalchemy(
     key_metrics_dict: dict = None, market_context_dict: dict = None
 ):
     """
-    거래 실행 및 로깅 구현부 (SQLAlchemy Transaction 내에서 실행됨)
+    거래 실행 및 로깅 구현부 (ACTIVE_PORTFOLIO + TRADELOG)
     """
     from sqlalchemy import text
+    from shared.db.models import resolve_table_name
     
-    # 1. Trade Log 저장
+    # 1. Trade Log 저장 (항상 실행)
     try:
-        tradelog_table = db_models.resolve_table_name("TRADELOG")
-        portfolio_table = db_models.resolve_table_name("PORTFOLIO")
+        tradelog_table = resolve_table_name("TRADELOG")
+        active_table = resolve_table_name("ACTIVE_PORTFOLIO")
         
         now = datetime.now(timezone.utc)
         
@@ -429,7 +448,6 @@ def _execute_trade_and_log_sqlalchemy(
         key_metrics_json = json.dumps(key_metrics_dict) if key_metrics_dict else None
         market_context_json = json.dumps(market_context_dict) if market_context_dict else None
         
-        # Trade Log Insert
         session.execute(text(f"""
             INSERT INTO {tradelog_table} 
             (STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, REASON, 
@@ -449,85 +467,61 @@ def _execute_trade_and_log_sqlalchemy(
             "ts": now
         })
         
-        # 2. Portfolio 업데이트 (매수인 경우)
+        # 2. Active Portfolio 업데이트
         if trade_type == 'BUY':
-            # 기존 보유 종목 확인
-            pf_check = session.execute(text(f"""
-                SELECT ID, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT 
-                FROM {portfolio_table} 
-                WHERE STOCK_CODE = :code AND STATUS = 'HOLDING'
-            """), {"code": stock_info['code']}).fetchone()
-            
+            # UPSERT 로직 (Duplicate Key Update)
             total_amount = quantity * price
             
-            if pf_check:
-                # 추가 매수 (평단가 수정)
-                pf_id, curr_qty, curr_avg, curr_total = pf_check
-                new_qty = curr_qty + quantity
-                new_total_amt = float(curr_total or 0) + total_amount
-                new_avg = new_total_amt / new_qty
-                
-                session.execute(text(f"""
-                    UPDATE {portfolio_table}
-                    SET QUANTITY = :qty, 
-                        AVERAGE_BUY_PRICE = :avg, 
-                        TOTAL_BUY_AMOUNT = :total,
-                        UPDATED_AT = :now
-                    WHERE ID = :id
-                """), {
-                    "qty": new_qty, "avg": new_avg, "total": new_total_amt, 
-                    "now": now, "id": pf_id
-                })
-            else:
-                # 신규 매수
-                session.execute(text(f"""
-                    INSERT INTO {portfolio_table}
-                    (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
-                     STATUS, CREATED_AT, UPDATED_AT, STOP_LOSS_PRICE, CURRENT_HIGH_PRICE)
-                    VALUES 
-                    (:code, :name, :qty, :price, :total, 
-                     'HOLDING', :now, :now, :stop_loss, :high_price)
-                """), {
-                    "code": stock_info['code'],
-                    "name": stock_info['name'],
-                    "qty": quantity,
-                    "price": price,
-                    "total": total_amount,
-                    "now": now,
-                    "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
-                    "high_price": price  # 초기 최고가 = 매수가
-                })
+            # MariaDB UPSERT syntax
+            session.execute(text(f"""
+                INSERT INTO {active_table}
+                (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
+                 STOP_LOSS_PRICE, CURRENT_HIGH_PRICE, CREATED_AT, UPDATED_AT)
+                VALUES 
+                (:code, :name, :qty, :price, :total, 
+                 :stop_loss, :high_price, :now, :now)
+                ON DUPLICATE KEY UPDATE
+                    QUANTITY = QUANTITY + :qty,
+                    TOTAL_BUY_AMOUNT = TOTAL_BUY_AMOUNT + :total,
+                    AVERAGE_BUY_PRICE = (TOTAL_BUY_AMOUNT + :total) / (QUANTITY + :qty),
+                    UPDATED_AT = :now
+            """), {
+                "code": stock_info['code'],
+                "name": stock_info['name'],
+                "qty": quantity,
+                "price": price,
+                "total": total_amount,
+                "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
+                "high_price": price,
+                "now": now
+            })
                 
         elif trade_type == 'SELL':
-            # 매도 처리 (Portfolio 업데이트)
-            pf_check = session.execute(text(f"""
-                SELECT ID, QUANTITY, AVERAGE_BUY_PRICE 
-                FROM {portfolio_table} 
-                WHERE STOCK_CODE = :code AND (STATUS = 'HOLDING' OR STATUS = 'PARTIAL')
+            # 매도 처리 (감소 또는 삭제)
+            row = session.execute(text(f"""
+                SELECT QUANTITY, AVERAGE_BUY_PRICE 
+                FROM {active_table} 
+                WHERE STOCK_CODE = :code
             """), {"code": stock_info['code']}).fetchone()
             
-            if pf_check:
-                pf_id, curr_qty, avg_price = pf_check
+            if row:
+                curr_qty, avg_price = row[0], row[1]
                 
                 if curr_qty <= quantity:
-                    # 전량 매도
-                    session.execute(text(f"""
-                        UPDATE {portfolio_table} 
-                        SET STATUS = 'SOLD', SELL_STATE = 'SOLD', QUANTITY = 0, UPDATED_AT = :now
-                        WHERE ID = :id
-                    """), {"id": pf_id, "now": now})
+                    # 전량 매도 -> 삭제
+                    session.execute(text(f"DELETE FROM {active_table} WHERE STOCK_CODE = :code"), 
+                                    {"code": stock_info['code']})
                 else:
-                    # 부분 매도
+                    # 부분 매도 -> 업데이트
                     new_qty = curr_qty - quantity
                     new_total_amt = new_qty * avg_price
                     session.execute(text(f"""
-                        UPDATE {portfolio_table} 
-                        SET QUANTITY = :qty, TOTAL_BUY_AMOUNT = :total, 
-                            STATUS = 'PARTIAL', UPDATED_AT = :now 
-                        WHERE ID = :id
-                    """), {"qty": new_qty, "total": new_total_amt, "now": now, "id": pf_id})
+                        UPDATE {active_table} 
+                        SET QUANTITY = :qty, TOTAL_BUY_AMOUNT = :total, UPDATED_AT = :now 
+                        WHERE STOCK_CODE = :code
+                    """), {"qty": new_qty, "total": new_total_amt, "now": now, "code": stock_info['code']})
             else:
-                logger.warning(f"⚠️ 매도 처리 중 Portfolio 미발견: {stock_info['code']}")
+                logger.warning(f"⚠️ 매도 처리 중 ActivePortfolio 미발견: {stock_info['code']}")
                 
         return True
         
@@ -741,7 +735,6 @@ def get_trade_logs(session, date: str) -> List[Dict]:
     TradeLog = db_models.TradeLog
     Portfolio = db_models.Portfolio
     from sqlalchemy import func
-    from sqlalchemy.orm import aliased
     
     try:
         if len(date) == 8:
@@ -752,7 +745,7 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         start_dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
         end_dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         
-        # 포트폴리오 테이블과 조인하여 종목명 조회
+        # [Fix] Join 제거 - TradeLog만 조회 (Cartesian Product 방지)
         rows = session.query(
             TradeLog.stock_code,
             TradeLog.trade_type,
@@ -761,27 +754,39 @@ def get_trade_logs(session, date: str) -> List[Dict]:
             TradeLog.reason,
             TradeLog.strategy_signal,
             func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
-            TradeLog.trade_timestamp,
-            Portfolio.stock_name  # 종목명
-        ).outerjoin(
-            Portfolio, TradeLog.stock_code == Portfolio.stock_code
+            TradeLog.trade_timestamp
         ).filter(
             TradeLog.trade_timestamp >= start_dt, 
             TradeLog.trade_timestamp <= end_dt
         ).order_by(TradeLog.trade_timestamp.asc()).all()
         
+        if not rows:
+            return []
+            
+        # 종목명 별도 조회 (Portfolio에서 가장 최근 이름 사용)
+        stock_codes = list(set([r[0] for r in rows]))
+        name_map = {}
+        if stock_codes:
+            # MariaDB는 DISTINCT ON이 없으므로 GROUP BY 사용
+            p_rows = session.query(Portfolio.stock_code, Portfolio.stock_name)\
+                .filter(Portfolio.stock_code.in_(stock_codes))\
+                .group_by(Portfolio.stock_code)\
+                .all()
+            name_map = {p[0]: p[1] for p in p_rows}
+        
         trades = []
         for row in rows:
+            code = row[0]
             quantity = int(row[2] or 0)
             price = float(row[3] or 0)
             
             trades.append({
-                "stock_code": row[0],
-                "stock_name": row[8] or row[0],  # 종목명 없으면 코드 사용
-                "action": row[1],  # BUY/SELL (기존 trade_type → action으로 변환)
+                "stock_code": code,
+                "stock_name": name_map.get(code, code),  # 종목명 없으면 코드
+                "action": row[1],
                 "quantity": quantity,
                 "price": price,
-                "amount": quantity * price,  # 거래금액 계산
+                "amount": quantity * price,
                 "reason": row[4] or "",
                 "strategy_signal": row[5] or "",
                 "profit_amount": float(row[6]) if row[6] else 0.0,

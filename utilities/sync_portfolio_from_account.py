@@ -13,6 +13,7 @@ KIS 계좌의 실제 보유 종목과 DB PORTFOLIO 테이블을 동기화합니�
    - DB에 없는 보유 종목 → 추가 (선택)
    - DB에 있지만 실제로는 청산된 종목 → 상태 변경 (HOLDING → SOLD)
    - 수량 불일치 → 수정
+   - 중복된 DB 레코드 → 정리 (SOLD 처리)
 
 사용법:
     python utilities/sync_portfolio_from_account.py [--dry-run] [--auto-confirm]
@@ -53,6 +54,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # DB 엔진 초기화
+# [Fix] 로컬 실행 시 secrets.json에서 DB 접속 정보 로드
+if os.path.exists(os.environ.get('SECRETS_FILE', '')):
+    import json
+    try:
+        with open(os.environ['SECRETS_FILE'], 'r') as f:
+            secrets = json.load(f)
+            if 'mariadb-user' in secrets:
+                os.environ['MARIADB_USER'] = secrets['mariadb-user']
+            if 'mariadb-password' in secrets:
+                os.environ['MARIADB_PASSWORD'] = secrets['mariadb-password']
+            # DB 호스트/포트가 환경변수에 없다면 기본값 설정 (WSL/Local)
+            if not os.getenv('MARIADB_HOST'):
+                os.environ['MARIADB_HOST'] = '127.0.0.1'
+            if not os.getenv('MARIADB_PORT'):
+                os.environ['MARIADB_PORT'] = '3307'
+            if not os.getenv('MARIADB_DBNAME'):
+                os.environ['MARIADB_DBNAME'] = 'jennie_db'
+    except Exception as e:
+        logger.warning(f"⚠️ secrets.json 로드 실패: {e}")
+
 ensure_engine_initialized()
 
 
@@ -121,21 +142,27 @@ def compare_holdings(
             'only_in_kis': [...],      # KIS에만 있는 종목 (DB 추가 필요)
             'only_in_db': [...],       # DB에만 있는 종목 (청산된 것으로 추정)
             'quantity_mismatch': [...], # 수량 불일치
-            'matched': [...]           # 일치하는 종목
+            'matched': [...],          # 일치하는 종목
+            'duplicates': [...]        # 중복된 DB 레코드 (정리 대상)
         }
     """
     result = {
         'only_in_kis': [],
         'only_in_db': [],
         'quantity_mismatch': [],
-        'matched': []
+        'matched': [],
+        'duplicates': []
     }
     
     # KIS 보유 종목을 코드별로 매핑
     kis_map = {h['code']: h for h in kis_holdings}
     
-    # DB 포트폴리오를 코드별로 매핑
-    db_map = {p.stock_code: p for p in db_portfolio}
+    # DB 포트폴리오를 코드별로 그룹화 (중복 처리)
+    db_map = {}
+    for p in db_portfolio:
+        if p.stock_code not in db_map:
+            db_map[p.stock_code] = []
+        db_map[p.stock_code].append(p)
     
     # 최근 매도 이력을 코드별로 매핑
     sell_trades = {}
@@ -159,32 +186,47 @@ def compare_holdings(
             'current_price': kis_item['current_price']
         })
     
-    # 2. DB에만 있는 종목 (청산된 것으로 추정)
+    # 2. DB에만 있는 종목 (청산된 것으로 추정, 모든 중복 포함)
     for code in db_codes - kis_codes:
-        db_item = db_map[code]
+        db_items = db_map[code]
         sell_history = sell_trades.get(code, [])
-        result['only_in_db'].append({
-            'code': code,
-            'name': db_item.stock_name,
-            'db_quantity': db_item.quantity,
-            'db_avg_price': db_item.average_buy_price,
-            'db_id': db_item.id,
-            'sell_trades': len(sell_history),
-            'last_sell': sell_history[0].trade_timestamp if sell_history else None
-        })
+        # 모든 항목을 정리 대상으로 추가
+        for db_item in db_items:
+            result['only_in_db'].append({
+                'code': code,
+                'name': db_item.stock_name,
+                'db_quantity': db_item.quantity,
+                'db_avg_price': db_item.average_buy_price,
+                'db_id': db_item.id,
+                'sell_trades': len(sell_history),
+                'last_sell': sell_history[0].trade_timestamp if sell_history else None
+            })
     
-    # 3. 양쪽에 있는 종목 비교
+    # 3. 양쪽에 있는 종목 비교 (중복 확인)
     for code in kis_codes & db_codes:
         kis_item = kis_map[code]
-        db_item = db_map[code]
+        db_items = db_map[code]
         
-        if kis_item['quantity'] != db_item.quantity:
+        # 첫 번째 항목을 주 항목으로 사용
+        primary_item = db_items[0]
+        
+        # 나머지 중복 항목은 정리 대상으로 추가
+        if len(db_items) > 1:
+            for dup_item in db_items[1:]:
+                result['duplicates'].append({
+                    'code': code,
+                    'name': dup_item.stock_name,
+                    'db_id': dup_item.id,
+                    'reason': 'Duplicate entry'
+                })
+        
+        if kis_item['quantity'] != primary_item.quantity:
             result['quantity_mismatch'].append({
                 'code': code,
                 'name': kis_item['name'],
                 'kis_quantity': kis_item['quantity'],
-                'db_quantity': db_item.quantity,
-                'db_id': db_item.id
+                'db_quantity': primary_item.quantity,
+                'db_id': primary_item.id
             })
         else:
             result['matched'].append({
@@ -208,6 +250,12 @@ def print_report(comparison: Dict):
         print(f"\n✅ 일치하는 종목 ({len(comparison['matched'])}개):")
         for item in comparison['matched']:
             print(f"   - {item['code']} {item['name']}: {item['quantity']}주")
+            
+    # 중복 종목 (정리 예정)
+    if comparison['duplicates']:
+        print(f"\n🗑️ 중복된 항목 (정리 예정) ({len(comparison['duplicates'])}개):")
+        for item in comparison['duplicates']:
+            print(f"   - {item['code']} {item['name']} (ID: {item['db_id']})")
     
     # KIS에만 있는 종목
     if comparison['only_in_kis']:
@@ -233,11 +281,11 @@ def print_report(comparison: Dict):
     
     print("\n" + "=" * 70)
     
-    total_issues = len(comparison['only_in_kis']) + len(comparison['only_in_db']) + len(comparison['quantity_mismatch'])
+    total_issues = len(comparison['only_in_kis']) + len(comparison['only_in_db']) + len(comparison['quantity_mismatch']) + len(comparison['duplicates'])
     if total_issues == 0:
         print("✅ 모든 종목이 일치합니다!")
     else:
-        print(f"⚠️ 총 {total_issues}개 불일치 발견")
+        print(f"⚠️ 총 {total_issues}개 불일치/중복 발견")
     print("=" * 70 + "\n")
 
 
@@ -262,12 +310,23 @@ def apply_sync(session: Session, comparison: Dict, dry_run: bool = True):
                 portfolio.status = 'SOLD'
                 portfolio.sell_state = 'SYNCED_FROM_ACCOUNT'
                 portfolio.updated_at = datetime.now()
-                
-                # 최근 매도 거래가 있으면 매도 가격 정보도 업데이트 가능 (선택)
                 logger.info(f"✅ {item['code']} {item['name']}: HOLDING → SOLD 변경 완료")
                 changes_made += 1
+                
+    # 2. 중복 항목 → SOLD로 변경 (정리)
+    for item in comparison['duplicates']:
+        if dry_run:
+            logger.info(f"[DRY RUN] {item['code']} {item['name']} (ID: {item['db_id']}): 중복 항목 → SOLD 처리 예정")
+        else:
+            portfolio = session.query(Portfolio).filter(Portfolio.id == item['db_id']).first()
+            if portfolio:
+                portfolio.status = 'SOLD'
+                portfolio.sell_state = 'DUPLICATE_CLEANUP'
+                portfolio.updated_at = datetime.now()
+                logger.info(f"✅ {item['code']} {item['name']} (ID: {item['db_id']}): 중복 정리 완료")
+                changes_made += 1
     
-    # 2. 수량 불일치 → DB 수량 업데이트
+    # 3. 수량 불일치 → DB 수량 업데이트
     for item in comparison['quantity_mismatch']:
         if dry_run:
             logger.info(f"[DRY RUN] {item['code']} {item['name']}: 수량 {item['db_quantity']} → {item['kis_quantity']} 변경 예정")
@@ -280,7 +339,7 @@ def apply_sync(session: Session, comparison: Dict, dry_run: bool = True):
                 logger.info(f"✅ {item['code']} {item['name']}: 수량 {old_quantity} → {item['kis_quantity']} 변경 완료")
                 changes_made += 1
     
-    # 3. KIS에만 있는 종목은 수동 추가 권장 (자동 추가는 위험)
+    # 4. KIS에만 있는 종목은 수동 추가 권장 (자동 추가는 위험)
     if comparison['only_in_kis']:
         logger.warning(f"⚠️ KIS에만 있는 {len(comparison['only_in_kis'])}개 종목은 수동 검토 후 추가하세요.")
         for item in comparison['only_in_kis']:
@@ -295,7 +354,7 @@ def apply_sync(session: Session, comparison: Dict, dry_run: bool = True):
             logger.error(f"❌ 동기화 실패: {e}")
             raise
     elif dry_run:
-        logger.info(f"[DRY RUN] 총 {len(comparison['only_in_db']) + len(comparison['quantity_mismatch'])}개 항목 변경 예정")
+        logger.info(f"[DRY RUN] 총 {len(comparison['only_in_db']) + len(comparison['quantity_mismatch']) + len(comparison['duplicates'])}개 항목 변경 예정")
 
 
 def add_missing_holdings(session: Session, missing_items: List[Dict], dry_run: bool = True):
@@ -314,7 +373,7 @@ def add_missing_holdings(session: Session, missing_items: List[Dict], dry_run: b
             logger.info(f"[DRY RUN] {item['code']} {item['name']}: 신규 추가/갱신 예정 ({item['quantity']}주 @ {item['avg_price']:,.0f}원)")
         else:
             # 중복 방지를 위해 먼저 조회
-            existing_portfolio = session.query(Portfolio).filter(Portfolio.stock_code == item['code']).first()
+            existing_portfolio = session.query(Portfolio).filter(Portfolio.stock_code == item['code']).filter(Portfolio.status == 'SOLD').order_by(Portfolio.updated_at.desc()).first()
             
             if existing_portfolio:
                 # 이미 존재하면(예: SOLD 상태) 업데이트
@@ -387,7 +446,7 @@ def main():
         print_report(comparison)
         
         # 6. 동기화 적용
-        sync_items = len(comparison['only_in_db']) + len(comparison['quantity_mismatch'])
+        sync_items = len(comparison['only_in_db']) + len(comparison['quantity_mismatch']) + len(comparison['duplicates'])
         add_items = len(comparison['only_in_kis']) if args.add_missing else 0
         total_changes = sync_items + add_items
         
@@ -404,7 +463,7 @@ def main():
             # 요약 메시지
             summary_parts = []
             if sync_items > 0:
-                summary_parts.append(f"청산/수량 변경 {sync_items}개")
+                summary_parts.append(f"청산/수량 변경/중복 정리 {sync_items}개")
             if add_items > 0:
                 summary_parts.append(f"신규 추가 {add_items}개")
             
@@ -424,4 +483,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

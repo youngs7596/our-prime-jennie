@@ -129,6 +129,7 @@ class StockDailyPrice(Base):
 
 # --- 아래부터 새롭게 추가된 모델들 ---
 
+
 class Config(Base):
     __tablename__ = resolve_table_name("CONFIG")
     __table_args__ = {"extend_existing": True}
@@ -137,6 +138,30 @@ class Config(Base):
     config_value = Column("CONFIG_VALUE", Text, nullable=False)  # TEXT로 변경 (큰 JSON 저장용)
     description = Column("DESCRIPTION", Text, nullable=True)
     last_updated = Column("LAST_UPDATED", DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class ActivePortfolio(Base):
+    """
+    [New Architecture] 활성 포트폴리오 (State-only)
+    - 오직 현재 보유 중인 종목만 저장
+    - 매도(전량) 시 레코드 삭제
+    - stock_code가 PK이므로 중복 원천 차단
+    """
+    __tablename__ = resolve_table_name("ACTIVE_PORTFOLIO")
+    __table_args__ = {"extend_existing": True}
+
+    stock_code = Column("STOCK_CODE", String(20), primary_key=True)
+    stock_name = Column("STOCK_NAME", String(120))
+    quantity = Column("QUANTITY", Integer, nullable=False)
+    average_buy_price = Column("AVERAGE_BUY_PRICE", Float)
+    total_buy_amount = Column("TOTAL_BUY_AMOUNT", Float)
+    current_high_price = Column("CURRENT_HIGH_PRICE", Float)
+    stop_loss_price = Column("STOP_LOSS_PRICE", Float)
+    
+    # 메타데이터
+    created_at = Column("CREATED_AT", DateTime, server_default=func.now())
+    updated_at = Column("UPDATED_AT", DateTime, onupdate=func.now())  # 마지막 변동 시간
+
 
 
 class BacktestTradeLog(Base):
