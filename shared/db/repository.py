@@ -136,12 +136,12 @@ def get_active_watchlist(session: Session) -> Dict[str, dict]:
 
 def get_active_portfolio(session: Session) -> List[dict]:
     """
-    현재 보유(HOLDING) 중인 포트폴리오 목록 조회.
+    현재 보유(ActivePortfolio) 중인 포트폴리오 목록 조회.
     """
+    # ActivePortfolio 테이블 조회
     query = (
-        select(models.Portfolio)
-        .where(models.Portfolio.status.in_(["HOLDING", "PARTIAL"]))
-        .order_by(models.Portfolio.id.asc())
+        select(models.ActivePortfolio)
+        .order_by(models.ActivePortfolio.stock_code.asc())
     )
     rows = session.execute(query).scalars().all()
     portfolio: List[dict] = []
@@ -149,13 +149,14 @@ def get_active_portfolio(session: Session) -> List[dict]:
     for row in rows:
         portfolio.append(
             {
-                "id": row.id,
+                "id": row.stock_code, # Use stock_code as ID
                 "code": row.stock_code,
                 "name": row.stock_name,
                 "quantity": row.quantity,
                 "avg_price": float(row.average_buy_price) if row.average_buy_price is not None else 0.0,
                 "high_price": float(row.current_high_price) if row.current_high_price is not None else 0.0,
-                "sell_state": row.sell_state,
+                # ActivePortfolio doesn't track sell_state explicitly, assume HOLDING
+                "sell_state": "HOLDING", 
                 "stop_loss_price": float(row.stop_loss_price) if row.stop_loss_price is not None else 0.0,
                 "created_at": row.created_at,
             }

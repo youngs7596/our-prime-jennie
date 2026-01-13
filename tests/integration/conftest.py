@@ -29,7 +29,13 @@ def patch_session_scope(mocker, in_memory_db):
     
     @contextmanager
     def mock_scope(readonly=False):
-        yield session
+        try:
+            yield session
+            if not readonly:
+                session.commit()
+        except Exception:
+            session.rollback()
+            raise
     
     # Patch where session_scope is imported/used
     # Since we are dynamically importing, we need to patch the imported modules AFTER they are imported

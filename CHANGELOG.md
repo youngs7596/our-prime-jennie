@@ -17,6 +17,7 @@
 - **Airflow & Buy Limit Fixes**: Airflow DAGs(Scout/Crawler/Price-Monitor) API 전환 및 비동기화, `MAX_BUY_COUNT_PER_DAY` 4회 제한 버그(DB/Preset) 6회로 수정.
 - **Airflow DAG Stabilization**: `analyst_feedback_update`(`KeyError` 수정) 및 `weekly_factor_analysis`(`DB Connection` 타입 불일치 수정) DAG 정상화 완료.
 - **Portfolio Architecture Refactoring**: `ACTIVE_PORTFOLIO` 테이블 신규 생성 및 데이터 마이그레이션을 통해 `holdings` 중복 버그 원천 차단. 거래 로직(`trading.py`)이 Legacy `PORTFOLIO` 대신 `ACTIVE_PORTFOLIO`를 참조하도록 전면 수정 및 검증 완료.
+- **Portfolio Architecture Verified**: Integration Test(`test_e2e_pipeline.py`)에서 발생하던 `RuntimeError`(DB Dialect mismatch)를 해결하기 위해 `trading.py`에 SQLite 호환 로직(`_is_sqlite`) 추가 및 `repository.py`의 `get_active_portfolio` 쿼리 대상 수정 완료.
 
 
 ## 2026-01-12

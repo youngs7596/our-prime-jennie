@@ -21,6 +21,16 @@ from .core import _get_table_name, _is_mariadb, _is_sqlalchemy_ready
 logger = logging.getLogger(__name__)
 
 
+def _is_sqlite(session):
+    """Check if the current session is using SQLite"""
+    try:
+        bind = session.get_bind()
+        return bind.dialect.name == 'sqlite'
+    except Exception:
+        return False
+
+
+
 # ============================================================================
 # [Watchlist] 관심 종목 관리
 # ============================================================================
@@ -205,20 +215,65 @@ def save_to_watchlist(session, candidates: List[Dict]):
                 'market_cap': c.get('market_cap'), 'sales_growth': c.get('sales_growth'), 'eps_growth': c.get('eps_growth'),
                 'financial_updated_at': now
             }
-            result = session.execute(text("""
-                INSERT INTO WATCHLIST (
-                    STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
-                    TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
-                    PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
-                ) VALUES (:code, :name, :created_at, :is_tradable, :trade_tier, :llm_score, :llm_reason, :llm_updated_at,
-                          :per, :pbr, :roe, :market_cap, :sales_growth, :eps_growth, :financial_updated_at)
-                ON DUPLICATE KEY UPDATE
-                    STOCK_NAME = VALUES(STOCK_NAME), IS_TRADABLE = VALUES(IS_TRADABLE),
-                    TRADE_TIER = VALUES(TRADE_TIER),
-                    LLM_SCORE = VALUES(LLM_SCORE), LLM_REASON = VALUES(LLM_REASON), LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
-                    PER = VALUES(PER), PBR = VALUES(PBR), ROE = VALUES(ROE), MARKET_CAP = VALUES(MARKET_CAP),
-                    SALES_GROWTH = VALUES(SALES_GROWTH), EPS_GROWTH = VALUES(EPS_GROWTH), FINANCIAL_UPDATED_AT = VALUES(FINANCIAL_UPDATED_AT)
-            """), params)
+            if _is_sqlite(session):
+                # SQLite: INSERT OR REPLACE (REPLACE INTO)
+                # Note: This technically replaces the row, potentially resetting unlisted columns if any.
+                # But for WATCHLIST, we usually update all key columns.
+                # However, ON DUPLICATE KEY UPDATE syntax is specific to MySQL/MariaDB.
+                # For basic testing, we can check existence or use REPLACE.
+                # Let's use simple UPSERT logic (Check -> Insert/Update) for safety in tests.
+                
+                check_sql = text(f"SELECT 1 FROM WATCHLIST WHERE STOCK_CODE = :code")
+                exists = session.execute(check_sql, {'code': params['code']}).fetchone()
+                
+                if exists:
+                    # UPDATE
+                    update_sql = text("""
+                        UPDATE WATCHLIST SET
+                            STOCK_NAME = :name, IS_TRADABLE = :is_tradable, TRADE_TIER = :trade_tier,
+                            LLM_SCORE = :llm_score, LLM_REASON = :llm_reason, LLM_UPDATED_AT = :llm_updated_at,
+                            PER = :per, PBR = :pbr, ROE = :roe, MARKET_CAP = :market_cap,
+                            SALES_GROWTH = :sales_growth, EPS_GROWTH = :eps_growth, FINANCIAL_UPDATED_AT = :financial_updated_at
+                        WHERE STOCK_CODE = :code
+                    """)
+                    session.execute(update_sql, params)
+                    update_count += 1
+                else:
+                    # INSERT
+                    insert_sql = text("""
+                        INSERT INTO WATCHLIST (
+                            STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
+                            TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+                            PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
+                        ) VALUES (:code, :name, :created_at, :is_tradable, :trade_tier, :llm_score, 
+                                  :llm_reason, :llm_updated_at, :per, :pbr, :roe, :market_cap, 
+                                  :sales_growth, :eps_growth, :financial_updated_at)
+                    """)
+                    session.execute(insert_sql, params)
+                    insert_count += 1
+                
+                # Mock result for logic below
+                class MockResult:
+                    rowcount = 1
+                result = MockResult()
+                
+            else:
+                # MariaDB UPSERT syntax
+                result = session.execute(text("""
+                    INSERT INTO WATCHLIST (
+                        STOCK_CODE, STOCK_NAME, CREATED_AT, IS_TRADABLE,
+                        TRADE_TIER, LLM_SCORE, LLM_REASON, LLM_UPDATED_AT,
+                        PER, PBR, ROE, MARKET_CAP, SALES_GROWTH, EPS_GROWTH, FINANCIAL_UPDATED_AT
+                    ) VALUES (:code, :name, :created_at, :is_tradable, :trade_tier, :llm_score, :llm_reason, :llm_updated_at,
+                              :per, :pbr, :roe, :market_cap, :sales_growth, :eps_growth, :financial_updated_at)
+                    ON DUPLICATE KEY UPDATE
+                        STOCK_NAME = VALUES(STOCK_NAME), IS_TRADABLE = VALUES(IS_TRADABLE),
+                        TRADE_TIER = VALUES(TRADE_TIER),
+                        LLM_SCORE = VALUES(LLM_SCORE), LLM_REASON = VALUES(LLM_REASON), LLM_UPDATED_AT = VALUES(LLM_UPDATED_AT),
+                        PER = VALUES(PER), PBR = VALUES(PBR), ROE = VALUES(ROE), MARKET_CAP = VALUES(MARKET_CAP),
+                        SALES_GROWTH = VALUES(SALES_GROWTH), EPS_GROWTH = VALUES(EPS_GROWTH), FINANCIAL_UPDATED_AT = VALUES(FINANCIAL_UPDATED_AT)
+                """), params)
+
             if result.rowcount == 1:
                 insert_count += 1
             elif result.rowcount == 2:
@@ -469,32 +524,81 @@ def _execute_trade_and_log_sqlalchemy(
         
         # 2. Active Portfolio 업데이트
         if trade_type == 'BUY':
-            # UPSERT 로직 (Duplicate Key Update)
             total_amount = quantity * price
             
-            # MariaDB UPSERT syntax
-            session.execute(text(f"""
-                INSERT INTO {active_table}
-                (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
-                 STOP_LOSS_PRICE, CURRENT_HIGH_PRICE, CREATED_AT, UPDATED_AT)
-                VALUES 
-                (:code, :name, :qty, :price, :total, 
-                 :stop_loss, :high_price, :now, :now)
-                ON DUPLICATE KEY UPDATE
-                    QUANTITY = QUANTITY + :qty,
-                    TOTAL_BUY_AMOUNT = TOTAL_BUY_AMOUNT + :total,
-                    AVERAGE_BUY_PRICE = (TOTAL_BUY_AMOUNT + :total) / (QUANTITY + :qty),
-                    UPDATED_AT = :now
-            """), {
-                "code": stock_info['code'],
-                "name": stock_info['name'],
-                "qty": quantity,
-                "price": price,
-                "total": total_amount,
-                "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
-                "high_price": price,
-                "now": now
-            })
+            if _is_sqlite(session):
+                # SQLite Implementation (SELECT -> UPDATE/INSERT)
+                existing = session.execute(
+                    text(f"SELECT QUANTITY, TOTAL_BUY_AMOUNT FROM {active_table} WHERE STOCK_CODE = :code"), 
+                    {"code": stock_info['code']}
+                ).fetchone()
+                
+                if existing:
+                    # UPDATE
+                    current_qty = existing[0]
+                    current_total = existing[1]
+                    new_qty = current_qty + quantity
+                    new_total = current_total + total_amount
+                    avg_price = new_total / new_qty if new_qty > 0 else 0
+                    
+                    session.execute(text(f"""
+                        UPDATE {active_table}
+                        SET QUANTITY = :qty, 
+                            TOTAL_BUY_AMOUNT = :total, 
+                            AVERAGE_BUY_PRICE = :avg, 
+                            UPDATED_AT = :now
+                        WHERE STOCK_CODE = :code
+                    """), {
+                        "qty": new_qty, 
+                        "total": new_total, 
+                        "avg": avg_price, 
+                        "now": now, 
+                        "code": stock_info['code']
+                    })
+                else:
+                    # INSERT
+                    session.execute(text(f"""
+                        INSERT INTO {active_table}
+                        (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
+                         STOP_LOSS_PRICE, CURRENT_HIGH_PRICE, CREATED_AT, UPDATED_AT)
+                        VALUES 
+                        (:code, :name, :qty, :price, :total, 
+                         :stop_loss, :high_price, :now, :now)
+                    """), {
+                        "code": stock_info['code'],
+                        "name": stock_info['name'],
+                        "qty": quantity,
+                        "price": price,
+                        "total": total_amount,
+                        "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
+                        "high_price": price,
+                        "now": now
+                    })
+            else:
+                # MariaDB UPSERT syntax (Atomic)
+                session.execute(text(f"""
+                    INSERT INTO {active_table}
+                    (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, TOTAL_BUY_AMOUNT,
+                     STOP_LOSS_PRICE, CURRENT_HIGH_PRICE, CREATED_AT, UPDATED_AT)
+                    VALUES 
+                    (:code, :name, :qty, :price, :total, 
+                     :stop_loss, :high_price, :now, :now)
+                    ON DUPLICATE KEY UPDATE
+                        QUANTITY = QUANTITY + :qty,
+                        TOTAL_BUY_AMOUNT = TOTAL_BUY_AMOUNT + :total,
+                        AVERAGE_BUY_PRICE = (TOTAL_BUY_AMOUNT + :total) / (QUANTITY + :qty),
+                        UPDATED_AT = :now
+                """), {
+                    "code": stock_info['code'],
+                    "name": stock_info['name'],
+                    "qty": quantity,
+                    "price": price,
+                    "total": total_amount,
+                    "stop_loss": initial_stop_loss_price if initial_stop_loss_price is not None else 0.0,
+                    "high_price": price,
+                    "now": now
+                })
+            
                 
         elif trade_type == 'SELL':
             # 매도 처리 (감소 또는 삭제)
