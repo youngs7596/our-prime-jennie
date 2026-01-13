@@ -56,7 +56,7 @@ def format_report_for_llm(stats, recent_decisions):
     for d in recent_decisions[:10]:
         pnl = d.get('return_t5')
         pnl_str = f"{pnl:.2f}%" if pnl is not None else "N/A"
-        report.append(f"- {d['stock_name']}({d['stock_code']}): Hunter {d['hunter_score']}, Hybrid {d['hybrid_score']} -> T+5 Return: {pnl_str} (Regime: {d['market_regime']})")
+        report.append(f"- {d['stock_name']}({d['stock_code']}): Hunter {d['hunter_score']} -> T+5 Return: {pnl_str} (Regime: {d['market_regime']})")
 
     return "\n".join(report)
 

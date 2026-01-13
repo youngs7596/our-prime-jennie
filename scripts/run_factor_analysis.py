@@ -103,8 +103,10 @@ def main():
     start_time = datetime.now()
     
     # DB 연결
-    # [Fix] shared.database.core.get_db_connection() takes no arguments
-    conn = database.get_db_connection()
+    # [Fix] FactorAnalyzer expects SQLAlchemy Engine, but get_db_connection() returns raw DBAPI connection
+    # shared.database.pool is not reliable if imported before initialization
+    conn = database.init_connection_pool()
+
     if not conn:
         logger.error("❌ DB 연결 실패")
         return
@@ -208,7 +210,8 @@ def main():
     except Exception as e:
         logger.error(f"❌ 분석 중 오류 발생: {e}", exc_info=True)
     finally:
-        conn.close()
+        # conn is an Engine object, it manages the pool automatically.
+        pass
 
 
 if __name__ == "__main__":
