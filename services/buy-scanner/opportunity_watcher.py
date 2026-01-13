@@ -134,6 +134,21 @@ class BuyOpportunityWatcher:
             'last_tick_time': None,
             'last_signal_time': None,
         }
+        self.current_version_key = None
+
+    def check_for_update(self) -> bool:
+        """Redis에서 새 버전 확인"""
+        if not self.redis:
+            return False
+        try:
+            active_key = self.redis.get("hot_watchlist:active")
+            # active_key가 존재하고, 현재 버전과 다르면 업데이트 필요
+            # (현재 버전이 None이면 무조건 업데이트)
+            if active_key and active_key != self.current_version_key:
+                return True
+            return False
+        except Exception:
+            return False
         
     def load_hot_watchlist(self) -> bool:
         """Redis에서 Hot Watchlist 로드"""
@@ -144,7 +159,11 @@ class BuyOpportunityWatcher:
             version_key = self.redis.get("hot_watchlist:active")
             if not version_key:
                 logger.debug("Hot Watchlist active 버전 없음")
+                self.current_version_key = None
                 return False
+            
+            # 버전이 같으면 (그리고 우리가 이미 데이터를 가지고 있으면) 스킵
+            # 단, force reload가 필요할 수도 있으므로 여기서는 로드 진행
             
             data = self.redis.get(version_key)
             if not data:
@@ -168,6 +187,7 @@ class BuyOpportunityWatcher:
             self.market_regime = payload.get('market_regime', 'SIDEWAYS')
             self.score_threshold = payload.get('score_threshold', 65)
             self.last_watchlist_load = time.time()
+            self.current_version_key = version_key
             
             logger.info(f"🔥 Hot Watchlist 로드: {len(self.hot_watchlist)}개 종목 "
                        f"(regime: {self.market_regime}, threshold: {self.score_threshold})")

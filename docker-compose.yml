@@ -166,59 +166,10 @@ services:
       - stack=my-prime-jennie
 
   # ============================================================================
-  # 0-bis. Scheduler Service
+  # 0-bis. Scheduler Service (Legacy - Removed in favor of Airflow)
   # ============================================================================
-  scheduler-service:
-    build:
-      context: .
-      dockerfile: services/scheduler-service/Dockerfile
-    profiles: [ "real" ]
-    network_mode: host
-    env_file:
-      - infrastructure/env-vars-wsl.yaml
-    environment:
-      - PORT=8095
-      - RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/
-    volumes:
-      - ./secrets.json:/app/config/secrets.json:ro
-      - /docker_data/scheduler_data:/app/data
-    labels:
-      - app=scheduler-service
-      - stack=my-prime-jennie
-    depends_on:
-      kis-gateway:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health')" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  scheduler-worker:
-    build:
-      context: .
-      dockerfile: services/scheduler-service/Dockerfile
-    profiles: [ "real" ]
-    network_mode: host
-    env_file:
-      - infrastructure/env-vars-wsl.yaml
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@127.0.0.1:5672/
-      - SCHEDULER_SCOPE=real
-      - PYTHONPATH=/app
-    volumes:
-      - ./secrets.json:/app/config/secrets.json:ro
-      - /docker_data/scheduler_data:/app/data
-    command: [ "python3", "worker.py" ]
-    labels:
-      - app=scheduler-worker
-      - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
-    restart: unless-stopped
+  # scheduler-service: ... removed ...
+  # scheduler-worker: ... removed ...
 
   scheduler-service-mock:
     build:
@@ -364,9 +315,6 @@ services:
     labels:
       - app=buy-scanner
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
       interval: 30s
@@ -432,9 +380,6 @@ services:
     labels:
       - app=buy-executor
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')" ]
       interval: 30s
@@ -494,9 +439,6 @@ services:
     labels:
       - app=sell-executor
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')" ]
       interval: 30s
@@ -614,9 +556,6 @@ services:
     labels:
       - app=price-monitor
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')" ]
       interval: 30s
@@ -679,9 +618,6 @@ services:
     labels:
       - app=daily-briefing
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8086/health')" ]
       interval: 30s
@@ -750,9 +686,6 @@ services:
     labels:
       - app=scout-job
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8087/health')" ]
       interval: 30s
@@ -850,9 +783,6 @@ services:
     labels:
       - app=news-crawler
       - stack=my-prime-jennie
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/health')" ]
       interval: 30s
@@ -912,9 +842,6 @@ services:
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      scheduler-service:
-        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')" ]
       interval: 30s
@@ -1073,6 +1000,88 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # ============================================================================
+  # 9. Airflow Infrastructure (Consolidated Scheduler)
+  # ============================================================================
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: services/airflow/Dockerfile
+    profiles: [ "real" ]
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - msa-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      # Use PyMySQL driver to avoid C-extension build dependencies
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+pymysql://root:q1w2e3R$@mariadb:3306/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-t7i2p3o4k5e6n7_g8e9n0e1r2a3t4e5d6=}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__RBAC=True
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs/airflow:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./shared:/opt/airflow/shared
+      - ./services:/opt/airflow/services
+      - ./infrastructure:/opt/airflow/infrastructure
+      - ./config:/opt/airflow/config
+      - ./secrets.json:/opt/airflow/secrets.json
+    ports:
+      - "8085:8080"
+    command: webserver
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    restart: always
+
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: services/airflow/Dockerfile
+    profiles: [ "real" ]
+    depends_on:
+      airflow-webserver:
+        condition: service_healthy
+    networks:
+      - msa-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=mysql+pymysql://root:q1w2e3R$@mariadb:3306/airflow
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY:-t7i2p3o4k5e6n7_g8e9n0e1r2a3t4e5d6=}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/opt/airflow
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs/airflow:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./shared:/opt/airflow/shared
+      - ./services:/opt/airflow/services
+      - ./infrastructure:/opt/airflow/infrastructure
+      - ./config:/opt/airflow/config
+      - ./secrets.json:/opt/airflow/secrets.json
+      # Mount docker socket to allow triggering other containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: scheduler
+    healthcheck:
+      test: [ "CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"' ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    restart: always
 
 networks:
   msa-network:

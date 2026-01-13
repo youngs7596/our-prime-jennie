@@ -118,3 +118,4 @@ FACT_CHECK_ALERT_ENABLED: "true"  # LLM 환각 탐지 시 Telegram 알림 활성
 ENABLE_AI_AUDITOR: "false" # [Config] Disable Cloud AI Verification (User Request)
 
 ENABLE_STARTUP_ONESHOT: "false"
+AIRFLOW_FERNET_KEY=4g8yR8W14v5coc3o9xXA-yNcn4x5a8QFk57fbARQNtU=

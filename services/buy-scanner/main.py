@@ -213,6 +213,8 @@ def _start_websocket_monitoring():
                     
                     logger.info("   (WS) ✅ WebSocket 연결 성공! 실시간 감시 중.")
                     
+                    last_watchlist_check = time.time()
+                    
                     # 연결 유지 루프
                     while kis_client.websocket.connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
                         time.sleep(1)
@@ -222,6 +224,14 @@ def _start_websocket_monitoring():
                         if now - last_heartbeat_time >= 5:
                             opportunity_watcher.publish_heartbeat()
                             last_heartbeat_time = now
+                            
+                        # Watchlist 업데이트 체크 (30초마다)
+                        if now - last_watchlist_check >= 30:
+                            if opportunity_watcher.check_for_update():
+                                logger.info("🔄 (WS) Hot Watchlist 업데이트 감지! 재연결을 진행합니다.")
+                                kis_client.websocket.stop() # 이로 인해 connection_event가 clear되어 루프 종료
+                                break
+                            last_watchlist_check = now
                     
                     if opportunity_watcher.stop_event.is_set():
                         break
@@ -313,15 +323,24 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
         if connection_event.wait(timeout=10):
             logger.info("   (Mock WS) ✅ 실시간 감시 시작!")
             
+            last_watchlist_check = time.time()
+            
             # 연결 유지 루프
             while connection_event.is_set() and not opportunity_watcher.stop_event.is_set():
                 time.sleep(1)
                 now = time.time()
-                
                 # Heartbeat 발행 (5초마다)
                 if now - last_heartbeat_time >= 5:
                     opportunity_watcher.publish_heartbeat()
                     last_heartbeat_time = now
+                    
+                # Watchlist 업데이트 체크 (30초마다)
+                if now - last_watchlist_check >= 30:
+                    if opportunity_watcher.check_for_update():
+                        logger.info("🔄 (Mock WS) Hot Watchlist 업데이트 감지! 재연결을 진행합니다.")
+                        sio.disconnect()
+                        break
+                    last_watchlist_check = now
         else:
             logger.error("   (Mock WS) ❌ 연결 타임아웃!")
     except Exception as e:
