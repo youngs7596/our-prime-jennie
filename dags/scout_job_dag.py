@@ -30,7 +30,7 @@ with DAG(
 
     run_scout = BashOperator(
         task_id='run_scout_job',
-        # service/scout-job has a main.py or similar entrypoint? 
-        # Using "python services/scout-job/main.py"
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python services/scout-job/main.py',
+        # Trigger the existing scout-job service via HTTP API
+        # scout-job is on host network port 8087, accessed via host.docker.internal from container
+        bash_command='curl -X POST -H "Content-Type: application/json" http://host.docker.internal:8087/scout',
     )

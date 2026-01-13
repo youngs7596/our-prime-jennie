@@ -36,7 +36,7 @@ REGISTRY = {
     "TIER2_MIN_CONDITIONS": {"value": 3, "type": "int", "desc": "Tier2 복합 안전장치 최소 충족 조건 수", "category": "Signal", "db_priority": True},
 
     # ===== 리스크/비중 (운영 튜닝) =====
-    "MAX_BUY_COUNT_PER_DAY": {"value": 5, "type": "int", "desc": "일일 최대 매수 건수", "category": "Risk", "db_priority": True},
+    "MAX_BUY_COUNT_PER_DAY": {"value": 6, "type": "int", "desc": "일일 최대 매수 건수", "category": "Risk", "db_priority": True},
     "MAX_PORTFOLIO_SIZE": {"value": 10, "type": "int", "desc": "보유 종목 한도", "category": "Risk", "db_priority": True},
     "MAX_POSITION_VALUE_PCT": {"value": 10.0, "type": "float", "desc": "단일 종목 최대 비중(%)", "category": "Risk", "db_priority": True},
     "MAX_SECTOR_PCT": {"value": 30.0, "type": "float", "desc": "섹터 최대 비중(%)", "category": "Risk", "db_priority": True},

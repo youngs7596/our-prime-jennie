@@ -29,9 +29,9 @@ with DAG(
     tags=['crawler', 'news'],
 ) as dag:
 
-    # Docker container executes this. 
-    # Must ensure PYTHONPATH includes project root
+    # Trigger the existing news-crawler service via HTTP API
     run_crawler = BashOperator(
         task_id='run_news_crawler',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python services/news-crawler/main.py',
+        # news-crawler is on host network port 8089
+        bash_command='curl -X POST -H "Content-Type: application/json" http://host.docker.internal:8089/crawl',
     )

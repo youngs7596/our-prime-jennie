@@ -129,13 +129,34 @@ def health():
 @app.route("/crawl", methods=["POST"])
 def crawl():
     """
-    뉴스 크롤링 실행 엔드포인트 (HTTP 수동 트리거)
+    뉴스 크롤링 실행 엔드포인트 (HTTP 수동 트리거 -> RabbitMQ 비동기)
     """
     try:
-        result = _run_crawler(trigger_source="http")
-        return jsonify(result), 200
+        if not scheduler_job_publisher:
+             return jsonify({"status": "error", "message": "RabbitMQ Publisher not initialized"}), 503
+
+        run_id = str(uuid.uuid4())
+        payload = {
+            "job_id": _get_scheduler_job_id(),
+            "scope": os.getenv("SCHEDULER_SCOPE", "real"),
+            "run_id": run_id,
+            "trigger_source": "manual_http",
+            "params": {},
+            "timeout_sec": 3600,
+            "retry_limit": 1,
+            "queued_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        msg_id = scheduler_job_publisher.publish(payload)
+        logger.info("🚀 News Crawler 비동기 트리거됨 (run_id=%s, msg_id=%s)", run_id, msg_id)
+        
+        return jsonify({
+            "status": "triggered",
+            "run_id": run_id,
+            "message": "News crawler job pushed to queue for asynchronous processing"
+        }), 202
     except Exception as e:
-        logger.error(f"❌ News Crawler 작업 실패: {e}", exc_info=True)
+        logger.error(f"❌ News Crawler 트리거 실패: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 

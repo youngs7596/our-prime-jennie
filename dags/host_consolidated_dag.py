@@ -14,6 +14,17 @@ default_args = {
     'on_failure_callback': send_telegram_alert,
 }
 
+# Common Environment Variables (Same as utility_jobs_dag)
+COMMON_ENV = {
+    'PYTHONPATH': '/opt/airflow',
+    'MARIADB_HOST': 'mariadb',
+    'MARIADB_PORT': '3306',
+    'MARIADB_USER': 'root',
+    'REDIS_HOST': 'redis',
+    'REDIS_PORT': '6379',
+    'TZ': 'Asia/Seoul',
+}
+
 # 1. Weekly Factor Analysis (Friday 22:00 KST -> 13:00 UTC)
 with DAG(
     'weekly_factor_analysis',
@@ -26,6 +37,7 @@ with DAG(
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
         bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/weekly_factor_analysis_batch.py',
+        env=COMMON_ENV,
     )
 
 # 2. Daily Price Collector (Weekday 16:00 KST -> 07:00 UTC)
@@ -40,6 +52,7 @@ with DAG(
     run_collector = BashOperator(
         task_id='collect_full_market_data',
         bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/collect_full_market_data_parallel.py',
+        env=COMMON_ENV,
     )
 
 # 3. Daily Briefing (Weekday 17:00 KST -> 08:00 UTC)
@@ -70,4 +83,5 @@ with DAG(
     run_ai_perf = BashOperator(
         task_id='analyze_ai_performance',
         bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/analyze_ai_performance.py',
+        env=COMMON_ENV,
     )

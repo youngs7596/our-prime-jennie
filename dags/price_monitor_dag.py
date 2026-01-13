@@ -27,13 +27,11 @@ with DAG(
     tags=['price', 'monitor', 'ops'],
 ) as dag:
 
-    # 1. Start Price Monitor Service (Container)
-    # Ideally, we call an API or script that starts the service logic.
-    # Referring to old scheduler: "price-monitor-start" job sends action="start" param.
-    # Here we can run the script directly if it supports CLI
+    # 1. Start Price Monitor Service (Trigger API)
+    # price-monitor is on host network port 8088
     start_monitor = BashOperator(
         task_id='start_price_monitor',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python services/price-monitor/main.py --action start',
+        bash_command='curl -X POST http://host.docker.internal:8088/start',
     )
     
     # 2. Stop Price Monitor (Separate DAG)
@@ -51,5 +49,5 @@ with DAG(
 
     stop_monitor = BashOperator(
         task_id='stop_price_monitor',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python services/price-monitor/main.py --action stop',
+        bash_command='curl -X POST http://host.docker.internal:8088/stop',
     )

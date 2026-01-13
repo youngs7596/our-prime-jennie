@@ -17,7 +17,7 @@
       "sell_rsi_1": 68.0,
       "sell_rsi_2": 75.0,
       "sell_rsi_3": 80.0,
-      "max_buys_per_day": 3,
+      "max_buys_per_day": 6,
       "max_hold_days": 35
     }
   },
@@ -39,7 +39,7 @@
       "sell_rsi_1": 70.0,
       "sell_rsi_2": 73.0,
       "sell_rsi_3": 78.0,
-      "max_buys_per_day": 3,
+      "max_buys_per_day": 6,
       "max_hold_days": 35
     }
   },
@@ -61,7 +61,7 @@
       "sell_rsi_1": 70.0,
       "sell_rsi_2": 75.0,
       "sell_rsi_3": 78.0,
-      "max_buys_per_day": 3,
+      "max_buys_per_day": 6,
       "max_hold_days": 25
     }
   },
@@ -83,7 +83,7 @@
       "sell_rsi_1": 68.0,
       "sell_rsi_2": 75.0,
       "sell_rsi_3": 78.0,
-      "max_buys_per_day": 4,
+      "max_buys_per_day": 6,
       "max_hold_days": 30
     }
   },
@@ -105,7 +105,7 @@
       "sell_rsi_1": 70.0,
       "sell_rsi_2": 75.0,
       "sell_rsi_3": 78.0,
-      "max_buys_per_day": 3,
+      "max_buys_per_day": 6,
       "max_hold_days": 35
     }
   }

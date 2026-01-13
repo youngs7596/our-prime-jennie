@@ -250,6 +250,9 @@ def main():
     # DB 연결
     # DB 연결
     # shared.database.get_db_connection handles config internally or via env vars
+    from shared.db.connection import init_engine
+    init_engine()
+    
     conn = database.get_db_connection()
     if not conn:
         logger.error("❌ DB 연결 실패")

@@ -1038,6 +1038,7 @@ services:
       - ./services:/opt/airflow/services
       - ./infrastructure:/opt/airflow/infrastructure
       - ./config:/opt/airflow/config
+      - ./scripts:/opt/airflow/scripts
       - ./secrets.json:/opt/airflow/secrets.json
     ports:
       - "8085:8080"
@@ -1076,6 +1077,7 @@ services:
       - ./infrastructure:/opt/airflow/infrastructure
       - ./config:/opt/airflow/config
       - ./secrets.json:/opt/airflow/secrets.json
+      - ./scripts:/opt/airflow/scripts
       # Mount docker socket to allow triggering other containers
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
