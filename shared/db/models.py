@@ -78,22 +78,7 @@ class WatchList(Base):
     trade_tier = Column("TRADE_TIER", String(16), nullable=False, default="BLOCKED")
 
 
-class Portfolio(Base):
-    __tablename__ = resolve_table_name("PORTFOLIO")
-    __table_args__ = {"extend_existing": True}
 
-    id = Column("ID", Integer, primary_key=True)
-    stock_code = Column("STOCK_CODE", String(20))
-    stock_name = Column("STOCK_NAME", String(120))
-    quantity = Column("QUANTITY", Integer)
-    average_buy_price = Column("AVERAGE_BUY_PRICE", Float)
-    total_buy_amount = Column("TOTAL_BUY_AMOUNT", Float)
-    current_high_price = Column("CURRENT_HIGH_PRICE", Float)
-    status = Column("STATUS", String(20))
-    sell_state = Column("SELL_STATE", String(20))
-    stop_loss_price = Column("STOP_LOSS_PRICE", Float)
-    created_at = Column("CREATED_AT", DateTime, server_default=func.now())
-    updated_at = Column("UPDATED_AT", DateTime, onupdate=func.now())
 
 
 class TradeLog(Base):
@@ -101,7 +86,7 @@ class TradeLog(Base):
     __table_args__ = {"extend_existing": True}
 
     log_id = Column("LOG_ID", Integer, primary_key=True)
-    portfolio_id = Column("PORTFOLIO_ID", Integer, ForeignKey(resolve_table_name("PORTFOLIO") + ".ID"))
+    # portfolio_id FK Removed (Legacy)
     stock_code = Column("STOCK_CODE", String(20), index=True)
     trade_type = Column("TRADE_TYPE", String(10))
     quantity = Column("QUANTITY", Integer)

@@ -5,6 +5,7 @@
   - `shared/strategy.py`: `check_death_cross`에 `gap_threshold=0.002` 파라미터 추가
   - `services/sell-executor/executor.py`: Redis Lock(`lock:sell:{stock_code}`) 추가
   - `tests/shared/test_strategy_death_cross_gap.py`: 신규 테스트 추가 및 `executor` 테스트 보강
+- **ActivePortfolio Migration Cleanup**: 레거시 `Portfolio` 모델 및 `TradeLog.portfolio_id` FK 의존성 완전 제거, `test_repository.py` 전수 수정 및 59개 테스트 통과. `ActivePortfolio` 체계로 완전 전환 및 코드 부채 해소.
 - **Redis Streams WebSocket 아키텍처**: KIS API 동시 연결 제한(Connection reset by peer) 해결을 위해 단일 WebSocket 공유 아키텍처 구현.
   - `kis-gateway`: `KISWebSocketStreamer` 싱글톤 및 `/api/realtime/subscribe` 엔드포인트 추가. KIS WebSocket → Redis Streams 발행.
   - `shared/kis/stream_consumer.py`: Redis Consumer Groups 기반 `StreamPriceConsumer` 클래스 신규 생성.

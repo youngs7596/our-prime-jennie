@@ -735,7 +735,7 @@ def get_trade_log(session, limit=50):
     try:
         tradelog_table = db_models.resolve_table_name("TRADELOG")
         result = session.execute(text(f"""
-            SELECT LOG_ID, PORTFOLIO_ID, STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, REASON, TRADE_TIMESTAMP
+            SELECT LOG_ID, STOCK_CODE, TRADE_TYPE, QUANTITY, PRICE, REASON, TRADE_TIMESTAMP
             FROM {tradelog_table}
             ORDER BY TRADE_TIMESTAMP DESC
             LIMIT :limit
@@ -743,7 +743,7 @@ def get_trade_log(session, limit=50):
         rows = result.fetchall()
         
         if rows:
-            return pd.DataFrame(rows, columns=['LOG_ID', 'PORTFOLIO_ID', 'STOCK_CODE', 'TRADE_TYPE', 'QUANTITY', 'PRICE', 'REASON', 'TRADE_TIMESTAMP'])
+            return pd.DataFrame(rows, columns=['LOG_ID', 'STOCK_CODE', 'TRADE_TYPE', 'QUANTITY', 'PRICE', 'REASON', 'TRADE_TIMESTAMP'])
         return None
     except Exception as e:
         logger.error(f"❌ DB: get_trade_log 실패! (에러: {e})")

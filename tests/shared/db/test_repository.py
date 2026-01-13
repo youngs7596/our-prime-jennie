@@ -75,43 +75,29 @@ def session_with_watchlist(db_session):
 
 @pytest.fixture
 def session_with_portfolio(db_session):
-    """Portfolio 데이터가 있는 세션"""
-    from shared.db.models import Portfolio
+    """ActivePortfolio 데이터가 있는 세션"""
+    from shared.db.models import ActivePortfolio
     
     items = [
-        Portfolio(
+        ActivePortfolio(
             stock_code="005930",
             stock_name="삼성전자",
             quantity=100,
             average_buy_price=70000,
             total_buy_amount=7000000,
             current_high_price=75000,
-            status="HOLDING",
-            sell_state="INITIAL",
             stop_loss_price=63000,
         ),
-        Portfolio(
+        ActivePortfolio(
             stock_code="000660",
             stock_name="SK하이닉스",
             quantity=50,
             average_buy_price=150000,
             total_buy_amount=7500000,
             current_high_price=160000,
-            status="HOLDING",
-            sell_state="TRAILING",
             stop_loss_price=140000,
         ),
-        Portfolio(
-            stock_code="035420",
-            stock_name="NAVER",
-            quantity=10,
-            average_buy_price=200000,
-            total_buy_amount=2000000,
-            current_high_price=200000,
-            status="SOLD",  # 매도 완료
-            sell_state="SOLD",
-            stop_loss_price=180000,
-        ),
+        # NAVER (SOLD)는 ActivePortfolio에 존재하지 않음 (보유중인 종목만 저장됨)
     ]
     
     for item in items:
@@ -339,12 +325,11 @@ class TestPortfolio:
         
         portfolio = get_active_portfolio(session_with_portfolio)
         
-        # SOLD는 제외되어야 함
+        # ActivePortfolio에는 보유중인 종목만 있음
         assert len(portfolio) == 2
         codes = [p["code"] for p in portfolio]
         assert "005930" in codes
         assert "000660" in codes
-        assert "035420" not in codes  # SOLD 상태
     
     def test_get_active_portfolio_fields(self, session_with_portfolio):
         """포트폴리오 필드 확인"""
@@ -357,7 +342,7 @@ class TestPortfolio:
         assert samsung["quantity"] == 100
         assert samsung["avg_price"] == 70000
         assert samsung["high_price"] == 75000
-        assert samsung["sell_state"] == "INITIAL"
+        assert samsung["sell_state"] == "HOLDING" # ActivePortfolio는 상태 필드가 없어 서비스 레이어에서 HOLDING으로 고정
         assert samsung["stop_loss_price"] == 63000
     
     def test_get_active_portfolio_empty(self, db_session):
@@ -576,19 +561,19 @@ class TestEdgeCases:
     
     def test_portfolio_with_null_values(self, db_session):
         """NULL 값이 있는 포트폴리오"""
-        from shared.db.models import Portfolio
+    def test_portfolio_with_null_values(self, db_session):
+        """NULL 값이 있는 포트폴리오"""
+        from shared.db.models import ActivePortfolio
         from shared.db.repository import get_active_portfolio
         
         # NULL 값이 많은 포트폴리오 생성
-        db_session.add(Portfolio(
+        db_session.add(ActivePortfolio(
             stock_code="TEST01",
             stock_name="테스트",
             quantity=10,
             average_buy_price=None,  # NULL
             total_buy_amount=None,
             current_high_price=None,
-            status="HOLDING",
-            sell_state=None,
             stop_loss_price=None,
         ))
         db_session.commit()
