@@ -35,6 +35,7 @@ _MOCK_TABLES = {
     "TRADELOG",
     "NEWS_SENTIMENT",
     "AGENT_COMMANDS",
+    "ACTIVE_PORTFOLIO",
 }
 
 # Oracle은 대소문자를 구분하지 않으므로, 모든 테이블 이름을 대문자로 통일합니다.
