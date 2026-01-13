@@ -62,11 +62,6 @@ with DAG(
 with DAG(
     'daily_ai_performance_analysis',
     default_args=default_args,
-    schedule_interval='0 22 * * 1-5', # Sunday-Thursday UTC to match Monday-Friday KST morning?
-    # Weekday 07:00 KST is Mon-Fri.
-    # Mon 07:00 KST = Sun 22:00 UTC.
-    # Fri 07:00 KST = Thu 22:00 UTC.
-    # So cron should be "0 22 * * 0-4"
     schedule_interval='0 22 * * 0-4',
     start_date=datetime(2025, 1, 1),
     catchup=False,

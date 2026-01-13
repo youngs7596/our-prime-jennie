@@ -5,6 +5,7 @@
 - **Bug Fix (Portfolio Size)**: `buy-executor`에서 포트폴리오 크기가 실제 4개이나 10개로 잘못 인식되는 버그 수정 (`MAX_PORTFOLIO_SIZE`=30 증설, DB 중복 데이터 확인).
 - **Airflow Utility Jobs Migration**: 누락된 5개 유틸리티 작업(`collect_intraday`, `analyst_feedback_update`, `collect_prices_fdr`, `collect_investor_trading`, `collect_dart_filings`)을 `dags/utility_jobs_dag.py`로 통합하고 UTC 스케줄 등록 완료.
 - **Infrastructure Fix**: Airflow(Bridge) 컨테이너에서 Host Network 서비스(KIS Gateway, Ollama) 접근을 위한 `host.docker.internal` 설정(`extra_hosts`) 추가.
+- **Hotfix (Airflow DAGs)**: `host_consolidated_dag.py` 및 `news_crawler_dag.py`의 `schedule_interval` 중복 정의로 인한 Import Error 수정.
 
 ## 2026-01-12
 - **Backfill Data & Scoring Fix**: 백필 데이터 누락 문제(뉴스 쿼리 대소문자) 해결 및 뉴스 데이터 부족 시 점수 보정(80%) 로직 적용으로 `WATCHLIST_HISTORY` 데이터 정합성 확보.

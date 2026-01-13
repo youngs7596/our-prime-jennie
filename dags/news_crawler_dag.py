@@ -23,12 +23,6 @@ with DAG(
     'news_crawler_v1',
     default_args=default_args,
     description='News Crawler (07, 15, 16 KST)',
-    schedule_interval='0 7,15,16 * * *', # UTC? KST? Airflow uses UTC by default. KST 07:00 = UTC 22:00 (prev day)
-    # Wait, simple cron expression in UTC might be tricky for "07, 15, 16"
-    # KST 07:00 -> UTC 22:00
-    # KST 15:00 -> UTC 06:00
-    # KST 16:00 -> UTC 07:00
-    # So UTC schedule: "0 22,6,7 * * *"
     schedule_interval='0 22,6,7 * * *', 
     start_date=datetime(2025, 1, 1),
     catchup=False,
