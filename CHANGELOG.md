@@ -1,6 +1,10 @@
 # 📅 변경 이력 (Change Log)
 
 ## 2026-01-13
+- **Sell Logic Hardening**: Death Cross 민감도 상향(0.2% Gap) 및 Redis Lock 기반 매도 중복 방지 로직 구현으로 안정성 강화.
+  - `shared/strategy.py`: `check_death_cross`에 `gap_threshold=0.002` 파라미터 추가
+  - `services/sell-executor/executor.py`: Redis Lock(`lock:sell:{stock_code}`) 추가
+  - `tests/shared/test_strategy_death_cross_gap.py`: 신규 테스트 추가 및 `executor` 테스트 보강
 - **Redis Streams WebSocket 아키텍처**: KIS API 동시 연결 제한(Connection reset by peer) 해결을 위해 단일 WebSocket 공유 아키텍처 구현.
   - `kis-gateway`: `KISWebSocketStreamer` 싱글톤 및 `/api/realtime/subscribe` 엔드포인트 추가. KIS WebSocket → Redis Streams 발행.
   - `shared/kis/stream_consumer.py`: Redis Consumer Groups 기반 `StreamPriceConsumer` 클래스 신규 생성.

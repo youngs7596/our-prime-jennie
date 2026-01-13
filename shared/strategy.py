@@ -262,10 +262,19 @@ def check_golden_cross(daily_prices_df, short_period=5, long_period=20):
 # -----------------------------------------------------------
 # '추세 이탈' 신호 (데드 크로스)
 # -----------------------------------------------------------
-def check_death_cross(daily_prices_df, short_period=5, long_period=20):
+def check_death_cross(daily_prices_df, short_period=5, long_period=20, gap_threshold=0.002):
     """
     단기 이평선(5일)이 장기 이평선(20일)을 하향 돌파(데드 크로스)했는지 확인합니다.
-    (daily_prices_df: 날짜 오름차순 정렬)
+    추가로, 단순히 교차하는 것을 넘어 0.2% 이상의 이격(gap)이 발생했는지 확인하여 노이즈를 필터링합니다.
+
+    Args:
+        daily_prices_df: 일봉 데이터 (날짜 오름차순)
+        short_period: 단기 이평 기간 (기본 5)
+        long_period: 장기 이평 기간 (기본 20)
+        gap_threshold: 신호 인정 최소 이격률 (기본 0.002 = 0.2%)
+
+    Returns:
+        True if Death Cross detected with sufficient gap
     """
     if len(daily_prices_df) < long_period:
         logger.debug(f"   (MA) {long_period}일치 데이터 부족 ({len(daily_prices_df)}일)으로 계산 불가")
@@ -282,10 +291,25 @@ def check_death_cross(daily_prices_df, short_period=5, long_period=20):
         yesterday_short_ma = short_ma.iloc[-2]
         yesterday_long_ma = long_ma.iloc[-2]
 
-        # 데드 크로스: 어제는 5일선 >= 20일선 이었고, 오늘은 5일선 < 20일선
-        if yesterday_short_ma >= yesterday_long_ma and today_short_ma < today_long_ma:
+        # 데드 크로스 1차 조건: 어제는 5일선 >= 20일선 이었고, 오늘은 5일선 < 20일선
+        is_crossed = yesterday_short_ma >= yesterday_long_ma and today_short_ma < today_long_ma
+        
+        if not is_crossed:
+            return False
+            
+        # 데드 크로스 2차 조건: 이격률 (Gap) 확인
+        # (장기 - 단기) / 장기 >= 0.2% -> 즉, 단기가 장기보다 0.2% 이상 아래로 내려갔는지
+        if today_long_ma == 0:
+            return False
+            
+        gap_ratio = (today_long_ma - today_short_ma) / today_long_ma
+        
+        if gap_ratio >= gap_threshold:
             return True
-        return False
+        else:
+            logger.debug(f"   (MA) 데드 크로스 감지되었으나 이격 부족 (Gap: {gap_ratio:.4f} < {gap_threshold})")
+            return False
+            
     except Exception as e:
         logger.error(f"❌ (MA) 데드 크로스 계산 중 오류 발생: {e}", exc_info=True)
         return False

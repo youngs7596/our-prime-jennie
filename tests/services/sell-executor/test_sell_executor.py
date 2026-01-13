@@ -44,7 +44,8 @@ def executor_module():
     with patch.dict(sys.modules, {'sell_executor': module}), \
          patch('shared.strategy_presets.resolve_preset_for_regime', return_value=('TEST_PRESET', {})), \
          patch('shared.strategy_presets.apply_preset_to_config'), \
-         patch('shared.database'):
+         patch('shared.database'), \
+         patch('shared.redis_cache.get_redis_connection', return_value=None):  # Default to No Redis
         spec.loader.exec_module(module)
         yield module, sys.modules['sell_executor']
 
@@ -237,6 +238,92 @@ class TestIdempotency:
             
             assert result['status'] == 'skipped'
             assert 'Duplicate' in result['reason']
+
+
+class TestRedisLock:
+    """Redis Lock 테스트"""
+
+    def test_redis_lock_blocks_execution(self, executor_module, mock_kis, mock_config):
+        """Redis Lock이 이미 잡혀있으면 skipped 반환"""
+        executor = executor_module[0]
+        
+        # Override the get_redis_connection locally
+        mock_redis = MagicMock()
+        mock_redis.set.return_value = False  # Lock failed
+        
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch.object(executor, 'get_redis_connection', return_value=mock_redis):
+            
+            # Setup Portfolio
+            mock_portfolio.return_value = [{'code': '005930', 'id': 1}]
+            
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+            
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+            
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='Lock Test',
+                dry_run=True
+            )
+            
+            assert result['status'] == 'skipped'
+            assert 'locked' in result['reason']
+            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=10)
+
+    def test_redis_lock_acquired_success(self, executor_module, mock_kis, mock_config, sample_holding):
+        """Redis Lock 획득 성공 시 정상 진행"""
+        import pandas as pd
+        executor = executor_module[0]
+        
+        # Override the get_redis_connection locally
+        mock_redis = MagicMock()
+        mock_redis.set.return_value = True  # Lock acquired
+        
+        # Configure shared.database mock (already mocked by fixture)
+        mock_db = executor.database
+        mock_db.get_market_regime_cache.return_value = None
+        mock_db.get_daily_prices.return_value = pd.DataFrame({'CLOSE_PRICE': [75000]})
+        mock_db.get_rag_context_with_validation.return_value = ("News", True, None)
+        mock_db.execute_trade_and_log.return_value = True
+        
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.db.repository.was_traded_recently', return_value=False), \
+             patch.object(executor, 'get_redis_connection', return_value=mock_redis):
+            
+            # Setup Other Mocks
+            mock_portfolio.return_value = [sample_holding]
+            
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+            
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+            
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='Lock Success Test',
+                dry_run=True
+            )
+            
+            assert result['status'] == 'success'
+            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=10)
 
 
 class TestProfitCalculation:

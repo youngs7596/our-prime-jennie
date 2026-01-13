@@ -13,7 +13,12 @@ from datetime import datetime, timezone, timedelta
 import shared.database as database
 from shared.db import connection
 from shared.db import repository as repo
-from shared.redis_cache import delete_high_watermark, delete_scale_out_level
+from shared.redis_cache import (
+    delete_high_watermark,
+    delete_scale_out_level,
+    get_redis_connection
+)
+
 from shared.strategy_presets import (
     apply_preset_to_config,
     resolve_preset_for_regime,
@@ -99,9 +104,22 @@ class SellExecutor:
                     return {"status": "error", "reason": "Not in portfolio"}
                 
                 # 1.5 중복 주문 체크 (Idempotency)
+                
+                # A) Redis Lock (Short-term Concurrency Guard - 10s)
+                # 동일 종목에 대해 동시에 여러 Sell 요청이 들어오는 것을 방지
+                redis_client = get_redis_connection()
+                if redis_client:
+                    lock_key = f"lock:sell:{stock_code}"
+                    # NX=True: 키가 존재하지 않을 때만 설정, EX=10: 10초 후 자동 만료
+                    is_locked = redis_client.set(lock_key, "LOCKED", nx=True, ex=10)
+                    if not is_locked:
+                        logger.warning(f"⚠️ [Redis Lock] 매도 진행 중 (잠김): {stock_name}({stock_code}) - 중복 실행 방지")
+                        return {"status": "skipped", "reason": f"Sell process locked for {stock_code}"}
+                
+                # B) DB Check (Long-term Guard - 10m)
                 # 최근 매도 주문 확인 (중복 실행 방지) - 10분 내 동일 매도 주문 확인
                 if repo.check_duplicate_order(session, stock_code, trade_type='SELL', time_window_minutes=10):
-                    logger.warning(f"⚠️ 최근 매도 주문 이력 존재: {stock_name}({stock_code}) - 중복 실행 방지")
+                    logger.warning(f"⚠️ [DB Check] 최근 매도 주문 이력 존재: {stock_name}({stock_code}) - 중복 실행 방지")
                     return {"status": "skipped", "reason": f"Duplicate sell order detected for {stock_code}"}
                 
                 # 2. 현재가 조회
