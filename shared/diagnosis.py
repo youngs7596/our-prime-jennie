@@ -183,22 +183,20 @@ class DockerLogAnalyzer:
             if state != 'running':
                 return f"FAIL (State: {state})"
             
-            # 2. 최근 로그 가져오기 (tail=50)
+            # 2. 최근 로그 가져오기 (tail=200) - 활동 주기가 긴 서비스(10분) 고려
             log_resp = self.session.get(f"{self.socket_path}/containers/{container_id}/logs", params={
                 "stdout": 1,
                 "stderr": 1,
-                "tail": 50
+                "tail": 200
             })
              
             if log_resp.status_code != 200:
                 return "FAIL (Cannot read logs)"
                 
             # Docker raw log format contains header bytes, but text search usually works ignoring them.
-            # 정확히는 8바이트 헤더가 있지만, string decode 후 검색해도 무방.
             logs = log_resp.content.decode('utf-8', errors='ignore')
             
-            # 3. 패턴 매칭 및 시간 확인
-            # 간단히 패턴 존재 여부만 확인 (조금 더 정교하게 하려면 timestamp 파싱 필요)
+            # 3. 패턴 매칭
             matched = False
             for p in patterns:
                 if p in logs:
@@ -208,8 +206,9 @@ class DockerLogAnalyzer:
             if matched:
                 return "OK (Logs Active)"
             else:
-                return f"WARNING (No activity pattern '{patterns[0]}' found in last 50 logs)"
-                
+                # 패턴이 없으면 마지막 로그 시간이라도 보여주는 것이 좋음 (구현 생략)
+                return f"WARNING (No log pattern '{patterns[0]}' in last 200 lines)"
+
         except Exception as e:
             return f"ERROR ({str(e)})"
 
@@ -217,15 +216,22 @@ class DockerLogAnalyzer:
         """핵심 서비스 로그 진단"""
         results = []
         
-        # 진단 대상 정의
+        # 진단 대상 정의 (정확한 로그 키워드 반영)
         targets = [
-            ("buy-scanner", ["Wait", "Tick", "Heartbeat"]),
-            ("price-monitor", ["Monitor", "Heartbeat", "start_monitoring"]),
-            ("scout-worker", ["Job", "Processing", "Worker"]),
+            # buy-scanner: 매분 'Hot Watchlist 로드' 로그 발생 (또는 Redis 연결)
+            ("buy-scanner", ["Hot Watchlist", "Redis 연결", "Tick"]),
+            # price-monitor: 10분마다 '[상태 체크]', 시작 시 'Monitor 시작'
+            ("price-monitor", ["상태 체크", "Monitor 시작", "Redis Streams"]),
+            # scout-worker: 작업 수신 시만 로그 발생. 평소엔 조용함. 'Worker 시작'은 스타트업시.
+            ("scout-worker", ["Job", "Worker 시작", "Processing"]),
         ]
         
         for svc, patterns in targets:
             status = self.check_service_health(svc, patterns)
+            # scout-worker는 Idling이 정상일 수 있음
+            if svc == "scout-worker" and "WARNING" in status:
+                status = "Idle (No recent jobs)"
+                
             results.append(f"- {svc}: {status}")
             
         return results
