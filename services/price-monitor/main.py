@@ -215,8 +215,21 @@ def _start_monitor_thread(trigger_source: str):
 
         price_monitor.stop_event.clear()
         dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+        # Thread Wrapper to ensure state reset on exit
+        def _monitor_thread_wrapper(dry_run_arg):
+            global is_monitoring, monitor_thread
+            try:
+                price_monitor.start_monitoring(dry_run=dry_run_arg)
+            except Exception as e:
+                logger.error(f"❌ Price Monitor 쓰레드 비정상 종료: {e}", exc_info=True)
+            finally:
+                with monitor_lock:
+                    is_monitoring = False
+                    monitor_thread = None
+                logger.info("ℹ️ Price Monitor 쓰레드 종료 (상태 초기화 완료)")
+
         monitor_thread = threading.Thread(
-            target=price_monitor.start_monitoring,
+            target=_monitor_thread_wrapper,
             args=(dry_run,),
             daemon=True,
         )

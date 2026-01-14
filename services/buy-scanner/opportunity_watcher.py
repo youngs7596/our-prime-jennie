@@ -105,15 +105,10 @@ class BuyOpportunityWatcher:
         self.bar_aggregator = BarAggregator(bar_interval_seconds=60)
         self.stop_event = Event()
         
-        # Redis 연결
-        redis_url = redis_url or "redis://127.0.0.1:6379/0"
-        try:
-            self.redis = redis.from_url(redis_url, decode_responses=True)
-            self.redis.ping()
-            logger.info("✅ BuyOpportunityWatcher Redis 연결 성공")
-        except Exception as e:
-            logger.warning(f"⚠️ BuyOpportunityWatcher Redis 연결 실패: {e}")
-            self.redis = None
+        # Redis 연결 설정
+        self.redis_url = redis_url or "redis://127.0.0.1:6379/0"
+        self.redis = None
+        self._ensure_redis_connection()
         
         self.hot_watchlist: Dict[str, dict] = {}
         self.market_regime = 'SIDEWAYS'
@@ -136,10 +131,32 @@ class BuyOpportunityWatcher:
         }
         self.current_version_key = None
 
+    def _ensure_redis_connection(self):
+        """Redis 연결 확인 및 재연결"""
+        if self.redis:
+            try:
+                self.redis.ping()
+                return True
+            except redis.ConnectionError:
+                logger.warning("⚠️ Redis 연결 끊김. 재연결 시도...")
+                self.redis = None
+        
+        try:
+            self.redis = redis.from_url(self.redis_url, decode_responses=True)
+            self.redis.ping()
+            logger.info("✅ BuyOpportunityWatcher Redis 연결 성공")
+            return True
+        except Exception as e:
+            # 너무 자주 로그 남기지 않도록 DEBUG 레벨 권장하나, 여기서는 중요하므로 ERROR/WARNING
+            logger.warning(f"⚠️ BuyOpportunityWatcher Redis 연결 실패: {e}")
+            self.redis = None
+            return False
+
     def check_for_update(self) -> bool:
         """Redis에서 새 버전 확인"""
-        if not self.redis:
+        if not self._ensure_redis_connection():
             return False
+            
         try:
             active_key = self.redis.get("hot_watchlist:active")
             # active_key가 존재하고, 현재 버전과 다르면 업데이트 필요
@@ -152,7 +169,7 @@ class BuyOpportunityWatcher:
         
     def load_hot_watchlist(self) -> bool:
         """Redis에서 Hot Watchlist 로드"""
-        if not self.redis:
+        if not self._ensure_redis_connection():
             return False
         
         try:

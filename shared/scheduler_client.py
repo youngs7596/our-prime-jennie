@@ -21,16 +21,23 @@ def mark_job_run(job_id: str, scope: Optional[str] = None) -> bool:
         logger.warning("⚠️ Scheduler job_id가 비어 있어 last_run 업데이트를 건너뜁니다.")
         return False
 
-    target_scope = scope or os.getenv("SCHEDULER_SCOPE", "real")
-    url = f"{SCHEDULER_SERVICE_URL}/jobs/{job_id}/last-run"
-    payload = {"scope": target_scope}
+    # [Deprecation] Scheduler Service has been replaced by Airflow.
+    # We no longer need to report last_run to a custom scheduler API.
+    # Keeping this function as a no-op to maintain compatibility with existing callers.
+    
+    # target_scope = scope or os.getenv("SCHEDULER_SCOPE", "real")
+    # logger.debug("ℹ️ [Airflow Migration] Skipping legacy scheduler report (job=%s)", job_id)
+    return True
+    
+    # url = f"{SCHEDULER_SERVICE_URL}/jobs/{job_id}/last-run"
+    # payload = {"scope": target_scope}
 
-    try:
-        resp = requests.post(url, json=payload, timeout=5)
-        resp.raise_for_status()
-        logger.debug("✅ Scheduler last_run_at 업데이트 성공 (job=%s, scope=%s)", job_id, target_scope)
-        return True
-    except requests.RequestException as exc:
-        logger.error("❌ Scheduler last_run 보고 실패 (job=%s): %s", job_id, exc)
-        return False
+    # try:
+    #     resp = requests.post(url, json=payload, timeout=5)
+    #     resp.raise_for_status()
+    #     logger.debug("✅ Scheduler last_run_at 업데이트 성공 (job=%s, scope=%s)", job_id, target_scope)
+    #     return True
+    # except requests.RequestException as exc:
+    #     logger.error("❌ Scheduler last_run 보고 실패 (job=%s): %s", job_id, exc)
+    #     return False
 
