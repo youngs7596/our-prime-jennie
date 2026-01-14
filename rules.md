@@ -171,7 +171,8 @@
 > - `datetime.now()` 또는 `date` 명령어로 확인 후 정확한 날짜 섹션에 기록합니다.
 
 2. **CHANGELOG 업데이트**
-   - `CHANGELOG.md`에 오늘 작업 내용을 **한 줄**로 요약해 추가합니다.
+   - `docs/changelogs/CHANGELOG-YYYY-MM.md` (당월 파일)에 오늘 작업 내용을 **한 줄**로 요약해 추가합니다.
+   - 파일이 없으면 새로 생성합니다.
 3. **Git 동기화(주의: 사용자 승인 필요 가능)**
    - `git add .`
    - `git commit -m "Session Handoff: [제목]"`
