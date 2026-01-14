@@ -1,9 +1,4 @@
-# 📅 변경 이력 (Change Log)
-
-> 이 파일은 **현재 월(Current Month)**의 변경 이력을 보여줍니다.
-> 과거 이력은 하단의 '🗄️ 아카이브' 링크를 참고하세요.
-
-## 🚀 최신 (2026-01)
+# 📅 2026-01 변경 이력
 
 ## 2026-01-13
 
@@ -34,7 +29,6 @@
 - **Real-time Log Analysis**: Enhanced `/diagnose` to analyze real-time logs from core services (`buy-scanner`, `price-monitor`, `scout-worker`) via Docker socket, verifying actual operational activity beyond simple process liveness.
 - **Jenkins Build Stability**: `Jenkinsfile`에 `COMPOSE_PARALLEL_LIMIT='2'` 설정을 추가하여 BuildKit 병렬 빌드 시 발생하는 캐시 경합(Race Condition) 오류(`failed to prepare extraction snapshot`) 해결.
 - **Diagnosis API**: Command Handler에 `/api/diagnose` 엔드포인트 추가 및 `SystemDiagnoser` 버그 수정 (Docker SDK 도입, SQL Syntax 수정, requests-unixsocket 제거) [Minji].
-- **Changelog Refactoring**: 대형화된 `CHANGELOG.md`를 월별 아카이브(`docs/changelogs/`)로 분리하고 메인 파일은 당월 내역만 표시하도록 구조 개편.
 
 
 ## 2026-01-12
@@ -233,10 +227,3 @@
 
 
 
-
-## 🗄️ 아카이브 (Archives)
-
-| 연월 (Year-Month) | 바로가기 |
-|---|---|
-| 2026-01 | [보기](docs/changelogs/CHANGELOG-2026-01.md) |
-| 2025-12 | [보기](docs/changelogs/CHANGELOG-2025-12.md) |
