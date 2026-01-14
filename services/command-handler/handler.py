@@ -84,6 +84,9 @@ class CommandHandler:
             'minscore': self._handle_minscore,
             'maxbuy': self._handle_maxbuy,
             'config': self._handle_config,
+            # 진단
+            'diagnose': self._handle_diagnose,
+            'report': self._handle_diagnose,
             # 도움말
             'help': self._handle_help,
         }
@@ -777,6 +780,18 @@ class CommandHandler:
 📈 최소 LLM 점수: {min_score}점
 🛒 일일 최대 매수: {max_buy}회
 🔔 알림: {'🔇 음소거' if muted else '🔔 활성'}"""
+
+    def _handle_diagnose(self, cmd: dict, dry_run: bool) -> str:
+        """시스템 자가 진단 리포트 생성"""
+        from shared.diagnosis import SystemDiagnoser
+        
+        try:
+            diagnoser = SystemDiagnoser(kis_client=self.kis)
+            report = diagnoser.run_diagnostics()
+            return report
+        except Exception as e:
+            logger.error(f"진단 리포트 생성 실패: {e}", exc_info=True)
+            return f"❌ 진단 실패: {e}"
     
     # ============================================================================
     # 도움말
@@ -784,7 +799,10 @@ class CommandHandler:
     
     def _handle_help(self, cmd: dict, dry_run: bool) -> str:
         """도움말"""
-        return HELP_TEXT
+        base_help = HELP_TEXT
+        # 진단 명령어 설명 추가
+        extra_help = "\n\n🏥 *진단*\n`/diagnose` - 시스템 상태 및 에러 로그 진단 리포트"
+        return base_help + extra_help
     
     # ============================================================================
     # 유틸리티

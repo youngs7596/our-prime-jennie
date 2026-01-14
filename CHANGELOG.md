@@ -23,6 +23,7 @@
 - **Hotfix (Dashboard Backend)**: ActivePortfolio 마이그레이션 후 `dashboard-backend`에서 발생한 `ImportError`(legacy `Portfolio`) 수정 및 Docker 이미지 리빌드.
 - **Test Environment Safety**: `ACTIVE_PORTFOLIO` 테이블을 `_MOCK_TABLES`에 추가하여 Mock 모드(`TRADING_MODE=MOCK`) 실행 시 운영 데이터 오염 방지 및 E2E 테스트(`test_e2e_pipeline.py`) 안정성 확보.
 - **2026-01-14**: Fixed critical stability issues: implemented Redis reconnection in `buy-scanner`, fixed zombie thread state in `price-monitor`, and silenced legacy scheduler reporting in `shared`.
+- **Remote Diagnosis System**: Added `/diagnose` Telegram command to generate comprehensive system health reports (Infrastructure status + Recent critical incidents log), enabling effective remote monitoring and issue reporting.
 - **Jenkins Build Stability**: `Jenkinsfile`에 `COMPOSE_PARALLEL_LIMIT='2'` 설정을 추가하여 BuildKit 병렬 빌드 시 발생하는 캐시 경합(Race Condition) 오류(`failed to prepare extraction snapshot`) 해결.
 
 

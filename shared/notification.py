@@ -55,6 +55,7 @@ class TelegramBot:
         'watch', 'unwatch', 'watchlist',       # 관심종목
         'mute', 'unmute', 'alert', 'alerts',   # 알림 제어
         'risk', 'minscore', 'maxbuy', 'config', # 설정
+        'diagnose', 'report',                   # 진단
         'help'                                  # 도움말
     ]
     
