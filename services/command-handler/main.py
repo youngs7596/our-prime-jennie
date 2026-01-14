@@ -7,6 +7,7 @@ import sys
 import time
 import logging
 import threading
+from datetime import datetime
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
@@ -225,6 +226,31 @@ def stop_polling_endpoint():
     """폴링 중지"""
     stop_polling()
     return jsonify({"status": "polling stopped"}), 200
+
+
+@app.route('/api/diagnose', methods=['GET'])
+def api_diagnose():
+    """시스템 자가 진단 API"""
+    try:
+        from shared.diagnosis import SystemDiagnoser
+        
+        # command_handler가 초기화되지 않았으면 None 처리
+        kis_client = command_handler.kis if command_handler else None
+        
+        diagnoser = SystemDiagnoser(kis_client=kis_client)
+        report = diagnoser.run_diagnostics()
+        
+        return jsonify({
+            "status": "success",
+            "report": report,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }), 200
+    except Exception as e:
+        logger.error(f"API 진단 실패: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "error": str(e)
+        }), 500
 
 
 @app.route('/', methods=['GET'])

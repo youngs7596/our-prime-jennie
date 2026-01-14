@@ -7,6 +7,8 @@ import redis
 from datetime import datetime, timezone
 import traceback
 from typing import List, Dict, Optional
+import docker
+from sqlalchemy import text
 
 from shared.db.connection import get_engine, session_scope
 from shared.kis.client import KISClient
@@ -87,7 +89,7 @@ class SystemDiagnoser:
         try:
             # 엔진 가져오기 (연결 풀 테스트)
             with session_scope(readonly=True) as session:
-                session.execute("SELECT 1")
+                session.execute(text("SELECT 1"))
             return "OK"
         except Exception as e:
             return f"ERROR ({str(e)})"
@@ -144,15 +146,15 @@ class SystemDiagnoser:
             
         return results
 
-import requests_unixsocket
-import requests
-
 class DockerLogAnalyzer:
-    """Docker Container 로그 분석 클래스"""
+    """Docker Container 로그 분석 클래스 (Docker SDK 사용)"""
     
     def __init__(self):
-        self.socket_path = "http+unix://%2Fvar%2Frun%2Fdocker.sock"
-        self.session = requests_unixsocket.Session()
+        try:
+            self.client = docker.from_env()
+        except Exception as e:
+            logger.error(f"Failed to initialize Docker client: {e}")
+            self.client = None
         
     def check_service_health(self, service_name: str, patterns: List[str]) -> str:
         """
@@ -165,36 +167,26 @@ class DockerLogAnalyzer:
         Returns:
            상태 문자열 (예: "OK (Last activity: 5s ago)")
         """
+        if not self.client:
+            return "ERROR (Docker client not initialized)"
+
         try:
             # 1. Container ID 찾기 (label filter)
-            # label=com.docker.compose.service={service_name}
-            resp = self.session.get(f"{self.socket_path}/containers/json", params={
-                "filters": json.dumps({"label": [f"com.docker.compose.service={service_name}"]})
-            })
+            # docker-compose로 띄운 컨테이너 찾기
+            containers = self.client.containers.list(filters={"label": [f"com.docker.compose.service={service_name}"]})
             
-            if resp.status_code != 200 or not resp.json():
-                # 서비스명으로 못 찾으면 이름으로 시도 (my-prime-jennie-buy-scanner-1 등)
+            if not containers:
                 return "FAIL (Container not found)"
                 
-            container = resp.json()[0]
-            container_id = container['Id']
-            state = container['State']
+            container = containers[0]
             
-            if state != 'running':
-                return f"FAIL (State: {state})"
+            if container.status != 'running':
+                return f"FAIL (State: {container.status})"
             
-            # 2. 최근 로그 가져오기 (tail=200) - 활동 주기가 긴 서비스(10분) 고려
-            log_resp = self.session.get(f"{self.socket_path}/containers/{container_id}/logs", params={
-                "stdout": 1,
-                "stderr": 1,
-                "tail": 200
-            })
-             
-            if log_resp.status_code != 200:
-                return "FAIL (Cannot read logs)"
-                
-            # Docker raw log format contains header bytes, but text search usually works ignoring them.
-            logs = log_resp.content.decode('utf-8', errors='ignore')
+            # 2. 최근 로그 가져오기 (tail=200)
+            # logs() returns bytes
+            log_bytes = container.logs(tail=200)
+            logs = log_bytes.decode('utf-8', errors='ignore')
             
             # 3. 패턴 매칭
             matched = False
@@ -206,7 +198,6 @@ class DockerLogAnalyzer:
             if matched:
                 return "OK (Logs Active)"
             else:
-                # 패턴이 없으면 마지막 로그 시간이라도 보여주는 것이 좋음 (구현 생략)
                 return f"WARNING (No log pattern '{patterns[0]}' in last 200 lines)"
 
         except Exception as e:
@@ -216,13 +207,13 @@ class DockerLogAnalyzer:
         """핵심 서비스 로그 진단"""
         results = []
         
-        # 진단 대상 정의 (정확한 로그 키워드 반영)
+        # 진단 대상 정의
         targets = [
             # buy-scanner: 매분 'Hot Watchlist 로드' 로그 발생 (또는 Redis 연결)
             ("buy-scanner", ["Hot Watchlist", "Redis 연결", "Tick"]),
             # price-monitor: 10분마다 '[상태 체크]', 시작 시 'Monitor 시작'
             ("price-monitor", ["상태 체크", "Monitor 시작", "Redis Streams"]),
-            # scout-worker: 작업 수신 시만 로그 발생. 평소엔 조용함. 'Worker 시작'은 스타트업시.
+            # scout-worker: 작업 수신 시만 로그 발생. 평소엔 조용함.
             ("scout-worker", ["Job", "Worker 시작", "Processing"]),
         ]
         
