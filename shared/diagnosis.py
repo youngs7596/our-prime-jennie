@@ -47,7 +47,17 @@ class SystemDiagnoser:
         kis_status = self._check_kis()
         report_lines.append(f"- KIS API: {kis_status}")
         
-        # 4. Recent Incidents
+        # 4. Core Services (Log Analysis)
+        report_lines.append("")
+        report_lines.append("🔎 *Core Services (Log Analysis)*")
+        try:
+            docker_analyzer = DockerLogAnalyzer()
+            service_logs = docker_analyzer.run_diagnostics()
+            report_lines.extend(service_logs)
+        except Exception as e:
+            report_lines.append(f"Failed to analyze docker logs: {e}")
+        
+        # 5. Recent Incidents
         report_lines.append("")
         report_lines.append("🚨 *Recent Incidents (Last 3)*")
         incidents = self._get_recent_incidents(limit=3)
@@ -96,6 +106,7 @@ class SystemDiagnoser:
         except Exception as e:
             return f"ERROR ({str(e)})"
 
+
     def _get_recent_incidents(self, limit: int = 3) -> List[str]:
         log_path = os.path.join(os.getcwd(), "logs/incidents.jsonl")
         if not os.path.exists(log_path):
@@ -132,3 +143,93 @@ class SystemDiagnoser:
             results.append(f"Failed to parse logs: {e}")
             
         return results
+
+import requests_unixsocket
+import requests
+
+class DockerLogAnalyzer:
+    """Docker Container 로그 분석 클래스"""
+    
+    def __init__(self):
+        self.socket_path = "http+unix://%2Fvar%2Frun%2Fdocker.sock"
+        self.session = requests_unixsocket.Session()
+        
+    def check_service_health(self, service_name: str, patterns: List[str]) -> str:
+        """
+        서비스의 최근 로그를 분석하여 건강 상태 확인
+        
+        Args:
+           service_name: docker-compose 서비스 이름 (예: buy-scanner)
+           patterns: 정상 동작을 의미하는 로그 키워드 리스트
+        
+        Returns:
+           상태 문자열 (예: "OK (Last activity: 5s ago)")
+        """
+        try:
+            # 1. Container ID 찾기 (label filter)
+            # label=com.docker.compose.service={service_name}
+            resp = self.session.get(f"{self.socket_path}/containers/json", params={
+                "filters": json.dumps({"label": [f"com.docker.compose.service={service_name}"]})
+            })
+            
+            if resp.status_code != 200 or not resp.json():
+                # 서비스명으로 못 찾으면 이름으로 시도 (my-prime-jennie-buy-scanner-1 등)
+                return "FAIL (Container not found)"
+                
+            container = resp.json()[0]
+            container_id = container['Id']
+            state = container['State']
+            
+            if state != 'running':
+                return f"FAIL (State: {state})"
+            
+            # 2. 최근 로그 가져오기 (tail=50)
+            log_resp = self.session.get(f"{self.socket_path}/containers/{container_id}/logs", params={
+                "stdout": 1,
+                "stderr": 1,
+                "tail": 50
+            })
+             
+            if log_resp.status_code != 200:
+                return "FAIL (Cannot read logs)"
+                
+            # Docker raw log format contains header bytes, but text search usually works ignoring them.
+            # 정확히는 8바이트 헤더가 있지만, string decode 후 검색해도 무방.
+            logs = log_resp.content.decode('utf-8', errors='ignore')
+            
+            # 3. 패턴 매칭 및 시간 확인
+            # 간단히 패턴 존재 여부만 확인 (조금 더 정교하게 하려면 timestamp 파싱 필요)
+            matched = False
+            for p in patterns:
+                if p in logs:
+                    matched = True
+                    break
+            
+            if matched:
+                return "OK (Logs Active)"
+            else:
+                return f"WARNING (No activity pattern '{patterns[0]}' found in last 50 logs)"
+                
+        except Exception as e:
+            return f"ERROR ({str(e)})"
+
+    def run_diagnostics(self) -> List[str]:
+        """핵심 서비스 로그 진단"""
+        results = []
+        
+        # 진단 대상 정의
+        targets = [
+            ("buy-scanner", ["Wait", "Tick", "Heartbeat"]),
+            ("price-monitor", ["Monitor", "Heartbeat", "start_monitoring"]),
+            ("scout-worker", ["Job", "Processing", "Worker"]),
+        ]
+        
+        for svc, patterns in targets:
+            status = self.check_service_health(svc, patterns)
+            results.append(f"- {svc}: {status}")
+            
+        return results
+
+# SystemDiagnoser 업데이트
+# 기존 run_diagnostics 메서드 수정 필요 (replace_file_content로 부분 수정이 어려울 수 있으므로 전체 다시 씀_get_recent_incidents는 유지)
+

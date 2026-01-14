@@ -492,6 +492,7 @@ services:
       - infrastructure/env-vars-wsl.yaml
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - PORT=8091
       - SECRETS_FILE=/app/config/secrets.json
