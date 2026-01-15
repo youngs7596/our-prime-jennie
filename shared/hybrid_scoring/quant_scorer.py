@@ -962,13 +962,49 @@ class QuantScorer:
                 factors['news_stat_score'] = round(news_stat_score, 2)
                 factors['confidence_weight'] = confidence_weight
             else:
-                # [Optimization] 데이터 없음 (New Item or Data Gap)
-                # 사용자 요청: "뉴스가 없다면 80% 정도 점수를 줘라" (15점 만점 중 12점 목표)
-                # - 통계 점수 (7점 만점): 5.6점 (80%)
-                # - 감성 점수 (8점 만점): 6.4점 (80%)
-                stat_score = 5.6
-                factors['news_stat_note'] = '데이터 부족 (기본 80% 적용)'
-            
+                # [Fix] 뉴스 데이터 부재 시 "Smart Fallback" (Schema Mismatch Resolved)
+                # 기존: NEWS_FACTOR_STATS 없음 -> 무조건 고정 점수 (12.0)
+                # 변경: NEWS_SENTIMENT(Active Table) 조회하여 "시장 평균"의 80% 반영
+                
+                try:
+                    from sqlalchemy import text
+                    # self.db_conn checks
+                    if self.db_conn:
+                        # 최근 7일간 뉴스 점수 평균 (Active Table used by Crawler)
+                        # NOTE: Crawler writes to NEWS_SENTIMENT, not STOCK_NEWS_SENTIMENT
+                        avg_query_sql = text("""
+                            SELECT AVG(SENTIMENT_SCORE) as avg_sent, COUNT(DISTINCT STOCK_CODE) as cnt
+                            FROM NEWS_SENTIMENT
+                            WHERE PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                            AND SENTIMENT_SCORE > 0
+                        """)
+                        row_res = self.db_conn.execute(avg_query_sql).fetchone()
+                        
+                        if row_res and row_res[1] and row_res[1] >= 5: # 최소 5개 종목 표본
+                            avg_sentiment = float(row_res[0])
+                            # Rule: 평균의 80% 적용
+                            target_sentiment = avg_sentiment * 0.8
+                            
+                            # 환산 로직 (Sentiment 0~100 -> Score 0~8)
+                            sentiment_score = (target_sentiment / 100.0) * 8.0
+                            
+                            # Stat Score (0~7) -> Sentiment 비율과 동일하게 적용
+                            stat_score = (target_sentiment / 100.0) * 7.0 
+                            
+                            factors['news_stat_note'] = f'Smart Fallback (Market Avg {avg_sentiment:.1f} * 80%)'
+                        else:
+                            # DB 데이터 부족 시 Conservative Default (6.0/15.0)
+                            stat_score = 2.0
+                            sentiment_score = 4.0
+                            factors['news_stat_note'] = 'Conservative Default (6.0pts)'
+                    else:
+                        stat_score = 2.0
+                        sentiment_score = 4.0
+                except Exception as e:
+                    logger.error(f"❌ [Smart Fallback] DB Query Failed: {e}")
+                    stat_score = 2.0
+                    sentiment_score = 4.0
+
             total_score += stat_score
             
             factors['news_win_rate'] = None
@@ -977,8 +1013,14 @@ class QuantScorer:
             factors['news_stat_score'] = round(stat_score, 2)
             factors['confidence_weight'] = 0.0
 
-            # 2. 현재 감성 점수 보정 (8점) - 기존 3점에서 확대
+            # 2. 현재 감성 점수 보정 (8점)
             # 0~100을 0~8점으로 변환
+            # BUT, if we used Smart Fallback above, sentiment_score is ALREADY CALCULATED.
+            # We must override the logic below ONLY if we modified sentiment_score above?
+            # Actually, `sentiment_score` variable is local here.
+            # Logic below calculates `sentiment_score` based on `current_sentiment_score` argument.
+            # If `current_sentiment_score` is 0 (missing), we should use the fallback value.
+            
             if current_sentiment_score > 0:
                 # 50점(중립) -> 6.4점 (80%) 로직 적용
                 if current_sentiment_score == 50:
@@ -986,9 +1028,11 @@ class QuantScorer:
                 else:
                     sentiment_score = current_sentiment_score / 100 * 8.0
             else:
-                 # 감성 점수 없음 (0) -> 기본 6.4점 (80%)
-                sentiment_score = 6.4
-                factors['news_sentiment_note'] = '감성분석 없음 (기본 80% 적용)'
+                 # 감성 점수 없음 (0) -> 위에서 계산한 Smart Fallback 값 유지
+                 # (If we didn't calculate it above, it defaults to 6.4 in old logic, but here we set it to 4.0 or calculated)
+                 if 'sentiment_score' not in locals():
+                     sentiment_score = 4.0 # Conservative default
+
 
             
             # 역신호 카테고리 패널티 (분석 결과 기각으로 로직 제거)

@@ -127,9 +127,14 @@ class BuyExecutor:
             for candidate in candidates:
                 c_code = candidate.get('stock_code', candidate.get('code'))
                 c_name = candidate.get('stock_name', candidate.get('name'))
-                if repo.was_traded_recently(session, c_code, hours=0.17): # 10분 = 0.17시간
+                if repo.was_traded_recently(session, c_code, hours=0.17, trade_type='BUY'): # 최근 10분 내 매수 이력 확인
                     logger.warning(f"⚠️ 최근 매수 주문 이력 존재: {c_name}({c_code}) - 중복 실행 방지")
                     return {"status": "skipped", "reason": f"Duplicate order detected for {c_code}"}
+                
+                # [New Rule] 최근 1시간(60분) 내 매도 이력 있는 종목 재진입 금지 (세탁/설거지 방지)
+                if repo.was_traded_recently(session, c_code, hours=24.0, trade_type='SELL'):
+                    logger.warning(f"⏳ 쿨타임(24h): {c_name}({c_code})은 최근 24시간 내 매도 이력이 있어 매수 보류")
+                    return {"status": "skipped", "reason": f"Cooldown active (Sold within 24h): {c_code}"}
             
             # 3. [Fast Hands] LLM 점수 기반 즉시 선정 (동기 호출 제거)
             # candidates는 이미 buy-scanner에서 필터링되어 넘어옴 (is_tradable=True인 경우만)

@@ -266,7 +266,8 @@ class CommandHandler:
         """현재 포트폴리오 조회"""
         try:
             with session_scope(readonly=True) as session:
-                portfolio = get_active_watchlist_v2(session)
+                # [Fix] get_active_watchlist_v2 -> get_active_portfolio
+                portfolio = database.repo.get_active_portfolio(session)
             
             if not portfolio:
                 return "📭 현재 보유 종목이 없습니다."
@@ -276,12 +277,22 @@ class CommandHandler:
             total_value = 0
             total_profit = 0
             
-            # SQLAlchemy ORM 객체 또는 dict를 반환할 수 있으므로 getattr 사용
-            for i, (code, p) in enumerate(portfolio.items(), 1):
+            # get_active_portfolio 반환값: List[Dict] (e.g., {'code':..., 'name':..., 'quantity':...})
+            for i, p in enumerate(portfolio, 1):
+                code = p.get('code')
                 name = p.get('name', code)
-                qty = p.get('quantity', 0) # 포트폴리오 조회이므로 보유수량
-                buy_price = p.get('avg_price', 0) # 평단가
-                current_price = p.get('current_price', buy_price) # 현재가
+                qty = int(p.get('quantity', 0))
+                buy_price = float(p.get('avg_price', 0))
+                current_price = float(p.get('current_price', buy_price)) # 현재가가 없으면 평단가로 대체
+                
+                # 현재가가 0이면 KIS API로 실시간 조회 시도 (필요 시)
+                if current_price <= 0 and self.kis:
+                    try:
+                        snap = self.kis.get_stock_snapshot(code)
+                        if snap:
+                            current_price = snap.get('price', 0)
+                    except:
+                        pass
                 
                 profit_pct = ((current_price - buy_price) / buy_price * 100) if buy_price > 0 and current_price > 0 else 0
                 profit_emoji = "📈" if profit_pct >= 0 else "📉"
@@ -818,16 +829,19 @@ class CommandHandler:
             if name_or_code.isdigit() and len(name_or_code) == 6:
                 with session_scope(readonly=True) as session:
                     stock = session.query(StockMaster).filter(StockMaster.stock_code == name_or_code).first()
-                if stock:
-                    return (name_or_code, stock.stock_name)
+                    if stock:
+                        return (name_or_code, stock.stock_name)
+                    
+                # DB에 없어도 코드가 6자리 숫자면 유효한 코드로 간주 (Fallback)
                 return (name_or_code, name_or_code)
             else:
                 # 종목명으로 검색
                 with session_scope(readonly=True) as session:
                     stock = session.query(StockMaster).filter(StockMaster.stock_name == name_or_code).first()
-                if stock:
-                    return (stock.stock_code, stock.stock_name)
+                    if stock:
+                        return (stock.stock_code, stock.stock_name)
                 return (None, None)
         except Exception as e:
             logger.error(f"종목 검색 오류: {e}")
             return (None, None)
+

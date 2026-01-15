@@ -1,6 +1,14 @@
 # 📅 2026-01 변경 이력
 
-## 2026-01-13
+## 2026-01-15
+- **News Scoring & Pipeline Integrity Fix**: 뉴스 스코어링의 비정상적 거품(인플레이션) 현상 해결 및 데이터 파이프라인 정류 완료.
+  - `shared/hybrid_scoring/quant_scorer.py`: 뉴스가 없는 종목에 대해 시장 평균의 80%를 반영하는 'Smart Fallback' 로직 구현.
+  - `services/scout-job/scout.py`: `NEWS_SENTIMENT`(Active) 테이블을 참조하도록 데이터 조회 로직 수정 및 잡주 필터링(시총 < 500억, 주가 < 1000원) 복구.
+  - `shared/db/models.py`: 잘못된 `StockNewsSentiment` 별칭 제거로 스키마 혼선 방지.
+- **Investment Performance Reporting**: 1월 9일 이후의 투자 성과를 분석하는 전문 스크립트(`report_performance.py`) 구축 및 실현 손익(+985만 원) 집계 완료.
+- **System Maintenance**: `TRADELOG` 및 `ACTIVE_PORTFOLIO` 테이블의 스키마 불일치 및 Collation 충돌 문제 해결.
+
+## 2026-01-14
 
 
 - **Sell Logic Hardening**: Death Cross 민감도 상향(0.2% Gap) 및 Redis Lock 기반 매도 중복 방지 로직 구현으로 안정성 강화.

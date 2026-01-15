@@ -264,12 +264,11 @@ def handle_manual_sell(
             return "❌ 매도 요청 발행 실패 (RabbitMQ)"
         
         dry_run_suffix = "\n⚠️ DRY_RUN 모드: 실행 서비스에서 시뮬레이션 처리" if effective_dry_run else ""
-        return f"""📨 매도 요청을 접수했습니다.
+        return f"""⏳ *매도 요청 대기중...*
+(잠시 후 체결 결과를 알려드립니다)
 
 📉 {stock_name} ({stock_code})
-🛒 수량: {quantity}주 / 보유 {holding_qty}주
-💰 예상 금액: {total_amount:,.0f}원
-{profit_emoji} 예상 손익: {profit:+,.0f}원 ({profit_pct:+.2f}%)
+🛒 수량: {quantity}주
 🧾 메시지 ID: {msg_id}{dry_run_suffix}"""
         
     except Exception as e:
@@ -369,13 +368,11 @@ def handle_sellall(
         
         mode_prefix = "[DRY_RUN] " if effective_dry_run else ""
         
-        return f"""🛑 *{mode_prefix}전체 청산 요청을 접수했습니다.*
+        return f"""⏳ *{mode_prefix}전체 청산 요청 대기중...*
+(잠시 후 개별 종목의 체결 결과를 알려드립니다)
 
 ✅ 발행 성공: {success_count}건
-❌ 발행 실패: {fail_count}건
-
-*결과(최대 10개):*
-""" + '\n'.join(results[:10])
+❌ 발행 실패: {fail_count}건"""
         
     except Exception as e:
         logger.error(f"전체 청산 오류: {e}", exc_info=True)

@@ -420,12 +420,12 @@ class StockMaster(Base):
     stock_name = Column("STOCK_NAME", String(120), nullable=True)
     market_cap = Column("MARKET_CAP", Numeric(20, 0), nullable=True)
     sector_kospi200 = Column("SECTOR_KOSPI200", String(50), nullable=True)
-    industry_code = Column("INDUSTRY_CODE", String(20), nullable=True)
-    industry_name = Column("INDUSTRY_NAME", String(100), nullable=True)
-    is_kospi200 = Column("IS_KOSPI200", Integer, default=0)
-    is_active = Column("IS_ACTIVE", Integer, default=1)
+    # industry_code = Column("INDUSTRY_CODE", String(20), nullable=True)
+    # industry_name = Column("INDUSTRY_NAME", String(100), nullable=True)
+    # is_kospi200 = Column("IS_KOSPI200", Integer, default=0)
+    # is_active = Column("IS_ACTIVE", Integer, default=1)
     created_at = Column("CREATED_AT", DateTime, server_default=func.now())
-    updated_at = Column("UPDATED_AT", DateTime, onupdate=func.now())
+    # updated_at = Column("UPDATED_AT", DateTime, onupdate=func.now())
 
 
 class FinancialMetricsQuarterly(Base):

@@ -141,6 +141,7 @@ def get_active_portfolio(session: Session) -> List[dict]:
     # ActivePortfolio 테이블 조회
     query = (
         select(models.ActivePortfolio)
+        .where(models.ActivePortfolio.quantity > 0)
         .order_by(models.ActivePortfolio.stock_code.asc())
     )
     rows = session.execute(query).scalars().all()
@@ -260,22 +261,30 @@ def get_trade_logs(session: Session, date_str: str | None = None) -> List[dict]:
     return logs
 
 
-def was_traded_recently(session: Session, stock_code: str, hours: int = 24) -> bool:
+def was_traded_recently(session: Session, stock_code: str, hours: int = 24, trade_type: str = None) -> bool:
     """
     최근 N시간 내 거래 여부 확인.
+    
+    Args:
+        session: DB 세션
+        stock_code: 종목 코드
+        hours: 시간 범위 (기본 24시간)
+        trade_type: 거래 유형 필터 (BUY 또는 SELL). None이면 유형 무관하게 확인.
     """
     # [Hybrid Fix] Oracle func.numtodsinterval 제거 -> Python timedelta 사용
     from datetime import datetime, timedelta, timezone
     
+    # hours가 float일 수 있음 (10분 = 0.17시간)
     threshold_dt = datetime.now(timezone.utc) - timedelta(hours=hours)
     
-    exists_query = (
-        select(models.TradeLog.stock_code)
-        .where(models.TradeLog.stock_code == stock_code)
-        .where(models.TradeLog.trade_timestamp >= threshold_dt)
-        .limit(1)
-    )
-    result = session.execute(exists_query).first()
+    query = select(models.TradeLog.stock_code).where(models.TradeLog.stock_code == stock_code)
+    
+    if trade_type:
+        query = query.where(models.TradeLog.trade_type == trade_type)
+        
+    query = query.where(models.TradeLog.trade_timestamp >= threshold_dt).limit(1)
+    
+    result = session.execute(query).first()
     return result is not None
 
 

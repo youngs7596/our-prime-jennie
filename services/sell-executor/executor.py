@@ -101,7 +101,10 @@ class SellExecutor:
                 
                 if not holding:
                     logger.error(f"보유 내역이 없습니다: {stock_code}")
-                    return {"status": "error", "reason": "Not in portfolio"}
+                    reason = "Not in portfolio"
+                    if self.telegram_bot and "MANUAL" in sell_reason.upper():
+                        self.telegram_bot.send_message(f"🚫 *매도 실패* ({stock_name})\n이유: 보유 주식이 없습니다.")
+                    return {"status": "error", "reason": reason}
                 
                 # 1.5 중복 주문 체크 (Idempotency)
                 
@@ -118,9 +121,15 @@ class SellExecutor:
                 
                 # B) DB Check (Long-term Guard - 10m)
                 # 최근 매도 주문 확인 (중복 실행 방지) - 10분 내 동일 매도 주문 확인
-                if repo.check_duplicate_order(session, stock_code, trade_type='SELL', time_window_minutes=10):
+                # [Fix] MANUAL 매도는 중복 체크 우회 (사용자 강제 실행 존중)
+                is_manual = "MANUAL" in sell_reason.upper()
+                if not is_manual and repo.check_duplicate_order(session, stock_code, trade_type='SELL', time_window_minutes=10):
+                    reason = f"Duplicate sell order detected for {stock_code}"
                     logger.warning(f"⚠️ [DB Check] 최근 매도 주문 이력 존재: {stock_name}({stock_code}) - 중복 실행 방지")
-                    return {"status": "skipped", "reason": f"Duplicate sell order detected for {stock_code}"}
+                    return {"status": "skipped", "reason": reason}
+                
+                if is_manual:
+                    logger.info(f"🔓 [Manual Override] 중복 매도 방지 체크 우회: {stock_name}")
                 
                 # 2. 현재가 조회
                 trading_mode = os.getenv("TRADING_MODE", "MOCK")

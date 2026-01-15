@@ -301,15 +301,32 @@ class PriceMonitor:
                 logger.error(f"모니터링 루프 오류: {e}")
                 time.sleep(check_interval)
     
-    def _check_sell_signal(self, session, stock_code, stock_name, buy_price, current_price, holding):
+    def _check_sell_signal(self, session, stock_code, stock_name, buy_price, current_price, holding, check_db_freshness=True):
         try:
+            # 0. PROFIT CALCULATION (Initial)
             profit_pct = ((current_price - buy_price) / buy_price) * 100
+            
+            # --- [Double-Check Logic] DB 최신 상태 확인 ---
+            # check_db_freshness=True이고, 수익률이 비정상적으로 높거나(예: +10% 이상) 매도 신호가 의심될 때
+            # 또는 단순히 "모든 매도 신호 발생 직전"에 수행 (안전 제일)
+            
+            # 여기서는 잠정적으로 신호가 잡힐 것 같으면 DB를 확인하도록 구현
+            # (ATR/StopLoss 계산 전 1차 필터링은 과부하 우려가 있으니, 
+            #  일단 로직을 태우고 Signal=True가 나오면 그때 검증하는 것이 효율적. 
+            #  하지만 buy_price 자체가 틀리면 로직을 태우는 의미가 없으므로,
+            #  "수익률이 +5% 이상"이거나 "손실이 -3% 이하"인 변동성 구간에서만 검증하거나,
+            #  혹은 간단히 Signal이 Return 되기 직전에 검증합니다.)
+            
+            # => 전략: 일단 기존 로직대로 Signal을 계산하고, Signal이 True이면 리턴하기 전에 DB와 대조합니다.
+            
             daily_prices = database.get_daily_prices(session, stock_code, limit=30)
             
             # ATR 계산 (여러 조건에서 사용)
             atr = None
             if not daily_prices.empty and len(daily_prices) >= 15:
                 atr = strategy.calculate_atr(daily_prices, period=14)
+            
+            potential_signal = None
             
             # =====================================================================
             # 1. 손절 조건 (Stop Loss)
@@ -320,138 +337,148 @@ class PriceMonitor:
                 mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
                 stop_price = buy_price - (mult * atr)
                 if current_price < stop_price:
-                    return {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
+                    potential_signal = {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
             
             # 1-2. Fallback: Fixed Stop Loss
-            stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-5.0)
-            
-            # [Jennie's Fix] Stop Loss는 항상 음수여야 합니다.
-            if stop_loss > 0:
-                stop_loss = -stop_loss
+            if not potential_signal:
+                stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-5.0)
+                if stop_loss > 0: stop_loss = -stop_loss
 
-            if profit_pct <= stop_loss:
-                return {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
+                if profit_pct <= stop_loss:
+                    potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
 
             # =====================================================================
-            # 2. 트레일링 익절 (Trailing Take Profit) - 신규 추가
+            # 2. 트레일링 익절 (Trailing Take Profit)
             # =====================================================================
-            
-            # High Watermark 업데이트 (최고가 추적)
-            watermark = update_high_watermark(stock_code, current_price, buy_price)
-            high_price = watermark.get('high_price', current_price)
-            
-            # 트레일링 익절 조건 체크
-            trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
-            activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
-            
-            if trailing_enabled and atr:
-                # 최고가 기준 수익률
-                high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+            if not potential_signal:
+                trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
+                activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
                 
-                # 활성화 조건: 최고가 기준 수익이 activation_pct 이상일 때
-                if high_profit_pct >= activation_pct:
-                    trailing_mult = self.config.get_float('TRAILING_TAKE_PROFIT_ATR_MULT', default=1.5)
-                    trailing_stop_price = high_price - (atr * trailing_mult)
+                # High Watermark 업데이트
+                watermark = update_high_watermark(stock_code, current_price, buy_price)
+                high_price = watermark.get('high_price', current_price) # 여기서 high_price는 Redis 기준
+
+                if trailing_enabled and atr:
+                    high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
                     
-                    # 트레일링 익절 발동: 현재가가 트레일링 스탑가 이하
-                    if current_price <= trailing_stop_price:
-                        return {
-                            "signal": True,
-                            "reason": f"Trailing TP: High {high_price:,.0f} → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
-                            "quantity_pct": 100.0
-                        }
+                    if high_profit_pct >= activation_pct:
+                        trailing_mult = self.config.get_float('TRAILING_TAKE_PROFIT_ATR_MULT', default=1.5)
+                        trailing_stop_price = high_price - (atr * trailing_mult)
+                        
+                        if current_price <= trailing_stop_price:
+                            potential_signal = {
+                                "signal": True,
+                                "reason": f"Trailing TP: High {high_price:,.0f} → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
+                                "quantity_pct": 100.0
+                            }
 
             # =====================================================================
-            # 3. 분할 익절 (Scale-out) - 수익률 단계별 부분 매도
+            # 3. 분할 익절 (Scale-out)
             # =====================================================================
-            scale_out_enabled = self.config.get_bool('SCALE_OUT_ENABLED', default=True)
-            
-            if scale_out_enabled and profit_pct > 0:
-                current_level = get_scale_out_level(stock_code)
-                
-                # 각 레벨별 설정 조회
-                level_1_pct = self.config.get_float('SCALE_OUT_LEVEL_1_PCT', default=5.0)
-                level_1_sell = self.config.get_float('SCALE_OUT_LEVEL_1_SELL_PCT', default=25.0)
-                level_2_pct = self.config.get_float('SCALE_OUT_LEVEL_2_PCT', default=10.0)
-                level_2_sell = self.config.get_float('SCALE_OUT_LEVEL_2_SELL_PCT', default=25.0)
-                level_3_pct = self.config.get_float('SCALE_OUT_LEVEL_3_PCT', default=15.0)
-                level_3_sell = self.config.get_float('SCALE_OUT_LEVEL_3_SELL_PCT', default=25.0)
-                
-                # 아직 레벨 1 미도달
-                if current_level < 1 and profit_pct >= level_1_pct:
-                    set_scale_out_level(stock_code, 1)
-                    return {
-                        "signal": True,
-                        "reason": f"Scale-out L1: +{profit_pct:.1f}% (목표 +{level_1_pct}%)",
-                        "quantity_pct": level_1_sell
-                    }
-                
-                # 레벨 1 완료, 레벨 2 미도달
-                if current_level < 2 and profit_pct >= level_2_pct:
-                    set_scale_out_level(stock_code, 2)
-                    return {
-                        "signal": True,
-                        "reason": f"Scale-out L2: +{profit_pct:.1f}% (목표 +{level_2_pct}%)",
-                        "quantity_pct": level_2_sell
-                    }
-                
-                # 레벨 2 완료, 레벨 3 미도달
-                if current_level < 3 and profit_pct >= level_3_pct:
-                    set_scale_out_level(stock_code, 3)
-                    return {
-                        "signal": True,
-                        "reason": f"Scale-out L3: +{profit_pct:.1f}% (목표 +{level_3_pct}%)",
-                        "quantity_pct": level_3_sell
-                    }
+            if not potential_signal:
+                scale_out_enabled = self.config.get_bool('SCALE_OUT_ENABLED', default=True)
+                if scale_out_enabled and profit_pct > 0:
+                    current_level = get_scale_out_level(stock_code)
+                    
+                    level_1_pct = self.config.get_float('SCALE_OUT_LEVEL_1_PCT', default=5.0)
+                    level_1_sell = self.config.get_float('SCALE_OUT_LEVEL_1_SELL_PCT', default=25.0)
+                    level_2_pct = self.config.get_float('SCALE_OUT_LEVEL_2_PCT', default=10.0)
+                    level_2_sell = self.config.get_float('SCALE_OUT_LEVEL_2_SELL_PCT', default=25.0)
+                    level_3_pct = self.config.get_float('SCALE_OUT_LEVEL_3_PCT', default=15.0)
+                    level_3_sell = self.config.get_float('SCALE_OUT_LEVEL_3_SELL_PCT', default=25.0)
+                    
+                    if current_level < 1 and profit_pct >= level_1_pct:
+                        set_scale_out_level(stock_code, 1)
+                        potential_signal = {"signal": True, "reason": f"Scale-out L1: +{profit_pct:.1f}% (목표 +{level_1_pct}%)", "quantity_pct": level_1_sell}
+                    
+                    elif current_level < 2 and profit_pct >= level_2_pct:
+                        set_scale_out_level(stock_code, 2)
+                        potential_signal = {"signal": True, "reason": f"Scale-out L2: +{profit_pct:.1f}% (목표 +{level_2_pct}%)", "quantity_pct": level_2_sell}
+                    
+                    elif current_level < 3 and profit_pct >= level_3_pct:
+                        set_scale_out_level(stock_code, 3)
+                        potential_signal = {"signal": True, "reason": f"Scale-out L3: +{profit_pct:.1f}% (목표 +{level_3_pct}%)", "quantity_pct": level_3_sell}
 
             # =====================================================================
-            # 4. RSI 과열 (추가 Scale-out)
+            # 4. RSI 과열 & 5. 고정 목표 & 6. Death Cross & 7. Max Holding
             # =====================================================================
-            if not daily_prices.empty and len(daily_prices) >= 15:
-                prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
-                rsi = strategy.calculate_rsi(prices[::-1], period=14)
-                threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
-                
-                # [Jennie's Fix] 최소 수익률 조건 추가 (사용자 요청: 3%)
-                min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
-                
-                # 이미 RSI 분할 매도를 했는지 확인
-                rsi_already_sold = get_rsi_overbought_sold(stock_code)
+            if not potential_signal:
+                # RSI Check
+                if not daily_prices.empty and len(daily_prices) >= 15:
+                    prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
+                    rsi = strategy.calculate_rsi(prices[::-1], period=14)
+                    threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
+                    min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
+                    rsi_already_sold = get_rsi_overbought_sold(stock_code)
 
-                if rsi and rsi >= threshold and profit_pct >= min_rsi_profit and not rsi_already_sold:
-                    # Redis에 매도 상태 기록
-                    set_rsi_overbought_sold(stock_code, True)
-                    return {"signal": True, "reason": f"RSI Overbought ({rsi:.1f}, Profit: {profit_pct:.1f}%)", "quantity_pct": 50.0}
+                    if rsi and rsi >= threshold and profit_pct >= min_rsi_profit and not rsi_already_sold:
+                        set_rsi_overbought_sold(stock_code, True)
+                        potential_signal = {"signal": True, "reason": f"RSI Overbought ({rsi:.1f}, Profit: {profit_pct:.1f}%)", "quantity_pct": 50.0}
 
-            # =====================================================================
-            # 5. 고정 목표 익절 (트레일링 비활성화 시 폴백)
-            # =====================================================================
-            if not trailing_enabled:
-                target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
-                if profit_pct >= target:
-                    return {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
+            if not potential_signal:
+                if not self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True):
+                    target = self.config.get_float('SELL_TARGET_PROFIT_PCT', default=10.0)
+                    if profit_pct >= target:
+                        potential_signal = {"signal": True, "reason": f"Target Profit: {profit_pct:.2f}%", "quantity_pct": 100.0}
+
+            if not potential_signal:
+                if not daily_prices.empty and len(daily_prices) >= 20:
+                    import pandas as pd
+                    new_row = pd.DataFrame([{'PRICE_DATE': datetime.now(), 'CLOSE_PRICE': current_price, 'OPEN_PRICE': current_price, 'HIGH_PRICE': current_price, 'LOW_PRICE': current_price}])
+                    # df = pd.concat([daily_prices, new_row], ignore_index=True) # Avoid concat overhead if possible, but safe here
+                    # To keep it simple and safe:
+                    df = pd.concat([daily_prices, new_row], ignore_index=True)
+                    if strategy.check_death_cross(df):
+                        potential_signal = {"signal": True, "reason": "Death Cross", "quantity_pct": 100.0}
+
+            if not potential_signal:
+                if holding.get('buy_date'):
+                    days = (datetime.now() - datetime.strptime(holding['buy_date'], '%Y%m%d')).days
+                    if days >= self.config.get_int('MAX_HOLDING_DAYS', default=30):
+                        potential_signal = {"signal": True, "reason": f"Max Holding Days ({days})", "quantity_pct": 100.0}
+
+            # === [Double-Check Logic] ===
+            if potential_signal and check_db_freshness:
+                logger.info(f"🕵️ [Double-Check] 매도 신호 감지 ({stock_name}): {potential_signal['reason']} -> DB 검증 시작")
+                
+                # DB에서 최신 포트폴리오 정보를 다시 조회
+                # session은 readonly=True일 수 있으니 주의 (여기선 조회만 하므로 OK)
+                fresh_portfolio = repo.get_active_portfolio(session) 
+                # (주의: 전체 조회가 비효율적일 수 있으나 현재 보유 종목 수가 적어(10~20개) 허용 범위)
+                # 더 나은 방법: repo.get_holding(session, stock_code) 추가 권장
+                
+                fresh_holding = next((h for h in fresh_portfolio if h['code'] == stock_code), None)
+                
+                if not fresh_holding:
+                    logger.warning(f"⚠️ [Double-Check] DB에 보유 종목 없음! (Zombie State) -> 매도 취소 및 캐시 정리")
+                    self.portfolio_cache.pop(holding['id'], None)
+                    return None
+                
+                # 데이터 비교
+                db_buy_price = fresh_holding['avg_price']
+                cache_buy_price = holding['avg_price']
+                
+                # 가격 불일치 허용 오차 (부동소수점 고려, 1원 차이도 민감하게 체크)
+                if abs(db_buy_price - cache_buy_price) > 1.0:
+                    logger.warning(f"⚠️ [Double-Check] 매수가 불일치 발각! Cache: {cache_buy_price:,.0f} vs DB: {db_buy_price:,.0f}")
+                    logger.warning(f"   -> 캐시 업데이트 및 신호 재평가 수행")
+                    
+                    # 캐시 업데이트
+                    if holding.get('id') in self.portfolio_cache:
+                        self.portfolio_cache[holding['id']].update(fresh_holding)
+                        # holding 객체 자체도 업데이트 (참조형이므로)
+                        holding['avg_price'] = db_buy_price
+                        holding['quantity'] = fresh_holding['quantity']
+                    
+                    # 재귀 호출 (check_db_freshness=False로 무한 루프 방지)
+                    return self._check_sell_signal(session, stock_code, stock_name, db_buy_price, current_price, holding, check_db_freshness=False)
+                
+                logger.info(f"✅ [Double-Check] DB 검증 완료. 신호 유효함.")
             
-            # =====================================================================
-            # 6. Death Cross
-            # =====================================================================
-            if not daily_prices.empty and len(daily_prices) >= 20:
-                import pandas as pd
-                new_row = pd.DataFrame([{'PRICE_DATE': datetime.now(), 'CLOSE_PRICE': current_price, 'OPEN_PRICE': current_price, 'HIGH_PRICE': current_price, 'LOW_PRICE': current_price}])
-                df = pd.concat([daily_prices, new_row], ignore_index=True)
-                if strategy.check_death_cross(df):
-                    return {"signal": True, "reason": "Death Cross", "quantity_pct": 100.0}
-            
-            # =====================================================================
-            # 7. Max Holding Days
-            # =====================================================================
-            if holding.get('buy_date'):
-                days = (datetime.now() - datetime.strptime(holding['buy_date'], '%Y%m%d')).days
-                if days >= self.config.get_int('MAX_HOLDING_DAYS', default=30):
-                    return {"signal": True, "reason": f"Max Holding Days ({days})", "quantity_pct": 100.0}
-            
-            return None
+            return potential_signal
+
         except Exception as e:
-            logger.error(f"[{stock_name}] 신호 체크 오류: {e}")
+            logger.error(f"[{stock_name}] 신호 체크 오류: {e}", exc_info=True)
             return None
 
     def _on_websocket_price_update(self, stock_code, current_price, current_high):

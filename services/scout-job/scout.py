@@ -240,6 +240,29 @@ def enrich_candidates_with_market_data(candidate_stocks: Dict[str, Dict], sessio
                 candidate_stocks[code]['volume'] = int(volume) if volume else 0
         
         logger.info(f"   (Hash) ✅ DB에서 {len(rows)}개 종목 시장 데이터 로드")
+        
+        # [Fix] 최신 뉴스 감성 점수 조회 (NEWS_SENTIMENT - Active Table)
+        # QuantScorer에 전달하기 위해 여기서 조회
+        sent_query = text(f"""
+            SELECT STOCK_CODE, SENTIMENT_SCORE 
+            FROM NEWS_SENTIMENT
+            WHERE STOCK_CODE IN ({placeholders})
+            AND PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 3 DAY)
+            AND (STOCK_CODE, PUBLISHED_AT) IN (
+                SELECT STOCK_CODE, MAX(PUBLISHED_AT)
+                FROM NEWS_SENTIMENT
+                WHERE STOCK_CODE IN ({placeholders})
+                GROUP BY STOCK_CODE
+            )
+        """)
+        sent_rows = session.execute(sent_query).fetchall()
+        for row in sent_rows:
+            code = row[0]
+            score = row[1]
+            if code in candidate_stocks and score is not None:
+                candidate_stocks[code]['sentiment_score'] = float(score)
+        
+        logger.info(f"   (Hash) ✅ DB에서 {len(sent_rows)}개 종목 뉴스 감성 점수 로드")
     except Exception as e:
         logger.warning(f"   (Hash) ⚠️ DB 시장 데이터 조회 실패: {e}")
     
@@ -546,9 +569,51 @@ def main():
             logger.info("--- [Phase 1.5] 시장 데이터 기반 해시 계산 ---")
             enrich_candidates_with_market_data(candidate_stocks, session, vectorstore)
             
-            # Phase 1 시작 전에 모든 데이터 일괄 조회 (병렬 스레드 안 API 호출 제거)
+    # Phase 1 시작 전에 모든 데이터 일괄 조회 (병렬 스레드 안 API 호출 제거)
             logger.info("--- [Phase 1.6] 데이터 사전 조회 (스냅샷/뉴스) ---")
             snapshot_cache, news_cache = prefetch_all_data(candidate_stocks, kis_api, vectorstore)
+
+            # [Filter] 잡주 필터링 (Junk Stock Filter) - 시총/주가 기준
+            # Config: JUNK_FILTER_MIN_CAP_BILLION (기본 500억), JUNK_FILTER_MIN_PRICE (기본 1000원)
+            min_cap_billion = _parse_int_env(os.getenv("JUNK_FILTER_MIN_CAP_BILLION"), 50) # 500억 (단위: 억 아님. input int 50 -> 500억?)
+            # Wait, DB unit is Million. 50B = 50,000 Million.
+            # User expectation: 500억. 
+            # Let's align with ENV var naming. 
+            # If ENV is "50", it might mean 50 Billion?
+            # Let's set default code constant to 50000 (Million KRW) for safety and clarity.
+            
+            junk_min_cap_unit = _parse_int_env(os.getenv("MIN_MARKET_CAP_INT"), 50000) # Default 500억 (50000 백만)
+            junk_min_price = _parse_int_env(os.getenv("MIN_PRICE_INT"), 1000)
+
+            junk_dropped = 0
+            junk_codes = []
+            
+            for code in list(candidate_stocks.keys()):
+                if code == '0001': continue # 지수는 제외
+                
+                # Check 1: Penny Stock
+                price = candidate_stocks[code].get('price', 0)
+                # Check 2: Small Cap (Use Snapshot)
+                snapshot = snapshot_cache.get(code)
+                market_cap = snapshot.get('market_cap', 0) if snapshot else 0
+                
+                is_penny = price < junk_min_price
+                is_small_cap = market_cap < junk_min_cap_unit
+                
+                if is_penny or is_small_cap:
+                    reason = []
+                    if is_penny: reason.append(f"동전주({price:,.0f}원)")
+                    if is_small_cap: reason.append(f"초소형주({market_cap//100:,.0f}억)")
+                    
+                    logger.info(f"      🗑️ [JunkFilter] {candidate_stocks[code]['name']}({code}) 제외: {', '.join(reason)}")
+                    del candidate_stocks[code]
+                    if snapshot_cache.get(code): del snapshot_cache[code] # Clean cache too
+                    if news_cache.get(code): del news_cache[code]
+                    junk_dropped += 1
+                    junk_codes.append(code)
+            
+            if junk_dropped > 0:
+                logger.info(f"   (Filter) 🚫 잡주 필터링: {junk_dropped}개 종목 제외 완료")
 
             # [NEW] Phase 1.7: 스냅샷에서 재무지표(PER/PBR) 추출 → STOCK_FUNDAMENTALS 저장
             # 이유: 전체 200개 종목의 재무 데이터를 일일 단위로 축적하여 백테스트 정확도 향상
