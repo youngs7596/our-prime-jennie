@@ -185,14 +185,14 @@ class FactorRepository:
             result = (
                 self.session.query(
                     StockMaster.sector_kospi200,
-                    StockMaster.industry_code
+                    # StockMaster.industry_code # industry_code는 현재 모델에서 제외됨
                 )
                 .filter(StockMaster.stock_code == stock_code)
                 .first()
             )
             
             if result:
-                return result[0], result[1]
+                return result[0], None # industry_code 자리에 None 반환
             return None, None
             
         except Exception as e:

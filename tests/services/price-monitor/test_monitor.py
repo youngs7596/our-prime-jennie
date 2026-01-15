@@ -62,12 +62,15 @@ class TestPriceMonitor(unittest.TestCase):
 
     def test_check_sell_signal_stop_loss(self):
         """Test Fixed Stop Loss Trigger"""
-        with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()):
+        with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p:
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             self.mock_config.get_float.side_effect = lambda k, default: -5.0 if 'STOP_LOSS' in k else default
             
             # Buy 100, Current 90 (-10%) -> Should Trigger
+            holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 90, {}
+                self.mock_db_session, "005930", "Samsung", 100, 90, holding
             )
             
             self.assertIsNotNone(result)
@@ -90,11 +93,14 @@ class TestPriceMonitor(unittest.TestCase):
         
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
              patch("monitor.update_high_watermark", return_value={"high_price": 120, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
-             patch("monitor.get_scale_out_level", return_value=0):
+             patch("monitor.get_scale_out_level", return_value=0), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p:
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
             # Buy 100, Current 120 (+20%) -> Should Trigger
+            holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 120, {}
+                self.mock_db_session, "005930", "Samsung", 100, 120, holding
             )
             
             self.assertIsNotNone(result)
@@ -109,14 +115,17 @@ class TestPriceMonitor(unittest.TestCase):
         })
         
         with patch("monitor.database.get_daily_prices", return_value=prices), \
-             patch("monitor.strategy.calculate_atr", return_value=5.0): # ATR = 5
+             patch("monitor.strategy.calculate_atr", return_value=5.0), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p: # ATR = 5
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
             self.mock_config.get_float.return_value = 2.0 # Multiplier
             
             # Stop Price = Buy(100) - (2.0 * 5) = 90
             # Current Price = 89 -> Trigger
+            holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 89, {}
+                self.mock_db_session, "005930", "Samsung", 100, 89, holding
             )
             
             self.assertIsNotNone(result)
@@ -218,10 +227,13 @@ class TestPriceMonitor(unittest.TestCase):
              patch("monitor.update_high_watermark", return_value={"high_price": 105, "buy_price": 100, "profit_from_high_pct": 0, "updated": False}), \
              patch("monitor.get_scale_out_level", return_value=0), \
              patch("monitor.get_rsi_overbought_sold", return_value=False), \
-             patch("monitor.set_rsi_overbought_sold", return_value=None):
+             patch("monitor.set_rsi_overbought_sold", return_value=None), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p:
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
+            holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 105, {}  # 5% profit
+                self.mock_db_session, "005930", "Samsung", 100, 105, holding  # 5% profit
             )
             
             self.assertIsNotNone(result)
@@ -235,12 +247,15 @@ class TestPriceMonitor(unittest.TestCase):
         with patch("monitor.database.get_daily_prices", return_value=daily_prices), \
              patch("monitor.strategy.calculate_atr", return_value=None), \
              patch("monitor.strategy.calculate_rsi", return_value=None), \
-             patch("monitor.strategy.check_death_cross", return_value=True):
+             patch("monitor.strategy.check_death_cross", return_value=True), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p:
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
             self.mock_config.get_float.side_effect = lambda k, default: 999.0 if 'TARGET' in k else -5.0
 
+            holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 100, {}
+                self.mock_db_session, "005930", "Samsung", 100, 100, holding
             )
             
             self.assertIsNotNone(result)
@@ -252,10 +267,12 @@ class TestPriceMonitor(unittest.TestCase):
         self.mock_config.get_float.return_value = 99.0
         
         buy_date = (datetime.now() - timedelta(days=11)).strftime('%Y%m%d')
-        holding = {'buy_date': buy_date}
+        holding = {'code': '005930', 'buy_date': buy_date, 'avg_price': 100, 'quantity': 10, 'id': 1}
         
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
-             patch("monitor.strategy.calculate_atr", return_value=None):
+             patch("monitor.strategy.calculate_atr", return_value=None), \
+             patch("monitor.repo.get_active_portfolio") as mock_get_p:
+            mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
             result = self.monitor._check_sell_signal(
                 self.mock_db_session, "005930", "Samsung", 100, 100, holding

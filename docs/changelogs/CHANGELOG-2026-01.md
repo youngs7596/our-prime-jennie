@@ -1,7 +1,7 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-15
-- **News Scoring & Pipeline Integrity Fix**: 뉴스 스코어링의 비정상적 거품(인플레이션) 현상 해결 및 데이터 파이프라인 정류 완료.
+- **Test Stabilization**: `PriceMonitor`의 ‘Double-Check’ 로직 도입에 따른 단위 테스트 Mocking 보강 및 `StockMaster` 모델 스키마 변경(`industry_code` 제거) 반영.
   - `shared/hybrid_scoring/quant_scorer.py`: 뉴스가 없는 종목에 대해 시장 평균의 80%를 반영하는 'Smart Fallback' 로직 구현.
   - `services/scout-job/scout.py`: `NEWS_SENTIMENT`(Active) 테이블을 참조하도록 데이터 조회 로직 수정 및 잡주 필터링(시총 < 500억, 주가 < 1000원) 복구.
   - `shared/db/models.py`: 잘못된 `StockNewsSentiment` 별칭 제거로 스키마 혼선 방지.

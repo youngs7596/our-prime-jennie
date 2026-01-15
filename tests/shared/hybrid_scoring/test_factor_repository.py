@@ -76,22 +76,19 @@ def sample_stock_master(in_memory_db):
             stock_code='005930',
             stock_name='삼성전자',
             market_cap=400000000000000,  # 400조
-            sector_kospi200='반도체',
-            industry_code='IT'
+            sector_kospi200='반도체'
         ),
         StockMaster(
             stock_code='000660',
             stock_name='SK하이닉스',
             market_cap=100000000000000,  # 100조
-            sector_kospi200='반도체',
-            industry_code='IT'
+            sector_kospi200='반도체'
         ),
         StockMaster(
             stock_code='035420',
             stock_name='NAVER',
             market_cap=50000000000000,  # 50조
-            sector_kospi200='인터넷',
-            industry_code='서비스'
+            sector_kospi200='인터넷'
         ),
     ]
     
@@ -213,7 +210,7 @@ class TestStockMaster:
         sector, industry = repo.get_stock_sector('005930')
         
         assert sector == '반도체'
-        assert industry == 'IT'
+        assert industry is None
     
     def test_get_stock_sector_not_found(self, repo):
         """존재하지 않는 종목"""
