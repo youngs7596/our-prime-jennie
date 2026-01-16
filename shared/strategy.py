@@ -699,3 +699,45 @@ def check_macd_divergence(daily_prices_df, lookback=10):
     except Exception as e:
         logger.error(f"❌ (MACD Divergence) 다이버전스 확인 중 오류: {e}", exc_info=True)
         return None
+
+
+# -----------------------------------------------------------
+# '과매도 반등' 신호 (RSI Rebound)
+# -----------------------------------------------------------
+def check_rsi_rebound(prices_list, period=14, threshold=30):
+    """
+    RSI가 과매도 구간(threshold)을 상향 돌파(Rebound)했는지 확인합니다.
+    (prices_list: [최신, ..., 과거] 순서)
+    
+    조건:
+    1. 전일(Previous) RSI < threshold (과매도 상태)
+    2. 당일(Current) RSI >= threshold (과매도 탈출)
+    
+    Returns:
+        (bool, float): (Rebound 여부, 현재 RSI 값)
+    """
+    try:
+        if prices_list is None or len(prices_list) < period + 2:
+            return False, None
+
+        # Current RSI (오늘 기준)
+        current_rsi = calculate_rsi(prices_list, period)
+        if current_rsi is None:
+            return False, None
+            
+        # Previous RSI (어제 기준) - 최신 데이터 하나 제외
+        # prices_list[1:] is [Yesterday, ..., Oldest]
+        prev_rsi = calculate_rsi(prices_list[1:], period)
+        if prev_rsi is None:
+            return False, current_rsi
+
+        # Rebound 확인
+        if prev_rsi < threshold and current_rsi >= threshold:
+            logger.info(f"✨ RSI Rebound 감지: Prev({prev_rsi:.1f}) < {threshold} <= Curr({current_rsi:.1f})")
+            return True, current_rsi
+            
+        return False, current_rsi
+        
+    except Exception as e:
+        logger.error(f"❌ (RSI Rebound) 오류: {e}", exc_info=True)
+        return False, None

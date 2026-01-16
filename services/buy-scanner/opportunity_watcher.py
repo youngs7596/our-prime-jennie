@@ -270,7 +270,7 @@ class BuyOpportunityWatcher:
         if not strategies:
             strategies = [
                 {"id": "GOLDEN_CROSS", "params": {"short_window": 5, "long_window": 20}},
-                {"id": "RSI_OVERSOLD", "params": {"threshold": 30}}
+                {"id": "RSI_REBOUND", "params": {"threshold": 30}}  # [CHANGED] 과매도(30) 탈출 시 진입 (Falling Knife 방지)
             ]
 
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
@@ -302,12 +302,16 @@ class BuyOpportunityWatcher:
                     
                     break
             
-            elif strat_id == "RSI_OVERSOLD":
-                triggered, reason = self._check_rsi_oversold(recent_bars, params)
+            elif strat_id == "RSI_REBOUND":
+                triggered, reason = self._check_rsi_rebound(recent_bars, params)
                 if triggered:
-                    signal_type = "RSI_OVERSOLD"
+                    signal_type = "RSI_REBOUND"
                     signal_reason = reason
                     break
+                    
+            elif strat_id == "RSI_OVERSOLD":
+                # [DEPRECATED] 사용 금지 (RSI_REBOUND로 대체됨)
+                continue
                     
             elif strat_id == "BB_LOWER":
                 triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
@@ -364,7 +368,36 @@ class BuyOpportunityWatcher:
             return True, f"MA({short_w}) crossed above MA({long_w})"
         return False, ""
 
+    def _check_rsi_rebound(self, bars: List[dict], params: dict) -> tuple:
+        """
+        RSI Rebound 전략: 과매도권(Threshold)을 하향 돌파했다가 다시 상향 돌파할 때 매수
+        조건: Prev_RSI < Threshold <= Curr_RSI
+        """
+        closes = [b['close'] for b in bars]
+        threshold = params.get('threshold', 30)
+        
+        # 1. 현재 RSI
+        curr_rsi = self._calculate_simple_rsi(closes, period=14)
+        if curr_rsi is None:
+            return False, ""
+            
+        # 2. 전일 RSI (최신 데이터 1개 제외하고 계산)
+        if len(closes) < 2:
+            return False, ""
+        prev_closes = closes[:-1]
+        prev_rsi = self._calculate_simple_rsi(prev_closes, period=14)
+        if prev_rsi is None:
+            return False, ""
+            
+        # 3. Rebound 확인
+        # (이전에는 과매도 상태였고 -> 현재는 과매도 기준 이상으로 올라옴)
+        if prev_rsi < threshold and curr_rsi >= threshold:
+            return True, f"RSI Rebound: {prev_rsi:.1f} -> {curr_rsi:.1f} (CrossUp {threshold})"
+            
+        return False, ""
+
     def _check_rsi_oversold(self, bars: List[dict], params: dict) -> tuple:
+        # [DEPRECATED] Only for legacy support or manual override
         closes = [b['close'] for b in bars]
         threshold = params.get('threshold', 30)
         rsi = self._calculate_simple_rsi(closes, period=14)

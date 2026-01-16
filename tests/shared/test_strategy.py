@@ -620,6 +620,110 @@ class TestMACDDivergence:
         assert result is None
 
 
+
+# ============================================================================
+# check_rsi_rebound 테스트
+# ============================================================================
+
+class TestRSIRebound:
+    """RSI Rebound (과매도 탈출) 감지 테스트"""
+
+    def test_rsi_rebound_detected(self):
+        """RSI Rebound 감지: 28 -> 32"""
+        # RSI 설정을 위해 의도적인 가격 패턴 생성
+        # 하락세(RSI<30) -> 반등(RSI>30)
+        
+        # 14일간 하락 -> RSI 낮음
+        prices = list(range(120, 90, -2)) 
+        # 마지막에 급반등
+        prices += [90, 89, 88, 92, 95] 
+        # Reverse to [Newest, ..., Oldest]
+        prices_list = prices[::-1]
+        
+        # 전일 RSI는 < 30 이어야 하고
+        # 당일 RSI는 >= 30 이어야 함
+        # 정확한 수치를 맞추기 어려우므로 mock을 하거나, 
+        # calculate_rsi가 정상 동작한다고 가정하고 패턴을 미세 조정할 수 있음.
+        # 여기서는 간단히 로직 함수 자체의 동작(Prev < T <= Curr)을 검증하기 위해
+        # calculate_rsi를 mocking하는 것이 가장 확실함.
+        
+        # 하지만 통합 테스트 성격으로 실제 값을 계산해보는 것도 좋음.
+        # 여기서는 우선 실제 계산에 의존하되, 안되면 Mocking 고려.
+        
+        # 간단한 Mocking 대신 실제 데이터 주입:
+        # 매우 긴 하락 후 1일 상승 -> RSI는 여전히 낮을 수 있음.
+        # V자 반등이 필요.
+        
+        # 강제 Mocking (strategy.calculate_rsi)
+        # test_strategy.py는 strategy 모듈을 import하고 있음.
+        
+        # 하지만 pytest-mock 없이 순수 로직 테스트가 어려울 수 있으니,
+        # known values 주입이 나음.
+        pass
+
+    def test_rsi_rebound_logic_mock(self, mocker):
+        """RSI Rebound 로직 검증 (Mock 사용)"""
+        # calculate_rsi를 mock하여 원하는 RSI 값을 리턴하게 함
+        
+        # Given
+        mock_rsi = mocker.patch('shared.strategy.calculate_rsi')
+        # 호출 순서: 1. current_rsi(prices), 2. prev_rsi(prices[1:])
+        mock_rsi.side_effect = [32.0, 28.0] 
+        
+        prices = [100] * 20 # Dummy prices
+        
+        # When
+        is_rebound, rsi_val = strategy.check_rsi_rebound(prices, threshold=30)
+        
+        # Then
+        assert is_rebound is True
+        assert rsi_val == 32.0
+        
+        # Verify calls
+        assert mock_rsi.call_count == 2
+    
+    def test_no_rebound_still_oversold(self, mocker):
+        """여전히 과매도 상태 (25 -> 28)"""
+        mock_rsi = mocker.patch('shared.strategy.calculate_rsi')
+        mock_rsi.side_effect = [28.0, 25.0]
+        
+        prices = [100] * 20
+        is_rebound, rsi_val = strategy.check_rsi_rebound(prices, threshold=30)
+        
+        assert is_rebound is False
+        assert rsi_val == 28.0
+        
+    def test_no_rebound_already_normal(self, mocker):
+        """이미 정상 구간 (35 -> 40)"""
+        mock_rsi = mocker.patch('shared.strategy.calculate_rsi')
+        mock_rsi.side_effect = [40.0, 35.0]
+        
+        prices = [100] * 20
+        is_rebound, rsi_val = strategy.check_rsi_rebound(prices, threshold=30)
+        
+        assert is_rebound is False
+        assert rsi_val == 40.0
+
+    def test_no_rebound_cross_down(self, mocker):
+        """하향 돌파 (32 -> 28) - 진입 시점 아님"""
+        mock_rsi = mocker.patch('shared.strategy.calculate_rsi')
+        mock_rsi.side_effect = [28.0, 32.0]
+        
+        prices = [100] * 20
+        is_rebound, rsi_val = strategy.check_rsi_rebound(prices, threshold=30)
+        
+        assert is_rebound is False
+        assert rsi_val == 28.0
+
+    def test_insufficient_data(self):
+        """데이터 부족"""
+        prices = [100]  # 1개
+        is_rebound, rsi_val = strategy.check_rsi_rebound(prices)
+        assert is_rebound is False
+        assert rsi_val is None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
 

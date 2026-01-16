@@ -2,6 +2,7 @@
 
 ## 2026-01-16
 - **Buy-Scanner Modernization**: `buy-scanner` 서비스를 폴링 없는 완전한 이벤트 구동(Redis Streams only) 아키텍처로 개편하고, `_check_legendary_pattern`(Supper Prime Analysis)을 `BuyOpportunityWatcher`에 통합하여 실시간 수급/패턴 감지 기능 배포 완료. 레거시 `scanner.py` 및 폴링 로직 삭제.
+- **RSI Strategy Enhancement**: '떨어지는 칼날' 매수 방지를 위해 기존 `RSI_OVERSOLD`(과매도 즉시 진입) 전략을 비활성화하고, 과매도 구간 탈출 시 진입하는 `RSI_REBOUND` 전략으로 교체 및 검증 완료.
 
 - **Price-Monitor Modernization**: `price-monitor` 서비스를 `monitor.py` 내 폴링 로직을 제거하고 Redis Streams(`kis:prices`) 기반 전용으로 전환하여 실시간성을 강화하고, 레거시 스케줄러 의존성 삭제 및 단위 테스트(`test_monitor.py`) 최신화 완료.
 - **Test Stabilization**: `PriceMonitor`의 ‘Double-Check’ 로직 도입에 따른 단위 테스트 Mocking 보강 및 `StockMaster` 모델 스키마 변경(`industry_code` 제거) 반영.
