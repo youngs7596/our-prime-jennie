@@ -236,6 +236,10 @@ class BuyOpportunityWatcher:
             return
         
         try:
+            # 쓰레드에서 호출될 수 있으므로 DB 초기화 보장
+            from shared.db.connection import ensure_engine_initialized
+            ensure_engine_initialized()
+            
             with session_scope(readonly=True) as session:
                 repo = FactorRepository(session)
                 # 최근 30일치 외국인 수급 데이터 조회
