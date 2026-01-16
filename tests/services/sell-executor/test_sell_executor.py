@@ -286,7 +286,7 @@ class TestRedisLock:
             
             assert result['status'] == 'skipped'
             assert 'locked' in result['reason']
-            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=10)
+            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=30)
 
     def test_execute_sell_lock_release_on_exception(self, executor_module, mock_kis, mock_config, sample_holding):
         """예외 발생 시 Redis Lock 해제 확인"""
@@ -371,7 +371,7 @@ class TestRedisLock:
             )
             
             assert result['status'] == 'success'
-            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=10)
+            mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=30)
 
 
 class TestProfitCalculation:

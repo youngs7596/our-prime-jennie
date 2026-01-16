@@ -89,7 +89,7 @@ class SellExecutor:
             redis_client = get_redis_connection()
             if redis_client:
                 # NX=True: 키가 존재하지 않을 때만 설정, EX=10: 10초 후 자동 만료
-                lock_acquired = redis_client.set(lock_key, "LOCKED", nx=True, ex=10)
+                lock_acquired = redis_client.set(lock_key, "LOCKED", nx=True, ex=30)
                 if not lock_acquired:
                     logger.warning(f"⚠️ [Redis Lock] 매도 진행 중 (잠김): {stock_name}({stock_code}) - 중복 실행 방지")
                     return {"status": "skipped", "reason": f"Sell process locked for {stock_code}"}

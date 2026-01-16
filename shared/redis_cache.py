@@ -1072,6 +1072,103 @@ def delete_high_watermark(stock_code: str, redis_client=None) -> bool:
 
 
 # ============================================================================
+# Profit Floor (수익 보호 바닥) 추적
+# ============================================================================
+
+PROFIT_FLOOR_PREFIX = "profit_floor:"
+
+
+def set_profit_floor(
+    stock_code: str,
+    floor_pct: float,
+    redis_client=None,
+    ttl: int = 86400 * 7  # 7일 유효
+) -> bool:
+    """
+    [Redis] 종목의 수익 보호 바닥을 설정합니다.
+    일정 수익률 이상 도달 시, 최소 보장 수익률을 설정하여 이익을 보호합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        floor_pct: 수익 보호 바닥 (예: 10.0 = 10%)
+        redis_client: 테스트용 Redis 클라이언트
+        ttl: 만료 시간 (기본 7일)
+    
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    try:
+        key = f"{PROFIT_FLOOR_PREFIX}{stock_code}"
+        data = {
+            "floor_pct": floor_pct,
+            "set_at": datetime.now(timezone.utc).isoformat()
+        }
+        r.setex(key, ttl, json.dumps(data))
+        logger.info(f"🛡️ [Redis] Profit Floor 설정: {stock_code} = +{floor_pct}%")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] Profit Floor 설정 실패: {e}")
+        return False
+
+
+def get_profit_floor(stock_code: str, redis_client=None) -> Optional[float]:
+    """
+    [Redis] 종목의 수익 보호 바닥을 조회합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        수익 보호 바닥 (%) 또는 None
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return None
+    
+    try:
+        key = f"{PROFIT_FLOOR_PREFIX}{stock_code}"
+        data_json = r.get(key)
+        if data_json:
+            data = json.loads(data_json)
+            return data.get("floor_pct")
+        return None
+    except Exception as e:
+        logger.error(f"❌ [Redis] Profit Floor 조회 실패: {e}")
+        return None
+
+
+def delete_profit_floor(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 종목의 수익 보호 바닥을 삭제합니다. (매도 완료 시 호출)
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+    
+    try:
+        key = f"{PROFIT_FLOOR_PREFIX}{stock_code}"
+        deleted = r.delete(key)
+        if deleted:
+            logger.debug(f"🗑️ [Redis] Profit Floor 삭제: {stock_code}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] Profit Floor 삭제 실패: {e}")
+        return False
+
+
+# ============================================================================
 # Scale-out (분할 익절) 상태 추적
 # ============================================================================
 

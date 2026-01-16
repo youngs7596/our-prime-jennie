@@ -24,6 +24,8 @@ from shared.redis_cache import (
     get_rsi_overbought_sold,
     set_rsi_overbought_sold,
     delete_rsi_overbought_sold,
+    set_profit_floor,
+    get_profit_floor,
 )
 from shared.db.connection import session_scope
 from shared.db import repository as repo
@@ -202,12 +204,42 @@ class PriceMonitor:
             potential_signal = None
             
             # =====================================================================
+            # 0. Profit Floor Protection (수익 보호 바닥)
+            # =====================================================================
+            # 수익이 15% 이상 도달하면 바닥을 10%로 설정
+            PROFIT_FLOOR_ACTIVATION = 15.0
+            PROFIT_FLOOR_LEVEL = 10.0
+            
+            if profit_pct >= PROFIT_FLOOR_ACTIVATION:
+                existing_floor = get_profit_floor(stock_code)
+                if not existing_floor:
+                    set_profit_floor(stock_code, PROFIT_FLOOR_LEVEL)
+                    logger.info(f"🛡️ [{stock_name}] Profit Floor 설정: +{PROFIT_FLOOR_LEVEL}% (현재 +{profit_pct:.1f}%)")
+            
+            floor = get_profit_floor(stock_code)
+            if floor and profit_pct < floor:
+                potential_signal = {"signal": True, "reason": f"Profit Floor Hit ({profit_pct:.1f}% < Floor {floor}%)", "quantity_pct": 100.0}
+            
+            # =====================================================================
+            # 0.5 MACD Divergence Early Warning
+            # =====================================================================
+            macd_bearish_warning = False
+            if not potential_signal and not daily_prices.empty and len(daily_prices) >= 36:
+                macd_div = strategy.check_macd_divergence(daily_prices)
+                if macd_div and macd_div.get('bearish_divergence'):
+                    macd_bearish_warning = True
+                    logger.warning(f"⚠️ [{stock_name}] MACD Bearish Divergence 감지")
+            
+            # =====================================================================
             # 1. 손절 조건 (Stop Loss)
             # =====================================================================
             
             # 1-1. ATR Trailing Stop (손절)
-            if atr:
+            if not potential_signal and atr:
                 mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
+                # MACD bearish divergence 시 더 타이트한 스탑
+                if macd_bearish_warning:
+                    mult = mult * 0.75
                 stop_price = buy_price - (mult * atr)
                 if current_price < stop_price:
                     potential_signal = {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
@@ -226,6 +258,9 @@ class PriceMonitor:
             if not potential_signal:
                 trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
                 activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
+                # MACD bearish divergence 시 더 빠른 익절 (20% 조기 활성화)
+                if macd_bearish_warning:
+                    activation_pct = activation_pct * 0.8
                 
                 # High Watermark 업데이트
                 watermark = update_high_watermark(stock_code, current_price, buy_price)
