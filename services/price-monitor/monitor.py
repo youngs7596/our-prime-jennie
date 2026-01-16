@@ -118,6 +118,10 @@ class PriceMonitor:
         """Redis Streams 모드로 실시간 모니터링 (kis-gateway 공유 WebSocket)"""
         logger.info("=== Redis Streams 모드로 실시간 모니터링 시작 ===")
         
+        # 쓰레드에서 호출되므로 DB 초기화 보장
+        from shared.db.connection import ensure_engine_initialized
+        ensure_engine_initialized()
+        
         redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
         gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
         
