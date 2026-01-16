@@ -283,53 +283,68 @@ class BuyOpportunityWatcher:
 
         if not self._check_cooldown(stock_code):
             return None
-            
+        
         signal_type = None
         signal_reason = ""
         
-        for strat in strategies:
-            strat_id = strat.get('id')
-            params = strat.get('params', {})
+        # [NEW] 상승장 전용 전략 먼저 체크 (기존 전략보다 우선 적용)
+        if self.market_regime in ['BULL', 'STRONG_BULL']:
+            # 1. RECON_BULL_ENTRY: 고점수 RECON 종목 자동 진입
+            result = self._check_recon_bull_entry(stock_code, stock_info)
+            if result:
+                signal_type, signal_reason = result
             
-            if strat_id == "GOLDEN_CROSS":
-                triggered, reason = self._check_golden_cross(recent_bars, params)
-                if triggered:
-                    signal_type = "GOLDEN_CROSS"
-                    signal_reason = reason
-                    
-                    # [Super Prime] Legendary Pattern Check
-                    # 골든크로스 발생 시, 외국인 수급 패턴 확인하여 등급 상향
-                    if self._check_legendary_pattern(stock_code, recent_bars):
-                         signal_type = "GOLDEN_CROSS_SUPER_PRIME"
-                         signal_reason += " + Legendary Pattern (Foreign Buy)"
-                         logger.info(f"🚨 [{stock_code}] SUPER PRIME 신호 격상! (Legendary Pattern)")
-                    
-                    break
-            
-            elif strat_id == "RSI_REBOUND":
-                triggered, reason = self._check_rsi_rebound(recent_bars, params)
-                if triggered:
-                    signal_type = "RSI_REBOUND"
-                    signal_reason = reason
-                    break
-                    
-            elif strat_id == "RSI_OVERSOLD":
-                # [DEPRECATED] 사용 금지 (RSI_REBOUND로 대체됨)
-                continue
-                    
-            elif strat_id == "BB_LOWER":
-                triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
-                if triggered:
-                    signal_type = "BB_LOWER"
-                    signal_reason = reason
-                    break
-            
-            elif strat_id == "MOMENTUM":
-                triggered, reason = self._check_momentum(recent_bars, params)
-                if triggered:
-                    signal_type = "MOMENTUM"
-                    signal_reason = reason
-                    break
+            # 2. MOMENTUM_CONTINUATION: 모멘텀 지속 종목
+            if not signal_type:
+                result = self._check_momentum_continuation(stock_code, stock_info, recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+        
+        # [EXISTING] 신호가 없으면 기존 전략 루프 실행
+        if not signal_type:
+            for strat in strategies:
+                strat_id = strat.get('id')
+                params = strat.get('params', {})
+                
+                if strat_id == "GOLDEN_CROSS":
+                    triggered, reason = self._check_golden_cross(recent_bars, params)
+                    if triggered:
+                        signal_type = "GOLDEN_CROSS"
+                        signal_reason = reason
+                        
+                        # [Super Prime] Legendary Pattern Check
+                        # 골든크로스 발생 시, 외국인 수급 패턴 확인하여 등급 상향
+                        if self._check_legendary_pattern(stock_code, recent_bars):
+                             signal_type = "GOLDEN_CROSS_SUPER_PRIME"
+                             signal_reason += " + Legendary Pattern (Foreign Buy)"
+                             logger.info(f"🚨 [{stock_code}] SUPER PRIME 신호 격상! (Legendary Pattern)")
+                        
+                        break
+                
+                elif strat_id == "RSI_REBOUND":
+                    triggered, reason = self._check_rsi_rebound(recent_bars, params)
+                    if triggered:
+                        signal_type = "RSI_REBOUND"
+                        signal_reason = reason
+                        break
+                        
+                elif strat_id == "RSI_OVERSOLD":
+                    # [DEPRECATED] 사용 금지 (RSI_REBOUND로 대체됨)
+                    continue
+                        
+                elif strat_id == "BB_LOWER":
+                    triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
+                    if triggered:
+                        signal_type = "BB_LOWER"
+                        signal_reason = reason
+                        break
+                
+                elif strat_id == "MOMENTUM":
+                    triggered, reason = self._check_momentum(recent_bars, params)
+                    if triggered:
+                        signal_type = "MOMENTUM"
+                        signal_reason = reason
+                        break
 
         if not signal_type:
             return None
@@ -458,6 +473,91 @@ class BuyOpportunityWatcher:
         rsi = 100 - (100 / (1 + rs))
         return rsi
     
+    def _check_recon_bull_entry(self, stock_code: str, stock_info: dict) -> Optional[tuple]:
+        """
+        RECON_BULL_ENTRY: 상승장에서 고점수 RECON 종목 자동 진입
+        
+        조건:
+        1. market_regime in ['BULL', 'STRONG_BULL']
+        2. LLM Score >= 70
+        3. Trade_Tier == 'RECON'
+        
+        Returns:
+            (signal_type, reason) or None
+        """
+        # 환경변수로 비활성화 가능
+        if not self.config.get_bool("ENABLE_RECON_BULL_ENTRY", default=True):
+            return None
+        
+        # 상승장 체크
+        if self.market_regime not in ['BULL', 'STRONG_BULL']:
+            return None
+        
+        # LLM Score 체크
+        llm_score = stock_info.get('llm_score', 0)
+        if llm_score < 70:
+            return None
+        
+        # Trade Tier 체크
+        trade_tier = stock_info.get('trade_tier', '')
+        if trade_tier != 'RECON':
+            return None
+        
+        reason = f"LLM Score {llm_score:.1f} + RECON Tier + {self.market_regime} Market"
+        logger.info(f"🚀 [{stock_code}] RECON_BULL_ENTRY 조건 충족: {reason}")
+        return ("RECON_BULL_ENTRY", reason)
+    
+    def _check_momentum_continuation(self, stock_code: str, stock_info: dict, 
+                                     bars: List[dict]) -> Optional[tuple]:
+        """
+        MOMENTUM_CONTINUATION_BULL: 거래량 급증 + 상승 추세 지속 종목
+        
+        조건:
+        1. market_regime in ['BULL', 'STRONG_BULL']
+        2. MA5 > MA20 (현재)
+        3. 당일 상승률 >= 2%
+        4. LLM Score >= 65
+        
+        Returns:
+            (signal_type, reason) or None
+        """
+        # 환경변수로 비활성화 가능
+        if not self.config.get_bool("ENABLE_MOMENTUM_CONTINUATION", default=True):
+            return None
+        
+        # 상승장 체크
+        if self.market_regime not in ['BULL', 'STRONG_BULL']:
+            return None
+        
+        # LLM Score 체크
+        llm_score = stock_info.get('llm_score', 0)
+        if llm_score < 65:
+            return None
+        
+        # 충분한 바 데이터 필요
+        if len(bars) < 20:
+            return None
+        
+        # MA5 > MA20 체크
+        closes = [bar['close'] for bar in bars]
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        
+        if ma5 <= ma20:
+            return None
+        
+        # 당일 상승률 체크 (첫 바 대비 현재)
+        first_price = bars[0]['open']
+        current_price = bars[-1]['close']
+        price_change = ((current_price - first_price) / first_price) * 100
+        
+        if price_change < 2.0:
+            return None
+        
+        reason = f"MA5({ma5:.0f}) > MA20({ma20:.0f}) + 상승률 {price_change:.1f}% + LLM {llm_score:.1f}"
+        logger.info(f"📈 [{stock_code}] MOMENTUM_CONTINUATION 조건 충족: {reason}")
+        return ("MOMENTUM_CONTINUATION_BULL", reason)
+
     def _check_cooldown(self, stock_code: str) -> bool:
         if not self.redis:
             return True

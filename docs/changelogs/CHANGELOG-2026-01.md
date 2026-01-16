@@ -3,6 +3,10 @@
 ## 2026-01-16
 - **Buy-Scanner Modernization**: `buy-scanner` 서비스를 폴링 없는 완전한 이벤트 구동(Redis Streams only) 아키텍처로 개편하고, `_check_legendary_pattern`(Supper Prime Analysis)을 `BuyOpportunityWatcher`에 통합하여 실시간 수급/패턴 감지 기능 배포 완료. 레거시 `scanner.py` 및 폴링 로직 삭제.
 - **RSI Strategy Enhancement**: '떨어지는 칼날' 매수 방지를 위해 기존 `RSI_OVERSOLD`(과매도 즉시 진입) 전략을 비활성화하고, 과매도 구간 탈출 시 진입하는 `RSI_REBOUND` 전략으로 교체 및 검증 완료.
+- **Bull Market Entry Strategies (Council Approved)**: 3현자(Prime Council) 자문을 통해 상승장 전용 매수 전략 2가지 신규 구현:
+  - `RECON_BULL_ENTRY`: 상승장에서 LLM Score ≥70 + RECON 등급 종목 자동 진입
+  - `MOMENTUM_CONTINUATION_BULL`: MA5 > MA20 + 당일 상승률 ≥2% + LLM ≥65 종목 추세 추종 진입
+  - 환경변수(`ENABLE_RECON_BULL_ENTRY`, `ENABLE_MOMENTUM_CONTINUATION`)로 즉시 비활성화 가능
 - **Emergency Stop & Fixes**: `/stop` 명령이 즉시 반영되도록 `buy-executor`, `sell-executor`, `buy-scanner`에 `is_trading_stopped()` 체크 로직을 구현하고, `price-monitor`의 `NameError`(`pytz`) 수정 및 관련 단위 테스트 보강 완료.
 
 - **Price-Monitor Modernization**: `price-monitor` 서비스를 `monitor.py` 내 폴링 로직을 제거하고 Redis Streams(`kis:prices`) 기반 전용으로 전환하여 실시간성을 강화하고, 레거시 스케줄러 의존성 삭제 및 단위 테스트(`test_monitor.py`) 최신화 완료.
