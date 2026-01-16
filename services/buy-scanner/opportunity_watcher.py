@@ -29,7 +29,7 @@ class BarAggregator:
         self.current_bars: Dict[str, dict] = {}
         self.completed_bars: Dict[str, List[dict]] = defaultdict(list)
         self.lock = Lock()
-        self.max_bar_history = 30
+        self.max_bar_history = 60  # [CHANGED] 30 -> 60 (1시간 데이터 확보)
         
     def update(self, stock_code: str, price: float, volume: int = 0) -> Optional[dict]:
         """새 틱 데이터 수신 시 호출"""
@@ -299,9 +299,25 @@ class BuyOpportunityWatcher:
                 result = self._check_momentum_continuation(stock_code, stock_info, recent_bars)
                 if result:
                     signal_type, signal_reason = result
-        
+
+            # 3. [NEW] SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파)
+            if not signal_type:
+                result = self._check_short_term_high_breakout(stock_code, recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+
+            # 4. [NEW] VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파)
+            if not signal_type:
+                result = self._check_volume_breakout_1min(stock_code, recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+
         # [EXISTING] 신호가 없으면 기존 전략 루프 실행
+        # 단, 강세장(BULL/STRONG_BULL)에서는 역추세 전략(RSI, BB) 비활성화
         if not signal_type:
+            # 강세장에서는 역추세 전략 스킵
+            is_bull_market = self.market_regime in ['BULL', 'STRONG_BULL']
+            
             for strat in strategies:
                 strat_id = strat.get('id')
                 params = strat.get('params', {})
@@ -313,7 +329,6 @@ class BuyOpportunityWatcher:
                         signal_reason = reason
                         
                         # [Super Prime] Legendary Pattern Check
-                        # 골든크로스 발생 시, 외국인 수급 패턴 확인하여 등급 상향
                         if self._check_legendary_pattern(stock_code, recent_bars):
                              signal_type = "GOLDEN_CROSS_SUPER_PRIME"
                              signal_reason += " + Legendary Pattern (Foreign Buy)"
@@ -322,6 +337,10 @@ class BuyOpportunityWatcher:
                         break
                 
                 elif strat_id == "RSI_REBOUND":
+                    # 강세장에서는 RSI Rebound 비활성화 (거의 발생 안 함 + 가짜 신호 방지)
+                    if is_bull_market:
+                        continue
+                        
                     triggered, reason = self._check_rsi_rebound(recent_bars, params)
                     if triggered:
                         signal_type = "RSI_REBOUND"
@@ -329,10 +348,13 @@ class BuyOpportunityWatcher:
                         break
                         
                 elif strat_id == "RSI_OVERSOLD":
-                    # [DEPRECATED] 사용 금지 (RSI_REBOUND로 대체됨)
                     continue
                         
                 elif strat_id == "BB_LOWER":
+                    # 강세장에서는 BB 하단 터치 전략 비활성화 (Band Walk 위험)
+                    if is_bull_market:
+                        continue
+
                     triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
                     if triggered:
                         signal_type = "BB_LOWER"
@@ -557,6 +579,90 @@ class BuyOpportunityWatcher:
         reason = f"MA5({ma5:.0f}) > MA20({ma20:.0f}) + 상승률 {price_change:.1f}% + LLM {llm_score:.1f}"
         logger.info(f"📈 [{stock_code}] MOMENTUM_CONTINUATION 조건 충족: {reason}")
         return ("MOMENTUM_CONTINUATION_BULL", reason)
+
+    def _check_short_term_high_breakout(self, stock_code: str, bars: List[dict]) -> Optional[tuple]:
+        """
+        [New] SHORT_TERM_HIGH_BREAKOUT: 60분 신고가 돌파 + 거래량 급증 (2배)
+        조건:
+        1. 현재가 > 최근 60분 내 최고가 (High)
+        2. 현재 거래량 > 최근 30분 평균 거래량 * 2.0
+        """
+        # 데이터 충분 여부 확인
+        if len(bars) < 30:
+            return None
+        
+        # 최근 60분(또는 가능한 최대) 고가 계산
+        # bars는 1분봉 리스트 (최대 30개지만 BarAggregator 설정에 따라 다름)
+        # BarAggregator.max_bar_history를 60으로 늘려야 정확하지만, 
+        # 현재 30개라면 30분 신고가로 근사하여 사용
+        
+        recent_highs = [b['high'] for b in bars[:-1]] # 현재 봉 제외
+        if not recent_highs:
+            return None
+            
+        period_high = max(recent_highs)
+        current_bar = bars[-1]
+        current_price = current_bar['close']
+        
+        # 1. 고가 돌파 확인 (현재는 종가 기준)
+        if current_price <= period_high:
+            return None
+            
+        # 2. 거래량 급증 확인
+        recent_volumes = [b['volume'] for b in bars[:-1]][-30:]
+        avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 0
+        
+        if avg_volume == 0:
+            return None
+            
+        current_volume = current_bar['volume']
+        volume_ratio = current_volume / avg_volume
+        
+        if volume_ratio < 2.0:
+            return None
+            
+        reason = f"60분 신고가 돌파 ({current_price} > {period_high}) + 거래량 {volume_ratio:.1f}배"
+        logger.info(f"🚀 [{stock_code}] SHORT_TERM_HIGH_BREAKOUT 조건 충족: {reason}")
+        return ("SHORT_TERM_HIGH_BREAKOUT", reason)
+
+    def _check_volume_breakout_1min(self, stock_code: str, bars: List[dict]) -> Optional[tuple]:
+        """
+        [New] VOLUME_BREAKOUT_1MIN: 20분 저항 돌파 + 거래량 폭발 (3배)
+        조건:
+        1. 현재가 > 최근 20분 내 최고 종가
+        2. 현재 거래량 > 최근 60분(실제론 30분) 평균 거래량 * 3.0
+        """
+        if len(bars) < 20:
+            return None
+            
+        # 최근 20분 종가 최고치 (저항선)
+        recent_closes = [b['close'] for b in bars[:-1]][-20:] 
+        if not recent_closes: 
+            return None
+            
+        resistance_price = max(recent_closes)
+        current_bar = bars[-1]
+        current_price = current_bar['close']
+        
+        if current_price <= resistance_price:
+            return None
+            
+        # 거래량 확인 (3배)
+        recent_volumes = [b['volume'] for b in bars[:-1]]
+        avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 0
+        
+        if avg_volume == 0:
+            return None
+            
+        current_volume = current_bar['volume']
+        volume_ratio = current_volume / avg_volume
+        
+        if volume_ratio < 3.0:
+            return None
+            
+        reason = f"20분 저항 돌파 ({current_price} > {resistance_price}) + 거래량 {volume_ratio:.1f}배"
+        logger.info(f"💥 [{stock_code}] VOLUME_BREAKOUT_1MIN 조건 충족: {reason}")
+        return ("VOLUME_BREAKOUT_1MIN", reason)
 
     def _check_cooldown(self, stock_code: str) -> bool:
         if not self.redis:

@@ -266,8 +266,8 @@ class CommandHandler:
         """현재 포트폴리오 조회"""
         try:
             with session_scope(readonly=True) as session:
-                # [Fix] get_active_watchlist_v2 -> get_active_portfolio
-                portfolio = database.repo.get_active_portfolio(session)
+                # shared.database에서 직접 export된 함수 사용
+                portfolio = database.get_active_portfolio(session)
             
             if not portfolio:
                 return "📭 현재 보유 종목이 없습니다."
@@ -534,7 +534,7 @@ class CommandHandler:
                 reverse=True
             )
             
-            for i, (code, info) in enumerate(sorted_items[:15], 1):  # 최대 15개
+            for i, (code, info) in enumerate(sorted_items, 1):  # 전체 표시
                 name = info.get('name', code)
                 score = info.get('llm_score', 0)
                 tradable = "✅" if info.get('is_tradable', True) else "⏸️"
@@ -551,8 +551,7 @@ class CommandHandler:
                 
                 lines.append(f"{i}. {tradable} {name} ({code}) {score_emoji} {score}점")
             
-            if len(watchlist) > 15:
-                lines.append(f"\n... 외 {len(watchlist) - 15}개")
+            # 전체 표시하므로 생략 메시지 제거됨
             
             lines.append(f"\n💡 `/unwatch 종목명`으로 제거")
             

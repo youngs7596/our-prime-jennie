@@ -8,6 +8,8 @@
   - `MOMENTUM_CONTINUATION_BULL`: MA5 > MA20 + 당일 상승률 ≥2% + LLM ≥65 종목 추세 추종 진입
   - 환경변수(`ENABLE_RECON_BULL_ENTRY`, `ENABLE_MOMENTUM_CONTINUATION`)로 즉시 비활성화 가능
 - **Emergency Stop & Fixes**: `/stop` 명령이 즉시 반영되도록 `buy-executor`, `sell-executor`, `buy-scanner`에 `is_trading_stopped()` 체크 로직을 구현하고, `price-monitor`의 `NameError`(`pytz`) 수정 및 관련 단위 테스트 보강 완료.
+- **Market Regime Real-time Update**: `scout-job`에서 `MarketRegimeDetector` 호출 시 KIS API를 통해 실시간 KOSPI 지수(`get_stock_snapshot`)를 조회·반영하도록 개선하여 국면 판단의 1일 지연(Lag) 문제를 해결.
+- **Bull Market Entry Optimization**: 강세장(`BULL`/`STRONG_BULL`)에서 `RSI_REBOUND` 및 `BB_LOWER` 등 역추세 전략을 자동 비활성화하고, 신규 돌파 전략(`SHORT_TERM_HIGH_BREAKOUT`, `VOLUME_BREAKOUT_1MIN`)을 우선 적용하도록 `buy-scanner` 로직 고도화.
 
 - **Price-Monitor Modernization**: `price-monitor` 서비스를 `monitor.py` 내 폴링 로직을 제거하고 Redis Streams(`kis:prices`) 기반 전용으로 전환하여 실시간성을 강화하고, 레거시 스케줄러 의존성 삭제 및 단위 테스트(`test_monitor.py`) 최신화 완료.
 - **Test Stabilization**: `PriceMonitor`의 ‘Double-Check’ 로직 도입에 따른 단위 테스트 Mocking 보강 및 `StockMaster` 모델 스키마 변경(`industry_code` 제거) 반영.

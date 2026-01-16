@@ -764,8 +764,22 @@ def main():
                     # 시장 국면 감지
                     kospi_prices = database.get_daily_prices(session, "0001", limit=60)
                     if not kospi_prices.empty:
+                        # [Fix] 실시간 코스피 지수 조회 (장중 변동성 즉각 반영)
+                        kospi_current = None
+                        try:
+                            kospi_snapshot = kis_api.get_stock_snapshot("0001", is_index=True)
+                            if kospi_snapshot:
+                                kospi_current = float(kospi_snapshot['price'])
+                                logger.info(f"   (Market) 📡 실시간 KOSPI 지수: {kospi_current:.2f}")
+                        except Exception as e:
+                            logger.warning(f"   (Market) ⚠️ 실시간 KOSPI 조회 실패 (어제 종가 사용): {e}")
+
+                        # 실시간 조회 실패 시, DB의 마지막 종가(어제) 사용
+                        if kospi_current is None:
+                            kospi_current = float(kospi_prices['CLOSE_PRICE'].iloc[-1])
+
                         detector = MarketRegimeDetector()
-                        current_regime, _ = detector.detect_regime(kospi_prices, float(kospi_prices['CLOSE_PRICE'].iloc[-1]), quiet=True)
+                        current_regime, _ = detector.detect_regime(kospi_prices, kospi_current, quiet=True)
                     else:
                         current_regime = "SIDEWAYS"
                     
