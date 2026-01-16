@@ -38,8 +38,8 @@ def _build_connection_url() -> str:
     user_enc = quote_plus(user)
     password_enc = quote_plus(password)
     
-    # pymysql 드라이버 사용 (권장)
-    return f"mysql+pymysql://{user_enc}:{password_enc}@{host}:{port}/{dbname}?charset=utf8mb4"
+    # mysqlconnector 드라이버 사용 (Docker 호환)
+    return f"mysql+mysqlconnector://{user_enc}:{password_enc}@{host}:{port}/{dbname}?charset=utf8mb4"
 
 
 def _get_db_type():
