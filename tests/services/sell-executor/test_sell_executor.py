@@ -288,6 +288,44 @@ class TestRedisLock:
             assert 'locked' in result['reason']
             mock_redis.set.assert_called_with('lock:sell:005930', 'LOCKED', nx=True, ex=10)
 
+    def test_execute_sell_lock_release_on_exception(self, executor_module, mock_kis, mock_config, sample_holding):
+        """예외 발생 시 Redis Lock 해제 확인"""
+        executor = executor_module[0]
+        
+        # Override the get_redis_connection locally
+        mock_redis = MagicMock()
+        mock_redis.set.return_value = True  # Lock acquired
+        
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+             patch.object(executor, 'get_redis_connection', return_value=mock_redis):
+            
+            # DB 에러 시뮬레이션
+            mock_portfolio.side_effect = RuntimeError("DB Error")
+            
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+            
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+            
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='Lock Release Test',
+                current_price=80000
+            )
+            
+            assert result['status'] == 'error'
+            mock_redis.delete.assert_called_with('lock:sell:005930')
+
     def test_redis_lock_acquired_success(self, executor_module, mock_kis, mock_config, sample_holding):
         """Redis Lock 획득 성공 시 정상 진행"""
         import pandas as pd
@@ -630,6 +668,87 @@ class TestMockModePrice:
                 mock_kis.get_stock_snapshot.assert_not_called()
                 # DB에서 가져온 가격 73000 사용
                 assert result['sell_price'] == 73000
+
+    def test_execute_sell_priority_price(self, executor_module, mock_kis, mock_config, sample_holding):
+        """제공된 current_price 우선 사용 확인"""
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+             patch('shared.database') as mock_db, \
+             patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
+            
+            mock_portfolio.return_value = [sample_holding]
+            mock_db.execute_trade_and_log.return_value = True
+            
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            # ...
+            
+            executor = executor_module[0]
+            executor.database = mock_db
+            
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+            
+            # Provide explicit price 80000
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='TEST',
+                current_price=80000,
+                dry_run=True 
+            )
+            
+            # Should use 80000, not call KIS or DB for price
+            mock_kis.get_stock_snapshot.assert_not_called()
+            assert result['sell_price'] == 80000
+
+
+class TestEmergencyStopCheck:
+    """긴급 정지 테스트"""
+
+    def test_emergency_stop_allows_manual_sell(self, executor_module, mock_kis, mock_config, sample_holding):
+        """Emergency Stop 상태여도 매뉴얼 매도는 허용"""
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=True), \
+             patch('shared.database') as mock_db:
+            
+            mock_portfolio.return_value = [sample_holding]
+            mock_db.get_market_regime_cache.return_value = None
+            
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+            
+            executor = executor_module[0]
+            executor.database = mock_db
+            
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis,
+                config=mock_config
+            )
+            
+            # MANUAL reason provided
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='MANUAL: User requested',
+                current_price=80000,
+                dry_run=True 
+            )
+            
+            # Should NOT be skipped due to Emergency Stop
+            assert 'Emergency Stop' not in result.get('reason', '')
+            assert result['status'] == 'success'
 
 
 if __name__ == '__main__':
