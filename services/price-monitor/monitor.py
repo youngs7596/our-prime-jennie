@@ -60,14 +60,13 @@ class PriceMonitor:
         self.stop_event = Event()
         
         trading_mode = os.getenv("TRADING_MODE", "MOCK")
-        self.use_websocket = (trading_mode == "REAL")
         self.use_redis_streams = os.getenv("USE_REDIS_STREAMS", "false").lower() == "true"
         self.alert_check_interval = int(os.getenv("PRICE_ALERT_CHECK_INTERVAL", "15"))
         
         # Redis Streams 모드용 consumer
         self.stream_consumer = None
         
-        logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_WEBSOCKET={self.use_websocket}, USE_REDIS_STREAMS={self.use_redis_streams}")
+        logger.info(f"Price Monitor 설정: TRADING_MODE={trading_mode}, USE_REDIS_STREAMS={self.use_redis_streams}")
         
         self.portfolio_cache = {}
         
