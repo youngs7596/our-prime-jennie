@@ -71,8 +71,6 @@ monitor_lock = threading.Lock()
 
 def initialize_service():
     """서비스 초기화"""
-def initialize_service():
-    """서비스 초기화"""
     global price_monitor, rabbitmq_url, rabbitmq_sell_queue, tasks_publisher
     
     logger.info("=== Price Monitor Service 초기화 시작 (Redis Streams Mode) ===")
