@@ -64,7 +64,7 @@ class TestDynamicStrategies(unittest.TestCase):
         self.watcher._check_bb_lower = MagicMock(return_value=(True, "BB Triggered")) # Should NOT be called
 
         # Need enough bars to pass length check
-        self.watcher.bar_aggregator.get_recent_bars.return_value = [{"close": 100}] * 30
+        self.watcher.bar_aggregator.get_recent_bars.return_value = [{"open": 100, "high": 110, "low": 90, "close": 100, "volume": 1000}] * 30
         self.watcher._check_cooldown = MagicMock(return_value=True)
 
         # Execute
@@ -87,7 +87,7 @@ class TestDynamicStrategies(unittest.TestCase):
         
         # Mock check method to return True
         self.watcher._check_golden_cross = MagicMock(return_value=(True, "Golden Cross!"))
-        self.watcher.bar_aggregator.get_recent_bars.return_value = [{"close": 100}] * 30
+        self.watcher.bar_aggregator.get_recent_bars.return_value = [{"open": 100, "high": 110, "low": 90, "close": 100, "volume": 1000}] * 30
         self.watcher._check_cooldown = MagicMock(return_value=True)
 
         result = self.watcher._check_buy_signal(stock_code, 100.0, {})
