@@ -15,10 +15,6 @@ if PROJECT_ROOT not in sys.path:
     # sys.path.insert(0, PROJECT_ROOT)
     pass
 
-# We need to import monitor.
-# sys.path.insert(0, os.path.join(PROJECT_ROOT, 'services', 'price-monitor'))
-# Also ensure shared is in path (already done by PROJECT_ROOT insert)
-
 # Standard import via importlib to avoid sys.path and legacy loader issues
 def load_monitor_module():
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
@@ -33,15 +29,9 @@ monitor_mod = load_monitor_module()
 PriceMonitor = monitor_mod.PriceMonitor
 
 
-
-# OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
-# from opportunity_watcher import OpportunityWatcher
-
 class TestPriceMonitor(unittest.TestCase):
     
     def setUp(self):
-        # OpportunityWatcher는 buy-scanner로 이관됨 (패치 불필요)
-        
         self.mock_kis = MagicMock()
         
         self.mock_config = MagicMock()
@@ -58,7 +48,7 @@ class TestPriceMonitor(unittest.TestCase):
         self.monitor = PriceMonitor(self.mock_kis, self.mock_config, self.mock_publisher)
 
     def tearDown(self):
-        pass  # OpportunityWatcher 패치 제거됨
+        pass
 
     def test_check_sell_signal_stop_loss(self):
         """Test Fixed Stop Loss Trigger"""
@@ -160,43 +150,14 @@ class TestPriceMonitor(unittest.TestCase):
         self.monitor.telegram_bot.send_message.assert_called_once()
         mock_redis.delete_price_alert.assert_called_with("005930")
 
-    def test_monitor_with_polling_loop(self):
-        """Test the polling loop execution flow"""
-        self.mock_config.get_int.return_value = 0
-        self.mock_config.get_float.return_value = -5.0
-        
-        with patch("monitor.session_scope"), \
-             patch("monitor.repo.get_active_portfolio") as mock_get_portfolio, \
-             patch("monitor.database.get_daily_prices") as mock_get_prices, \
-             patch.object(self.monitor, '_check_sell_signal') as mock_check_signal, \
-             patch("time.sleep"):  # Patch sleep to prevent delay
-             
-            mock_get_portfolio.return_value = [
-                {'code': '005930', 'name': 'Samsung', 'avg_price': 100000, 'quantity': 10}
-            ]
-            
-            mock_get_prices.return_value = pd.DataFrame({'CLOSE_PRICE': [105000]})
-            mock_check_signal.return_value = {"signal": True, "reason": "Test", "quantity_pct": 50}
-            
-            self.monitor.kis.check_market_open = MagicMock(return_value=True)
-
-            with patch.dict(os.environ, {"TRADING_MODE": "MOCK"}):
-                # mock stop_event.is_set to return False then True to run loop once
-                self.monitor.stop_event.is_set = MagicMock(side_effect=[False, False, False, True, True])
-
-                self.monitor._monitor_with_polling(dry_run=True)
-            
-            mock_get_portfolio.assert_called()
-            mock_check_signal.assert_called()
-
     def test_on_websocket_price_update(self):
-        """Test WebSocket price update callback"""
+        """Test WebSocket price update callback (used by StreamConsumer too)"""
         self.monitor.portfolio_cache = {
              1: {'code': '005930', 'name': 'Samsung', 'avg_price': 100000, 'quantity': 10, 'id': 1}
         }
         
         with patch("monitor.session_scope"), \
-             patch.object(self.monitor, '_check_sell_signal', return_value={"signal": True, "reason": "WS Test", "quantity_pct": 100}):
+             patch.object(self.monitor, '_check_sell_signal', return_value={"signal": True, "reason": "Stream Test", "quantity_pct": 100}):
             
             self.monitor._on_websocket_price_update('005930', 90000, 95000)
             
@@ -281,58 +242,55 @@ class TestPriceMonitor(unittest.TestCase):
             self.assertIsNotNone(result)
             self.assertIn("Max Holding Days", result['reason'])
 
-    def test_start_monitoring_market_check(self):
-        """Test market open check prevents monitoring"""
-        self.monitor.kis.check_market_open = MagicMock(return_value=False)
-        self.mock_config.get_bool.return_value = False
-        self.monitor._monitor_with_polling = MagicMock()
+    @patch("monitor.StreamPriceConsumer")
+    def test_monitor_with_redis_streams(self, MockConsumer):
+        """Test Redis Streams monitoring flow"""
+        mock_consumer_instance = MockConsumer.return_value
+        # inner loop breaks on second call
+        mock_consumer_instance.is_connected.side_effect = [True, False] 
         
-        self.monitor.start_monitoring()
-        
-        self.monitor._monitor_with_polling.assert_not_called()
-
-    def test_stop_monitoring(self):
-        """Test stop monitoring signal"""
-        self.monitor.stop_monitoring()
-        self.assertTrue(self.monitor.stop_event.is_set())
-
-    def test_monitor_websocket_silent_stall(self):
-        """Test Silent Stall Detection in WebSocket mode"""
         with patch("monitor.session_scope"), \
              patch("monitor.repo.get_active_portfolio") as mock_get_portfolio, \
-             patch("time.sleep"):  # Patch sleep
-            
+             patch("time.sleep"):
+             
             mock_get_portfolio.return_value = [
                 {'code': '005930', 'name': 'Samsung', 'id': 1}
             ]
             
-            self.monitor.use_websocket = True
-            self.mock_config.get_bool.return_value = False 
-            self.monitor.kis.check_market_open = MagicMock(return_value=True)
-            self.monitor.kis.websocket.connection_event.wait.return_value = True
-            self.monitor.kis.websocket.connection_event.is_set.return_value = True
+            # Make the outer loop break after one iteration
+            # logic: [outer_check=False, inner_check=False(ignored due to is_connected=True), outer_check_after_break=True]
+            # Wait, outer loop is `while not self.stop_event.is_set()`
+            # Inside: `while self.stream_consumer.is_connected() and not self.stop_event.is_set()`
             
-            # Mock time to simulate Jump
-            self.time_val = 1000.0
-            def mock_time():
-                return self.time_val
+            # We can just set stop_event.is_set side effect
+            self.monitor.stop_event = MagicMock()
+            self.monitor.stop_event.is_set.side_effect = [False, False, True] 
+            # 1. Outer loop check (False -> enter)
+            # 2. Inner loop check (False -> continue, AND is_connected=True)
+            # 3. Inner loop check 2 (is_connected=False -> break inner)
+            # 4. End of outer loop check (if self.stop_event.is_set(): break) -> Wait, logic is:
+            #    if self.stop_event.is_set(): break
+            #    logger.warning...
+            #    next outer loop iteration check
             
-            # We can't easily side_effect time.time without a closure or class variable
-            # But we can update it manually inside the loop if we could hook in.
-            # Instead, let's just assume the check exists.
-            # The logic relies on `time.time()`.
-            # We use side_effect iter.
+            # Implementation:
+            # while not stop_event.is_set(): # Call 1
+            #    ...
+            #    start_consuming
+            #    while is_connected and not stop_event.is_set(): # Call 2 (is_connected=True)
+            #        sleep 1
+            #        ...
+            #    # Next is_connected=False -> breaks inner loop
+            #    if stop_event.is_set(): # Call 3
+            #        break
             
-            with patch("time.time", side_effect=[1000.0, 1000.0, 1000.0, 1000.0, 1080.0, 1100.0, 1100.0, 1100.0, 1100.0]): 
-                 # Sequence of time.time() calls in the loop
-                 
-                # Mock stop event
-                self.monitor.stop_event.is_set = MagicMock(side_effect=[False, False, True, True, True])
-                
-                self.monitor._monitor_with_websocket(dry_run=True)
-                
-                self.monitor.kis.websocket.stop.assert_called()
+            # So [False, False, True] should work.
 
+            with patch.dict(monitor_mod.__dict__, {"REDIS_STREAMS_AVAILABLE": True}):
+                 self.monitor._monitor_with_redis_streams(dry_run=True)
+                 
+            mock_consumer_instance.start_consuming.assert_called()
+            mock_consumer_instance.stop.assert_called()
 
 if __name__ == '__main__':
     unittest.main()

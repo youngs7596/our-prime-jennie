@@ -77,38 +77,30 @@ class PriceMonitor:
         self.last_ws_data_time = 0
     
     def start_monitoring(self, dry_run: bool = True):
-        logger.info("=== 가격 모니터링 시작 ===")
+        logger.info("=== 가격 모니터링 시작 (Redis Streams Only) ===")
         try:
-            # 시장 운영 여부 확인 (휴장/주말/장외면 바로 중단)
             # 시장 운영 여부 확인 (휴장/주말/장외면 바로 중단)
             disable_market_open_check = self.config.get_bool("DISABLE_MARKET_OPEN_CHECK", default=False)
             
-            if not disable_market_open_check:
+            if not disable_market_open_check and not dry_run:
                 try:
-                    if hasattr(self.kis, "check_market_open"):
-                        if not self.kis.check_market_open():
-                            logger.warning("💤 시장 미운영(휴장/주말/장외)으로 모니터링을 건너뜁니다.")
-                            return
-                    else:
-                        # Gateway 클라이언트 등 최소한의 주말/시간 필터
-                        from datetime import datetime
-                        import pytz
-                        kst = pytz.timezone("Asia/Seoul")
-                        now = datetime.now(kst)
-                        if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
-                            logger.warning("💤 시장 미운영 시간(주말/장외)으로 모니터링을 건너뜁니다.")
-                            return
+                    # Gateway 클라이언트 등 최소한의 주말/시간 필터
+                    kst = pytz.timezone("Asia/Seoul")
+                    now = datetime.now(kst)
+                    if not (0 <= now.weekday() <= 4 and 8 <= now.hour <= 16):
+                        logger.warning("💤 시장 미운영 시간(주말/장외)으로 모니터링을 건너뜁니다.")
+                        return
                 except Exception as e:
                     logger.error(f"시장 운영 여부 확인 실패: {e}", exc_info=True)
                     return
 
-            # 모니터링 모드 결정
-            if self.use_redis_streams and REDIS_STREAMS_AVAILABLE:
+            # Redis Streams 모드 강제
+            if REDIS_STREAMS_AVAILABLE:
                 self._monitor_with_redis_streams(dry_run)
-            elif self.use_websocket:
-                self._monitor_with_websocket(dry_run)
             else:
-                self._monitor_with_polling(dry_run)
+                logger.error("❌ Redis Streams 모듈(shared.kis.stream_consumer)이 없습니다. 모니터링 불가.")
+                return
+
         except Exception as e:
             logger.error(f"❌ 모니터링 중 오류: {e}", exc_info=True)
         finally:
@@ -179,127 +171,8 @@ class PriceMonitor:
                 logger.error(f"❌ (Streams) 모니터링 오류: {e}", exc_info=True)
                 time.sleep(60)
         
-        self.stream_consumer.stop()
-    
-    def _monitor_with_websocket(self, dry_run: bool):
-        logger.info("=== WebSocket 모드로 실시간 모니터링 시작 ===")
-        
-        last_alert_check = 0
-        while not self.stop_event.is_set():
-            try:
-                with session_scope(readonly=True) as session:
-                    portfolio = repo.get_active_portfolio(session)
-                
-                if not portfolio:
-                    logger.info("   (WS) 보유 종목이 없습니다. 60초 후 다시 확인합니다.")
-                    time.sleep(60)
-                    continue
-                
-                portfolio_codes = list(set(item['code'] for item in portfolio))
-                self.portfolio_cache = {item['id']: item for item in portfolio}
-                
-                # [Phase: WebSocket 역할 분리] 보유 포트폴리오만 감시 (매도 전용)
-                # Hot Watchlist 매수 감시는 buy-scanner가 담당
-                all_codes = portfolio_codes
-                
-                self.kis.websocket.start_realtime_monitoring(
-                    portfolio_codes=all_codes,
-                    on_price_func=self._on_websocket_price_update
-                )
-                
-                if not self.kis.websocket.connection_event.wait(timeout=15):
-                    logger.error("   (WS) ❌ WebSocket 연결 시간(15초) 초과! 재시도합니다.")
-                    if self.kis.websocket.ws:
-                        self.kis.websocket.ws.close()
-                    time.sleep(5)
-                    continue
-                
-                logger.info("   (WS) ✅ WebSocket 연결 확인! 실시간 감시 시작.")
-                
-                last_status_log_time = time.time()
-                self.last_ws_data_time = time.time()  # 연결 시점 초기화
-                last_heartbeat_time = 0  # Heartbeat 타이머
-                
-                while self.kis.websocket.connection_event.is_set() and not self.stop_event.is_set():
-                    time.sleep(1)
-                    now = time.time()
-                    
-                    # Silent Stall 감지 (데이터가 60초간 안 들어오면 재연결)
-                    # 단, 구독 종목이 있을 때만 체크
-                    if len(all_codes) > 0 and (now - self.last_ws_data_time > 60):
-                        logger.warning(f"   (WS) ⚠️ Silent Stall 감지! (60초간 데이터 수신 없음) 재연결 시도.")
-                        self.kis.websocket.stop()
-                        break
-                    # Dashboard Heartbeat 제거 (매수 감시는 buy-scanner가 담당)
-
-                    if now - last_status_log_time >= 600:
-                        logger.info(f"   (WS) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
-                        last_status_log_time = now
-                    if now - last_alert_check >= self.alert_check_interval:
-                        self._process_price_alerts()
-                        last_alert_check = now
-                
-                if self.stop_event.is_set():
-                    break
-                
-                logger.warning("   (WS) WebSocket 연결 끊김. 재연결 시도.")
-                
-            except Exception as e:
-                logger.error(f"❌ (WS) 모니터링 오류: {e}", exc_info=True)
-                time.sleep(60)
-        
-        self.kis.websocket.stop()
-    
-    def _monitor_with_polling(self, dry_run: bool):
-        logger.info("HTTP Polling 모드로 모니터링 시작")
-        check_interval = self.config.get_int('PRICE_MONITOR_INTERVAL_SECONDS', default=10)
-        
-        last_alert_check = 0
-        while not self.stop_event.is_set():
-            try:
-                with session_scope(readonly=True) as session:
-                    portfolio = repo.get_active_portfolio(session)
-                
-                if not portfolio:
-                    time.sleep(check_interval)
-                    continue
-                
-                for holding in portfolio:
-                    if self.stop_event.is_set(): break
-                    
-                    stock_code = holding['code']
-                    trading_mode = os.getenv("TRADING_MODE", "MOCK")
-                    
-                    if trading_mode == "MOCK":
-                        with session_scope(readonly=True) as session:
-                            prices = database.get_daily_prices(session, stock_code, limit=1)
-                            current_price = float(prices['CLOSE_PRICE'].iloc[-1]) if not prices.empty else 0
-                    else:
-                        snap = self.kis.get_stock_snapshot(stock_code)
-                        current_price = snap['price'] if snap else 0
-                    
-                    if current_price <= 0: continue
-                    
-                    with session_scope(readonly=True) as session: # _check_sell_signal이 session을 받도록 수정
-                        signal = self._check_sell_signal(
-                            session, stock_code, holding.get('name', stock_code),
-                            holding['avg_price'], current_price, holding
-                        )
-                    
-                    if signal:
-                        logger.info(f"🔔 매도 신호 발생: {holding.get('name', stock_code)}")
-                        self._publish_sell_order(signal, holding, current_price)
-                
-                # 가격 알림 체크 (주기적)
-                now = time.time()
-                if now - last_alert_check >= self.alert_check_interval:
-                    self._process_price_alerts()
-                    last_alert_check = now
-                
-                time.sleep(check_interval)
-            except Exception as e:
-                logger.error(f"모니터링 루프 오류: {e}")
-                time.sleep(check_interval)
+        if self.stream_consumer:
+            self.stream_consumer.stop()
     
     def _check_sell_signal(self, session, stock_code, stock_name, buy_price, current_price, holding, check_db_freshness=True):
         try:

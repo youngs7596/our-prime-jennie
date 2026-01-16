@@ -3,6 +3,7 @@
 ## 2026-01-16
 - **Buy-Scanner Modernization**: `buy-scanner` 서비스를 폴링 없는 완전한 이벤트 구동(Redis Streams only) 아키텍처로 개편하고, `_check_legendary_pattern`(Supper Prime Analysis)을 `BuyOpportunityWatcher`에 통합하여 실시간 수급/패턴 감지 기능 배포 완료. 레거시 `scanner.py` 및 폴링 로직 삭제.
 
+- **Price-Monitor Modernization**: `price-monitor` 서비스를 `monitor.py` 내 폴링 로직을 제거하고 Redis Streams(`kis:prices`) 기반 전용으로 전환하여 실시간성을 강화하고, 레거시 스케줄러 의존성 삭제 및 단위 테스트(`test_monitor.py`) 최신화 완료.
 - **Test Stabilization**: `PriceMonitor`의 ‘Double-Check’ 로직 도입에 따른 단위 테스트 Mocking 보강 및 `StockMaster` 모델 스키마 변경(`industry_code` 제거) 반영.
   - `shared/hybrid_scoring/quant_scorer.py`: 뉴스가 없는 종목에 대해 시장 평균의 80%를 반영하는 'Smart Fallback' 로직 구현.
   - `services/scout-job/scout.py`: `NEWS_SENTIMENT`(Active) 테이블을 참조하도록 데이터 조회 로직 수정 및 잡주 필터링(시총 < 500억, 주가 < 1000원) 복구.

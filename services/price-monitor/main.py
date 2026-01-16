@@ -2,7 +2,7 @@
 services/price-monitor/main.py - 실시간 가격 모니터링 서비스
 =========================================================
 
-이 서비스는 보유 종목의 가격을 실시간 모니터링하여 매도 신호를 발생시킵니다.
+이 서비스는 보유 종목의 가격을 실시간 모니터링하여 매도 신호를 발생시킵니다. (Redis Streams 기반)
 
 매도 조건:
 ---------
@@ -14,10 +14,9 @@ services/price-monitor/main.py - 실시간 가격 모니터링 서비스
 
 처리 흐름:
 ---------
-1. Scheduler에서 주기적 트리거
-2. 보유 종목(PORTFOLIO) 조회
-3. 각 종목 현재가 조회 (KIS Gateway)
-4. 매도 조건 충족 시 sell-orders 큐로 발행
+1. Redis Streams(kis:prices) 구독 (from kis-gateway)
+2. 실시간 가격 수신 시 보유 종목(PORTFOLIO)과 대조
+3. 매도 조건 충족 시 sell-orders 큐로 발행
 
 출력:
 ----
@@ -29,35 +28,26 @@ RabbitMQ sell-orders 큐로 매도 신호 발행
 - TRADING_MODE: REAL/MOCK
 - RABBITMQ_URL: RabbitMQ 연결 URL
 - KIS_GATEWAY_URL: KIS Gateway URL
+- REDIS_URL: Redis 연결 URL
 """
 
 import os
 import sys
 import logging
 import threading
-import uuid
-from datetime import datetime, timezone
-from flask import Flask, jsonify
 from dotenv import load_dotenv
+from flask import Flask, jsonify
 
 # shared 패키지 임포트 경로 설정
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import shared.auth as auth
-import shared.database as database
 from shared.kis.client import KISClient as KIS_API
-from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
-from shared.scheduler_runtime import (
-    parse_job_message,
-    SchedulerJobMessage,
-)
-from shared.scheduler_client import mark_job_run
+from shared.rabbitmq import RabbitMQPublisher
 from shared.notification import TelegramBot
 
 from monitor import PriceMonitor
-# from opportunity_watcher import OpportunityWatcher
 
 # 로깅 설정
 logging.basicConfig(
@@ -76,9 +66,6 @@ is_monitoring = False
 rabbitmq_url = None
 rabbitmq_sell_queue = None
 tasks_publisher = None
-scheduler_job_worker = None
-scheduler_job_publisher = None
-buy_signals_publisher = None  # Hot Watchlist 매수 신호용
 monitor_lock = threading.Lock()
 
 
@@ -86,7 +73,7 @@ def initialize_service():
     """서비스 초기화"""
     global price_monitor, rabbitmq_url, rabbitmq_sell_queue, tasks_publisher
     
-    logger.info("=== Price Monitor Service 초기화 시작 ===")
+    logger.info("=== Price Monitor Service 초기화 시작 (Redis Streams Mode) ===")
     load_dotenv()
     
     try:
@@ -109,7 +96,7 @@ def initialize_service():
             trading_mode=trading_mode
         )
         kis.authenticate()
-        logger.info("✅ KIS API 직접 연결 초기화 완료 (WebSocket 강제 사용)")
+        logger.info("✅ KIS API 연결 초기화 완료")
         
         # 3. ConfigManager 초기화
         config_manager = ConfigManager(db_conn=None, cache_ttl=300)
@@ -135,12 +122,11 @@ def initialize_service():
         )
         logger.info("✅ Price Monitor 초기화 완료")
         
-        # 7. OpportunityWatcher는 buy-scanner로 이관됨 (Phase: WebSocket 역할 분리)
-        # 매수 역할은 buy-scanner가 담당, price-monitor는 매도만 담당
-        logger.info("ℹ️ OpportunityWatcher는 buy-scanner로 이관됨 (매도 전용 모드)")
-        
         logger.info("=== Price Monitor Service 초기화 완료 ===")
-        _start_scheduler_worker()
+        # 자동 시작 (환경변수에 따라)
+        if os.getenv("AUTO_START_MONITOR", "true").lower() == "true":
+            _start_monitor_thread(trigger_source="auto_start")
+            
         return True
         
     except Exception as e:
@@ -183,24 +169,11 @@ def stop_monitoring():
 def root():
     return jsonify({
         "service": "price-monitor",
-        "version": "v1.0",
+        "version": "v2.0-streams",
         "trading_mode": os.getenv("TRADING_MODE", "MOCK"),
         "dry_run": os.getenv("DRY_RUN", "true"),
         "is_monitoring": is_monitoring
     }), 200
-
-
-# =============================================================================
-# Scheduler Worker & Helper Functions
-# =============================================================================
-def _get_scheduler_queue_name():
-    scope = os.getenv("SCHEDULER_SCOPE", "real")
-    default_queue = f"{scope}.jobs.price-monitor"
-    return os.getenv("SCHEDULER_QUEUE_PRICE_MONITOR", default_queue)
-
-
-def _get_scheduler_job_id() -> str:
-    return os.getenv("SCHEDULER_PRICE_MONITOR_START_JOB_ID", "price-monitor-start")
 
 
 def _start_monitor_thread(trigger_source: str):
@@ -247,90 +220,15 @@ def _stop_monitor_thread(trigger_source: str):
             return {"status": "not_running"}
 
         logger.info("🛑 Price Monitor 정지 요청 수신 (trigger=%s)", trigger_source)
-        is_monitoring = False
-        price_monitor.stop_monitoring()
+        is_monitoring = False # 플래그 먼저 내림
+        if price_monitor:
+            price_monitor.stop_monitoring()
 
-        if monitor_thread:
-            monitor_thread.join(timeout=30)
-            monitor_thread = None
-
+        # 쓰레드 join은 락 안에서 하면 데드락 위험이 있으므로 락 밖에서 하거나 가볍게 처리
+        # 여기선 join을 생략하거나 짧게 대기.
+        # monitor.py의 loop가 stop_event를 체크하므로 자연스럽게 종료됨.
+        
         return {"status": "stopped", "trigger": trigger_source}
-
-
-def handle_scheduler_job(payload: dict):
-    job_msg = parse_job_message(payload)
-    action = (job_msg.params or {}).get("action", "start")
-    logger.info(
-        "🕒 Price Monitor Scheduler Job 수신: job=%s action=%s run=%s",
-        job_msg.job_id,
-        action,
-        job_msg.run_id,
-    )
-
-    # "unknown"일 때도 환경변수 job_id 사용
-    effective_job_id = job_msg.job_id if job_msg.job_id and job_msg.job_id != "unknown" else _get_scheduler_job_id()
-    
-    try:
-        if action == "start":
-            _start_monitor_thread(trigger_source=f"scheduler/{job_msg.trigger_source}")
-        elif action == "stop":
-            _stop_monitor_thread(trigger_source=f"scheduler/{job_msg.trigger_source}")
-        elif action == "pulse":
-            if not is_monitoring:
-                logger.warning("⚠️ Pulse 트리거 감지: Price Monitor가 중지 상태라 자동 시작합니다.")
-                _start_monitor_thread(trigger_source="scheduler/pulse")
-            else:
-                logger.info("✅ Pulse 확인: Price Monitor 정상 실행 중.")
-        else:
-            logger.warning("⚠️ 알 수 없는 action=%s. 작업을 건너뜁니다.", action)
-    except Exception as exc:
-        logger.error("❌ Price Monitor Scheduler Job 처리 실패: %s", exc, exc_info=True)
-    finally:
-        mark_job_run(effective_job_id, scope=job_msg.scope)
-
-
-def _start_scheduler_worker():
-    global scheduler_job_worker, scheduler_job_publisher
-    if os.getenv("ENABLE_PRICE_MONITOR_JOB_WORKER", "true").lower() != "true":
-        logger.info("⚠️ Price Monitor Scheduler Worker 비활성화 (ENABLE_PRICE_MONITOR_JOB_WORKER=false)")
-        return
-
-    queue_name = _get_scheduler_queue_name()
-    scheduler_job_publisher = RabbitMQPublisher(
-        amqp_url=rabbitmq_url or os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-        queue_name=queue_name,
-    )
-    scheduler_job_worker = RabbitMQWorker(
-        amqp_url=rabbitmq_url or os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"),
-        queue_name=queue_name,
-        handler=handle_scheduler_job,
-    )
-    scheduler_job_worker.start()
-    logger.info("✅ Price Monitor Scheduler Worker 시작 (queue=%s)", queue_name)
-    _bootstrap_scheduler_job()
-
-
-def _bootstrap_scheduler_job():
-    if not scheduler_job_publisher:
-        logger.warning("⚠️ Scheduler Job Publisher 없음. Startup 메시지를 건너뜁니다.")
-        return
-
-    payload = {
-        "job_id": _get_scheduler_job_id(),
-        "scope": os.getenv("SCHEDULER_SCOPE", "real"),
-        "run_id": str(uuid.uuid4()),
-        "trigger_source": "startup_oneshot",
-        "params": {"action": "start"},
-        "timeout_sec": 180,
-        "retry_limit": 1,
-        "queued_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    message_id = scheduler_job_publisher.publish(payload)
-    if message_id:
-        logger.info("🚀 Price Monitor Startup Job 발행 (message=%s)", message_id)
-    else:
-        logger.error("❌ Price Monitor Startup Job 발행 실패")
 
 
 if price_monitor is None and os.getenv('WERKZEUG_RUN_MAIN') != 'true':
