@@ -82,6 +82,7 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
     stock_name = sell_request.get('stock_name')
     quantity = sell_request.get('quantity')
     sell_reason = sell_request.get('sell_reason', 'Unknown')
+    current_price = sell_request.get('current_price')
 
     if not all([stock_code, stock_name, quantity]):
         raise ValueError("Missing required fields")
@@ -91,12 +92,13 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
         logger.info("🔧 DRY_RUN 모드: 실제 주문은 실행되지 않습니다")
 
     logger.info(
-        "[%s] 매도 요청: %s(%s) %s주, 사유: %s",
+        "[%s] 매도 요청: %s(%s) %s주, 사유: %s, 가격: %s",
         request_source.upper(),
         stock_name,
         stock_code,
         quantity,
         sell_reason,
+        current_price
     )
 
     result = executor.execute_sell_order(
@@ -104,7 +106,8 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
         stock_name=stock_name,
         quantity=quantity,
         sell_reason=sell_reason,
-        dry_run=dry_run
+        dry_run=dry_run,
+        current_price=current_price
     )
     return result
 

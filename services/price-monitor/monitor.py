@@ -7,6 +7,7 @@ import sys
 import os
 from datetime import datetime
 from threading import Event
+import pytz
 
 # shared 패키지 임포트
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))

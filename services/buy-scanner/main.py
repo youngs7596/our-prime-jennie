@@ -45,7 +45,7 @@ from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
 from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
-from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage
+# from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage # Removed
 # from shared.scheduler_client import mark_job_run # Polling 제거로 미사용
 
 from opportunity_watcher import BuyOpportunityWatcher
@@ -244,6 +244,10 @@ def _start_redis_streams_monitoring():
 
 def _on_stream_price_update(stock_code: str, current_price: float, current_high: float):
     """Redis Streams 가격 업데이트 콜백"""
+    # [Emergency Stop Check]
+    if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
+        return
+
     if not opportunity_watcher:
         return
     
@@ -369,6 +373,10 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
     
     @sio.on('price_update')
     def on_price_update(data):
+        # [Emergency Stop Check]
+        if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
+            return
+
         nonlocal price_update_count
         price_update_count += 1
         
@@ -389,6 +397,10 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
     @sio.on('buy_signal')
     def on_buy_signal(data):
         """테스트 API에서 발행된 매수 신호 직접 수신"""
+        # [Emergency Stop Check]
+        if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
+            return
+
         stock_code = data.get('stock_code')
         signal_type = data.get('signal_type', 'TEST')
         
@@ -441,6 +453,10 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
 
 def _on_price_update(stock_code: str, current_price: float, current_high: float):
     """WebSocket 가격 업데이트 콜백"""
+    # [Emergency Stop Check]
+    if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
+        return
+
     if not opportunity_watcher:
         return
     

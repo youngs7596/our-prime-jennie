@@ -16,7 +16,8 @@ from shared.db import repository as repo
 from shared.redis_cache import (
     delete_high_watermark,
     delete_scale_out_level,
-    get_redis_connection
+    get_redis_connection,
+    is_trading_stopped
 )
 
 from shared.strategy_presets import (
@@ -44,7 +45,7 @@ class SellExecutor:
     def execute_sell_order(self, stock_code: str, stock_name: str, quantity: int,
                           sell_reason: str, strategy_preset: dict | None = None,
                           risk_setting: dict | None = None,
-                          dry_run: bool = True) -> dict:
+                          dry_run: bool = True, current_price: float | None = None) -> dict:
         """
         매도 주문 실행
         
@@ -53,11 +54,14 @@ class SellExecutor:
             stock_name: 종목 이름
             quantity: 매도 수량
             sell_reason: 매도 사유
+            strategy_preset: 전략 프리셋 (Optional)
+            risk_setting: 리스크 설정 (Optional)
             dry_run: True면 로그만 기록, False면 실제 주문
+            current_price: 현재가 (Optional). 제공되면 API 조회 없이 즉시 사용.
         
         Returns:
             {
-                "status": "success" | "error",
+                "status": "success" | "error" | "skipped",
                 "stock_code": "005930",
                 "stock_name": "삼성전자",
                 "order_no": "12345",
@@ -68,7 +72,28 @@ class SellExecutor:
         """
         logger.info(f"=== 매도 주문 실행 시작: {stock_name}({stock_code}) ===")
         
+        # [Emergency Stop Check]
+        is_manual = "MANUAL" in sell_reason.upper()
+        if not is_manual and is_trading_stopped():
+             logger.warning("⛔ [Emergency Stop] 긴급 중지 상태입니다. 자동 매도를 건너뜁니다.")
+             return {"status": "skipped", "reason": "Emergency Stop Active"}
+
+        
+        redis_client = None
+        lock_key = f"lock:sell:{stock_code}"
+        lock_acquired = False
+
         try:
+            # 1.5 중복 주문 체크 (Idempotency - Short term Redis Lock)
+            # A) Redis Lock (Short-term Concurrency Guard - 10s)
+            redis_client = get_redis_connection()
+            if redis_client:
+                # NX=True: 키가 존재하지 않을 때만 설정, EX=10: 10초 후 자동 만료
+                lock_acquired = redis_client.set(lock_key, "LOCKED", nx=True, ex=10)
+                if not lock_acquired:
+                    logger.warning(f"⚠️ [Redis Lock] 매도 진행 중 (잠김): {stock_name}({stock_code}) - 중복 실행 방지")
+                    return {"status": "skipped", "reason": f"Sell process locked for {stock_code}"}
+
             shared_regime_cache = None
             preset_info = strategy_preset or {}
             preset_name = preset_info.get('name')
@@ -106,19 +131,6 @@ class SellExecutor:
                         self.telegram_bot.send_message(f"🚫 *매도 실패* ({stock_name})\n이유: 보유 주식이 없습니다.")
                     return {"status": "error", "reason": reason}
                 
-                # 1.5 중복 주문 체크 (Idempotency)
-                
-                # A) Redis Lock (Short-term Concurrency Guard - 10s)
-                # 동일 종목에 대해 동시에 여러 Sell 요청이 들어오는 것을 방지
-                redis_client = get_redis_connection()
-                if redis_client:
-                    lock_key = f"lock:sell:{stock_code}"
-                    # NX=True: 키가 존재하지 않을 때만 설정, EX=10: 10초 후 자동 만료
-                    is_locked = redis_client.set(lock_key, "LOCKED", nx=True, ex=10)
-                    if not is_locked:
-                        logger.warning(f"⚠️ [Redis Lock] 매도 진행 중 (잠김): {stock_name}({stock_code}) - 중복 실행 방지")
-                        return {"status": "skipped", "reason": f"Sell process locked for {stock_code}"}
-                
                 # B) DB Check (Long-term Guard - 10m)
                 # 최근 매도 주문 확인 (중복 실행 방지) - 10분 내 동일 매도 주문 확인
                 # [Fix] MANUAL 매도는 중복 체크 우회 (사용자 강제 실행 존중)
@@ -131,27 +143,34 @@ class SellExecutor:
                 if is_manual:
                     logger.info(f"🔓 [Manual Override] 중복 매도 방지 체크 우회: {stock_name}")
                 
-                # 2. 현재가 조회
-                trading_mode = os.getenv("TRADING_MODE", "MOCK")
-                if trading_mode == "MOCK":
-                    # Mock 모드: DB에서 최근 종가 사용
-                    daily_prices = database.get_daily_prices(session, stock_code, limit=1, table_name="STOCK_DAILY_PRICES_3Y")
-                    if daily_prices.empty:
-                        logger.error("가격 조회 실패")
-                        return {"status": "error", "reason": "Failed to get price"}
-                    current_price = float(daily_prices['CLOSE_PRICE'].iloc[-1])
-                    logger.info(f"MOCK 모드: 매도 가격 = {current_price}")
+                # 2. 현재가 결정 (Provided vs Lookup)
+                effective_price = 0.0
+                
+                if current_price and current_price > 0:
+                    effective_price = float(current_price)
+                    logger.info(f"🚀 [Fast Path] 제공된 현재가 사용: {effective_price:,}원")
                 else:
-                    snapshot = self.kis.get_stock_snapshot(stock_code)
-                    if not snapshot:
-                        logger.error("실시간 가격 조회 실패")
-                        return {"status": "error", "reason": "Failed to get current price"}
-                    current_price = snapshot['price']
+                    trading_mode = os.getenv("TRADING_MODE", "MOCK")
+                    if trading_mode == "MOCK":
+                        # Mock 모드: DB에서 최근 종가 사용
+                        daily_prices = database.get_daily_prices(session, stock_code, limit=1, table_name="STOCK_DAILY_PRICES_3Y")
+                        if daily_prices.empty:
+                            logger.error("가격 조회 실패")
+                            return {"status": "error", "reason": "Failed to get price"}
+                        effective_price = float(daily_prices['CLOSE_PRICE'].iloc[-1])
+                        logger.info(f"MOCK 모드: DB 조회 가격 = {effective_price}")
+                    else:
+                        snapshot = self.kis.get_stock_snapshot(stock_code)
+                        if not snapshot:
+                            logger.error("실시간 가격 조회 실패")
+                            return {"status": "error", "reason": "Failed to get current price"}
+                        effective_price = snapshot['price']
+                        logger.info(f"실시간 API 조회 가격 = {effective_price}")
                 
                 # 3. 수익률 계산
                 buy_price = holding['avg_price']
-                profit_pct = ((current_price - buy_price) / buy_price) * 100
-                profit_amount = (current_price - buy_price) * quantity
+                profit_pct = ((effective_price - buy_price) / buy_price) * 100
+                profit_amount = (effective_price - buy_price) * quantity
                 
                 # 보유 일수 계산
                 holding_days = 0
@@ -165,7 +184,7 @@ class SellExecutor:
                         buy_date_utc = buy_date
                     holding_days = (datetime.now(timezone.utc) - buy_date_utc).days
                 
-                logger.info(f"매수가: {buy_price:,}원, 현재가: {current_price:,}원")
+                logger.info(f"매수가: {buy_price:,}원, 현재가: {effective_price:,}원")
                 logger.info(f"수익률: {profit_pct:.2f}%, 수익금: {profit_amount:,}원, 보유일: {holding_days}일")
                 
                 # RAG 캐시 신선도 검증
@@ -188,7 +207,7 @@ class SellExecutor:
                 # 복기용 지표 수집
                 key_metrics_dict = {
                     "sell_reason": sell_reason,
-                    "current_price": float(current_price),
+                    "current_price": float(effective_price),
                     "buy_price": float(buy_price),
                     "profit_pct": round(profit_pct, 2),
                     "profit_amount": round(profit_amount, 0),
@@ -202,7 +221,7 @@ class SellExecutor:
                 
                 # 4. 매도 주문 실행
                 if dry_run:
-                    logger.info(f"🔧 [DRY_RUN] 매도 주문: {stock_name}({stock_code}) {quantity}주 @ {current_price:,}원")
+                    logger.info(f"🔧 [DRY_RUN] 매도 주문: {stock_name}({stock_code}) {quantity}주 @ {effective_price:,}원")
                     order_no = f"DRY_RUN_SELL_{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 else:
                     order_no = self.kis.place_sell_order(
@@ -223,7 +242,7 @@ class SellExecutor:
                     stock_code=stock_code,
                     stock_name=stock_name,
                     quantity=quantity,
-                    sell_price=current_price,
+                    sell_price=effective_price,
                     buy_price=buy_price,
                     profit_pct=profit_pct,
                     profit_amount=profit_amount,
@@ -251,7 +270,7 @@ class SellExecutor:
                         message = f"""{mode_indicator}{profit_emoji} *매도 체결*
 
 📊 *종목*: {stock_name} ({stock_code})
-💵 *매도가*: {current_price:,}원
+💵 *매도가*: {effective_price:,}원
 💰 *매수가*: {buy_price:,}원
 📊 *수량*: {quantity}주
 
@@ -279,7 +298,7 @@ class SellExecutor:
                     "stock_name": stock_name,
                     "order_no": order_no,
                     "quantity": quantity,
-                    "sell_price": current_price,
+                    "sell_price": effective_price,
                     "buy_price": buy_price,
                     "profit_pct": round(profit_pct, 2),
                     "profit_amount": round(profit_amount, 0),
@@ -289,6 +308,14 @@ class SellExecutor:
                 }
         
         except Exception as e:
+            # 예외 발생 시 Lock 해제 (Fail-Safe)
+            if lock_acquired and redis_client:
+                try:
+                    redis_client.delete(lock_key)
+                    logger.warning(f"🔓 [Fail-Safe] 예외 발생으로 Redis Lock 강제 해제: {stock_code}")
+                except Exception as unlock_err:
+                    logger.error(f"❌ Redis Lock 해제 중 오류: {unlock_err}")
+
             logger.error(f"❌ 매도 처리 중 오류: {e}", exc_info=True)
             return {"status": "error", "reason": str(e)}
     

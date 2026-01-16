@@ -3,6 +3,7 @@
 ## 2026-01-16
 - **Buy-Scanner Modernization**: `buy-scanner` 서비스를 폴링 없는 완전한 이벤트 구동(Redis Streams only) 아키텍처로 개편하고, `_check_legendary_pattern`(Supper Prime Analysis)을 `BuyOpportunityWatcher`에 통합하여 실시간 수급/패턴 감지 기능 배포 완료. 레거시 `scanner.py` 및 폴링 로직 삭제.
 - **RSI Strategy Enhancement**: '떨어지는 칼날' 매수 방지를 위해 기존 `RSI_OVERSOLD`(과매도 즉시 진입) 전략을 비활성화하고, 과매도 구간 탈출 시 진입하는 `RSI_REBOUND` 전략으로 교체 및 검증 완료.
+- **Emergency Stop & Fixes**: `/stop` 명령이 즉시 반영되도록 `buy-executor`, `sell-executor`, `buy-scanner`에 `is_trading_stopped()` 체크 로직을 구현하고, `price-monitor`의 `NameError`(`pytz`) 수정 및 관련 단위 테스트 보강 완료.
 
 - **Price-Monitor Modernization**: `price-monitor` 서비스를 `monitor.py` 내 폴링 로직을 제거하고 Redis Streams(`kis:prices`) 기반 전용으로 전환하여 실시간성을 강화하고, 레거시 스케줄러 의존성 삭제 및 단위 테스트(`test_monitor.py`) 최신화 완료.
 - **Test Stabilization**: `PriceMonitor`의 ‘Double-Check’ 로직 도입에 따른 단위 테스트 Mocking 보강 및 `StockMaster` 모델 스키마 변경(`industry_code` 제거) 반영.
@@ -10,6 +11,8 @@
   - `services/scout-job/scout.py`: `NEWS_SENTIMENT`(Active) 테이블을 참조하도록 데이터 조회 로직 수정 및 잡주 필터링(시총 < 500억, 주가 < 1000원) 복구.
   - `shared/db/models.py`: 잘못된 `StockNewsSentiment` 별칭 제거로 스키마 혼선 방지.
 - **Investment Performance Reporting**: 1월 9일 이후의 투자 성과를 분석하는 전문 스크립트(`report_performance.py`) 구축 및 실현 손익(+985만 원) 집계 완료.
+- **Sell Logic Enhancement**: 매도 주문의 즉시성(Immediacy) 확보를 위해 `sell-executor`가 Trigger Source(Price Monitor 등)로부터 전달받은 `current_price`를 사용하여 불필요한 API 호출을 제거하고, Fail-Safe Redis Lock 해제 로직을 추가하여 안정성 강화.
+- **Legacy Cleanup**: `buy-scanner`에서 더 이상 사용하지 않는 `scheduler_runtime` 의존성을 제거하고 코드 정리.
 - **System Maintenance**: `TRADELOG` 및 `ACTIVE_PORTFOLIO` 테이블의 스키마 불일치 및 Collation 충돌 문제 해결.
 
 ## 2026-01-14

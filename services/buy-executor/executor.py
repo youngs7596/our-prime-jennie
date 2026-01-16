@@ -72,6 +72,20 @@ class BuyExecutor:
         """
         logger.info("=== 매수 신호 처리 시작 ===")
         
+        # [Emergency Stop Check]
+        # Redis에서 실시간으로 플래그 확인 (ConfigManager 캐시 우회)
+        if redis_cache.is_trading_stopped():
+             logger.warning("⛔ [Emergency Stop] 긴급 중지 상태입니다. 매수 신호를 무시합니다.")
+             return {"status": "skipped", "reason": "Emergency Stop Active"}
+             
+        if redis_cache.is_trading_paused():
+             # 수동 매수인 경우는 허용해야 할 수도 있으나, 현재 구조상 RabbitMQ로 들어오는 건 다 자동 매수로 간주될 수 있음.
+             # 단, Telegram Manual Buy는 source='telegram-manual'로 옴.
+             source = scan_result.get('source', '')
+             if source != 'telegram-manual':
+                 logger.warning("⏸️ [Paused] 매수 일시 중지 상태입니다.")
+                 return {"status": "skipped", "reason": "Trading Paused"}
+        
         with session_scope() as session:
             # 1. 후보 확인
             candidates = scan_result.get('candidates', [])

@@ -139,6 +139,14 @@ def buy_executor(mock_kis, mock_config, mock_telegram):
         # 대안: 필요한 클래스만 임포트하고 mock 적용
 
 
+@pytest.fixture(autouse=True)
+def mock_redis_trading_flags():
+    """Redis Trading Flags를 기본적으로 False로 Mocking (실제 Redis 연결 방지)"""
+    with patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+         patch('shared.redis_cache.is_trading_paused', return_value=False):
+        yield
+
+
 class TestBuyExecutorSignalProcessing:
     """process_buy_signal 메서드 테스트"""
     
@@ -695,6 +703,81 @@ class TestIdempotency:
             assert result['status'] == 'skipped'
             assert 'already held' in result['reason']
 
+
+class TestEmergencyStopCheck:
+    """긴급 정지 및 일시 정지 테스트"""
+    
+    def test_emergency_stop_blocks_execution(self, mock_kis, mock_config, mock_telegram):
+        """긴급 정지 상태에서 매수 실행 차단"""
+        executor = load_executor_module()
+        
+        with patch('shared.redis_cache.is_trading_stopped', return_value=True):
+            buy_exec = executor.BuyExecutor(
+                kis=mock_kis,
+                config=mock_config,
+                gemini_api_key="test_key",
+                telegram_bot=mock_telegram
+            )
+            
+            result = buy_exec.process_buy_signal({'candidates': [{'stock_code': '005930'}]}, dry_run=True)
+            
+            assert result['status'] == 'skipped'
+            assert 'Emergency Stop' in result['reason']
+
+    def test_paused_trading_blocks_automated_buy(self, mock_kis, mock_config, mock_telegram):
+        """매수 일시 정지 상태에서 자동 매수 차단"""
+        executor = load_executor_module()
+        
+        with patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=True):
+            
+            buy_exec = executor.BuyExecutor(
+                kis=mock_kis,
+                config=mock_config,
+                gemini_api_key="test_key",
+                telegram_bot=mock_telegram
+            )
+            
+            # 일반 경로 (RabbitMQ)
+            result = buy_exec.process_buy_signal({'candidates': [{'stock_code': '005930'}], 'source': 'rabbitmq'}, dry_run=True)
+            
+            assert result['status'] == 'skipped'
+            assert 'Trading Paused' in result['reason']
+
+    def test_paused_trading_allows_manual_buy(self, mock_kis, mock_config, mock_telegram):
+        """매수 일시 정지 상태여도 Telegram 수동 매수는 허용"""
+        executor = load_executor_module()
+        
+        with patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=True), \
+             patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.database.get_market_regime_cache', return_value=None):
+             
+            # Session Mock
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor.BuyExecutor(
+                kis=mock_kis,
+                config=mock_config,
+                gemini_api_key="test_key",
+                telegram_bot=mock_telegram
+            )
+            
+            # 수동 매수 소스 (후보 없음 -> No candidates 리턴)
+            scan_result = {
+                'candidates': [],
+                'source': 'telegram-manual'
+            }
+            
+            # 만약 Pause 체크에 걸린다면 'Trading Paused' 리턴
+            # 통과한다면 'No candidates' 리턴
+            result = buy_exec.process_buy_signal(scan_result, dry_run=True)
+            
+            assert result['status'] == 'skipped'
+            assert 'No candidates' in result['reason']
+            assert 'Trading Paused' not in result['reason']
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
