@@ -34,7 +34,7 @@ class TestBuildConnectionUrl:
         url = connection._build_connection_url()
         
         # Then: 올바른 URL 형식
-        assert "mysql+mysqlconnector://" in url
+        assert "mysql+pymysql://" in url
         assert "testuser" in url
         assert "testhost" in url
         assert "3307" in url

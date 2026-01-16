@@ -432,7 +432,7 @@ class DailyReporter:
         logger.info(f"🔄 포트폴리오 동기화 시작 (실계좌: {len(live_holdings)}종목)")
 
         # 2. DB 업데이트
-        table_name = database._get_table_name("Portfolio")
+        table_name = database._get_table_name("ActivePortfolio")
         
         
         # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 존재하는지 확인하여 중복 Insert 방지)

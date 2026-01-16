@@ -128,6 +128,8 @@ class TestSellExecutorBasicFlow:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db:
             
             # Setup mocks
@@ -172,6 +174,8 @@ class TestSellExecutorBasicFlow:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db:
             
             mock_portfolio.return_value = []  # 빈 포트폴리오
@@ -210,6 +214,8 @@ class TestIdempotency:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db:
             
             mock_portfolio.return_value = [sample_holding]
@@ -254,6 +260,8 @@ class TestRedisLock:
         with patch('shared.db.connection.session_scope') as mock_session, \
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch.object(executor, 'get_redis_connection', return_value=mock_redis):
             
             # Setup Portfolio
@@ -300,6 +308,8 @@ class TestRedisLock:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
              patch('shared.db.repository.was_traded_recently', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch.object(executor, 'get_redis_connection', return_value=mock_redis):
             
             # Setup Other Mocks
@@ -395,6 +405,8 @@ class TestRealOrderExecution:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
             
@@ -444,6 +456,8 @@ class TestRealOrderExecution:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'REAL'}):
             
@@ -487,6 +501,8 @@ class TestTelegramNotification:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db:
             
             mock_portfolio.return_value = [sample_holding]
@@ -574,6 +590,8 @@ class TestMockModePrice:
              patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
              patch('shared.db.repository.was_traded_recently') as mock_traded, \
              patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
              patch('shared.database') as mock_db, \
              patch.dict(os.environ, {'TRADING_MODE': 'MOCK'}):
             
