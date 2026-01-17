@@ -6,9 +6,10 @@ my-prime-jennie은 프로젝트의 다음 단계로, AI 에이전트 3인(Jennie
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
-![Python](https://img.shields.io/badge/python-3.11-green)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Python](https://img.shields.io/badge/python-3.12-green)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ED)
+![Airflow](https://img.shields.io/badge/airflow-2.10-017CEE)
 ![License](https://img.shields.io/badge/license-MIT-yellow)
 
 **멀티 LLM 기반 한국 주식 자율 트레이딩 시스템**
@@ -340,7 +341,7 @@ def call_kis_api():
 | **command-handler** | 8091 | 텔레그램 명령 수신 → RabbitMQ 발행 (/buy, /sell, /sellall 등) |
 | **news-crawler** | 8089 | 뉴스 수집 및 감성 분석 |
 | **daily-briefing** | 8086 | 일간 브리핑 생성 |
-| **scheduler-service** | 8095 | 작업 스케줄링 (APScheduler) |
+| **ollama-gateway** | 11500 | Local LLM 오케스트레이션 (회로 차단기 + Rate Limiter) |
 | **dashboard** | 80, 8090 | React + FastAPI 대시보드 |
 
 ### 인프라 서비스
@@ -354,14 +355,19 @@ def call_kis_api():
 | **loki** | 3400 | 로그 집계 |
 | **cloudflared** | - | Cloudflare Tunnel (외부 접근) |
 | **jenkins** | 8180 | CI/CD 서버 |
+| **airflow** | 8280 | 워크플로우 스케줄러 (DAGs) |
 
-### 자동화 작업 (Cron)
+### 자동화 작업 (Airflow DAGs)
 
-| 작업 | 시간 | 설명 |
-|------|------|------|
-| **일일 AI 성과 분석** | 평일 07:00 | AI 의사결정 승률/수익률 분석 리포트 생성 (`analyze_ai_performance.py`) |
-| **일일 브리핑** | 평일 17:00 | 포트폴리오 현황 및 금일 거래 내역 텔레그램 발송 |
-| **주간 팩터 분석** | 금요일 22:00 | 주간 시장 팩터 유효성 검증 및 가중치 조정 (`weekly_factor_analysis_batch.py`) |
+> 🚨 **v1.2 변경**: `scheduler-service`가 Apache Airflow로 전환되었습니다. DAG 파일은 `dags/` 폴더에 있습니다.
+
+| DAG | 시간 | 설명 |
+|-----|------|------|
+| **daily_ai_performance** | 평일 07:00 | AI 의사결정 승률/수익률 분석 리포트 생성 |
+| **daily_briefing** | 평일 17:00 | 포트폴리오 현황 및 금일 거래 내역 텔레그램 발송 |
+| **weekly_factor_analysis** | 금요일 22:00 | 주간 시장 팩터 유효성 검증 및 가중치 조정 |
+| **scout_job** | 평일 08:30 | AI 종목 발굴 파이프라인 실행 |
+| **news_crawler** | 평일 08:00 | 뉴스 수집 및 감성 분석 |
 
 ---
 
@@ -952,10 +958,10 @@ MIT License
 
 <div align="center">
 
-**my-prime-jennie v1.1**
+**my-prime-jennie v1.2**
 
 *AI가 발굴하고, 통계가 검증하고, 사람이 결정한다.*
 
-**Last Updated: 2025-12-26**
+**Last Updated: 2026-01-17**
 
 </div>
