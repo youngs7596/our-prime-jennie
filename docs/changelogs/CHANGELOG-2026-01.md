@@ -1,5 +1,16 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-17
+- **Bull Market Entry Strategies v2 (Jennie CSO)**: 4가지 신규 강세장 매수 전략 구현 완료.
+  - `_get_dynamic_rsi_threshold`: 시장 상황별 동적 RSI 기준 (강세=50, 횡보=40, 약세=30)
+  - `_check_bull_pullback`: 상승 추세 중 건전한 조정 후 반등 (눌림목)
+  - `_check_vcp_breakout`: 변동성 축소 후 거래량 동반 돌파 (VCP)
+  - `_check_institutional_buying`: 기관/외국인 매수세 캔들 패턴 (Marubozu)
+- **Sell Logic Enhancement**: `sell-executor`에 매도 성공 시 Redis Lock 즉시 해제 및 Profit Floor 정리 로직 추가.
+- **Legacy Cleanup**: `scheduler_runtime.py` 삭제 및 `news-crawler`, `scout-job`에서 의존성 제거 (Airflow 전환 완료).
+- **Jenkins Build Optimization**: BuildKit 캐시 정리 + 병렬 빌드 무제한 + pip 캐시 활용으로 빌드 속도 대폭 향상.
+- **README.md 현행화**: 버전 1.2.0 업데이트, Python 3.12, Airflow 배지 추가, ollama-gateway/Airflow DAGs 반영.
+
 ## 2026-01-16
 - **Buy-Scanner Modernization**: `buy-scanner` 서비스를 폴링 없는 완전한 이벤트 구동(Redis Streams only) 아키텍처로 개편하고, `_check_legendary_pattern`(Supper Prime Analysis)을 `BuyOpportunityWatcher`에 통합하여 실시간 수급/패턴 감지 기능 배포 완료. 레거시 `scanner.py` 및 폴링 로직 삭제.
 - **RSI Strategy Enhancement**: '떨어지는 칼날' 매수 방지를 위해 기존 `RSI_OVERSOLD`(과매도 즉시 진입) 전략을 비활성화하고, 과매도 구간 탈출 시 진입하는 `RSI_REBOUND` 전략으로 교체 및 검증 완료.
