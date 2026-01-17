@@ -5,8 +5,9 @@ pipeline {
         DOCKER_COMPOSE_FILE = 'docker-compose.yml'
         // docker-compose.yml의 name: my-prime-jennie와 일치
         COMPOSE_PROJECT_NAME = 'my-prime-jennie'
-        // Docker BuildKit Concurrency Limit (Fix for 'parent snapshot does not exist' race condition)
-        COMPOSE_PARALLEL_LIMIT = '2'
+        // BuildKit 병렬 빌드 최적화 (9950X3D + 64GB RAM 활용)
+        DOCKER_BUILDKIT = '1'
+        COMPOSE_DOCKER_CLI_BUILD = '1'
     }
 
     options {
@@ -86,14 +87,14 @@ pipeline {
                 }
             }
             steps {
-                echo '🐳 Building Docker images...'
+                echo '🐳 Building Docker images (Cache Optimized + Parallel)...'
                 sh '''
-                    # [Fix] BuildKit 캐시 손상 방지 - 빌드 전 캐시 정리
-                    # 'parent snapshot does not exist' 오류 해결
+                    # [Fix] 손상된 캐시만 정리 (24시간 이상 된 것)
                     docker builder prune -f --filter "until=24h" || true
                     
-                    # 병렬 빌드 제한 (COMPOSE_PARALLEL_LIMIT 환경변수로 설정됨)
-                    docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
+                    # 캐시 활용 + 최신 베이스 이미지 풀 (--no-cache 제거로 빌드 속도 향상)
+                    # 병렬 빌드 무제한 (COMPOSE_PARALLEL_LIMIT 제거)
+                    docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --pull --parallel
                 '''
             }
         }
