@@ -272,9 +272,13 @@ class BuyOpportunityWatcher:
         strategies = stock_info.get('strategies', [])
         
         if not strategies:
+            # [FIX] Jennie CSO Review: 시장 상황에 따른 동적 RSI 기준값
+            # 강세장=50, 횡보=40, 약세=30
+            dynamic_rsi = self._get_dynamic_rsi_threshold()
+            
             strategies = [
                 {"id": "GOLDEN_CROSS", "params": {"short_window": 5, "long_window": 20}},
-                {"id": "RSI_REBOUND", "params": {"threshold": 30}}  # [CHANGED] 과매도(30) 탈출 시 진입 (Falling Knife 방지)
+                {"id": "RSI_REBOUND", "params": {"threshold": dynamic_rsi}}
             ]
 
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
@@ -300,15 +304,37 @@ class BuyOpportunityWatcher:
                 if result:
                     signal_type, signal_reason = result
 
-            # 3. [NEW] SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파)
+            # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파)
             if not signal_type:
                 result = self._check_short_term_high_breakout(stock_code, recent_bars)
                 if result:
                     signal_type, signal_reason = result
 
-            # 4. [NEW] VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파)
+            # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파)
             if not signal_type:
                 result = self._check_volume_breakout_1min(stock_code, recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+
+            # ================================================================
+            # [NEW] Jennie CSO 지시: 추가 Bull Market 전략 (2026-01-17)
+            # ================================================================
+            
+            # 5. BULL_PULLBACK: 상승 추세 중 건전한 조정 후 반등
+            if not signal_type:
+                result = self._check_bull_pullback(recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+
+            # 6. VCP_BREAKOUT: 변동성 축소 후 거래량 동반 돌파
+            if not signal_type:
+                result = self._check_vcp_breakout(recent_bars)
+                if result:
+                    signal_type, signal_reason = result
+                    
+            # 7. INSTITUTIONAL_ENTRY: 기관/외국인 매수세 캔들 패턴
+            if not signal_type:
+                result = self._check_institutional_buying(recent_bars)
                 if result:
                     signal_type, signal_reason = result
 
@@ -663,6 +689,187 @@ class BuyOpportunityWatcher:
         reason = f"20분 저항 돌파 ({current_price} > {resistance_price}) + 거래량 {volume_ratio:.1f}배"
         logger.info(f"💥 [{stock_code}] VOLUME_BREAKOUT_1MIN 조건 충족: {reason}")
         return ("VOLUME_BREAKOUT_1MIN", reason)
+
+    # ==========================================================================
+    # [NEW] Jennie CSO 지시: Bull Market 대응 신규 전략 (2026-01-17)
+    # ==========================================================================
+    
+    def _get_dynamic_rsi_threshold(self) -> float:
+        """
+        [A] 시장 상황에 따른 동적 RSI 매수 기준
+        강세장: RSI 50 (눌림목 진입), 횡보장: 40, 약세장: 30
+        """
+        if self.market_regime in ['BULL', 'STRONG_BULL']:
+            return 50.0
+        elif self.market_regime == 'SIDEWAYS':
+            return 40.0
+        else:  # BEAR, STRONG_BEAR
+            return 30.0
+
+    def _check_bull_pullback(self, bars: List[dict]) -> Optional[tuple]:
+        """
+        [B] BULL_PULLBACK: 상승 추세 중 건전한 조정 후 반등
+        
+        Trigger Condition (Jennie CSO 정의):
+        1. 현재가 > MA20 (상승 추세)
+        2. MA5 > MA20 (정배열)
+        3. 최근 3개 캔들 중 2개 이상 음봉 (조정)
+        4. 현재 캔들 양봉 전환 (close > open)
+        5. 거래량 감소 → 증가 전환
+        """
+        if len(bars) < 20:
+            return None
+            
+        closes = [b['close'] for b in bars]
+        current_bar = bars[-1]
+        current_price = current_bar['close']
+        
+        # 1. MA 계산
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        
+        # 2. 정배열 확인 (MA5 > MA20)
+        if ma5 <= ma20:
+            return None
+            
+        # 3. 현재가 > MA20 (상승 추세)
+        if current_price <= ma20:
+            return None
+            
+        # 4. 최근 3개 캔들 중 2개 이상 음봉 (조정 구간 확인)
+        recent_3_bars = bars[-4:-1]  # 현재 봉 제외, 직전 3개
+        bearish_count = sum(1 for b in recent_3_bars if b['close'] < b['open'])
+        if bearish_count < 2:
+            return None
+            
+        # 5. 현재 캔들 양봉 (반등 시도)
+        if current_bar['close'] <= current_bar['open']:
+            return None
+            
+        # 6. 거래량 감소 → 증가 전환 확인
+        recent_volumes = [b['volume'] for b in bars[-6:-1]]  # 직전 5개
+        if not recent_volumes or recent_volumes[-1] == 0:
+            return None
+            
+        avg_recent_volume = sum(recent_volumes) / len(recent_volumes)
+        current_volume = current_bar['volume']
+        
+        # 마지막 3개 거래량이 감소 추세였다가 현재 증가
+        if len(recent_volumes) >= 3:
+            vol_trend = recent_volumes[-3:]
+            # 감소 후 증가: 마지막 봉이 직전보다 20% 이상 증가
+            if current_volume <= avg_recent_volume * 0.8:
+                return None
+        
+        reason = f"MA5({ma5:.0f}) > MA20({ma20:.0f}) + 조정 {bearish_count}음봉 → 양봉 전환"
+        logger.info(f"📈 [BULL_PULLBACK] {reason}")
+        return ("BULL_PULLBACK", reason)
+
+    def _check_vcp_breakout(self, bars: List[dict]) -> Optional[tuple]:
+        """
+        [C] VCP_BREAKOUT: Volatility Contraction Pattern
+        변동성 축소 후 거래량 동반 돌파
+        
+        Trigger Condition (Jennie CSO 정의):
+        1. 최근 20캔들 Range(고-저) 축소 (수렴 구간)
+        2. 현재 거래량 > 직전 20개 평균의 300%
+        3. 현재가 > 최근 20개 캔들 최고가 돌파
+        """
+        if len(bars) < 20:
+            return None
+            
+        current_bar = bars[-1]
+        current_price = current_bar['close']
+        current_volume = current_bar['volume']
+        
+        # 직전 20개 캔들 분석 (현재 봉 제외)
+        analysis_bars = bars[-21:-1]
+        if len(analysis_bars) < 20:
+            return None
+            
+        # 1. Range 축소 확인: 최근 10개 vs 이전 10개 평균 Range 비교
+        first_half = analysis_bars[:10]
+        second_half = analysis_bars[10:]
+        
+        first_half_ranges = [(b['high'] - b['low']) for b in first_half]
+        second_half_ranges = [(b['high'] - b['low']) for b in second_half]
+        
+        avg_first = sum(first_half_ranges) / len(first_half_ranges) if first_half_ranges else 1
+        avg_second = sum(second_half_ranges) / len(second_half_ranges) if second_half_ranges else 1
+        
+        # 수렴 확인: 후반부 Range가 전반부의 70% 이하
+        if avg_first == 0 or avg_second / avg_first > 0.7:
+            return None
+            
+        # 2. 거래량 폭발 확인 (300%)
+        recent_volumes = [b['volume'] for b in analysis_bars]
+        avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 0
+        
+        if avg_volume == 0:
+            return None
+            
+        volume_ratio = current_volume / avg_volume
+        if volume_ratio < 3.0:
+            return None
+            
+        # 3. 고가 돌파 확인
+        period_high = max(b['high'] for b in analysis_bars)
+        if current_price <= period_high:
+            return None
+            
+        contraction_pct = (1 - avg_second / avg_first) * 100
+        reason = f"Range 축소 {contraction_pct:.0f}% + 거래량 {volume_ratio:.1f}배 + 고가 돌파"
+        logger.info(f"🎯 [VCP_BREAKOUT] {reason}")
+        return ("VCP_BREAKOUT", reason)
+
+    def _check_institutional_buying(self, bars: List[dict]) -> Optional[tuple]:
+        """
+        [D] INSTITUTIONAL_ENTRY: 기관/외국인 매수세 추정 (캔들 패턴 기반)
+        
+        Trigger Condition (Jennie CSO 정의):
+        1. Marubozu 양봉: (High - Close) / (High - Low) < 0.1 (윗꼬리 거의 없음)
+        2. 양봉 몸통 크기가 직전 캔들 대비 2배 이상
+        """
+        if len(bars) < 5:
+            return None
+            
+        current_bar = bars[-1]
+        prev_bar = bars[-2]
+        
+        # 양봉 확인
+        if current_bar['close'] <= current_bar['open']:
+            return None
+            
+        # Range 계산 (0 방지)
+        current_range = current_bar['high'] - current_bar['low']
+        if current_range <= 0:
+            return None
+            
+        # 1. Marubozu 확인: 윗꼬리 비율 < 10%
+        upper_wick = current_bar['high'] - current_bar['close']
+        upper_wick_ratio = upper_wick / current_range
+        
+        if upper_wick_ratio >= 0.1:
+            return None
+            
+        # 2. 양봉 몸통 크기 비교 (직전 캔들 대비 2배)
+        current_body = abs(current_bar['close'] - current_bar['open'])
+        prev_body = abs(prev_bar['close'] - prev_bar['open'])
+        
+        if prev_body == 0:
+            prev_body = 1  # 도지 캔들 처리
+            
+        body_ratio = current_body / prev_body
+        if body_ratio < 2.0:
+            return None
+            
+        # 추가 신뢰도: 거래량도 증가
+        if current_bar['volume'] <= prev_bar['volume']:
+            return None
+            
+        reason = f"Marubozu (윗꼬리 {upper_wick_ratio*100:.1f}%) + 몸통 {body_ratio:.1f}배"
+        logger.info(f"🐋 [INSTITUTIONAL_ENTRY] {reason}")
+        return ("INSTITUTIONAL_ENTRY", reason)
 
     def _check_cooldown(self, stock_code: str) -> bool:
         if not self.redis:
