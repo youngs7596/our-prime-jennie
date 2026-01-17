@@ -32,17 +32,12 @@ pipeline {
                 }
             }
             steps {
-                echo '🧪 Running Unit Tests...'
+                echo '🧪 Running Unit Tests (with pip cache)...'
                 sh '''
-                    # Force fresh install to avoid cache issues
-                    pip install --no-cache-dir -r requirements.txt
+                    # pip 캐시 활용 (--no-cache-dir 제거 → 빌드 속도 향상)
+                    pip install -q -r requirements.txt
                     
-                    # Verify key library versions for debugging
-                    python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
-                    python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
-                    python -c "import flask_limiter; print(f'Flask-Limiter version: {flask_limiter.__version__}')"
-                    
-                    # Run pytest for services tests (pytest fixtures are required)
+                    # Run pytest for services tests
                     pytest tests/services/ tests/shared/ -v --tb=short
                 '''
             }
@@ -62,10 +57,10 @@ pipeline {
                 }
             }
             steps {
-                echo '🔗 Running Integration Tests...'
+                echo '🔗 Running Integration Tests (reusing cached packages)...'
                 sh '''
-                    pip install -r requirements.txt
-                    # pytest is included in requirements.txt
+                    # 캐시된 패키지 재사용 (-q: quiet mode)
+                    pip install -q -r requirements.txt
                     pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml
                 '''
             }
