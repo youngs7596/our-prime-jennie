@@ -52,7 +52,7 @@ def get_scout_main():
     return run_scout_job
 
 from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
-from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage
+# scheduler_runtime 의존성 제거 (Airflow 전환 완료 - 2026-01-17)
 from shared.scheduler_client import mark_job_run
 
 scheduler_job_worker = None
@@ -116,25 +116,29 @@ def _get_scheduler_job_id() -> str:
 
 
 def handle_scheduler_job(payload: dict):
-    job_msg = parse_job_message(payload)
-    # "unknown"일 때도 환경변수 job_id 사용
-    effective_job_id = job_msg.job_id if job_msg.job_id and job_msg.job_id != "unknown" else _get_scheduler_job_id()
+    """Airflow/RabbitMQ에서 전달받은 작업 메시지 처리 (직접 파싱)"""
+    job_id = payload.get("job_id", "unknown")
+    run_id = payload.get("run_id", "unknown")
+    trigger_source = payload.get("trigger_source", "unknown")
+    scope = payload.get("scope", "real")
+    
+    effective_job_id = job_id if job_id != "unknown" else _get_scheduler_job_id()
     logger.info(
-        "🕒 Scout Job Scheduler 메시지 수신: job=%s (effective=%s) run=%s",
-        job_msg.job_id,
+        "🕒 Scout Job 수신: job=%s (effective=%s) run=%s",
+        job_id,
         effective_job_id,
-        job_msg.run_id,
+        run_id,
     )
     try:
-        if job_msg.job_id == "analyst-feedback-update":
+        if job_id == "analyst-feedback-update":
             from feedback_task import run_analyst_feedback_update
             run_analyst_feedback_update()
         else:
-            _run_scout_job(trigger_source=f"scheduler/{job_msg.trigger_source}")
+            _run_scout_job(trigger_source=f"scheduler/{trigger_source}")
     except Exception as exc:
-        logger.error("❌ Scout Job Scheduler 실행 실패: %s", exc, exc_info=True)
+        logger.error("❌ Scout Job 실행 실패: %s", exc, exc_info=True)
     finally:
-        mark_job_run(effective_job_id, scope=job_msg.scope)
+        mark_job_run(effective_job_id, scope=scope)
 
 
 # 전역 플래그를 사용하여 워커 중복 실행 방지

@@ -16,6 +16,7 @@ from shared.db import repository as repo
 from shared.redis_cache import (
     delete_high_watermark,
     delete_scale_out_level,
+    delete_profit_floor,
     get_redis_connection,
     is_trading_stopped
 )
@@ -284,12 +285,22 @@ class SellExecutor:
                     except Exception as e:
                         logger.warning(f"⚠️ 텔레그램 알림 발송 실패: {e}")
                 
-                # High Watermark 및 Scale-out 상태 정리
+                # High Watermark, Scale-out, Profit Floor 상태 정리
                 try:
                     delete_high_watermark(stock_code)
                     delete_scale_out_level(stock_code)
+                    delete_profit_floor(stock_code)
+                    logger.info(f"🧹 트레이딩 상태 정리 완료: {stock_code}")
                 except Exception as e:
                     logger.warning(f"⚠️ 트레이딩 상태 삭제 실패: {e}")
+                
+                # Redis Lock 명시적 해제 (성공 시 즉시 리소스 반환)
+                if lock_acquired and redis_client:
+                    try:
+                        redis_client.delete(lock_key)
+                        logger.debug(f"🔓 Redis Lock 해제 완료: {stock_code}")
+                    except Exception as unlock_err:
+                        logger.warning(f"⚠️ Redis Lock 해제 실패 (TTL 만료 대기): {unlock_err}")
                 
                 logger.info("=== 매도 처리 완료 ===")
                 return {
