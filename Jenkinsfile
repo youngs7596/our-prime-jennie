@@ -88,6 +88,11 @@ pipeline {
             steps {
                 echo '🐳 Building Docker images...'
                 sh '''
+                    # [Fix] BuildKit 캐시 손상 방지 - 빌드 전 캐시 정리
+                    # 'parent snapshot does not exist' 오류 해결
+                    docker builder prune -f --filter "until=24h" || true
+                    
+                    # 병렬 빌드 제한 (COMPOSE_PARALLEL_LIMIT 환경변수로 설정됨)
                     docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --no-cache
                 '''
             }
