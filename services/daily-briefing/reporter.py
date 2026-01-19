@@ -432,7 +432,7 @@ class DailyReporter:
         logger.info(f"🔄 포트폴리오 동기화 시작 (실계좌: {len(live_holdings)}종목)")
 
         # 2. DB 업데이트
-        table_name = database._get_table_name("ActivePortfolio")
+        table_name = database._get_table_name("ACTIVE_PORTFOLIO")
         
         
         # 2-1. 기존 DB 보유 종목 확인 (Status가 SOLD라도 존재하는지 확인하여 중복 Insert 방지)
@@ -443,30 +443,29 @@ class DailyReporter:
         # 2-2. Update & Insert
         for code, info in live_holdings.items():
             if code in existing_codes:
-                # 이미 존재하는 종목 (HOLDING 또는 SOLD) -> UPDATE
-                # 중복된 행이 있을 경우 모두 업데이트됨 (데이터 정합성 유지)
+                # 이미 존재하는 종목 -> UPDATE (수량/평단가 최신화)
                 session.execute(text(f"""
                     UPDATE {table_name}
-                    SET QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, STATUS = 'HOLDING', UPDATED_AT = NOW()
+                    SET QUANTITY = :qty, AVERAGE_BUY_PRICE = :price, UPDATED_AT = NOW()
                     WHERE STOCK_CODE = :code
                 """), {'qty': info['qty'], 'price': info['avg_price'], 'code': code})
             else:
-                # DB에 아예 없는 신규 종목 -> INSERT
+                # DB에 아예 없는 신규 종목 -> INSERT (ActivePortfolio 구조상 바로 Insert)
                 session.execute(text(f"""
-                    INSERT INTO {table_name} (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, STATUS, CREATED_AT, UPDATED_AT)
-                    VALUES (:code, :name, :qty, :price, 'HOLDING', NOW(), NOW())
+                    INSERT INTO {table_name} (STOCK_CODE, STOCK_NAME, QUANTITY, AVERAGE_BUY_PRICE, CREATED_AT, UPDATED_AT)
+                    VALUES (:code, :name, :qty, :price, NOW(), NOW())
                 """), {'code': code, 'name': info['name'], 'qty': info['qty'], 'price': info['avg_price']})
         
-        # 2-3. Delete (Mark as SOLD) - DB에는 있는데 실계좌에 없는 경우
+        # 2-3. Delete (Fully Sold) - DB에는 있는데 실계좌에 없는 경우
+        # ActivePortfolio는 현재 보유분만 저장하므로 과감히 삭제
         for db_code in existing_codes:
             if db_code in MANUAL_MANAGED_CODES:
                 continue
                 
             if db_code not in live_holdings:
-                logger.info(f"📉 외부 매도 감지: {db_code} (DB 보유 -> 실계좌 부재)")
+                logger.info(f"📉 전량 매도 감지: {db_code} (ActivePortfolio에서 제거)")
                 session.execute(text(f"""
-                    UPDATE {table_name}
-                    SET QUANTITY = 0, STATUS = 'SOLD', UPDATED_AT = NOW()
+                    DELETE FROM {table_name}
                     WHERE STOCK_CODE = :code
                 """), {'code': db_code})
         

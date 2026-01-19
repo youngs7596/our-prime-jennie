@@ -1,5 +1,10 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-19
+- **Service & DAG Fixes (Critical)**: `daily-briefing` 서비스의 `ActivePortfolio` 테이블명 불일치 및 레거시 로직(`STATUS` 컬럼 참조) 전면 수정으로 브리핑 발송 정상화.
+- **Airflow DAG Repair**: Docker 컨테이너 내부 `127.0.0.1` DB 접속 오류로 실패하던 `weekly_factor_analysis` DAG를 수정(환경변수 명시적 주입)하여 정상 복구 (`Running` 상태 확인).
+- **Portfolio Architecture Migration Completing**: `reporter.py`의 동기화 로직을 `active_holdings` 삭제 원칙(Status: SOLD 제거)에 맞게 리팩토링 완료.
+
 ## 2026-01-17
 - **Bull Market Entry Strategies v2 (Jennie CSO)**: 4가지 신규 강세장 매수 전략 구현 완료.
   - `_get_dynamic_rsi_threshold`: 시장 상황별 동적 RSI 기준 (강세=50, 횡보=40, 약세=30)

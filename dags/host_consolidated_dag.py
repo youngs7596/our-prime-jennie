@@ -38,7 +38,7 @@ with DAG(
 ) as dag_weekly:
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/weekly_factor_analysis_batch.py',
+        bash_command='export MARIADB_HOST=mariadb && export MARIADB_PORT=3306 && export MARIADB_USER=root && cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/weekly_factor_analysis_batch.py',
         env=COMMON_ENV,
     )
 

@@ -837,7 +837,7 @@ def get_trade_logs(session, date: str) -> List[Dict]:
             - profit_amount, reason, trade_time, strategy_signal
     """
     TradeLog = db_models.TradeLog
-    Portfolio = db_models.Portfolio
+    ActivePortfolio = db_models.ActivePortfolio  # 보유 종목에서 종목명 조회
     from sqlalchemy import func
     
     try:
@@ -867,16 +867,25 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         if not rows:
             return []
             
-        # 종목명 별도 조회 (Portfolio에서 가장 최근 이름 사용)
+        # 종목명 별도 조회 (ActivePortfolio에서 먼저 시도, 없으면 WatchList)
         stock_codes = list(set([r[0] for r in rows]))
         name_map = {}
         if stock_codes:
-            # MariaDB는 DISTINCT ON이 없으므로 GROUP BY 사용
-            p_rows = session.query(Portfolio.stock_code, Portfolio.stock_name)\
-                .filter(Portfolio.stock_code.in_(stock_codes))\
-                .group_by(Portfolio.stock_code)\
+            # 1. ActivePortfolio에서 종목명 조회
+            ap_rows = session.query(ActivePortfolio.stock_code, ActivePortfolio.stock_name)\
+                .filter(ActivePortfolio.stock_code.in_(stock_codes))\
                 .all()
-            name_map = {p[0]: p[1] for p in p_rows}
+            name_map = {p[0]: p[1] for p in ap_rows}
+            
+            # 2. ActivePortfolio에 없는 종목은 WatchList에서 조회 (매도된 종목 등)
+            missing_codes = [c for c in stock_codes if c not in name_map]
+            if missing_codes:
+                WatchList = db_models.WatchList
+                wl_rows = session.query(WatchList.stock_code, WatchList.stock_name)\
+                    .filter(WatchList.stock_code.in_(missing_codes))\
+                    .all()
+                for w in wl_rows:
+                    name_map[w[0]] = w[1]
         
         trades = []
         for row in rows:
