@@ -208,23 +208,30 @@ def get_performance_data(
     
     unrealized_profit = unrealized_value - unrealized_cost
     
-    # 5. MDD 계산 (누적 수익 기준)
+    # 5. MDD 계산 (Equity Curve 기준)
+    # [Fix] 단순히 누적 수익(cumulative)만으로 계산하면 분모가 작아 MDD가 과장됨 (-80% 등)
+    # 따라서 가상의 초기 자본금(Initial Capital)을 더해 전체 자산(Equity)의 변동폭으로 계산
+    INITIAL_CAPITAL = 200_000_000  # 기본 자본금 2억 가정 (추후 Config 화 가능)
+    
     cumulative_profits = []
     cumulative = 0
-    peak = 0
+    peak_equity = INITIAL_CAPITAL
     mdd = 0
     
     for trade in realized_trades:
         cumulative += trade['net_profit']
+        current_equity = INITIAL_CAPITAL + cumulative
+        
         cumulative_profits.append({
             'date': trade['sell_timestamp'].strftime('%Y-%m-%d'),
             'profit': cumulative
         })
         
-        if cumulative > peak:
-            peak = cumulative
+        if current_equity > peak_equity:
+            peak_equity = current_equity
         
-        drawdown = (cumulative - peak) / peak * 100 if peak > 0 else 0
+        # Peak 대비 현재 자산의 감소폭
+        drawdown = (current_equity - peak_equity) / peak_equity * 100
         if drawdown < mdd:
             mdd = drawdown
     
