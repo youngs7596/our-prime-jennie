@@ -189,12 +189,12 @@ def get_performance_data(
     
     # 현재가 조회 (Redis 또는 DB)
     for h in holdings:
-        cost = h.avg_price * h.quantity
+        cost = h.average_buy_price * h.quantity
         unrealized_cost += cost
         
         # 현재가는 avg_price로 대체 (실시간 가격은 별도 조회 필요)
         # TODO: Redis에서 실시간 가격 조회
-        current_price = h.avg_price  # 임시
+        current_price = h.average_buy_price  # 임시
         unrealized_value += current_price * h.quantity
     
     unrealized_profit = unrealized_value - unrealized_cost
