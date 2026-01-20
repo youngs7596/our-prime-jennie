@@ -612,13 +612,6 @@ async def get_daily_briefing_api(payload: dict = Depends(verify_token)):
 async def get_market_regime_api(payload: dict = Depends(verify_token)):
     """Market Regime (Bull/Bear/Sideways) API"""
     try:
-        from shared.market_regime import MarketRegimeManager
-        
-        # Instantiate Manager (it uses valid_sectors from scout_universe inside, or we can mock/ignore if just reading DB/Redis)
-        # For simple reading, let's just query Redis or DB as Manager might be heavy or require dependencies.
-        # Actually, MarketRegimeManager.analyze_market_regime updates DB. We just want to READ.
-        # Let's check shared.db.models.MarketRegime
-        
         with get_session() as session:
             from shared.db.models import MarketRegime
             # Get latest
