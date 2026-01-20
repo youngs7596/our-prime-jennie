@@ -1,5 +1,8 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-20
+- **Weekly Factor Analysis DAG 복구 (Critical)**: `weekly_factor_analysis_batch.py`에서 `subprocess.run()` 호출 시 `env=os.environ.copy()`를 추가하여 환경변수(`MARIADB_HOST=mariadb` 등)가 자식 프로세스에 전달되지 않던 버그 수정. Docker 컨테이너 내부에서 `127.0.0.1:3306` 대신 `mariadb:3306`으로 정상 연결 확인.
+
 ## 2026-01-19
 - **Service & DAG Fixes (Critical)**: `daily-briefing` 서비스의 `ActivePortfolio` 테이블명 불일치 및 레거시 로직(`STATUS` 컬럼 참조) 전면 수정으로 브리핑 발송 정상화.
 - **Airflow DAG Repair**: Docker 컨테이너 내부 `127.0.0.1` DB 접속 오류로 실패하던 `weekly_factor_analysis` DAG를 수정(환경변수 명시적 주입)하여 정상 복구 (`Running` 상태 확인).

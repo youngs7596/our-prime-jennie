@@ -106,6 +106,7 @@ class WeeklyFactorAnalysisBatch:
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
+                env=os.environ.copy(),  # 환경변수를 자식 프로세스에 전달 (MARIADB_HOST 등)
                 timeout=7200  # 2시간 타임아웃
             )
             
