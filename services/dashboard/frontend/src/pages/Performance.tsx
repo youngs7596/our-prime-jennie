@@ -86,7 +86,7 @@ export function PerformancePage() {
         setLoading(true)
         setError(null)
         try {
-            const response = await api.get(`/api/performance?preset=${preset}`)
+            const response = await api.get(`/performance?preset=${preset}`)
             setData(response.data)
         } catch (err: any) {
             setError(err.message || '데이터 로딩 실패')
