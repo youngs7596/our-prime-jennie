@@ -63,23 +63,32 @@ def fetch_current_prices_from_kis(stock_codes: List[str]) -> Dict[str, float]:
 def fetch_cash_balance_from_kis() -> float:
     """
     KIS Gateway API를 통해 현금 잔고(주문가능금액)를 조회합니다.
+    Connection reset 오류 방지를 위해 최대 3회 재시도합니다.
     
     Returns:
         float: 주문 가능 현금 (원)
     """
     import httpx
+    import time
     
     kis_gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
+    max_retries = 3
     
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.post(f"{kis_gateway_url}/api/account/cash-balance", json={})
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("success"):
-                    return float(result.get("data", 0.0))
-    except Exception as e:
-        logger.warning(f"KIS Gateway 현금 잔고 조회 실패: {e}")
+    for attempt in range(max_retries):
+        try:
+            # Connection: close 헤더로 Keep-Alive 문제 방지
+            with httpx.Client(timeout=10.0, headers={"Connection": "close"}) as client:
+                response = client.post(f"{kis_gateway_url}/api/account/cash-balance", json={})
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("success"):
+                        return float(result.get("data", 0.0))
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.debug(f"KIS Gateway 현금 잔고 조회 재시도 ({attempt + 1}/{max_retries}): {e}")
+                time.sleep(0.5)  # 500ms 대기 후 재시도
+                continue
+            logger.warning(f"KIS Gateway 현금 잔고 조회 실패 ({max_retries}회 시도): {e}")
     
     return 0.0
 
