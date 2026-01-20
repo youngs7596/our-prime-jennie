@@ -187,14 +187,23 @@ def get_performance_data(
     unrealized_cost = 0
     unrealized_value = 0
     
-    # 현재가 조회 (Redis 또는 DB)
+    # 실시간 현재가 조회 준비
+    stock_codes = [h.stock_code for h in holdings]
+    current_prices = {}
+    if stock_codes:
+        try:
+            from shared.db.repository import fetch_current_prices_from_kis
+            current_prices = fetch_current_prices_from_kis(stock_codes)
+        except Exception as e:
+            logger.warning(f"실시간 현재가 조회 실패: {e}")
+
+    # 현재가 반영 및 계산
     for h in holdings:
         cost = h.average_buy_price * h.quantity
         unrealized_cost += cost
         
-        # 현재가는 avg_price로 대체 (실시간 가격은 별도 조회 필요)
-        # TODO: Redis에서 실시간 가격 조회
-        current_price = h.average_buy_price  # 임시
+        # 실시간 가격 적용 (없으면 매수가 사용)
+        current_price = current_prices.get(h.stock_code, h.average_buy_price)
         unrealized_value += current_price * h.quantity
     
     unrealized_profit = unrealized_value - unrealized_cost
