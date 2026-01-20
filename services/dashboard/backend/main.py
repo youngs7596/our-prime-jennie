@@ -613,20 +613,28 @@ async def get_market_regime_api(payload: dict = Depends(verify_token)):
     """Market Regime (Bull/Bear/Sideways) API"""
     try:
         with get_session() as session:
-            from shared.db.models import MarketRegime
-            # Get latest
-            latest = session.query(MarketRegime).order_by(MarketRegime.date.desc()).first()
-            if latest:
-                return {
-                    "date": latest.date.isoformat(),
-                    "regime": latest.regime,
-                    "confidence": latest.confidence,
-                    "kospi_200_return": latest.kospi_200_return_3m,
-                    "adv_dec_ratio": latest.ad_ratio,
-                    "description": latest.description
-                }
-            else:
-                return {"regime": "UNKNOWN", "message": "No data"}
+            # from shared.db.models import MarketRegime
+            # # Get latest
+            # latest = session.query(MarketRegime).order_by(MarketRegime.date.desc()).first()
+            # if latest:
+            #     return {
+            #         "date": latest.date.isoformat(),
+            #         "regime": latest.regime,
+            #         "confidence": latest.confidence,
+            #         "kospi_200_return": latest.kospi_200_return_3m,
+            #         "adv_dec_ratio": latest.ad_ratio,
+            #         "description": latest.description
+            #     }
+            # else:
+            #     return {"regime": "UNKNOWN", "message": "No data"}
+            
+            # [Temporary Fix] MarketRegime table not yet migrated. Return placeholder.
+            return {
+                "date": datetime.now().isoformat(),
+                "regime": "SIDEWAYS", 
+                "confidence": 0.5,
+                "description": "Market Regime data not available yet (Model missing)"
+            }
                 
     except Exception as e:
         logger.error(f"Market Regime 조회 실패: {e}")
