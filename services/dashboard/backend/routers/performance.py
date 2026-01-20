@@ -32,7 +32,7 @@ from shared.analysis.performance_calculator import get_performance_data
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/performance", tags=["performance"])
+router = APIRouter(prefix="/performance", tags=["performance"])
 
 
 class PeriodPreset(str, Enum):
