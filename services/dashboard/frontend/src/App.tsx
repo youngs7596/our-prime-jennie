@@ -12,6 +12,7 @@ import VisualLogic from '@/pages/VisualLogic'
 import { SettingsPage } from '@/pages/Settings'
 import { ArchitecturePage } from '@/pages/Architecture'
 import SuperPrimePage from '@/pages/SuperPrime'
+import { PerformancePage } from '@/pages/Performance'
 import { useAuthStore } from '@/store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -44,6 +45,7 @@ function App() {
         >
           <Route index element={<OverviewPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
+          <Route path="performance" element={<PerformancePage />} />
           <Route path="scout" element={<ScoutPage />} />
           <Route path="system" element={<SystemPage />} />
           <Route path="news" element={<NewsPage />} />
@@ -63,4 +65,3 @@ function App() {
 }
 
 export default App
-

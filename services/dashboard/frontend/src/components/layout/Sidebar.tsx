@@ -21,6 +21,7 @@ import { useState } from 'react'
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Overview' },
   { path: '/portfolio', icon: Briefcase, label: 'Portfolio' },
+  { path: '/performance', icon: LineChart, label: '투자 성과' },
   { path: '/scout', icon: Brain, label: 'Scout Pipeline' },
   { path: '/system', icon: Activity, label: 'System Status' },
   { path: '/news', icon: Newspaper, label: 'News & Sentiment' },

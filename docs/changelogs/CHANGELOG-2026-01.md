@@ -2,6 +2,11 @@
 
 ## 2026-01-20
 - **Weekly Factor Analysis DAG 복구 (Critical)**: `weekly_factor_analysis_batch.py`에서 `subprocess.run()` 호출 시 `env=os.environ.copy()`를 추가하여 환경변수(`MARIADB_HOST=mariadb` 등)가 자식 프로세스에 전달되지 않던 버그 수정. Docker 컨테이너 내부에서 `127.0.0.1:3306` 대신 `mariadb:3306`으로 정상 연결 확인.
+- **투자 성과 대시보드 (Performance Dashboard)**: 가족 법인 자산운용 관점의 투자 성과 분석 기능 신규 구현.
+  - `shared/analysis/performance_calculator.py`: FIFO 매칭 기반 실현 손익 계산, 수수료/거래세(0.23%+0.0015%) 차감한 순수익, MDD(최대 낙폭), Profit Factor 지표 계산 로직 구현
+  - `services/dashboard/backend/routers/performance.py`: `/api/performance` API 엔드포인트 (기간 프리셋: 오늘/이번주/이번달/올해/전체)
+  - `services/dashboard/frontend/src/pages/Performance.tsx`: 핵심 지표 카드(순수익, 승률, Profit Factor, MDD), 누적 수익 그래프(Recharts), 종목별 상세 테이블 UI
+  - 사이드바에 '📊 투자 성과' 메뉴 추가
 
 ## 2026-01-19
 - **Service & DAG Fixes (Critical)**: `daily-briefing` 서비스의 `ActivePortfolio` 테이블명 불일치 및 레거시 로직(`STATUS` 컬럼 참조) 전면 수정으로 브리핑 발송 정상화.
