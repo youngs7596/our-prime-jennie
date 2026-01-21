@@ -477,7 +477,7 @@ def compute_news_hash(title: str) -> str:
 # 세션 내 중복 제거용 캐시
 _seen_news_hashes = set()
 
-def crawl_naver_finance_news(stock_code: str, stock_name: str, max_pages: int = None) -> list:
+def crawl_stock_news_with_fallback(stock_code: str, stock_name: str, max_pages: int = None) -> list:
     """
     네이버 금융에서 특정 종목의 뉴스를 직접 크롤링합니다.
     (shared.crawlers.naver 모듈 사용)
