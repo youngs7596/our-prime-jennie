@@ -62,16 +62,19 @@ def run_snapshot():
     logger.info("=" * 60)
     
     # [Local Dev Fix] 로컬 실행 시 secrets.json의 DB 포트(3307)를 환경변수에 주입
-    try:
-        from shared.auth import get_secret
-        import os
-        
-        db_port = get_secret("mariadb-port")
-        if db_port:
-            os.environ["MARIADB_PORT"] = str(db_port)
-            logger.info(f"🔧 로컬 환경: MARIADB_PORT={db_port} 설정 (from secrets)")
-    except Exception as e:
-        logger.warning(f"⚠️ 시크릿 로드 중 오류: {e}")
+    # 단, Airflow/Docker 환경(MARIADB_HOST가 이미 설정된 경우)에서는 건너뜀
+    if not os.environ.get("MARIADB_HOST"):
+        try:
+            from shared.auth import get_secret
+            
+            db_port = get_secret("mariadb-port")
+            if db_port:
+                os.environ["MARIADB_PORT"] = str(db_port)
+                logger.info(f"🔧 로컬 환경: MARIADB_PORT={db_port} 설정 (from secrets)")
+        except Exception as e:
+            logger.warning(f"⚠️ 시크릿 로드 중 오류: {e}")
+    else:
+        logger.info(f"🐳 Docker/Airflow 환경 감지: MARIADB_HOST={os.environ.get('MARIADB_HOST')}")
 
     # DB 엔진 초기화
     engine = init_engine()
@@ -88,7 +91,6 @@ def run_snapshot():
     # 1. KIS API 연결
     try:
         from shared.auth import get_secret
-        import os
         
         trading_mode = os.getenv("TRADING_MODE", "REAL").upper()
         
@@ -179,35 +181,35 @@ def run_snapshot():
     logger.info(f"   평가손익: {total_pnl:,.0f}원")
     logger.info(f"   실현손익: {realized_pnl:,.0f}원")
     
-    # 3. DB 저장 (Upsert)
+    # 3. DB 저장 (Upsert via ORM merge)
     session = None
     try:
         session = get_session()
         
-        # INSERT ... ON DUPLICATE KEY UPDATE
-        stmt = insert(DailyAssetSnapshot).values(
-            snapshot_date=today,
-            total_asset_amount=total_asset,
-            cash_balance=cash_balance,
-            stock_eval_amount=stock_eval,
-            total_profit_loss=total_pnl,
-            realized_profit_loss=realized_pnl, # [New]
-        )
+        # ORM 방식 upsert: 기존 레코드 조회 후 업데이트 또는 신규 생성
+        existing = session.query(DailyAssetSnapshot).filter_by(snapshot_date=today).first()
         
-        # 중복 시 업데이트할 컬럼 지정
-        # [Fix] SQLAlchemy Warning 해결: 문자열 키 대신 모델의 속성(Column 객체)을 키로 사용
-        update_dict = {
-            DailyAssetSnapshot.total_asset_amount: total_asset,
-            DailyAssetSnapshot.cash_balance: cash_balance,
-            DailyAssetSnapshot.stock_eval_amount: stock_eval,
-            DailyAssetSnapshot.total_profit_loss: total_pnl,
-            DailyAssetSnapshot.realized_profit_loss: realized_pnl, # [New]
-            # created_at은 유지
-        }
+        if existing:
+            # 기존 레코드 업데이트
+            existing.total_asset_amount = total_asset
+            existing.cash_balance = cash_balance
+            existing.stock_eval_amount = stock_eval
+            existing.total_profit_loss = total_pnl
+            existing.realized_profit_loss = realized_pnl
+            logger.info(f"🔄 기존 레코드 업데이트 (날짜: {today})")
+        else:
+            # 신규 레코드 생성
+            new_snapshot = DailyAssetSnapshot(
+                snapshot_date=today,
+                total_asset_amount=total_asset,
+                cash_balance=cash_balance,
+                stock_eval_amount=stock_eval,
+                total_profit_loss=total_pnl,
+                realized_profit_loss=realized_pnl,
+            )
+            session.add(new_snapshot)
+            logger.info(f"➕ 신규 레코드 생성 (날짜: {today})")
         
-        upsert_stmt = stmt.on_duplicate_key_update(update_dict)
-        
-        session.execute(upsert_stmt)
         session.commit()
         
         logger.info(f"✅ DB 저장 완료 (테이블: {DailyAssetSnapshot.__tablename__})")

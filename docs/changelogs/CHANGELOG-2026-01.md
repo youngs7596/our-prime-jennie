@@ -1,6 +1,9 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-21
+- **DAG Fix**: `daily_asset_snapshot` DAG Docker 환경 호환성 수정.
+  - `daily_asset_snapshot_dag.py`: BashOperator에 COMMON_ENV 환경변수 추가
+  - `daily_asset_snapshot.py`: Docker 환경 감지 로직 추가, 함수 내 중복 import 제거, SQLAlchemy ORM merge 방식으로 upsert 변경
 - **Legacy Service Removal**: `news-crawler` 서비스 완전 제거 (news-collector/analyzer/archiver로 대체 완료).
   - 컨테이너, 서비스 디렉토리, 테스트, DAG 삭제
   - docker-compose.yml, env-vars, scheduler-service 설정 정리
