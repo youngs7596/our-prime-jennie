@@ -406,16 +406,7 @@ DEFAULT_JOBS = [
         "timeout_sec": 7200,
         "default_params": {}
     },
-    {
-        "job_id": "news-crawler",
-        "description": "News Crawler (07:00, 15:30)",
-        "queue_suffix": "jobs.news-crawler",
-        "cron_expr": "0 7,15,16 * * *",  # 07:00, 15:00, 16:00 (15:30 근사치)
-        "enabled": True,
-        "reschedule_mode": "scheduler",
-        "timeout_sec": 300,
-        "default_params": {}
-    },
+
     {
         "job_id": "price-monitor-pulse",
         "description": "Price Monitor Pulse (Keep-Alive)",

@@ -764,73 +764,7 @@ services:
         required: false
 
   # ============================================================================
-  # 9. News Crawler (뉴스 수집)
-  # ============================================================================
-  news-crawler:
-    build:
-      context: .
-      dockerfile: services/news-crawler/Dockerfile
-    profiles: [ "real" ]
-    env_file:
-      - infrastructure/env-vars-wsl.yaml
-    volumes:
-      - ./secrets.json:/app/config/secrets.json:ro
-    environment:
-      - PORT=8089
-      - SECRETS_FILE=/app/config/secrets.json
-      - USE_OLLAMA_GATEWAY=true
-      - OLLAMA_GATEWAY_URL=http://localhost:11500
-      - OLLAMA_HOST=http://localhost:11434
-      - TIER_FAST_PROVIDER=ollama
-      - TIER_REASONING_PROVIDER=ollama
-      - ENABLE_NEWS_ANALYSIS=true
-    # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
-    network_mode: host
-    restart: unless-stopped
-    labels:
-      - app=news-crawler
-      - stack=my-prime-jennie
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/health')" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  news-crawler-mock:
-    build:
-      context: .
-      dockerfile: services/news-crawler/Dockerfile
-    profiles: [ "mock" ]
-    env_file:
-      - infrastructure/env-vars-mock.yaml
-    volumes:
-      - ./secrets.json:/app/config/secrets.json:ro
-    environment:
-      - PORT=9089
-      - SECRETS_FILE=/app/config/secrets.json
-      - KIS_GATEWAY_URL=http://localhost:9080
-      - CHROMA_SERVER_HOST=localhost
-      - REDIS_URL=redis://localhost:6379
-    network_mode: host
-    labels:
-      - app=news-crawler-mock
-      - stack=my-prime-jennie
-    depends_on:
-      scheduler-service-mock:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-        required: false
-      redis:
-        condition: service_healthy
-        required: false
-      chromadb:
-        condition: service_healthy
-        required: false
-
-  # ============================================================================
-  # 10. Dashboard (React + FastAPI)
+  # 9. Dashboard (React + FastAPI)
   # ============================================================================
   dashboard-backend:
     build:

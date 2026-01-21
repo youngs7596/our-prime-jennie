@@ -1,6 +1,9 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-21
+- **Legacy Service Removal**: `news-crawler` 서비스 완전 제거 (news-collector/analyzer/archiver로 대체 완료).
+  - 컨테이너, 서비스 디렉토리, 테스트, DAG 삭제
+  - docker-compose.yml, env-vars, scheduler-service 설정 정리
 - **Dashboard Refactoring (Feature)**: 대시보드 Backend/Frontend 전면 리팩토링 및 Trading 기능 추가.
   - **Backend**: `portfolio.py`, `market.py` 라우터 분리 및 `DailyAssetSnapshot`, `Redis` 기반 실데이터 연동.
   - **Frontend**: Overview 자산 추이 차트, Market Regime 실시간 표시, Manual Trading (`/trading`) 페이지 및 주문 폼 구현.

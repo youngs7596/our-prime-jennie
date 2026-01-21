@@ -22,16 +22,7 @@ def get_jobs_config():
             "timeout_sec": 600,
             "default_params": {}
         },
-        {
-            "job_id": "news-crawler",
-            "description": "News Crawler (20m interval)",
-            "queue": f"{SCOPE}.jobs.news-crawler",
-            "cron_expr": "*/20 * * * *",
-            "enabled": True,
-            "reschedule_mode": "scheduler",
-            "timeout_sec": 300,
-            "default_params": {}
-        },
+
         {
             "job_id": "price-monitor-pulse",
             "description": "Price Monitor Pulse (Keep-Alive)",
