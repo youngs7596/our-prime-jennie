@@ -13,6 +13,7 @@ import {
   Target,
   LineChart,
   Map,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'

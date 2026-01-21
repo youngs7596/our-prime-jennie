@@ -15,9 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
-import { Badge } from '@/components/ui/Badge'
 import { portfolioApi, tradesApi } from '@/lib/api'
-import { formatCurrency, formatNumber, formatRelativeTime } from '@/lib/utils'
+import { formatCurrency, formatRelativeTime } from '@/lib/utils'
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -52,7 +51,7 @@ export function TradingPage() {
             setSuccessMsg(`주문 성공: ${data.message}`)
             setErrorMsg('')
             setOrderForm(prev => ({ ...prev, stock_code: '', quantity: 1, price: 0 }))
-            queryClient.invalidateQueries(['recent-trades'])
+            queryClient.invalidateQueries({ queryKey: ['recent-trades'] })
             setTimeout(() => setSuccessMsg(''), 5000)
         },
         onError: (error: any) => {
@@ -127,8 +126,8 @@ export function TradingPage() {
                                             type="button"
                                             onClick={() => setOrderForm({ ...orderForm, side: 'BUY' })}
                                             className={`flex-1 px-3 py-2 text-sm font-medium rounded-l-md border ${orderForm.side === 'BUY'
-                                                    ? 'bg-profit-positive/20 text-profit-positive border-profit-positive'
-                                                    : 'bg-background text-muted-foreground border-input hover:bg-accent'
+                                                ? 'bg-profit-positive/20 text-profit-positive border-profit-positive'
+                                                : 'bg-background text-muted-foreground border-input hover:bg-accent'
                                                 }`}
                                         >
                                             매수
@@ -137,8 +136,8 @@ export function TradingPage() {
                                             type="button"
                                             onClick={() => setOrderForm({ ...orderForm, side: 'SELL' })}
                                             className={`flex-1 px-3 py-2 text-sm font-medium rounded-r-md border-t border-r border-b ${orderForm.side === 'SELL'
-                                                    ? 'bg-profit-negative/20 text-profit-negative border-profit-negative'
-                                                    : 'bg-background text-muted-foreground border-input hover:bg-accent'
+                                                ? 'bg-profit-negative/20 text-profit-negative border-profit-negative'
+                                                : 'bg-background text-muted-foreground border-input hover:bg-accent'
                                                 }`}
                                         >
                                             매도
@@ -183,12 +182,12 @@ export function TradingPage() {
                             <Button
                                 type="submit"
                                 className={`w-full ${orderForm.side === 'BUY'
-                                        ? 'bg-profit-positive hover:bg-profit-positive/90'
-                                        : 'bg-profit-negative hover:bg-profit-negative/90'
+                                    ? 'bg-profit-positive hover:bg-profit-positive/90'
+                                    : 'bg-profit-negative hover:bg-profit-negative/90'
                                     }`}
-                                disabled={orderMutation.isLoading}
+                                disabled={orderMutation.isPending}
                             >
-                                {orderMutation.isLoading ? '처리중...' : `${orderForm.side === 'BUY' ? '매수' : '매도'} 주문 실행`}
+                                {orderMutation.isPending ? '처리중...' : `${orderForm.side === 'BUY' ? '매수' : '매도'} 주문 실행`}
                             </Button>
                         </form>
                     </CardContent>
