@@ -83,24 +83,11 @@ def setup_db_credentials():
 # 앱 시작 전에 DB 자격 증명 설정
 setup_db_credentials()
 
+from auth import create_access_token, verify_token, JWT_SECRET, JWT_ALGORITHM, LoginRequest, TokenResponse
+
 # --- 환경 변수 ---
-JWT_SECRET = os.getenv("JWT_SECRET", "your-jwt-secret-here")
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24 * 7  # 7일
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 KIS_GATEWAY_URL = os.getenv("KIS_GATEWAY_URL", "http://kis-gateway:8080")
-
-# --- Pydantic 모델 ---
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user: dict
-
 
 class WatchlistItem(BaseModel):
     stock_code: str
@@ -151,26 +138,7 @@ def get_redis():
             redis_client = None
     return redis_client
 
-# --- JWT 인증 ---
-security = HTTPBearer()
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(hours=JWT_EXPIRATION_HOURS))
-    to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
-    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
-
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        payload = jwt.decode(credentials.credentials, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+# ... (Previous auth code removed)
 
 # --- WebSocket 연결 관리 ---
 class ConnectionManager:

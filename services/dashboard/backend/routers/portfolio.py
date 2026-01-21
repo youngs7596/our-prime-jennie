@@ -12,7 +12,7 @@ from shared.db.repository import (
     get_portfolio_with_current_prices,
 )
 from shared.db.models import DailyAssetSnapshot # For history
-from routers.auth_utils import verify_token # Assuming we'll move verify_token or import it appropriately. 
+from auth import verify_token
 # Wait, verify_token is in main.py. I should probably move it to a shared util or duplication.
 # For now, I will import it from main if possible, but circular import might be an issue.
 # Better to expect `dependencies=[Depends(verify_token)]` on the router include in main, 
