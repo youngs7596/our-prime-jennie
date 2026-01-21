@@ -12,12 +12,6 @@ import VisualLogic from '@/pages/VisualLogic'
 import { TradingPage } from '@/pages/Trading'
 import { SettingsPage } from '@/pages/Settings'
 
-// ... (abbreviated)
-
-          <Route path="logic" element={<FactorsPage />} />
-          <Route path="visual-logic" element={<VisualLogic />} />
-          <Route path="trading" element={<TradingPage />} />
-          <Route path="settings" element={<SettingsPage />} />
 import { ArchitecturePage } from '@/pages/Architecture'
 import SuperPrimePage from '@/pages/SuperPrime'
 import { PerformancePage } from '@/pages/Performance'
@@ -60,6 +54,7 @@ function App() {
           <Route path="analyst" element={<AnalystPage />} />
           <Route path="logic" element={<FactorsPage />} />
           <Route path="visual-logic" element={<VisualLogic />} />
+          <Route path="trading" element={<TradingPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="architecture" element={<ArchitecturePage />} />
           <Route path="super-prime" element={<SuperPrimePage />} />
