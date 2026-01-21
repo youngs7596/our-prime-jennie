@@ -116,6 +116,39 @@ class StockDailyPrice(Base):
 # --- 아래부터 새롭게 추가된 모델들 ---
 
 
+class DailyAssetSnapshot(Base):
+    """
+    일별 자산 스냅샷 (매일 장 마감 후 기록)
+    - KIS 잔고조회 API 결과(output2) 기준
+    - 수익률 및 MDD 계산의 기준 데이터
+    """
+    __tablename__ = resolve_table_name("DAILY_ASSET_SNAPSHOT")
+    __table_args__ = {"extend_existing": True}
+
+    snapshot_date = Column("SNAPSHOT_DATE", Date, primary_key=True)
+    
+    # 총 자산 (현금 + 주식 평가액)
+    total_asset_amount = Column("TOTAL_ASSET_AMOUNT", Numeric(20, 0), nullable=False)
+    
+    # 예수금 (D+2)
+    cash_balance = Column("CASH_BALANCE", Numeric(20, 0), nullable=False)
+    
+    # 주식 평가 금액
+    stock_eval_amount = Column("STOCK_EVAL_AMOUNT", Numeric(20, 0), nullable=False)
+    
+    # 평가 손익 합계 (당일 기준 아님, 보유 전체)
+    total_profit_loss = Column("TOTAL_PROFIT_LOSS", Numeric(20, 0), nullable=True)
+    
+    # [New] 당일 실현 손익 (KIS 기간별 매매 손익 조회 기준)
+    realized_profit_loss = Column("REALIZED_PROFIT_LOSS", Numeric(20, 0), nullable=True)
+    
+    # 순 투자 원금 (입출금 반영용, 선택사항)
+    net_investment = Column("NET_INVESTMENT", Numeric(20, 0), nullable=True)
+    
+    created_at = Column("CREATED_AT", DateTime, server_default=func.now())
+
+
+
 class Config(Base):
     __tablename__ = resolve_table_name("CONFIG")
     __table_args__ = {"extend_existing": True}

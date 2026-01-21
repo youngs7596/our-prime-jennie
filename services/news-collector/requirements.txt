@@ -1,0 +1,6 @@
+# services/news-collector/requirements.txt
+redis>=5.0.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+feedparser>=6.0.0
+python-dotenv>=1.0.0

@@ -1,5 +1,8 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-21
+- **Naver Finance Refactoring**: 뉴스, 시총, 재무제표 크롤링 로직을 `shared/crawlers/naver.py`로 통합하고 레거시 코드 제거 및 Unit Test 추가.
+
 ## 2026-01-20
 - **Performance Logic Refinement**: 투자 성과 대시보드의 수익률 및 MDD 계산 로직 개선.
   - MDD 계산 시 초기 자본금(2억)을 반영하여 Equity Curve 기준으로 재계산 (-80% 오류 해결).

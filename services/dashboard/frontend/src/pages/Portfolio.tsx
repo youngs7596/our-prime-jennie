@@ -246,7 +246,7 @@ export function PortfolioPage() {
                             <BarChart2 className="w-3 h-3 text-muted-foreground hover:text-jennie-pink" />
                           </button>
                           <a
-                            href={`https://finance.naver.com/item/main.nhn?code=${position.stock_code}`}
+                            href={`https://finance.naver.com/item/main.naver?code=${position.stock_code}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="opacity-0 group-hover:opacity-100 transition-opacity"

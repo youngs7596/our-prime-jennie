@@ -263,7 +263,7 @@ class CommandHandler:
 ⏰ 현재 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"""
     
     def _handle_portfolio(self, cmd: dict, dry_run: bool) -> str:
-        """현재 포트폴리오 조회"""
+        """현재 포트폴리오 조회 (KIS API 실시간 가격 사용)"""
         try:
             with session_scope(readonly=True) as session:
                 # shared.database에서 직접 export된 함수 사용
@@ -283,16 +283,20 @@ class CommandHandler:
                 name = p.get('name', code)
                 qty = int(p.get('quantity', 0))
                 buy_price = float(p.get('avg_price', 0))
-                current_price = float(p.get('current_price', buy_price)) # 현재가가 없으면 평단가로 대체
                 
-                # 현재가가 0이면 KIS API로 실시간 조회 시도 (필요 시)
-                if current_price <= 0 and self.kis:
+                # [Fix] 항상 KIS API로 실시간 현재가 조회
+                current_price = 0
+                if self.kis:
                     try:
                         snap = self.kis.get_stock_snapshot(code)
                         if snap:
-                            current_price = snap.get('price', 0)
-                    except:
-                        pass
+                            current_price = float(snap.get('price', 0))
+                    except Exception as e:
+                        logger.warning(f"현재가 조회 실패 ({code}): {e}")
+                
+                # 현재가를 못 가져오면 평단가로 폴백
+                if current_price <= 0:
+                    current_price = buy_price
                 
                 profit_pct = ((current_price - buy_price) / buy_price * 100) if buy_price > 0 and current_price > 0 else 0
                 profit_emoji = "📈" if profit_pct >= 0 else "📉"

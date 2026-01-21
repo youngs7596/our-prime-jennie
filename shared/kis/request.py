@@ -40,11 +40,15 @@ def safe_request(client, method, url, headers=None, params=None, data=None, tr_i
                 # 응답 본문이 비어있는지 확인 (404 등에서 발생 가능)
                 if not res.text or res.text.strip() == '':
                     logger.warning(f"   (Request) ⚠️ API 응답이 비어있습니다. (상태 코드: {res.status_code}, TR_ID: {tr_id})")
-                    # 404 응답의 경우, 주문이 이미 체결되어 미체결 목록에 없을 수 있음
-                    if res.status_code == 404:
-                        logger.info(f"   (Request) ℹ️ 404 응답: 주문이 이미 체결되었거나 존재하지 않을 수 있습니다.")
-                        return {'rt_cd': '0', 'output1': []}  # 체결된 것으로 간주
                     return None
+                
+                # [Fix] 404 에러일 때 무조건 성공 처리하던 로직 제거
+                # KIS API는 404일 때도 에러 메시지 JSON을 반환할 수 있음.
+                # 특히 경로가 틀리거나 파라미터가 이상할 때 발생.
+                if res.status_code == 404:
+                    logger.warning(f"   (Request) ⚠️ 404 Not Found 감지. (TR_ID: {tr_id})")
+                    # 여기서 바로 리턴하지 않고 아래 JSON 파싱 로직으로 넘겨서 상세 에러 메시지를 확인하도록 함
+
                 
                 try:
                     res_data = res.json()

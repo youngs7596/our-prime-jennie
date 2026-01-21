@@ -480,7 +480,8 @@ _seen_news_hashes = set()
 def crawl_naver_finance_news(stock_code: str, stock_name: str, max_pages: int = None) -> list:
     """
     네이버 금융에서 특정 종목의 뉴스를 직접 크롤링합니다.
-    [2026-01-03] Google News RSS 대신/보조로 사용.
+    (shared.crawlers.naver 모듈 사용)
+    실패/데이터 없음 시 Google News RSS (crawl_news_for_stock)로 Fallback
     
     Args:
         stock_code: 종목 코드 (예: "005930")
@@ -488,180 +489,44 @@ def crawl_naver_finance_news(stock_code: str, stock_name: str, max_pages: int = 
         max_pages: 수집할 최대 페이지 수 (기본값: NAVER_NEWS_MAX_PAGES 환경변수)
     
     Returns:
-        Document 리스트 (기존 crawl_news_for_stock과 동일한 형식)
+        Document 리스트
     """
-    import requests
-    from bs4 import BeautifulSoup
-    from datetime import date as date_class
+    from shared.crawlers.naver import crawl_stock_news
     
     if max_pages is None:
         max_pages = NAVER_NEWS_MAX_PAGES
     
-    logger.info(f"  (2/6) [Naver Finance] '{stock_name}({stock_code})' 뉴스 크롤링 시작 (max_pages={max_pages})")
-    documents = []
-    
-    # 필터링 통계
-    stats = {"total": 0, "noise": 0, "old": 0, "dup": 0, "accepted": 0}
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': f'https://finance.naver.com/item/news.naver?code={stock_code}'
-    }
-    
-    for page in range(1, max_pages + 1):
-        try:
-            url = NAVER_FINANCE_NEWS_URL.format(code=stock_code, page=page)
-            resp = requests.get(url, headers=headers, timeout=10)
-            resp.encoding = 'euc-kr'
-            
-            if resp.status_code != 200:
-                logger.warning(f"  [Naver Finance] HTTP {resp.status_code} for {stock_code} page {page}")
-                continue
-            
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            news_table = soup.select_one('table.type5')
-            
-            if not news_table:
-                logger.debug(f"  [Naver Finance] 뉴스 테이블 없음 - {stock_code} page {page}")
-                break  # 더 이상 페이지 없음
-            
-            rows = news_table.select('tr')
-            page_news_count = 0
-            
-            for row in rows:
-                title_td = row.select_one('td.title')
-                if not title_td:
-                    continue
-                
-                link = title_td.select_one('a')
-                if not link:
-                    continue
-                
-                info_td = row.select_one('td.info')  # 언론사
-                date_td = row.select_one('td.date')  # 날짜
-                
-                title = link.text.strip()
-                href = link.get('href', '')
-                source = info_td.text.strip() if info_td else 'N/A'
-                date_str = date_td.text.strip() if date_td else ''
-                
-                if not title:
-                    continue
-                
-                stats["total"] += 1
-                
-                # 1. 노이즈 필터링
-                if is_noise_title(title):
-                    stats["noise"] += 1
-                    continue
-                
-                # 2. 날짜 필터링 (7일 이내)
-                if date_str:
-                    try:
-                        # 형식: "2026.01.03 08:54"
-                        date_part = date_str.split()[0]  # "2026.01.03"
-                        parts = date_part.split('.')
-                        if len(parts) == 3:
-                            article_date = date_class(int(parts[0]), int(parts[1]), int(parts[2]))
-                            days_old = (date_class.today() - article_date).days
-                            if days_old > 7:
-                                stats["old"] += 1
-                                continue
-                    except (ValueError, IndexError):
-                        pass  # 파싱 실패 시 일단 포함
-                
-                # 3. 중복 체크
-                news_hash = compute_news_hash(title)
-                if news_hash in _seen_news_hashes:
-                    stats["dup"] += 1
-                    continue
-                _seen_news_hashes.add(news_hash)
-                
-                # 모든 필터 통과 -> 수집
-                stats["accepted"] += 1
-                page_news_count += 1
-                
-                # 링크 정규화
-                if href.startswith('/'):
-                    full_link = 'https://finance.naver.com' + href
-                else:
-                    full_link = href
-                
-                # 타임스탬프 생성 (날짜 문자열 기반)
-                published_timestamp = int(datetime.now(timezone.utc).timestamp())
-                if date_str:
-                    try:
-                        dt = datetime.strptime(date_str, '%Y.%m.%d %H:%M')
-                        dt = dt.replace(tzinfo=timezone(timedelta(hours=9)))  # KST
-                        published_timestamp = int(dt.timestamp())
-                    except ValueError:
-                        pass
-                
-                doc = Document(
-                    page_content=f"뉴스 제목: {title}\n링크: {full_link}",
-                    metadata={
-                        "stock_code": stock_code,
-                        "stock_name": stock_name,
-                        "source": f"Naver Finance ({source})",
-                        "source_url": full_link,
-                        "created_at_utc": published_timestamp
-                    }
-                )
-                documents.append(doc)
-            
-            logger.debug(f"  [Naver Finance] {stock_code} page {page}: {page_news_count}건 수집")
-            
-            # Rate limit 대응
-            if page < max_pages:
-                time.sleep(NAVER_NEWS_REQUEST_DELAY)
-                
-        except Exception as e:
-            logger.exception(f"🔥 [Naver Finance] {stock_code} page {page} 크롤링 오류: {e}")
-    
-    # 필터링 통계 로그
-    if stats["total"] > 0:
-        logger.info(f"  (2/6) [{stock_name}] Naver 필터링: 총{stats['total']} → noise:{stats['noise']} old:{stats['old']} dup:{stats['dup']} → 수집:{stats['accepted']}")
-    else:
-        logger.info(f"  (2/6) [{stock_name}] Naver 뉴스 없음")
-    
-    return documents
-
-
-def crawl_stock_news_with_fallback(stock_code: str, stock_name: str) -> list:
-    """
-    종목 뉴스 크롤링 (Naver 우선, Google Fallback)
-    
-    1. 네이버 금융에서 먼저 크롤링 시도
-    2. 실패하거나 결과가 없으면 Google News RSS로 Fallback
-    
-    Args:
-        stock_code: 종목 코드
-        stock_name: 종목명
-    
-    Returns:
-        Document 리스트
-    """
-    # 1차: 네이버 금융 시도
+    # 1. Naver News (Shared Module)
     try:
-        naver_docs = crawl_naver_finance_news(stock_code, stock_name)
-        if naver_docs:
-            return naver_docs
-        else:
-            # 네이버에서 뉴스가 없으면 Google Fallback
-            logger.info(f"  [Fallback] {stock_name}: Naver 뉴스 0건 → Google News 시도")
+        news_items = crawl_stock_news(
+            stock_code=stock_code,
+            stock_name=stock_name,
+            max_pages=max_pages,
+            request_delay=0.5,
+            deduplicate=True
+        )
+        
+        documents = []
+        for item in news_items:
+            doc = Document(
+                page_content=item['page_content'],
+                metadata=item['metadata']
+            )
+            documents.append(doc)
+            
+        if documents:
+            return documents
+            
     except Exception as e:
-        logger.warning(f"  [Fallback] {stock_name}: Naver 크롤링 오류 ({e}) → Google News 시도")
+        logger.warning(f"  [Naver Finance] 공유 모듈 크롤링 실패: {e}")
     
-    # 2차: Google News Fallback
+    # 2. Fallback: Google News
     try:
-        google_docs = crawl_news_for_stock(stock_code, stock_name)
-        if google_docs:
-            logger.info(f"  [Fallback] {stock_name}: Google News에서 {len(google_docs)}건 수집")
-        return google_docs
+        logger.info(f"  [Fallback] {stock_name}: Naver 뉴스 없음/실패, Google RSS 시도")
+        return crawl_news_for_stock(stock_code, stock_name)
     except Exception as e:
         logger.error(f"🔥 [Fallback] {stock_name}: Google News도 실패 - {e}")
         return []
-
 
 def crawl_news_for_stock(stock_code, stock_name):
     """
@@ -838,6 +703,15 @@ def process_unified_analysis(documents):
     
     if not stock_docs:
         return
+
+    # [Optimization] 과도한 분석 방지 (Limit per run)
+    if len(stock_docs) > MAX_SENTIMENT_DOCS_PER_RUN:
+        logger.warning(f"⚠️ [Unified] 분석 대상({len(stock_docs)}개)이 제한({MAX_SENTIMENT_DOCS_PER_RUN}개)을 초과했습니다.")
+        logger.warning(f"⚠️ [Unified] 최신순 정렬 후 상위 {MAX_SENTIMENT_DOCS_PER_RUN}개만 분석합니다.")
+        
+        # 최신 뉴스 우선 정렬 (created_at_utc 내림차순)
+        stock_docs.sort(key=lambda x: x.metadata.get("created_at_utc", 0), reverse=True)
+        stock_docs = stock_docs[:MAX_SENTIMENT_DOCS_PER_RUN]
 
     # 배치 준비
     batch_items = []
@@ -1143,15 +1017,15 @@ def run_collection_job():
         # 4. '새로운' 문서만 필터링 (Deduplication)
         new_documents_to_add = filter_new_documents(all_fetched_documents)
         
+        # 5. '새로운' 문서만 Chroma 서버에 저장 (Write) - [우선순위 상향] 분석 전 저장
+        add_documents_to_chroma(new_documents_to_add)
+
         # [New] 4-1. 새로운 문서 감성 분석 및 저장
         if os.getenv("ENABLE_NEWS_ANALYSIS", "true").lower() == "true":
             # [2026-01 Optimized] Unified Analysis (Sentiment + Risk)
             process_unified_analysis(new_documents_to_add)
         else:
             logger.info("⚠️ [Config] 'ENABLE_NEWS_ANALYSIS=false' 설정으로 인해 분석 단계 생략.")
-        
-        # 5. '새로운' 문서만 Chroma 서버에 저장 (Write)
-        add_documents_to_chroma(new_documents_to_add)
         
         # 6. 오래된 데이터 정리
         cleanup_old_data_job()

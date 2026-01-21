@@ -1089,6 +1089,70 @@ services:
       retries: 5
     restart: always
 
+  # ============================================================================
+  # 12. News Pipeline (Pub/Sub Architecture)
+  # ============================================================================
+
+  # News Collector - 뉴스 수집 전용 (Producer)
+  news-collector:
+    build:
+      context: .
+      dockerfile: services/news-collector/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - REDIS_URL=redis://localhost:6379/0
+      - COLLECTOR_UNIVERSE_SIZE=200
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=news-collector
+      - stack=my-prime-jennie
+
+  # News Archiver - ChromaDB 저장 전용 (Consumer A)
+  news-archiver:
+    build:
+      context: .
+      dockerfile: services/news-archiver/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - REDIS_URL=redis://localhost:6379/0
+      - CHROMA_SERVER_HOST=localhost
+      - CHROMA_SERVER_PORT=8000
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=news-archiver
+      - stack=my-prime-jennie
+    depends_on:
+      - news-collector
+
+  # News Analyzer - LLM 분석 전용 (Consumer B)
+  news-analyzer:
+    build:
+      context: .
+      dockerfile: services/news-analyzer/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - REDIS_URL=redis://localhost:6379/0
+      - USE_OLLAMA_GATEWAY=true
+      - OLLAMA_GATEWAY_URL=http://localhost:11500
+      - SECRETS_FILE=/app/config/secrets.json
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=news-analyzer
+      - stack=my-prime-jennie
+    depends_on:
+      - news-collector
+
 networks:
   msa-network:
     driver: bridge

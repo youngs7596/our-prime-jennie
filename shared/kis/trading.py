@@ -490,3 +490,146 @@ class Trading:
         cash_balance = float(dnca_tot_amt) if dnca_tot_amt else 0.0
         logger.info(f"   (Balance) ✅ 예수금(D+2): {cash_balance:,.0f}원")
         return cash_balance
+
+    def get_asset_summary(self):
+        """
+        계좌의 자산 현황 요약을 조회합니다.
+        '주식잔고조회' API의 output2 데이터를 사용합니다.
+        
+        Returns:
+            dict: {
+                'total_asset': float,      # 총 평가 자산 (예수금 + 유가증권평가금액)
+                'cash_balance': float,     # 예수금 (D+2)
+                'stock_eval': float,       # 유가증권 평가 금액 합계
+                'total_profit_loss': float # 총 평가 손익 금액
+            }
+        """
+        logger.info("   (Balance) 자산 현황 요약 조회 중...")
+        
+        if self.client.TRADING_MODE == "MOCK":
+            tr_id = "VTTC8434R"
+        else:
+            tr_id = "TTTC8434R"
+        
+        URL = f"{self.client.BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance"
+        
+        params = {
+            "CANO": self.client.ACCOUNT_PREFIX,
+            "ACNT_PRDT_CD": self.client.ACCOUNT_SUFFIX,
+            "AFHR_FLPR_YN": "N",
+            "OFL_YN": "",
+            "INQR_DVSN": "02",
+            "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "01",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": ""
+        }
+        
+        res_data = self.client.request('GET', URL, params=params, tr_id=tr_id)
+        
+        if not res_data or res_data.get('rt_cd') != '0':
+            logger.error(f"   (Balance) ❌ 자산 현황 조회 실패! (응답: {res_data})")
+            return None
+            
+        output2 = res_data.get('output2', [])
+        if not output2 or len(output2) == 0:
+            logger.warning("   (Balance) ⚠️ 자산 현황 데이터(output2)가 비어있습니다.")
+            return None
+            
+        summary = output2[0]
+        
+        # 데이터 파싱
+        # tot_evlu_mamt: 총 평가 금액 (주식 + 예수금 포함 추정) -> 실제로는 KIS output2 필드 확인 필요
+        # scts_evlu_amt: 유가증권 평가 금액
+        # dnca_tot_amt: 예수금 총액
+        # evlu_pfls_smtl_amt: 평가 손익 합계 금액
+        
+        try:
+            # [Fix] 사용자 요청: 미수 없는 '주문 가능 현금'을 사용 (nrcvb_buy_amt)
+            # 기존 dnca_tot_amt(예수금) 대신 get_cash_balance() 호출로 정확한 매수 가능 금액 조회
+            cash_balance = self.get_cash_balance()
+            
+            stock_eval = float(summary.get('scts_evlu_amt', 0))
+            total_pnl = float(summary.get('evlu_pfls_smtl_amt', 0))
+            
+            # 총 자산 재계산 (주식평가액 + 주문가능현금)
+            # tot_evlu_mamt는 예수금 기준일 수 있으므로 직접 합산이 더 정확함
+            total_asset = stock_eval + cash_balance
+            
+            logger.info(f"   (Balance) ✅ 자산 현황 (보정): 총자산 {total_asset:,.0f}원 / 주식 {stock_eval:,.0f}원 / 주문가능현금 {cash_balance:,.0f}원")
+            
+            return {
+                'total_asset': total_asset,
+                'cash_balance': cash_balance,
+                'stock_eval': stock_eval,
+                'total_profit_loss': total_pnl
+            }
+        except (ValueError, TypeError) as e:
+            logger.error(f"   (Balance) ❌ 자산 데이터 파싱 오류: {e}")
+            return None
+
+    def get_today_realized_pnl(self, target_date=None):
+        """
+        [New] 실현 손익(Realized PnL)을 조회합니다.
+        '주식잔고조회_실현손익' API (TTTC8494R) 사용.
+        
+        주의: 이 API는 모의투자(MOCK)를 지원하지 않으며, '오늘(현재)' 기준의 실현 손익만 반환합니다.
+        과거 날짜 조회 기능은 제공되지 않습니다.
+        
+        Args:
+            target_date (date, optional): 조회할 날짜 (현재 API 특성상 무시되며 오늘 기준 값 반환)
+        
+        Returns:
+            float: 실현 손익 (없거나 실패 시 0.0)
+        """
+        if self.client.TRADING_MODE == "MOCK":
+            logger.warning("   (PnL) ⚠️ 실현 손익 조회(TTTC8494R)는 모의투자를 지원하지 않습니다. 0원 반환.")
+            return 0.0
+
+        tr_id = "TTTC8494R"
+        URL = f"{self.client.BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance-rlz-pl"
+        
+        # [업데이트] 사용자 제공 정보 바탕으로 파라미터 구성 (TTTC8494R)
+        params = {
+            "CANO": self.client.ACCOUNT_PREFIX,
+            "ACNT_PRDT_CD": self.client.ACCOUNT_SUFFIX,
+            "AFHR_FLPR_YN": "N",
+            "OFL_YN": "",
+            "INQR_DVSN": "00",          # 00: 전체
+            "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "01",          # 01: 체결
+            "COST_ICLD_YN": "N",        # 비용 포함 여부 (필수)
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": ""
+        }
+        
+        if target_date and target_date != datetime.now().date():
+             logger.warning(f"   (PnL) ⚠️ 과거 날짜({target_date})가 요청되었으나, 이 API는 현재 기준 실현손익을 반환합니다.")
+
+        logger.info(f"   (PnL) 실현 손익 조회 중... (TR_ID: {tr_id})")
+        
+        res_data = self.client.request('GET', URL, params=params, tr_id=tr_id)
+        
+        if not res_data or res_data.get('rt_cd') != '0':
+            logger.error(f"   (PnL) ❌ 실현 손익 조회 실패! (응답: {res_data})")
+            return 0.0
+            
+        output2 = res_data.get('output2', [])
+        if not output2 or len(output2) == 0:
+            logger.info("   (PnL) 실현 손익 내역 없음 (0원)")
+            return 0.0
+        
+        try:
+            summary = output2[0]
+            # rlzt_pfls: 실현손익
+            realized_pnl = float(summary.get('rlzt_pfls', 0))
+            logger.info(f"   (PnL) ✅ 금일 실현 손익: {realized_pnl:,.0f}원")
+            return realized_pnl
+            
+        except (ValueError, TypeError) as e:
+            logger.error(f"   (PnL) ❌ 실현 손익 파싱 오류: {e}")
+            return 0.0

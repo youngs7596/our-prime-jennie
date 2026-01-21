@@ -3,18 +3,17 @@ import os
 import sys
 import logging
 import time
-import requests
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 import random
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
 
 import shared.database as database
 from shared.db.connection import get_session
 from shared.news_classifier import get_classifier
+from shared.crawlers.naver import crawl_stock_news
 from dotenv import load_dotenv
 
 # Configure logging
@@ -29,18 +28,12 @@ logger = logging.getLogger(__name__)
 
 # Constants
 TARGET_START_DATE = datetime(2022, 1, 1)
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Referer': 'https://finance.naver.com/'
-}
 
 def get_top_stocks(limit=100):
     """Get top KOSPI stocks by market cap from STOCK_MASTER"""
     conn = database.get_db_connection()
     cursor = conn.cursor()
     try:
-        # Check if IS_KOSPI and MARKET_CAP columns exist and use them
-        # Based on previous check, they do exist.
         query = """
             SELECT STOCK_CODE, STOCK_NAME 
             FROM STOCK_MASTER 
@@ -57,93 +50,40 @@ def get_top_stocks(limit=100):
     finally:
         conn.close()
 
-def parse_naver_date(date_str):
-    """Parse Naver news date string (YYYY.MM.DD HH:mm)"""
-    try:
-        return datetime.strptime(date_str, '%Y.%m.%d %H:%M')
-    except ValueError:
-        return None
-
-def fetch_qs_news(stock_code, page=1):
-    """Fetch news from Naver Finance for a specific stock and page"""
-    url = f"https://finance.naver.com/item/news_news.naver?code={stock_code}&page={page}&sm=title_entity_id.basic&clusterId="
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        logger.info(f"[{stock_code}] Page {page} Status: {response.status_code}, Length: {len(response.text)}")
-        if response.status_code == 200:
-            if page == 1:
-                with open("debug_naver.html", "w", encoding="euc-kr") as f:
-                     f.write(response.text)
-                logger.info(f"Saved debug_naver.html")
-            return response.text
-    except Exception as e:
-        logger.error(f"Error fetching {url}: {e}")
-    return None
-
 def backfill_stock_news(stock_code, stock_name, classifier, session):
-    """Backfill news for a single stock"""
+    """Backfill news for a single stock using shared crawler"""
     logger.info(f"Starting backfill for {stock_name} ({stock_code})")
     
-    page = 1
     total_added = 0
-    stop_scraping = False
-    seen_urls = set()
+    # Use max_pages=500 to simulate the loop in original script, but in shared module usually limited. 
+    # Since shared module processes page by page in a loop, we might need a custom loop here if we want deep backfill.
+    # However, for consistency and cleaning, let's use the shared crawl function but maybe call it in chunks or modification.
+    # The shared `crawl_stock_news` takes `max_pages`. We validly set it to a reasonable high number for backfill.
     
-    while not stop_scraping:
-        html = fetch_qs_news(stock_code, page)
-        if not html:
-            break
-            
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Naver Finance News List Selector (Check structure manually or assume standard)
-        # Typically tables with class 'type5' or similar in the iframe source
-        # But this URL returns a page with specific structure.
-        # Let's try to find title links.
-        
-        # New structure check:
-        # The URL https://finance.naver.com/item/news_news.naver?code=... returns a list.
-        # It's usually a table.
-        
-        news_items = soup.select('table.type5 tbody tr')
-        
-        if not news_items:
-            # End of pages or different structure
-            break
-            
-        page_processed_count = 0
-        
-        for row in news_items:
-            # Skip separator rows or empty rows
-            if not row.select('.title'):
-                continue
-                
-            title_tag = row.select_one('.title a')
-            date_tag = row.select_one('.date')
-            source_tag = row.select_one('.info')
-            
-            if not title_tag or not date_tag:
-                continue
-                
-            title = title_tag.get_text(strip=True)
-            link = "https://finance.naver.com" + title_tag['href']
-            
-            # De-duplicate within session
-            if link in seen_urls:
-                continue
-            seen_urls.add(link)
+    documents = crawl_stock_news(stock_code, stock_name, max_pages=200, request_delay=0.2, deduplicate=True)
+    
+    if not documents:
+        logger.info(f"No news found for {stock_name}")
+        return
 
-            date_str = date_tag.get_text(strip=True)
+    logger.info(f"Fetched {len(documents)} news items. Processing...")
+
+    for doc in documents:
+        try:
+            content = doc['page_content'] # "뉴스 제목: ...\n링크: ..."
+            # Parse content to recover title/link (redundant but matches flow)
+            lines = content.split('\n')
+            title = lines[0].replace("뉴스 제목: ", "").strip()
+            link = lines[1].replace("링크: ", "").strip()
             
-            news_date = parse_naver_date(date_str)
-            if not news_date:
-                continue
-                
+            metadata = doc['metadata']
+            pub_timestamp = metadata['created_at_utc']
+            pub_date = datetime.fromtimestamp(pub_timestamp)
+            
             # Check date limit
-            if news_date < TARGET_START_DATE:
-                stop_scraping = True
-                break
-                
+            if pub_date < TARGET_START_DATE:
+                continue
+
             # Classify
             classification = classifier.classify(title)
             
@@ -154,76 +94,52 @@ def backfill_stock_news(stock_code, stock_name, classifier, session):
             
             if classification:
                 # Map NewsClassification to score (0-100)
-                # base_score is typically -15 to +15.
-                # Let's map 0 -> 50, +15 -> ~80, -15 -> ~20
-                # Simple mapping: 50 + (base_score * 2)
                 score = 50 + (classification.base_score * 2)
                 score = max(0, min(100, score)) # Clamp 0-100
                 category = classification.category
                 reason = f"Category: {category} ({classification.sentiment})"
             
-            # Save to DB (Manual Insert to both tables)
-            try:
-                from shared.db.models import NewsSentiment
-                from sqlalchemy import text
-                
-                # Check DB existence (for idempotency beyond session cache)
-                # Check NEWS_SENTIMENT
-                existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == link).first()
-                if existing:
-                    continue
+            # Save to DB
+            from shared.db.models import NewsSentiment
+            from sqlalchemy import text
+            
+            # Check DB existence
+            existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == link).first()
+            if existing:
+                continue
 
-                # 1. NEWS_SENTIMENT (Detailed - ORM)
-                # This table matches models.py in this env (validated by successful inserts before)
-                new_sentiment = NewsSentiment(
-                    stock_code=stock_code,
-                    news_title=title,
-                    sentiment_score=score,
-                    sentiment_reason=reason,
-                    source_url=link,
-                    published_at=news_date
-                )
-                session.add(new_sentiment)
-                
-                # 2. STOCK_NEWS_SENTIMENT (Raw SQL Insert for compatibility - via Raw SQL due to ORM mismatch)
-                # Schema: ID, ARTICLE_URL, STOCK_CODE, NEWS_DATE, PRESS, HEADLINE, SUMMARY, SOURCE, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT
-                # We use INSERT IGNORE to skip duplicates on ARTICLE_URL
-                session.execute(text("""
-                    INSERT IGNORE INTO STOCK_NEWS_SENTIMENT 
-                    (STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE)
-                    VALUES (:code, :date, :url, :title, :category, :score, NOW(), 'NAVER')
-                """), {
-                    'code': stock_code,
-                    'date': news_date,
-                    'url': link,
-                    'title': title,
-                    'category': category,
-                    'score': score
-                })
-                
-                total_added += 1
-                page_processed_count += 1
-                
-            except Exception as e:
-                logger.error(f"Error saving {link}: {e}")
-                pass
-        
-        if page_processed_count == 0 and stop_scraping:
-             break
+            # 1. NEWS_SENTIMENT
+            new_sentiment = NewsSentiment(
+                stock_code=stock_code,
+                news_title=title,
+                sentiment_score=score,
+                sentiment_reason=reason,
+                source_url=link,
+                published_at=pub_date
+            )
+            session.add(new_sentiment)
+            
+            # 2. STOCK_NEWS_SENTIMENT (Raw SQL)
+            session.execute(text("""
+                INSERT IGNORE INTO STOCK_NEWS_SENTIMENT 
+                (STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE)
+                VALUES (:code, :date, :url, :title, :category, :score, NOW(), 'NAVER')
+            """), {
+                'code': stock_code,
+                'date': pub_date,
+                'url': link,
+                'title': title,
+                'category': category,
+                'score': score
+            })
+            
+            total_added += 1
+            
+        except Exception as e:
+            logger.error(f"Error saving document: {e}")
+            pass
 
-        if page_processed_count == 0 and not stop_scraping:
-             # Looked through page but found no valid items, maybe end of list or only old items
-             break
-
-        logger.info(f"  Processed page {page} for {stock_code}: {page_processed_count} items")
-        session.commit() # Commit after every page to see progress
-        page += 1
-        time.sleep(random.uniform(0.1, 0.3)) # Polite delay
-        
-        if page > 500: # Safety break to prevent infinite loops
-            logger.warning(f"  Reached max pages for {stock_code}")
-            break
-
+    session.commit()
     logger.info(f"Finished {stock_name}: Added {total_added} news items.")
 
 def main():
@@ -240,14 +156,12 @@ def main():
     logger.info(f"Found {len(stocks)} stocks to process.")
     
     session = get_session()
-    
     start_total = time.time()
     
     try:
         for i, (code, name) in enumerate(stocks):
             logger.info(f"[{i+1}/{len(stocks)}] Processing {name} ({code})...")
             backfill_stock_news(code, name, classifier, session)
-            session.commit() # Commit after each stock
             
     except KeyboardInterrupt:
         logger.warning("Process interrupted by user.")

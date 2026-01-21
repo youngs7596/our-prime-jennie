@@ -1,15 +1,14 @@
 # services/scout-job/scout_universe.py
-# Version: v1.1 (FDR Removed)
+# Version: v2.0 (shared.crawlers.naver 공통 모듈 사용)
 # Scout Job Universe Selection - 섹터 분석 및 종목 선별 함수
 #
 # scout.py에서 분리된 종목 유니버스 관리 함수들
 
 import logging
 import time
-import requests
-from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
 import shared.database as database
+from shared.crawlers.naver import get_kospi_top_stocks as _get_naver_top_stocks
 
 logger = logging.getLogger(__name__)
 
@@ -100,102 +99,29 @@ def _resolve_sector(code: str) -> str:
 def _scrape_naver_finance_top_stocks(limit: int = 200) -> list:
     """
     네이버 금융에서 KOSPI 시총 상위 종목을 스크래핑합니다.
-    FDR 대체용 Primary Method.
-    반환값: [{"code", "name", "price", "change_pct", "market_cap", "sector"}]
+    shared.crawlers.naver 공통 모듈 사용.
+    반환값: [{"code", "name", "price", "change_pct", "sector", "rank"}]
     """
     logger.info(f"   (A) 네이버 금융 시총 스크래핑 (상위 {limit}개) 시도 중...")
     
-    universe = []
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-    
     try:
-        # KOSPI 시총 상위 (페이지당 50개)
-        pages_needed = (limit // 50) + 1
-        current_rank = 0
+        # shared.crawlers.naver 모듈 사용
+        stocks = _get_naver_top_stocks(limit=limit)
         
-        for page in range(1, pages_needed + 1):
-            if len(universe) >= limit:
-                break
-                
-            url = f'https://finance.naver.com/sise/sise_market_sum.naver?sosok=0&page={page}'
-            resp = requests.get(url, headers=headers, timeout=10)
-            soup = BeautifulSoup(resp.text, 'html.parser')
+        if stocks:
+            # 섹터 정보 추가
+            for stock in stocks:
+                stock['sector'] = _resolve_sector(stock['code'])
             
-            rows = soup.select('table.type_2 tbody tr')
-            for row in rows:
-                if len(universe) >= limit:
-                    break
-                    
-                cells = row.select('td')
-                # 구분선 등 유효하지 않은 행은 건너뜀 (유효 행은 td가 많음)
-                if len(cells) < 10:
-                    continue
-
-                try:
-                    # 2번째 TD에 링크와 종목명 존재
-                    name_cell = cells[1]
-                    link = name_cell.select_one('a')
-                    if not link:
-                        continue
-                        
-                    name = link.text.strip()
-                    href = link.get('href', '')
-                    code = href.split('code=')[1] if 'code=' in href else ''
-                    
-                    if not (code and len(code) == 6 and code.isdigit()):
-                        continue
-
-                    current_rank += 1
-                    
-                    # 3번째 TD: 현재가
-                    price_str = cells[2].text.strip().replace(',', '')
-                    price = float(price_str) if price_str else 0
-                    
-                    # 5번째 TD: 등락률 (보통 5번째가 등락률임. N, Name, Price, Icon, Diff, Rate...)
-                    # Index check:
-                    # 0: No
-                    # 1: Name
-                    # 2: Price
-                    # 3: DiffIcon (img alt='상승')
-                    # 4: DiffNum
-                    # 5: Rate (e.g., +0.55%)
-                    rate_cell = cells[4] # 0-indexed, so 4 is 5th column
-                    rate_txt = rate_cell.text.strip().replace('%', '').replace(',', '')
-                    change_pct = float(rate_txt) if rate_txt else 0.0
-                    
-                    # 7번째 TD: 시가총액 (억)
-                    # 6: TradeVol
-                    # 7: Not sure... Naver sequence varies. Usually MarketCap is column 6 or 7.
-                    # Looking at Naver Finance: No, Name, Price, Diff, Change, Vol, High, Low, MarketCap...
-                    # Let's rely on standard fallback table structures or just assume ranking is by MarketCap.
-                    
-                    sector = _resolve_sector(code)
-                    
-                    universe.append({
-                        "code": code, 
-                        "name": name,
-                        "price": price,
-                        "change_pct": change_pct,
-                        "sector": sector,
-                        "rank": current_rank
-                    })
-                    
-                except (ValueError, IndexError) as e:
-                    # 파싱 실패해도 코드/이름은 저장 시도
-                    if 'code' in locals() and code:
-                        universe.append({"code": code, "name": name, "price": 0, "change_pct": 0, "sector": "기타"})
-                    continue
-        
-        if universe:
-            logger.info(f"   (A) ✅ 네이버 금융 스크래핑 완료: {len(universe)}개 종목 로드.")
-            return universe
+            logger.info(f"   (A) ✅ 네이버 금융 스크래핑 완료: {len(stocks)}개 종목 로드.")
+            return stocks
         else:
             logger.warning("   (A) ⚠️ 네이버 금융 스크래핑 결과 없음")
-            
+            return []
+    
     except Exception as e:
         logger.warning(f"   (A) ⚠️ 네이버 금융 스크래핑 실패: {e}")
-    
-    return []
+        return []
 
 def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
     """
