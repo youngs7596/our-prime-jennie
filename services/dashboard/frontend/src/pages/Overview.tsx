@@ -165,17 +165,17 @@ export function OverviewPage() {
     color: COLORS[i % COLORS.length],
   })) || []
 
-  // 가상의 자산 추이 데이터 (실제로는 API에서 가져와야 함)
-  const chartData = [
-    { date: '11/25', value: 10000000 },
-    { date: '11/26', value: 10200000 },
-    { date: '11/27', value: 10150000 },
-    { date: '11/28', value: 10400000 },
-    { date: '11/29', value: 10350000 },
-    { date: '11/30', value: 10600000 },
-    { date: '12/01', value: 10800000 },
-    { date: '12/02', value: summary?.total_value || 10800000 },
-  ]
+  // 자산 추이 데이터 (Real)
+  const { data: history } = useQuery({
+    queryKey: ['portfolio-history'],
+    queryFn: () => portfolioApi.getHistory(30),
+    refetchInterval: 60000 * 60, // 1시간마다
+  })
+
+  const chartData = history?.map((item: any) => ({
+    date: item.date.slice(5), // YYYY-MM-DD -> MM-DD
+    value: item.total_asset,
+  })) || []
 
   return (
     <motion.div
@@ -404,7 +404,7 @@ export function OverviewPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 {['Hunter Scout', 'Bull vs Bear Debate', 'Final Judge'].map((phase, i) => (
                   <div
                     key={phase}
@@ -462,10 +462,10 @@ export function OverviewPage() {
       <motion.div variants={itemVariants}>
         <Card>
           <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-raydium-purpleLight" />
-                시장 국면 (Market Regime)
-              </CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-raydium-purpleLight" />
+              시장 국면 (Market Regime)
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-6">
@@ -553,9 +553,9 @@ export function OverviewPage() {
       <motion.div variants={itemVariants}>
         <Card glow>
           <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-raydium-purpleLight" />
-                3현자 데일리 리뷰 (Daily Council)
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5 text-raydium-purpleLight" />
+              3현자 데일리 리뷰 (Daily Council)
               {councilReview?.date && (
                 <span className="text-xs text-muted-foreground ml-2">{councilReview.date}</span>
               )}

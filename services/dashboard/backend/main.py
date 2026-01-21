@@ -101,23 +101,6 @@ class TokenResponse(BaseModel):
     expires_in: int
     user: dict
 
-class PortfolioSummary(BaseModel):
-    total_value: float
-    total_invested: float
-    total_profit: float
-    profit_rate: float
-    cash_balance: float
-    positions_count: int
-
-class Position(BaseModel):
-    stock_code: str
-    stock_name: str
-    quantity: int
-    avg_price: float
-    current_price: float
-    profit: float
-    profit_rate: float
-    weight: float
 
 class WatchlistItem(BaseModel):
     stock_code: str
@@ -255,13 +238,15 @@ app.add_middleware(
 
 # 라우터 등록
 # 라우터 등록
-from routers import factors, llm, configs, scheduler, system, performance
+from routers import factors, llm, configs, scheduler, system, performance, portfolio, market
 app.include_router(factors.router) # Factor settings router
 app.include_router(llm.router) # LLM settings & stats router
 app.include_router(configs.router) # Config registry/API router
 app.include_router(scheduler.router) # Scheduler proxy router
 app.include_router(system.router) # System status router (Cached)
 app.include_router(performance.router) # Performance analytics router
+app.include_router(portfolio.router, dependencies=[Depends(verify_token)]) # Portfolio router
+app.include_router(market.router, dependencies=[Depends(verify_token)]) # Market router
 
 # =============================================================================
 # 인증 API
@@ -313,46 +298,7 @@ async def refresh_token(payload: dict = Depends(verify_token)):
 # 포트폴리오 API
 # =============================================================================
 
-@app.get("/api/portfolio/summary", response_model=PortfolioSummary)
-async def get_portfolio_summary_api(payload: dict = Depends(verify_token)):
-    """포트폴리오 요약 정보"""
-    try:
-        with get_session() as session:
-            summary = get_portfolio_summary(session)
-            return PortfolioSummary(
-                total_value=summary.get("total_value", 0),
-                total_invested=summary.get("total_invested", 0),
-                total_profit=summary.get("total_profit", 0),
-                profit_rate=summary.get("profit_rate", 0),
-                cash_balance=summary.get("cash_balance", 0),
-                positions_count=summary.get("positions_count", 0),
-            )
-    except Exception as e:
-        logger.error(f"포트폴리오 요약 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/portfolio/positions", response_model=list[Position])
-async def get_positions_api(payload: dict = Depends(verify_token)):
-    """보유 종목 목록 (실시간 가격 포함)"""
-    try:
-        with get_session() as session:
-            positions = get_portfolio_with_current_prices(session)
-            return [
-                Position(
-                    stock_code=p["stock_code"],
-                    stock_name=p["stock_name"],
-                    quantity=p["quantity"],
-                    avg_price=p["avg_price"],
-                    current_price=p.get("current_price", p["avg_price"]),
-                    profit=p.get("profit", 0),
-                    profit_rate=p.get("profit_rate", 0),
-                    weight=p.get("weight", 0),
-                )
-                for p in positions
-            ]
-    except Exception as e:
-        logger.error(f"보유 종목 조회 실패: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# Portfolio API moved to routers/portfolio.py
 
 # =============================================================================
 # Watchlist API
@@ -608,37 +554,7 @@ async def get_daily_briefing_api(payload: dict = Depends(verify_token)):
 # Market Regime API (NEW)
 # =============================================================================
 
-@app.get("/api/market/regime")
-async def get_market_regime_api(payload: dict = Depends(verify_token)):
-    """Market Regime (Bull/Bear/Sideways) API"""
-    try:
-        with get_session() as session:
-            # from shared.db.models import MarketRegime
-            # # Get latest
-            # latest = session.query(MarketRegime).order_by(MarketRegime.date.desc()).first()
-            # if latest:
-            #     return {
-            #         "date": latest.date.isoformat(),
-            #         "regime": latest.regime,
-            #         "confidence": latest.confidence,
-            #         "kospi_200_return": latest.kospi_200_return_3m,
-            #         "adv_dec_ratio": latest.ad_ratio,
-            #         "description": latest.description
-            #     }
-            # else:
-            #     return {"regime": "UNKNOWN", "message": "No data"}
-            
-            # [Temporary Fix] MarketRegime table not yet migrated. Return placeholder.
-            return {
-                "date": datetime.now().isoformat(),
-                "regime": "SIDEWAYS", 
-                "confidence": 0.5,
-                "description": "Market Regime data not available yet (Model missing)"
-            }
-                
-    except Exception as e:
-        logger.error(f"Market Regime 조회 실패: {e}")
-        return {"error": str(e)}
+# Market Regime API moved to routers/market.py
 
 
 # =============================================================================

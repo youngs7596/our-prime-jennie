@@ -1,6 +1,9 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-21
+- **Dashboard Refactoring (Feature)**: 대시보드 Backend/Frontend 전면 리팩토링 및 Trading 기능 추가.
+  - **Backend**: `portfolio.py`, `market.py` 라우터 분리 및 `DailyAssetSnapshot`, `Redis` 기반 실데이터 연동.
+  - **Frontend**: Overview 자산 추이 차트, Market Regime 실시간 표시, Manual Trading (`/trading`) 페이지 및 주문 폼 구현.
 - **Naver Finance Refactoring**: 뉴스, 시총, 재무제표 크롤링 로직을 `shared/crawlers/naver.py`로 통합하고 레거시 코드 제거 및 Unit Test 추가.
 
 ## 2026-01-20

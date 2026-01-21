@@ -784,6 +784,21 @@ def main():
                         current_regime = "SIDEWAYS"
                     
                     logger.info(f"   현재 시장 국면: {current_regime}")
+
+                    # [NEW] Dashboard 표시를 위해 Redis에 저장
+                    try:
+                        redis_conn = _get_redis()
+                        if redis_conn:
+                            regime_data = {
+                                "regime": current_regime,
+                                "confidence": 0.8, # TODO: Detector에서 confidence 반환하도록 개선 필요
+                                "updated_at": datetime.now().isoformat(),
+                                "description": f"KOSPI Analysis Based on {len(kospi_prices)} days"
+                            }
+                            redis_conn.set("market:regime:data", json.dumps(regime_data))
+                            logger.info("   (Redis) Market Regime 데이터 저장 완료")
+                    except Exception as re:
+                        logger.warning(f"   (Redis) Market Regime 저장 실패: {re}")
                     
                     # QuantScorer 초기화
                     quant_scorer = QuantScorer(session, market_regime=current_regime)

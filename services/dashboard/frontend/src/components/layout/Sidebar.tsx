@@ -28,6 +28,7 @@ const navItems = [
   { path: '/analyst', icon: Target, label: 'AI Analyst' },
   { path: '/logic', icon: Brain, label: 'Trading Logic' },
   { path: '/visual-logic', icon: LineChart, label: 'Visual Logic' },
+  { path: '/trading', icon: Zap, label: 'Trading' },
 
   { path: '/architecture', icon: Map, label: 'Architecture' },
   { path: '/super-prime', icon: Target, label: 'Super Prime' },

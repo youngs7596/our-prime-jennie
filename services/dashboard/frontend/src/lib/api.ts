@@ -60,6 +60,20 @@ export const portfolioApi = {
     const response = await api.get('/portfolio/positions')
     return response.data
   },
+  getHistory: async (days = 30) => {
+    const response = await api.get(`/portfolio/history?days=${days}`)
+    return response.data
+  },
+  createOrder: async (order: {
+    stock_code: string
+    quantity: number
+    price: number
+    side: string
+    order_type: string
+  }) => {
+    const response = await api.post('/portfolio/order', order)
+    return response.data
+  },
 }
 
 export const watchlistApi = {
