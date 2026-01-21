@@ -161,9 +161,31 @@ class PriceMonitor:
                     time.sleep(1)
                     now = time.time()
                     
+                    # [Heartbeat] Redis에 살아있음을 알림 (5초마다)
+                    # Dashboard System 페이지에서 "Real Time Watch Status"를 위해 사용됨
+                    if now - last_status_log_time >= 5:
+                        try:
+                            hb_data = {
+                                "status": "online",
+                                "service": "price-monitor",
+                                "metrics": {
+                                    "watching_count": len(self.portfolio_cache),
+                                    "updated_at": datetime.now().strftime("%H:%M:%S"),
+                                    "pid": os.getpid()
+                                }
+                            }
+                            # shared/redis_cache.py의 유틸리티 사용 (TTL 10초)
+                            # Key: monitoring:price_monitor
+                            redis_cache.set_redis_data("monitoring:price_monitor", hb_data, ttl=10)
+                            
+                        except Exception as hb_e:
+                             # Heartbeat 실패는 로그만 남기고 무시
+                            pass
+
                     if now - last_status_log_time >= 600:
                         logger.info(f"   (Streams) [상태 체크] 연결 유지 중, 감시: {len(self.portfolio_cache)}개")
-                        last_status_log_time = now
+                        # last_status_log_time은 600초 로그용으로 유지
+                    
                     if now - last_alert_check >= self.alert_check_interval:
                         self._process_price_alerts()
                         last_alert_check = now

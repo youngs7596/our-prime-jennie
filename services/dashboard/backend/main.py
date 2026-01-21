@@ -88,6 +88,7 @@ from auth import create_access_token, verify_token, JWT_SECRET, JWT_ALGORITHM, L
 # --- 환경 변수 ---
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 KIS_GATEWAY_URL = os.getenv("KIS_GATEWAY_URL", "http://kis-gateway:8080")
+JWT_EXPIRATION_HOURS = 24
 
 class WatchlistItem(BaseModel):
     stock_code: str

@@ -304,18 +304,24 @@ async def get_container_logs(
 @router.get("/realtime-monitor")
 @cache_response(ttl_seconds=1)
 async def get_realtime_monitor_status():
-    """OpportunityWatcher 실시간 상태 조회 (Redis)"""
+    """PriceMonitor 실시간 상태 조회 (Redis)"""
     try:
         r = get_redis_client()
         if not r:
             return {"status": "offline", "error": "Redis unavailable"}
         
-        data = r.get("monitoring:opportunity_watcher")
+        # 키 변경: monitoring:opportunity_watcher -> monitoring:price_monitor
+        data = r.get("monitoring:price_monitor")
         if not data:
             return {"status": "offline", "message": "No heartbeat data"}
             
-        metrics = json.loads(data)
-        return {"status": "online", "metrics": metrics}
+        hb_data = json.loads(data)
+        # hb_data 구조: {"status": "online", "service": "price-monitor", "metrics": {...}}
+        # 프론트엔드는 "metrics" 필드를 기대함
+        return {
+            "status": hb_data.get("status", "online"), 
+            "metrics": hb_data.get("metrics", {})
+        }
     except Exception as e:
         logger.error(f"Realtime Monitor 상태 조회 실패: {e}")
         return {"status": "error", "error": str(e)}

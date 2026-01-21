@@ -1,3 +1,4 @@
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -159,7 +160,7 @@ export function OverviewPage() {
   })
 
   // 포트폴리오 파이 차트 데이터
-  const pieData = positions?.slice(0, 5).map((p: any, i: number) => ({
+  const pieData = positions?.slice(0, 10).map((p: any, i: number) => ({
     name: p.stock_name,
     value: p.weight,
     color: COLORS[i % COLORS.length],
