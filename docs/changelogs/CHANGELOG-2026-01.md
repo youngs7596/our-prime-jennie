@@ -1,5 +1,11 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-22
+- **Redis Trading Bug Fix (Critical)**: 재매수(새 포지션) 시 이전 거래의 Redis 캐시(High Watermark 등)가 초기화되지 않아 매도 시점이 왜곡되던 버그 수정.
+  - `shared/redis_cache.py`: `update_high_watermark` 자동 리셋 로직 및 `reset_trading_state_for_stock` 추가.
+  - `executor.py`: 매수 완료 후 상태 초기화 호출 추가.
+  - `tests/shared/test_redis_cache.py` 및 `scripts/verify_redis_fix.py`: 검증 코드 추가.
+
 ## 2026-01-21
 - **DAG Fix**: `daily_asset_snapshot` DAG Docker 환경 호환성 수정.
   - `daily_asset_snapshot_dag.py`: BashOperator에 COMMON_ENV 환경변수 추가
