@@ -550,6 +550,13 @@ class BuyExecutor:
                 tier2_conditions_failed=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_failed'),
             )
             
+            # 8.5 [FIX] 새 포지션 시작: 이전 포지션의 Redis 상태 초기화 (오염 데이터 방지)
+            # 재매수 시 이전 거래의 high_watermark, scale_out 등이 남아있으면 잘못된 매도 판단 발생
+            try:
+                redis_cache.reset_trading_state_for_stock(stock_code)
+            except Exception as redis_err:
+                logger.warning(f"⚠️ Redis 상태 초기화 실패 (매수 계속): {redis_err}")
+            
             # 9. 텔레그램 알림 발송
             if self.telegram_bot:
                 try:

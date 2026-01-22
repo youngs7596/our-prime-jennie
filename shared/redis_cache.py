@@ -960,14 +960,30 @@ def update_high_watermark(
     
     try:
         existing = r.get(key)
+        force_update = False  # [FIX] 강제 업데이트 플래그
+        
         if existing:
             data = json.loads(existing)
-            high_price = data.get("high_price", buy_price)
+            old_buy_price = data.get("buy_price", 0)
+            
+            # [FIX] 새 포지션 감지: 매수가가 변경되면 새 포지션으로 판단하여 리셋
+            if abs(old_buy_price - buy_price) > 1.0:
+                high_price = max(buy_price, current_price)
+                force_update = True
+                logger.info(f"🔄 [Redis] 새 포지션 감지: {stock_code} 매수가 {old_buy_price:,.0f} → {buy_price:,.0f}, High 리셋")
+            else:
+                high_price = data.get("high_price", buy_price)
+                # [FIX] 비정상 상태 복구: high_price가 buy_price보다 낮으면 수정
+                if high_price < buy_price:
+                    high_price = max(buy_price, current_price)
+                    force_update = True
+                    logger.warning(f"⚠️ [Redis] 비정상 상태 복구: {stock_code} high_price < buy_price, 리셋")
         else:
-            high_price = buy_price
+            high_price = max(buy_price, current_price)
+            force_update = True  # 최초 생성 시 DB 갱신 필요
         
         # 최고가 갱신 체크
-        updated = False
+        updated = force_update
         if current_price > high_price:
             high_price = current_price
             updated = True
@@ -1069,6 +1085,45 @@ def delete_high_watermark(stock_code: str, redis_client=None) -> bool:
     except Exception as e:
         logger.error(f"❌ [Redis] High Watermark 삭제 실패: {e}")
         return False
+
+
+def reset_trading_state_for_stock(stock_code: str, redis_client=None) -> bool:
+    """
+    [Redis] 새 포지션 시작 시 모든 트레이딩 상태를 일괄 초기화합니다.
+    
+    매수 완료 후 호출하여 이전 포지션의 잔여 상태로 인한 버그를 방지합니다.
+    
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트
+    
+    Returns:
+        성공 여부
+    """
+    success = True
+    
+    # High Watermark 초기화
+    if not delete_high_watermark(stock_code, redis_client):
+        success = False
+    
+    # Scale-out Level 초기화
+    if not delete_scale_out_level(stock_code, redis_client):
+        success = False
+    
+    # Profit Floor 초기화
+    if not delete_profit_floor(stock_code, redis_client):
+        success = False
+    
+    # RSI Overbought Sold 초기화
+    if not delete_rsi_overbought_sold(stock_code, redis_client):
+        success = False
+    
+    if success:
+        logger.info(f"🧹 [Redis] 트레이딩 상태 일괄 초기화 완료: {stock_code}")
+    else:
+        logger.warning(f"⚠️ [Redis] 트레이딩 상태 일괄 초기화 일부 실패: {stock_code}")
+    
+    return success
 
 
 # ============================================================================

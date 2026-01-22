@@ -1307,6 +1307,82 @@ class TestHighWatermark:
         assert result["updated"] is False
 
 
+    def test_update_high_watermark_new_position_reset(self, fake_redis):
+        """새 포지션(매수가 변경) 감지 시 High Watermark 리셋"""
+        from shared.redis_cache import update_high_watermark, get_high_watermark
+        
+        stock_code = "005930"
+        
+        # 1. 이전 포지션: 매수가 80,000, 고가 85,000
+        update_high_watermark(stock_code, 85000, 80000, redis_client=fake_redis)
+        data = get_high_watermark(stock_code, redis_client=fake_redis)
+        assert data["high_price"] == 85000
+        assert data["buy_price"] == 80000
+        
+        # 2. 새 포지션 진입: 매수가 70,000 (하락 후 재매수 가정)
+        # 현재가 71,000 -> High Price는 71,000이 되어야 함 (85,000 아님)
+        result = update_high_watermark(stock_code, 71000, 70000, redis_client=fake_redis)
+        
+        # 3. 리셋 확인
+        assert result["updated"] is True
+        assert result["high_price"] == 71000  # 리셋됨
+        assert result["buy_price"] == 70000
+        
+        # Redis 조회 확인
+        data = get_high_watermark(stock_code, redis_client=fake_redis)
+        assert data["high_price"] == 71000
+    
+    def test_update_high_watermark_same_position(self, fake_redis):
+        """같은 포지션(매수가 동일)에서는 High Watermark 유지"""
+        from shared.redis_cache import update_high_watermark
+        
+        stock_code = "005930"
+        
+        # 1. 초기 상태
+        update_high_watermark(stock_code, 82000, 80000, redis_client=fake_redis)
+        
+        # 2. 가격 하락 (81000), 매수가는 동일
+        result = update_high_watermark(stock_code, 81000, 80000, redis_client=fake_redis)
+        
+        # 3. High Price 유지 (82000)
+        assert result["high_price"] == 82000
+        assert result["updated"] is False
+
+
+class TestTradingStateReset:
+    """트레이딩 상태 일괄 초기화 테스트"""
+    
+    def test_reset_trading_state_for_stock(self, fake_redis):
+        """모든 트레이딩 상태 일괄 초기화"""
+        from shared.redis_cache import (
+            update_high_watermark, set_scale_out_level, set_profit_floor, 
+            set_rsi_overbought_sold, reset_trading_state_for_stock,
+            get_high_watermark, get_scale_out_level, get_profit_floor, get_rsi_overbought_sold
+        )
+        
+        stock_code = "000660"
+        
+        # Given: 여러 상태 설정
+        update_high_watermark(stock_code, 150000, 140000, redis_client=fake_redis)
+        set_scale_out_level(stock_code, 1, redis_client=fake_redis)
+        set_profit_floor(stock_code, 10.0, redis_client=fake_redis)
+        set_rsi_overbought_sold(stock_code, True, redis_client=fake_redis)
+        
+        # 확인
+        assert get_high_watermark(stock_code, redis_client=fake_redis)["high_price"] == 150000
+        assert get_scale_out_level(stock_code, redis_client=fake_redis) == 1
+        
+        # When: 일괄 초기화
+        result = reset_trading_state_for_stock(stock_code, redis_client=fake_redis)
+        
+        # Then: 모두 초기화됨
+        assert result is True
+        assert get_high_watermark(stock_code, redis_client=fake_redis)["high_price"] is None
+        assert get_scale_out_level(stock_code, redis_client=fake_redis) == 0
+        assert get_profit_floor(stock_code, redis_client=fake_redis) is None
+        assert get_rsi_overbought_sold(stock_code, redis_client=fake_redis) is False
+
+
 class TestScaleOut:
     """Scale-out (분할 익절) 관련 테스트"""
     
