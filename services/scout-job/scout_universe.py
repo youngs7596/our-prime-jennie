@@ -158,8 +158,79 @@ def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
                     'avg_return': avg_return,
                     'stock_count': len(data['stocks']),
                     'stocks': data['stocks'][:5],
+                    'penalty_score': 0, # Default
+                    'trend_status': 'NEUTRAL'
                 }
+
+        # [NEW] 섹터별 추세 분석 (Penalty Calculation)
+        # 상위 섹터나 하위 섹터에 대해서만 상세 분석 수행 (API 호출 최적화)
+        # 여기서는 Penalty가 중요하므로, 수익률 하위 섹터에 대해 집중 분석
+        sorted_sectors_by_return = sorted(hot_sectors.items(), key=lambda x: x[1]['avg_return'])
         
+        # 하위 5개 섹터 (또는 수익률 음수인 모든 섹터) 검사
+        target_sectors = [s for s, info in sorted_sectors_by_return if info['avg_return'] < -1.0][:5]
+        
+        if target_sectors:
+            logger.info(f"   (E) 📉 하락세 섹터 상세 분석 중 ({len(target_sectors)}개)...")
+            from datetime import timedelta, date
+            
+            for sector_name in target_sectors:
+                info = hot_sectors[sector_name]
+                # 대표 종목 3개의 5일치 데이터를 가져와서 섹터 지수 추정
+                top_codes = [s['code'] for s in info['stocks'][:3]]
+                
+                sector_closes = [] # [day0_avg, day1_avg, ...]
+                
+                # 병렬 처리 대신 간단히 순차 처리 (종목 수가 적음)
+                valid_stock_count = 0
+                aggregated_history = {} # {date: [prices]}
+                
+                for code in top_codes:
+                    try:
+                        # DB에서 최근 30일치 조회 (MA20 계산 위해)
+                        prices = database.get_daily_prices(db_conn, code, limit=30)
+                        if not prices.empty and len(prices) >= 20:
+                            for _, row in prices.iterrows():
+                                d = row['PRICE_DATE'] # date object
+                                p = float(row['CLOSE_PRICE'])
+                                if d not in aggregated_history: aggregated_history[d] = []
+                                aggregated_history[d].append(p)
+                            valid_stock_count += 1
+                    except Exception:
+                        pass
+                
+                if valid_stock_count > 0:
+                    # 날짜별 평균가 계산 (섹터 지수 대용)
+                    sorted_dates = sorted(aggregated_history.keys())
+                    if len(sorted_dates) < 20:
+                        continue
+                        
+                    sector_index_series = []
+                    for d in sorted_dates:
+                        vals = aggregated_history[d]
+                        if vals:
+                            avg_p = sum(vals) / len(vals)
+                            sector_index_series.append(avg_p)
+                    
+                    if len(sector_index_series) < 20:
+                        continue
+
+                    # 지표 계산
+                    curr_price = sector_index_series[-1]
+                    price_5d_ago = sector_index_series[-6] if len(sector_index_series) >= 6 else sector_index_series[0]
+                    
+                    return_5d = ((curr_price - price_5d_ago) / price_5d_ago) * 100
+                    ma5 = sum(sector_index_series[-5:]) / 5
+                    ma20 = sum(sector_index_series[-20:]) / 20
+                    
+                    # Penalty Condition: 5일 수익률 < -3% AND 역배열 (MA5 < MA20)
+                    if return_5d < -3.0 and ma5 < ma20:
+                        info['penalty_score'] = -10
+                        info['trend_status'] = 'FALLING_KNIFE'
+                        logger.info(f"       ⚠️ [Penalty] {sector_name}: 5일등락 {return_5d:.1f}%, 역배열 (Falling Knife)")
+                    else:
+                        info['trend_status'] = 'WEAK'
+
         sorted_sectors = sorted(hot_sectors.items(), key=lambda x: x[1]['avg_return'], reverse=True)
         
         logger.info(f"   (E) ✅ 섹터 분석 완료. 핫 섹터 TOP 3:")

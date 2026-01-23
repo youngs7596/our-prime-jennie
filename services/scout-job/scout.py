@@ -553,6 +553,42 @@ def main():
             
             logger.info(f"   ✅ 후보군 {len(candidate_stocks)}개 발굴 완료.")
             
+            # [NEW] Phase 1.5: 섹터 모멘텀 페널티 적용 (Falling Knife Avoidance)
+            # Council Decision: 하락세 섹터(-10점) 식별 및 적용
+            logger.info("--- [Phase 1.5] 섹터 모멘텀 페널티 적용 ---")
+            penalty_count = 0
+            
+            # 섹터 매핑 로드 (scout_universe에서 import 필요하지만 간단히 SECTOR_MAPPING 사용)
+            from scout_universe import SECTOR_MAPPING
+            
+            for code, info in candidate_stocks.items():
+                if code == '0001': continue
+                
+                # 1. 섹터 식별
+                stock_sector = info.get('sector')
+                if not stock_sector:
+                    stock_sector = SECTOR_MAPPING.get(code, '기타')
+                    info['sector'] = stock_sector # 정보 보강
+                
+                # 2. 페널티 확인
+                if stock_sector in sector_analysis:
+                    sector_info = sector_analysis[stock_sector]
+                    penalty = sector_info.get('penalty_score', 0)
+                    
+                    if penalty < 0:
+                        # 페널티 적용 (reasons에 추가하고 나중에 Judge가 점수 깎도록 유도하거나, 여기서 아예 base_score 필드가 없으므로 reason에만 명시)
+                        # Scout pipeline 구조상 Hunter 단계에서는 'score'가 아직 없음.
+                        # 하지만 reasons에 '[PENALTY]' 태그를 달면 향후 로직에서 처리가능하도록 하거나,
+                        # Judge 단계(QuantScorer)에서 이를 반영해야 함.
+                        
+                        # 여기서는 간단히 reason에 강력한 경고 추가
+                        info['reasons'].append(f"⚠️ 섹터 하락세 (Falling Knife, {penalty}점)")
+                        info['is_sector_penalty'] = True # 플래그 설정
+                        penalty_count += 1
+            
+            if penalty_count > 0:
+                logger.info(f"   (Penalty) 📉 {penalty_count}개 후보에 섹터 하락 페널티 경고 적용")
+            
             # [Filter] 제외 종목 필터링 (v1.1)
             excluded_stocks = [s.strip() for s in os.getenv("EXCLUDED_STOCKS", "").split(",") if s.strip()]
             if excluded_stocks:
