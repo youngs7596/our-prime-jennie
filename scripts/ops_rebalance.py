@@ -3,12 +3,19 @@ import sys
 import json
 import time
 import argparse
+import logging
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
 
 from shared.kis import KISClient
+from shared.db.connection import session_scope
+from shared.database.trading import execute_trade_and_log
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 def setup_client():
     secrets_path = os.path.join(PROJECT_ROOT, "secrets.json")
@@ -109,6 +116,29 @@ def execute_rebalance(target_code, mode='loss-cut', dry_run=False):
                 order_no = kis.trading.place_sell_order(t['code'], t['qty'], 0)
                 if order_no:
                     print(f"     ✅ Order Placed: {order_no}")
+                    
+                    # DB 업데이트: TRADELOG + ACTIVE_PORTFOLIO
+                    try:
+                        # 현재가 조회 (매도 가격)
+                        snapshot = kis.market_data.get_stock_snapshot(t['code'])
+                        sell_price = float(snapshot.get('price', 0)) if snapshot else 0
+                        
+                        with session_scope() as session:
+                            stock_info = {'code': t['code'], 'name': t['name']}
+                            execute_trade_and_log(
+                                session, 
+                                trade_type="SELL",
+                                stock_info=stock_info,
+                                quantity=t['qty'],
+                                price=sell_price,
+                                llm_decision={"reason": f"REBALANCE_TO: 리밸런싱 매도 (Target: {target_code})"},
+                                strategy_signal="REBALANCE_TO"
+                            )
+                        print(f"     ✅ DB Updated (TRADELOG + ACTIVE_PORTFOLIO)")
+                    except Exception as e:
+                        logger.error(f"DB 업데이트 실패: {e}")
+                        print(f"     ⚠️ DB Update Failed: {e}")
+                    
                     time.sleep(0.3) # Rate limit
                 else:
                     print(f"     ❌ Order Failed")
@@ -159,6 +189,24 @@ def execute_rebalance(target_code, mode='loss-cut', dry_run=False):
             order_no = kis.trading.place_buy_order(target_code, buy_qty, int(curr_price))
             if order_no:
                 print(f"     ✅ Order Placed: {order_no}")
+                
+                # DB 업데이트: TRADELOG + ACTIVE_PORTFOLIO
+                try:
+                    with session_scope() as session:
+                        stock_info = {'code': target_code, 'name': name}
+                        execute_trade_and_log(
+                            session, 
+                            trade_type="BUY",
+                            stock_info=stock_info,
+                            quantity=buy_qty,
+                            price=curr_price,
+                            llm_decision={"reason": f"REBALANCE_TO: 리밸런싱 집중 매수"},
+                            strategy_signal="REBALANCE_TO"
+                        )
+                    print(f"     ✅ DB Updated (TRADELOG + ACTIVE_PORTFOLIO)")
+                except Exception as e:
+                    logger.error(f"DB 업데이트 실패: {e}")
+                    print(f"     ⚠️ DB Update Failed: {e}")
             else:
                 print(f"     ❌ Order Failed")
         else:
