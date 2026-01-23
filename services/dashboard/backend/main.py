@@ -207,7 +207,7 @@ app.add_middleware(
 
 # 라우터 등록
 # 라우터 등록
-from routers import factors, llm, configs, scheduler, system, performance, portfolio, market
+from routers import factors, llm, configs, scheduler, system, performance, portfolio, market, airflow, logs
 app.include_router(factors.router) # Factor settings router
 app.include_router(llm.router) # LLM settings & stats router
 app.include_router(configs.router) # Config registry/API router
@@ -216,6 +216,8 @@ app.include_router(system.router) # System status router (Cached)
 app.include_router(performance.router) # Performance analytics router
 app.include_router(portfolio.router, dependencies=[Depends(verify_token)]) # Portfolio router
 app.include_router(market.router, dependencies=[Depends(verify_token)]) # Market router
+app.include_router(airflow.router, dependencies=[Depends(verify_token)]) # Airflow router
+app.include_router(logs.router, dependencies=[Depends(verify_token)]) # Logs router
 
 # =============================================================================
 # 인증 API

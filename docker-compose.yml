@@ -693,6 +693,7 @@ services:
     labels:
       - app=scout-job
       - stack=my-prime-jennie
+    container_name: scout-job
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8087/health')" ]
       interval: 30s
@@ -792,6 +793,7 @@ services:
     labels:
       - app=dashboard-backend
       - stack=my-prime-jennie
+    container_name: dashboard-backend
 
   dashboard-frontend:
     build:
@@ -799,7 +801,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=/api
-        - VITE_API_URL=/api
+    container_name: dashboard-frontend
     profiles: [ "real" ]
     network_mode: host
     depends_on:
@@ -842,6 +844,7 @@ services:
     user: "0" # root로 실행해 docker.sock 접근 허용
     environment:
       - TZ=Asia/Seoul
+      - JAVA_OPTS=-Xmx2048m -Xms1024m
     ports:
       - "8180:8080" # 호스트 8180 → Jenkins 8080
     volumes:
@@ -964,7 +967,9 @@ services:
       - _AIRFLOW_DB_UPGRADE=true
       - _AIRFLOW_WWW_USER_CREATE=true
       - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_USERNAME=admin
       - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
@@ -1043,6 +1048,7 @@ services:
     labels:
       - app=news-collector
       - stack=my-prime-jennie
+    container_name: news-collector
 
   # News Archiver - ChromaDB 저장 전용 (Consumer A)
   news-archiver:

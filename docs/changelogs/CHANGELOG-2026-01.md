@@ -1,6 +1,7 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-23
+- **Dashboard Operations Stabilization**: Airflow/Loki 연동 오류(401/502) 해결 및 Operations 페이지 기능 개선(시간 범위 필터, KST 표시, 서비스 목록 동기화).
 - **Chart Phase Engine (Prime Council)**: Weinstein 4단계 이론 기반 차트 위상 분석 엔진 구현 (`shared/hybrid_scoring/chart_phase.py`). MA(20/60/120) 정배열/역배열 감지, Exhaustion(ADX+RSI+Z-Score) 점수화, Stage 4 매수 차단 및 Stage 2 보너스(1.2x) 적용.
 - **QuantScorer 연동**: Stage 4 종목 자동 제외, Exhaustion 시 스코어 x0.7 페널티.
 - **PriceMonitor 연동**: Stage 3/Exhaustion 감지 시 ATR Multiplier x0.8, Trailing Stop 조기 활성화(x0.7) 및 Drop 축소(x0.7).

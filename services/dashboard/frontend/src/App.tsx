@@ -11,6 +11,7 @@ import FactorsPage from '@/pages/Factors'
 import VisualLogic from '@/pages/VisualLogic'
 import { TradingPage } from '@/pages/Trading'
 import { SettingsPage } from '@/pages/Settings'
+import Operations from '@/pages/Operations'
 
 import { ArchitecturePage } from '@/pages/Architecture'
 import SuperPrimePage from '@/pages/SuperPrime'
@@ -55,6 +56,7 @@ function App() {
           <Route path="logic" element={<FactorsPage />} />
           <Route path="visual-logic" element={<VisualLogic />} />
           <Route path="trading" element={<TradingPage />} />
+          <Route path="operations" element={<Operations />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="architecture" element={<ArchitecturePage />} />
           <Route path="super-prime" element={<SuperPrimePage />} />

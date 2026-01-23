@@ -14,6 +14,7 @@ import {
   LineChart,
   Map,
   Zap,
+  Server,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -34,6 +35,8 @@ const navItems = [
   { path: '/architecture', icon: Map, label: 'Architecture' },
   { path: '/super-prime', icon: Target, label: 'Super Prime' },
   { path: '/settings', icon: Settings, label: 'Settings' },
+  { path: '/arrow-buttons', icon: LineChart, label: 'Dev: UI' },
+  { path: '/operations', icon: Server, label: 'Operations' },
 ]
 
 
