@@ -1,6 +1,10 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-23
+- **Chart Phase Engine (Prime Council)**: Weinstein 4단계 이론 기반 차트 위상 분석 엔진 구현 (`shared/hybrid_scoring/chart_phase.py`). MA(20/60/120) 정배열/역배열 감지, Exhaustion(ADX+RSI+Z-Score) 점수화, Stage 4 매수 차단 및 Stage 2 보너스(1.2x) 적용.
+- **QuantScorer 연동**: Stage 4 종목 자동 제외, Exhaustion 시 스코어 x0.7 페널티.
+- **PriceMonitor 연동**: Stage 3/Exhaustion 감지 시 ATR Multiplier x0.8, Trailing Stop 조기 활성화(x0.7) 및 Drop 축소(x0.7).
+- **Rebalance Workflow**: `/rebalance_to [종목]` 슬래시 커맨드 생성 (손절 후 지정 종목 집중 매수).
 - **Sector Momentum Penalty (Prime Council)**: "Falling Knife" 섹터(5일 수익률 < -3% 및 역배열) 식별 시, 해당 섹터의 모든 후보 종목에 **-10점 페널티**를 적용하는 로직 구현 (`Scout` Phase 1.5).
 - **Trailing Stop 개선**: 활성화 조건 +5%→+10%, 최소 수익률 가드 +5% 추가, ATR 기반에서 고점 대비 -7% 고정으로 변경
 - **Scale-out 전략 최적화 (Prime Council 권고)**:

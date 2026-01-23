@@ -61,6 +61,9 @@ from .quant_constants import (
     NEWS_TIME_EFFECT as QC_NEWS_TIME_EFFECT,
 )
 
+# [Prime Council] Chart Phase Analysis for Trend-Aware Scoring
+from .chart_phase import ChartPhaseAnalyzer, ChartPhaseResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -1313,8 +1316,42 @@ class QuantScorer:
             )
             all_details['compound_condition'] = compound_details
             
+            # ==========================================================
+            # [Prime Council] Chart Phase Analysis (Jennie/Minji/Junho)
+            # ==========================================================
+            chart_phase_result = ChartPhaseResult()  # Default
+            phase_multiplier = 1.0
+            is_phase_blocked = False
+            
+            try:
+                phase_analyzer = ChartPhaseAnalyzer()
+                chart_phase_result = phase_analyzer.analyze(daily_prices_df)
+                phase_multiplier = chart_phase_result.score_multiplier
+                is_phase_blocked = chart_phase_result.is_blocked
+                
+                all_details['chart_phase'] = {
+                    'stage': chart_phase_result.stage,
+                    'stage_name': chart_phase_result.stage_name,
+                    'trend_direction': chart_phase_result.trend_direction,
+                    'trend_strength': round(chart_phase_result.trend_strength, 1),
+                    'exhaustion_score': round(chart_phase_result.exhaustion_score, 1),
+                    'multiplier': phase_multiplier,
+                    'is_blocked': is_phase_blocked,
+                    'notes': chart_phase_result.notes[:3],  # Limit notes
+                }
+                
+                if is_phase_blocked:
+                    logger.info(f"   🚫 [ChartPhase] {stock_name} BLOCKED: Stage {chart_phase_result.stage_name}")
+                elif phase_multiplier != 1.0:
+                    logger.debug(f"   📊 [ChartPhase] {stock_name}: Stage {chart_phase_result.stage_name}, Multiplier={phase_multiplier:.2f}")
+                    
+            except Exception as phase_err:
+                logger.warning(f"   (ChartPhase) {stock_code} 분석 오류: {phase_err}")
+                all_details['chart_phase'] = {'error': str(phase_err)}
+            
             # 총점 계산 (100점 만점 + 복합조건 보너스 최대 5점)
-            total_score = (
+            # [Prime Council] Phase Multiplier 적용
+            base_total_score = (
                 momentum_score +
                 quality_score +
                 value_score +
@@ -1323,6 +1360,14 @@ class QuantScorer:
                 supply_demand_score +
                 compound_bonus  # 복합조건 보너스
             )
+            
+            # Apply Phase Multiplier (Stage 2: boost, Stage 3/Exhaustion: penalize)
+            total_score = base_total_score * phase_multiplier
+            
+            # Stage 4 (Downtrend) Hard Block
+            if is_phase_blocked:
+                total_score = 0.0  # 역배열은 무조건 0점
+                all_details['phase_block_reason'] = f"Stage 4 (Downtrend) - 매수 금지"
             
             # 장기 보유 추천 플래그
             # 단기(D+5)에서는 역신호지만 장기(D+60)에서 호재인 뉴스

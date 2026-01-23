@@ -31,8 +31,12 @@ from shared.db.connection import session_scope
 from shared.db import repository as repo
 from shared.notification import TelegramBot
 
-# OpportunityWatcher는 buy-scanner로 이관됨 (매수 역할 분리)
-# from opportunity_watcher import OpportunityWatcher
+# [Prime Council] Chart Phase Analysis for Trend-Aware Risk Management
+try:
+    from shared.hybrid_scoring.chart_phase import ChartPhaseAnalyzer
+    CHART_PHASE_AVAILABLE = True
+except ImportError:
+    CHART_PHASE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -257,15 +261,43 @@ class PriceMonitor:
                     logger.warning(f"⚠️ [{stock_name}] MACD Bearish Divergence 감지")
             
             # =====================================================================
+            # 0.6 [Prime Council] Chart Phase Analysis
+            # =====================================================================
+            chart_phase_warning = False
+            chart_phase_stage = 0
+            chart_phase_exhaustion = 0.0
+            
+            if CHART_PHASE_AVAILABLE and not daily_prices.empty and len(daily_prices) >= 125:
+                try:
+                    phase_analyzer = ChartPhaseAnalyzer()
+                    phase_result = phase_analyzer.analyze(daily_prices)
+                    chart_phase_stage = phase_result.stage
+                    chart_phase_exhaustion = phase_result.exhaustion_score
+                    
+                    # Stage 3 (Distribution) 또는 Exhaustion > 40 시 경고
+                    if phase_result.stage == 3 or phase_result.exhaustion_score > 40:
+                        chart_phase_warning = True
+                        logger.warning(f"📊 [{stock_name}] ChartPhase Warning: Stage={phase_result.stage_name}, Exhaustion={phase_result.exhaustion_score:.0f}")
+                except Exception as phase_err:
+                    logger.debug(f"   (ChartPhase) {stock_code} 오류: {phase_err}")
+            
+            # =====================================================================
             # 1. 손절 조건 (Stop Loss)
             # =====================================================================
             
             # 1-1. ATR Trailing Stop (손절)
             if not potential_signal and atr:
                 mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
+                
                 # MACD bearish divergence 시 더 타이트한 스탑
                 if macd_bearish_warning:
                     mult = mult * 0.75
+                
+                # [Prime Council] Stage 3/Exhaustion 시 추가로 타이트하게
+                if chart_phase_warning:
+                    mult = mult * 0.8  # 추가 20% 조임
+                    logger.debug(f"   [{stock_name}] ATR Mult 조정: Stage {chart_phase_stage}, Exhaustion {chart_phase_exhaustion:.0f}")
+                
                 stop_price = buy_price - (mult * atr)
                 if current_price < stop_price:
                     potential_signal = {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
@@ -291,6 +323,11 @@ class PriceMonitor:
                 # MACD bearish divergence 시 더 빠른 익절 (20% 조기 활성화)
                 if macd_bearish_warning:
                     activation_pct = activation_pct * 0.8
+                
+                # [Prime Council] Stage 3/Exhaustion 시 조기 활성화 + 타이트한 드롭
+                if chart_phase_warning:
+                    activation_pct = activation_pct * 0.7  # 30% 조기 활성화 (10% → 7%)
+                    drop_from_high_pct = drop_from_high_pct * 0.7  # 더 타이트한 드롭 (7% → 4.9%)
                 
                 # High Watermark 업데이트
                 watermark = update_high_watermark(stock_code, current_price, buy_price)
