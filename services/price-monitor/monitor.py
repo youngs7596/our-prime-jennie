@@ -278,60 +278,100 @@ class PriceMonitor:
                 if profit_pct <= stop_loss:
                     potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
 
+
             # =====================================================================
-            # 2. 트레일링 익절 (Trailing Take Profit)
+            # 2. 트레일링 익절 (Trailing Take Profit) - 개선됨
             # =====================================================================
             if not potential_signal:
                 trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
-                activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)
+                activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=10.0)  # 10%로 상향
+                min_trailing_profit = self.config.get_float('TRAILING_MIN_PROFIT_PCT', default=5.0)  # 최소 수익률 가드
+                drop_from_high_pct = self.config.get_float('TRAILING_DROP_FROM_HIGH_PCT', default=7.0)  # 고점 대비 하락률
+                
                 # MACD bearish divergence 시 더 빠른 익절 (20% 조기 활성화)
                 if macd_bearish_warning:
                     activation_pct = activation_pct * 0.8
                 
                 # High Watermark 업데이트
                 watermark = update_high_watermark(stock_code, current_price, buy_price)
-                high_price = watermark.get('high_price', current_price) # 여기서 high_price는 Redis 기준
+                high_price = watermark.get('high_price', current_price)
 
-                if trailing_enabled and atr:
+                if trailing_enabled:
                     high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
                     
+                    # 조건 1: 고점 수익률이 활성화 조건 이상
                     if high_profit_pct >= activation_pct:
-                        trailing_mult = self.config.get_float('TRAILING_TAKE_PROFIT_ATR_MULT', default=1.5)
-                        trailing_stop_price = high_price - (atr * trailing_mult)
+                        # 고점 대비 하락률 기반 스탑 가격 계산 (ATR 대신 %)
+                        trailing_stop_price = high_price * (1 - drop_from_high_pct / 100)
                         
-                        if current_price <= trailing_stop_price:
+                        # 조건 2: 현재가가 스탑 라인 이하
+                        # 조건 3: 현재 수익률이 최소 수익률 이상 (핵심 가드!)
+                        if current_price <= trailing_stop_price and profit_pct >= min_trailing_profit:
                             potential_signal = {
                                 "signal": True,
-                                "reason": f"Trailing TP: High {high_price:,.0f} → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
+                                "reason": f"Trailing TP: High {high_price:,.0f} (-{drop_from_high_pct}%) → Stop {trailing_stop_price:,.0f} (Profit: {profit_pct:.1f}%)",
                                 "quantity_pct": 100.0
                             }
 
             # =====================================================================
-            # 3. 분할 익절 (Scale-out)
+            # 3. 분할 익절 (Scale-out) - 개선됨
             # =====================================================================
             if not potential_signal:
                 scale_out_enabled = self.config.get_bool('SCALE_OUT_ENABLED', default=True)
                 if scale_out_enabled and profit_pct > 0:
                     current_level = get_scale_out_level(stock_code)
                     
-                    level_1_pct = self.config.get_float('SCALE_OUT_LEVEL_1_PCT', default=5.0)
-                    level_1_sell = self.config.get_float('SCALE_OUT_LEVEL_1_SELL_PCT', default=25.0)
-                    level_2_pct = self.config.get_float('SCALE_OUT_LEVEL_2_PCT', default=10.0)
-                    level_2_sell = self.config.get_float('SCALE_OUT_LEVEL_2_SELL_PCT', default=25.0)
-                    level_3_pct = self.config.get_float('SCALE_OUT_LEVEL_3_PCT', default=15.0)
-                    level_3_sell = self.config.get_float('SCALE_OUT_LEVEL_3_SELL_PCT', default=25.0)
+                    # --- 시장 국면 감지 (MarketRegimeDetector 연동) ---
+                    market_regime = "SIDEWAYS"  # 기본값
+                    try:
+                        regime_data = redis_cache.get_redis_data("market_regime:current")
+                        if regime_data:
+                            market_regime = regime_data.get("regime", "SIDEWAYS")
+                    except Exception:
+                        pass
                     
-                    if current_level < 1 and profit_pct >= level_1_pct:
-                        set_scale_out_level(stock_code, 1)
-                        potential_signal = {"signal": True, "reason": f"Scale-out L1: +{profit_pct:.1f}% (목표 +{level_1_pct}%)", "quantity_pct": level_1_sell}
+                    # --- 시장 국면별 동적 Scale-out 레벨 설정 ---
+                    if market_regime == "BULL":
+                        levels = [(8.0, 20.0), (15.0, 25.0), (25.0, 25.0), (35.0, 15.0)]  # L1~L4
+                    elif market_regime == "BEAR":
+                        levels = [(3.0, 20.0), (7.0, 25.0), (10.0, 25.0), (15.0, 15.0)]
+                    else:  # SIDEWAYS
+                        levels = [(5.0, 20.0), (10.0, 25.0), (15.0, 25.0), (20.0, 15.0)]
                     
-                    elif current_level < 2 and profit_pct >= level_2_pct:
-                        set_scale_out_level(stock_code, 2)
-                        potential_signal = {"signal": True, "reason": f"Scale-out L2: +{profit_pct:.1f}% (목표 +{level_2_pct}%)", "quantity_pct": level_2_sell}
+                    # --- 최소 거래금액 가드 ---
+                    MIN_TRANSACTION_AMOUNT = 500_000  # 50만원
+                    MIN_SELL_QUANTITY = 50            # 50주
                     
-                    elif current_level < 3 and profit_pct >= level_3_pct:
-                        set_scale_out_level(stock_code, 3)
-                        potential_signal = {"signal": True, "reason": f"Scale-out L3: +{profit_pct:.1f}% (목표 +{level_3_pct}%)", "quantity_pct": level_3_sell}
+                    # --- Scale-out L1~L4 처리 ---
+                    for level_idx, (target_pct, sell_pct) in enumerate(levels, start=1):
+                        if current_level < level_idx and profit_pct >= target_pct:
+                            # 매도 수량 계산
+                            sell_qty = int(holding['quantity'] * (sell_pct / 100.0)) or 1
+                            sell_amount = sell_qty * current_price
+                            
+                            # 최소 거래금액 가드 체크
+                            if sell_amount < MIN_TRANSACTION_AMOUNT or sell_qty < MIN_SELL_QUANTITY:
+                                # L4(마지막 레벨)이면 잔여수량 전량 청산
+                                if level_idx == 4:
+                                    set_scale_out_level(stock_code, level_idx)
+                                    potential_signal = {
+                                        "signal": True, 
+                                        "reason": f"Scale-out L{level_idx}(Force): +{profit_pct:.1f}% [{market_regime}]",
+                                        "quantity_pct": 100.0  # 잔여 전량
+                                    }
+                                    logger.info(f"🔄 [{stock_code}] 소량 잔여 강제 청산: {holding['quantity']}주")
+                                else:
+                                    # 소량이면 스킵, 다음 레벨까지 대기
+                                    logger.info(f"⏭️ [{stock_code}] Scale-out L{level_idx} 스킵: {sell_amount:,.0f}원 < 50만원")
+                                break
+                            else:
+                                set_scale_out_level(stock_code, level_idx)
+                                potential_signal = {
+                                    "signal": True, 
+                                    "reason": f"Scale-out L{level_idx}: +{profit_pct:.1f}% (목표 +{target_pct}%) [{market_regime}]",
+                                    "quantity_pct": sell_pct
+                                }
+                            break
 
             # =====================================================================
             # 4. RSI 과열 & 5. 고정 목표 & 6. Death Cross & 7. Max Holding

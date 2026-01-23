@@ -1,6 +1,12 @@
 # 📅 2026-01 변경 이력
 
 ## 2026-01-23
+- **Trailing Stop 개선**: 활성화 조건 +5%→+10%, 최소 수익률 가드 +5% 추가, ATR 기반에서 고점 대비 -7% 고정으로 변경
+- **Scale-out 전략 최적화 (Prime Council 권고)**:
+  - 시장 국면별 동적 레벨: BULL +8/15/25/35%, SIDEWAYS +5/10/15/20%, BEAR +3/7/10/15%
+  - 4단계 Scale-out (L1~L4) + 최소 거래금액 가드 50만원/50주
+  - L4 도달 시 소량 잔여 강제 청산 로직 추가
+- **collect_intraday.py**: Scout과 동일한 KOSPI Top 200 Universe 사용하도록 수정
 - **Golden Cross Strategy Optimization (Prime Council)**: Jennie, Minji, Junho 3인 합의에 따른 전략 개선.
   - `services/price-monitor/monitor.py`: Hard Stop 기본값 -5% → **-6%** (준호 권고: 변동성 버퍼 확보)
   - 수급 필터 분석: 하드 게이트 아님 확인 (`_check_legendary_pattern`은 SUPER_PRIME 보너스만)

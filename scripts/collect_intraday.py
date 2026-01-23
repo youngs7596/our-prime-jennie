@@ -22,7 +22,7 @@ sys.path.append(PROJECT_ROOT)
 
 from shared.kis.gateway_client import KISGatewayClient
 from shared import database
-from shared.db.models import StockMinutePrice, resolve_table_name, WatchList
+from shared.db.models import StockMinutePrice, WatchList
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, text
 
@@ -54,7 +54,7 @@ if not os.getenv("KIS_GATEWAY_URL"):
 if not os.getenv("USE_GATEWAY_AUTH"):
     os.environ["USE_GATEWAY_AUTH"] = "false"
     
-TOP_LIQUID_LIMIT = 50
+TOP_UNIVERSE_LIMIT = 200  # Scout과 동일한 Universe 크기
 
 def get_db_session():
     """DB 세션 생성"""
@@ -69,47 +69,45 @@ def get_db_session():
         
     return Session(bind=engine)
 
-def fetch_top_liquid_codes(session: Session, limit: int = 50) -> List[str]:
-    """
-    최근 거래대금 상위 종목 추출
-    (StockDailyPrice 테이블 활용)
-    """
-    try:
-        # MariaDB: STOCK_DAILY_PRICES_3Y에서 최근 일자 기준 평균 거래대금 상위
-        # 간단하게 최근 하루치 거래대금 순으로 정렬
-        query = text(f"""
-            SELECT STOCK_CODE 
-            FROM {resolve_table_name("STOCK_DAILY_PRICES_3Y")}
-            WHERE PRICE_DATE = (
-                SELECT MAX(PRICE_DATE) 
-                FROM {resolve_table_name("STOCK_DAILY_PRICES_3Y")}
-            )
-            ORDER BY (CLOSE_PRICE * VOLUME) DESC
-            LIMIT :limit
-        """)
-        result = session.execute(query, {"limit": limit}).fetchall()
-        return [row[0] for row in result]
-    except Exception as e:
-        logger.error(f"Top Liquid 조회 실패: {e}")
-        return []
-
 def get_target_universe(session: Session) -> List[str]:
-    """수집 대상 종목 리스트 생성 (Watchlist + Top Liquid)"""
+    """
+    수집 대상 종목 리스트 생성
+    Scout과 동일한 KOSPI 시총 상위 200개 종목 사용
+    """
+    from shared.crawlers.naver import get_kospi_top_stocks
+    
     targets: Set[str] = set()
     
-    # 1. Watchlist (ORM 사용)
+    # 1. KOSPI 시총 상위 200개 (Scout과 동일)
+    try:
+        top_stocks = get_kospi_top_stocks(limit=TOP_UNIVERSE_LIMIT)
+        if top_stocks:
+            logger.info(f"✅ KOSPI Top {len(top_stocks)} 종목 로드 완료 (Scout Universe)")
+            targets.update([s['code'] for s in top_stocks])
+    except Exception as e:
+        logger.error(f"KOSPI Top 종목 조회 실패: {e}")
+        # Fallback: Watchlist 사용
+        try:
+            watchlist_items = session.query(WatchList.stock_code).all()
+            if watchlist_items:
+                targets.update([item.stock_code for item in watchlist_items])
+                logger.info(f"Fallback: Watchlist {len(targets)}개 종목 사용")
+        except Exception as e2:
+            logger.error(f"Watchlist 조회 실패: {e2}")
+
+    # 2. Watchlist 추가 (Universe에 없는 종목도 모니터링)
     try:
         watchlist_items = session.query(WatchList.stock_code).all()
         if watchlist_items:
-            targets.update([item.stock_code for item in watchlist_items])
+            watchlist_codes = {item.stock_code for item in watchlist_items}
+            new_codes = watchlist_codes - targets
+            if new_codes:
+                logger.info(f"+ Watchlist에서 {len(new_codes)}개 추가 종목 포함")
+                targets.update(new_codes)
     except Exception as e:
-        logger.error(f"Watchlist 조회 실패: {e}")
+        pass  # Watchlist 실패는 무시
 
-    # 2. Top Liquid
-    top_liquid = fetch_top_liquid_codes(session, TOP_LIQUID_LIMIT)
-    targets.update(top_liquid)
-    
-    # KOSPI 지수 등 제외 (필요 시)
+    # KOSPI 지수 등 제외
     if "0001" in targets:
         targets.remove("0001")
         
@@ -179,7 +177,7 @@ def main():
     
     try:
         targets = get_target_universe(session)
-        logger.info(f"🎯 수집 대상: 총 {len(targets)}개 종목 (Watchlist + Top {TOP_LIQUID_LIMIT})")
+        logger.info(f"🎯 수집 대상: 총 {len(targets)}개 종목 (KOSPI Top {TOP_UNIVERSE_LIMIT} + Watchlist)")
         
         snapshots = []
         for i, code in enumerate(targets):
