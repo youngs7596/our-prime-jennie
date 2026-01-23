@@ -272,7 +272,7 @@ class PriceMonitor:
             
             # 1-2. Fallback: Fixed Stop Loss
             if not potential_signal:
-                stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-5.0)
+                stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-6.0)
                 if stop_loss > 0: stop_loss = -stop_loss
 
                 if profit_pct <= stop_loss:

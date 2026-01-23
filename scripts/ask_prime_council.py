@@ -136,7 +136,10 @@ def _safe_generate(provider, system_prompt, user_query, context, prev_reports):
             if start != -1 and end > start:
                 json_str = text_content[start:end]
             else:
-                return {"text": text_content, "error": "No JSON found in response"}, 0, 0
+                # [Council Reflection] JSON parsing completely failed. 
+                # Return the raw text as a 'text' field in a constructed dict.
+                logger.warning(f"JSON parsing failed. Returning raw text for provider.")
+                return {"text": text_content, "decision": "neutral", "raw_output": True}, 0, 0
         
         # 토큰 사용량 추정 (응답에 usage 정보가 없으면 문자 수 기반 추정)
         input_chars = len(system_prompt) + len(context) + len(user_query)

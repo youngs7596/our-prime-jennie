@@ -81,9 +81,12 @@ def get_db_config():
     return {}
 
 
-def load_stock_codes(limit: int = None) -> List[str]:
-    """DB에서 종목 코드 로드 (KOSPI)"""
-    # [Patch] FDR 이슈로 인해 DB에서 직접 조회로 변경
+def load_stock_codes(limit: int = None, target_codes: List[str] = None) -> List[str]:
+    """DB에서 종목 코드 로드 (KOSPI/KOSDAQ)"""
+    # 타겟 코드가 있으면 바로 반환
+    if target_codes:
+        return target_codes
+
     conn = database.get_db_connection()
     try:
         cursor = conn.cursor()
@@ -224,7 +227,8 @@ def save_trading_data(connection, data_list: List[Dict]) -> int:
 def parse_args():
     parser = argparse.ArgumentParser(description="외국인/기관 투자자 매매 데이터 수집기")
     parser.add_argument("--days", type=int, default=365, help="수집 기간(일)")
-    parser.add_argument("--codes", type=int, default=200, help="수집할 종목 수 (KOSPI 상위)")
+    parser.add_argument("--codes", type=int, default=None, help="수집할 종목 수 (기본값: 전체)")
+    parser.add_argument("--target-codes", type=str, default=None, help="수집할 종목 코드 리스트 (콤마 구분)")
     parser.add_argument("--mode", type=str, default="by_stock", 
                         choices=["by_stock", "by_date"],
                         help="수집 모드: by_stock(종목별), by_date(날짜별)")
@@ -243,11 +247,10 @@ def main():
     logger.info("=" * 60)
     logger.info(f"📈 외국인/기관 매매 데이터 수집 시작")
     logger.info(f"   - 기간: {args.days}일")
-    logger.info(f"   - 종목 수: {args.codes}개")
+    logger.info(f"   - 종목 수: {args.codes if args.codes else '전체'}")
     logger.info(f"   - 모드: {args.mode}")
     logger.info("=" * 60)
     
-    # DB 연결
     # DB 연결
     # shared.database.get_db_connection handles config internally or via env vars
     from shared.db.connection import init_engine
@@ -261,7 +264,8 @@ def main():
     ensure_table_exists(conn)
     
     # 종목 코드 로드
-    stock_codes = load_stock_codes(args.codes)
+    target_codes_list = args.target_codes.split(',') if args.target_codes else None
+    stock_codes = load_stock_codes(args.codes, target_codes_list)
     logger.info(f"   📊 대상 종목: {len(stock_codes)}개")
     
     # 날짜 범위
@@ -326,4 +330,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

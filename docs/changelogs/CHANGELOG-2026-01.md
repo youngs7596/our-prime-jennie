@@ -1,5 +1,12 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-23
+- **Golden Cross Strategy Optimization (Prime Council)**: Jennie, Minji, Junho 3인 합의에 따른 전략 개선.
+  - `services/price-monitor/monitor.py`: Hard Stop 기본값 -5% → **-6%** (준호 권고: 변동성 버퍼 확보)
+  - 수급 필터 분석: 하드 게이트 아님 확인 (`_check_legendary_pattern`은 SUPER_PRIME 보너스만)
+  - Trailing Stop: 기존 +5% 활성화, 1.5×ATR 로직 유지 (변경 불필요)
+  - `scripts/verify_investor_data_integrity.py`, `scripts/collect_investor_trading.py` 개선: 골든크로스 거래 누락 수급 데이터 백필
+
 ## 2026-01-22
 - **Redis Trading Bug Fix (Critical)**: 재매수(새 포지션) 시 이전 거래의 Redis 캐시(High Watermark 등)가 초기화되지 않아 매도 시점이 왜곡되던 버그 수정.
   - `shared/redis_cache.py`: `update_high_watermark` 자동 리셋 로직 및 `reset_trading_state_for_stock` 추가.
