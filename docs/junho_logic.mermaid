@@ -1,0 +1,79 @@
+flowchart LR
+  %% =========================
+  %% Quantum Jump - Workflow v2
+  %% =========================
+
+  classDef src fill:#111827,stroke:#374151,color:#E5E7EB;
+  classDef ok fill:#052e1a,stroke:#10B981,color:#D1FAE5;
+  classDef bad fill:#2b0b0b,stroke:#EF4444,color:#FEE2E2;
+  classDef gate fill:#1f2937,stroke:#F59E0B,color:#FEF3C7;
+  classDef core fill:#0b1020,stroke:#60A5FA,color:#DBEAFE;
+
+  Universe(("KOSPI/KOSDAQ\nUniverse")):::src
+  Scout["Scout Agent\n(Hunter & Judge Scoring)"]:::core
+  PassScore{"Score Gate\n>=70 (Normal)\n>=90 (Super Prime)"}:::gate
+  Watchlist(("Hot Watchlist\nTop 10~20")):::ok
+
+  subgraph Stream["Real-time Opportunity Watcher (Stream)"]
+    Tick["Real-time Ticks"]:::src
+    NoTrade{"No-Trade Window\n09:00~09:30?\n(Exceptions: Liquidity/Spread OK)"}:::gate
+    PumpGate{"News Pump Filter\nVWAP Disparity>2%\nAND Vol>2xAvg ?"}:::gate
+    Cooldown{"Cooldown\n>=180s since last signal?"}:::gate
+    Trigger{"Signal Trigger?"}:::gate
+    TriggerList["Standard:\n- Golden Cross (MA5>MA20)\n- RSI Rebound (30→Up)\n- Momentum (>3%)\nBull Specials:\n- RECON_BULL_ENTRY\n- VCP_BREAKOUT\n- VOLUME_BREAKOUT"]:::core
+  end
+
+  subgraph Guards["Junho Safety Guards (Sizing & Risk)"]
+    RiskBase["Base Risk = 1.0% Equity"]:::core
+    Sector{"Sector Discount?\nIf same sector exists => x0.7"}:::gate
+    ATR["ATR Parity Sizing\nQty=(Equity*Risk%)/(ATR*2.0)"]:::core
+    Heat{"Portfolio Heat Check\nSumRisk + NewRisk <= 5% ?"}:::gate
+    Weight{"Max Weight Cap\n12% (default)\n18% if Score>=80"}:::gate
+  end
+
+  BuyOrder((BUY ORDER)):::ok
+
+  subgraph Sell["Reviewer Phase (Sell Pipeline)"]
+    Monitor["Active Position Monitoring"]:::src
+    ProfitLock{"Profit Lock (Clamp)\nL1: 1.5~3% => BE\nL2: 3~5% => +1%"}:::gate
+    Trail{"Trailing Stop\n-3.5% from High\n(active after +5%)"}:::gate
+    Scale{"Scale-out\n15~25% staged"}:::gate
+    Stop{"Stops\nATR Stop: Entry-(ATR*2)\nHard Stop: -6%"}:::bad
+  end
+
+  SellOrder((SELL ORDER)):::bad
+
+  Rej1["REJECT: Score insufficient"]:::bad
+  Rej2["REJECT: No-Trade Window"]:::bad
+  Rej3["REJECT: News Pump (VWAP&Vol)"]:::bad
+  Rej4["REJECT: Cooldown"]:::bad
+  Rej5["REJECT: No valid trigger"]:::bad
+  Rej6["REJECT: Heat exceeded"]:::bad
+
+  Universe --> Scout --> PassScore
+  PassScore -- "NO" --> Rej1
+  PassScore -- "YES" --> Watchlist --> Tick --> NoTrade
+
+  NoTrade -- "YES (blocked)" --> Rej2
+  NoTrade -- "NO" --> PumpGate
+
+  PumpGate -- "YES (blocked)" --> Rej3
+  PumpGate -- "NO" --> Cooldown
+
+  Cooldown -- "NO" --> Rej4
+  Cooldown -- "YES" --> Trigger
+
+  Trigger -- "NO" --> Rej5
+  Trigger -- "YES" --> TriggerList --> RiskBase --> Sector --> ATR --> Heat
+  Heat -- "NO" --> Rej6
+  Heat -- "YES" --> Weight --> BuyOrder
+
+  BuyOrder -.-> Monitor
+  Monitor --> ProfitLock
+  Monitor --> Trail
+  Monitor --> Scale
+  Monitor --> Stop
+  ProfitLock --> SellOrder
+  Trail --> SellOrder
+  Scale --> SellOrder
+  Stop --> SellOrder

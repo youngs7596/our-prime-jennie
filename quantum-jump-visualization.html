@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Jump - Prime Jennie Trading System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;900&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #0D0D0F;
+            --bg-surface: #1A1A1F;
+            --bg-elevated: #242429;
+            --neon-blue: #007AFF;
+            --neon-orange: #FF9500;
+            --neon-green: #2ECC71;
+            --neon-red: #E74C3C;
+            --neon-purple: #9B59B6;
+            --neon-cyan: #5AC8FA;
+            --neon-yellow: #F1C40F;
+            --text-primary: #FFFFFF;
+            --text-secondary: #8E8E93;
+            --text-muted: #636366;
+            --glow-blue: 0 0 20px rgba(0, 122, 255, 0.5);
+            --glow-green: 0 0 20px rgba(46, 204, 113, 0.5);
+            --glow-red: 0 0 20px rgba(231, 76, 60, 0.5);
+            --glow-yellow: 0 0 15px rgba(241, 196, 15, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Noto Sans KR', monospace;
+            background: linear-gradient(135deg, var(--bg-deep) 0%, #0a0a0c 50%, var(--bg-surface) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated Grid Background */
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 122, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 122, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 60px rgba(90, 200, 250, 0.3);
+            letter-spacing: 0.1em;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+        }
+
+        .header .version-badge {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 6px 16px;
+            background: linear-gradient(135deg, rgba(241, 196, 15, 0.2), rgba(255, 149, 0, 0.2));
+            border: 1px solid var(--neon-yellow);
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: var(--neon-yellow);
+            letter-spacing: 0.15em;
+            box-shadow: var(--glow-yellow);
+        }
+
+        /* Section Titles */
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--neon-cyan);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--neon-cyan), var(--neon-blue));
+            border-radius: 2px;
+        }
+
+        .section-title .korean {
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* ============================================
+           PART 1: LOGIC FLOW DIAGRAM
+           ============================================ */
+        .logic-flow-section {
+            margin-bottom: 80px;
+            animation: fadeIn 1s ease-out 0.2s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .flow-container {
+            background: linear-gradient(180deg, rgba(26, 26, 31, 0.8), rgba(13, 13, 15, 0.9));
+            border: 1px solid rgba(90, 200, 250, 0.1);
+            border-radius: 20px;
+            padding: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .flow-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-blue), transparent);
+        }
+
+        /* Flow Stages */
+        .flow-stages {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .flow-stage {
+            flex: 1;
+            min-width: 280px;
+            position: relative;
+        }
+
+        .stage-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stage-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .stage-icon.scout { background: linear-gradient(135deg, rgba(90, 200, 250, 0.3), rgba(0, 122, 255, 0.3)); border: 1px solid var(--neon-cyan); }
+        .stage-icon.buy { background: linear-gradient(135deg, rgba(46, 204, 113, 0.3), rgba(39, 174, 96, 0.3)); border: 1px solid var(--neon-green); }
+        .stage-icon.guard { background: linear-gradient(135deg, rgba(241, 196, 15, 0.3), rgba(255, 149, 0, 0.3)); border: 1px solid var(--neon-yellow); }
+        .stage-icon.sell { background: linear-gradient(135deg, rgba(231, 76, 60, 0.3), rgba(192, 57, 43, 0.3)); border: 1px solid var(--neon-red); }
+
+        .stage-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .stage-title.cyan { color: var(--neon-cyan); }
+        .stage-title.green { color: var(--neon-green); }
+        .stage-title.yellow { color: var(--neon-yellow); }
+        .stage-title.red { color: var(--neon-red); }
+
+        .stage-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Flow Boxes */
+        .flow-box {
+            background: rgba(36, 36, 41, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .flow-box:hover {
+            background: rgba(36, 36, 41, 0.9);
+            transform: translateX(5px);
+        }
+
+        .flow-box-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flow-box-title .step-num {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(90, 200, 250, 0.2);
+            color: var(--neon-cyan);
+        }
+
+        .flow-box-content {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .flow-box-content code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--neon-cyan);
+            font-size: 0.7rem;
+        }
+
+        /* Condition Tags */
+        .condition-tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            margin: 2px;
+        }
+
+        .condition-tag.and { background: rgba(231, 76, 60, 0.2); color: var(--neon-red); border: 1px solid rgba(231, 76, 60, 0.3); }
+        .condition-tag.or { background: rgba(46, 204, 113, 0.2); color: var(--neon-green); border: 1px solid rgba(46, 204, 113, 0.3); }
+        .condition-tag.pass { background: rgba(90, 200, 250, 0.2); color: var(--neon-cyan); border: 1px solid rgba(90, 200, 250, 0.3); }
+
+        /* Flow Arrows */
+        .flow-arrow {
+            position: absolute;
+            top: 50%;
+            right: -25px;
+            width: 30px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--neon-cyan), transparent);
+            z-index: 10;
+        }
+
+        .flow-arrow::after {
+            content: '▶';
+            position: absolute;
+            right: -5px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--neon-cyan);
+            font-size: 0.6rem;
+        }
+
+        /* Guard Wall */
+        .guard-wall {
+            position: relative;
+            border: 2px solid var(--neon-yellow);
+            border-radius: 16px;
+            padding: 20px;
+            background: linear-gradient(180deg, rgba(241, 196, 15, 0.05), transparent);
+            box-shadow: 
+                0 0 30px rgba(241, 196, 15, 0.1),
+                inset 0 0 30px rgba(241, 196, 15, 0.03);
+            animation: guardPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes guardPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(241, 196, 15, 0.1), inset 0 0 30px rgba(241, 196, 15, 0.03); }
+            50% { box-shadow: 0 0 50px rgba(241, 196, 15, 0.2), inset 0 0 40px rgba(241, 196, 15, 0.05); }
+        }
+
+        .guard-wall::before {
+            content: '🛡️ JUNHO SAFETY GUARDS';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--bg-deep);
+            padding: 0 10px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            color: var(--neon-yellow);
+            letter-spacing: 0.1em;
+        }
+
+        /* Signal Badges */
+        .signal-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .signal-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 500;
+            border: 1px solid;
+        }
+
+        .signal-badge.standard { background: rgba(0, 122, 255, 0.15); border-color: rgba(0, 122, 255, 0.4); color: var(--neon-blue); }
+        .signal-badge.bull { background: rgba(46, 204, 113, 0.15); border-color: rgba(46, 204, 113, 0.4); color: var(--neon-green); }
+
+        /* Order Buttons */
+        .order-node {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .order-btn {
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .order-btn.buy {
+            background: linear-gradient(135deg, var(--neon-green), #27ae60);
+            color: #000;
+            box-shadow: var(--glow-green);
+        }
+
+        .order-btn.sell {
+            background: linear-gradient(135deg, var(--neon-red), #c0392b);
+            color: #fff;
+            box-shadow: var(--glow-red);
+        }
+
+        .order-btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* ============================================
+           PART 2: CHART DASHBOARD
+           ============================================ */
+        .chart-section {
+            animation: fadeIn 1s ease-out 0.4s both;
+        }
+
+        .dashboard-container {
+            background: linear-gradient(180deg, rgba(26, 26, 31, 0.95), rgba(13, 13, 15, 0.98));
+            border: 1px solid rgba(90, 200, 250, 0.15);
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .dashboard-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan), var(--neon-blue), var(--neon-purple));
+        }
+
+        /* Dashboard Header */
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .stock-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .stock-symbol {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stock-name {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .stock-price {
+            text-align: right;
+        }
+
+        .current-price {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--neon-green);
+        }
+
+        .price-change {
+            font-size: 0.9rem;
+            color: var(--neon-green);
+        }
+
+        .price-change.negative {
+            color: var(--neon-red);
+        }
+
+        /* Status Badges */
+        .status-badges {
+            display: flex;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .status-badge.active {
+            background: rgba(46, 204, 113, 0.2);
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            animation: statusPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .status-badge.score {
+            background: rgba(90, 200, 250, 0.2);
+            border: 1px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        /* Chart Container */
+        .chart-area {
+            padding: 20px 30px;
+        }
+
+        /* Main Price Chart */
+        .main-chart {
+            position: relative;
+            height: 400px;
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.4));
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        /* Chart SVG */
+        .chart-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Candlesticks */
+        .candle-up { fill: var(--neon-red); }
+        .candle-down { fill: var(--neon-blue); }
+        .candle-wick { stroke-width: 1; }
+        .candle-wick.up { stroke: var(--neon-red); }
+        .candle-wick.down { stroke: var(--neon-blue); }
+
+        /* Moving Averages */
+        .ma-line { fill: none; stroke-width: 2; }
+        .ma5 { stroke: var(--neon-blue); filter: drop-shadow(0 0 4px rgba(0, 122, 255, 0.5)); }
+        .ma20 { stroke: var(--neon-orange); filter: drop-shadow(0 0 4px rgba(255, 149, 0, 0.5)); }
+        .ma120 { stroke: var(--text-muted); stroke-dasharray: 5 3; stroke-width: 1; }
+
+        /* Bollinger Band */
+        .bb-area { fill: rgba(90, 200, 250, 0.08); }
+        .bb-line { fill: none; stroke: rgba(90, 200, 250, 0.3); stroke-width: 1; }
+
+        /* Signal Markers */
+        .signal-marker {
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .signal-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .signal-golden-cross { fill: var(--neon-green); filter: drop-shadow(0 0 8px rgba(46, 204, 113, 0.8)); }
+        .signal-bb-lower { fill: var(--neon-cyan); filter: drop-shadow(0 0 8px rgba(90, 200, 250, 0.8)); }
+        .signal-rsi-foreign { fill: var(--neon-orange); filter: drop-shadow(0 0 8px rgba(255, 149, 0, 0.8)); }
+        .signal-vcp { fill: var(--neon-purple); filter: drop-shadow(0 0 8px rgba(155, 89, 182, 0.8)); }
+
+        /* Signal Labels */
+        .signal-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 600;
+            fill: var(--text-primary);
+        }
+
+        /* Price Levels */
+        .price-level {
+            stroke-dasharray: 4 4;
+            stroke-width: 1;
+        }
+
+        .price-level.entry { stroke: var(--neon-green); }
+        .price-level.stop { stroke: var(--neon-red); }
+        .price-level.target { stroke: var(--neon-yellow); }
+
+        .price-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        /* Sub Panels */
+        .sub-panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+
+        .sub-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            position: relative;
+        }
+
+        .sub-panel-title {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sub-panel-title .indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .sub-panel-title .indicator.rsi { background: var(--neon-purple); }
+        .sub-panel-title .indicator.flow { background: var(--neon-blue); }
+        .sub-panel-title .indicator.volume { background: var(--neon-cyan); }
+
+        /* RSI Panel */
+        .rsi-chart {
+            height: 80px;
+            position: relative;
+        }
+
+        .rsi-zone {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background: rgba(46, 204, 113, 0.1);
+            border-top: 1px dashed rgba(46, 204, 113, 0.3);
+            border-bottom: 1px dashed rgba(46, 204, 113, 0.3);
+        }
+
+        .rsi-zone.oversold {
+            bottom: 0;
+            height: 30%;
+        }
+
+        .rsi-zone.overbought {
+            top: 0;
+            height: 30%;
+            background: rgba(231, 76, 60, 0.1);
+            border-color: rgba(231, 76, 60, 0.3);
+        }
+
+        .rsi-line {
+            fill: none;
+            stroke: var(--neon-purple);
+            stroke-width: 2;
+            filter: drop-shadow(0 0 4px rgba(155, 89, 182, 0.5));
+        }
+
+        /* Flow Panel */
+        .flow-chart {
+            height: 80px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            gap: 4px;
+        }
+
+        .flow-bar-group {
+            display: flex;
+            gap: 2px;
+            align-items: flex-end;
+        }
+
+        .flow-bar {
+            width: 12px;
+            border-radius: 2px 2px 0 0;
+            transition: height 0.3s ease;
+        }
+
+        .flow-bar.foreign { background: linear-gradient(180deg, var(--neon-blue), rgba(0, 122, 255, 0.5)); }
+        .flow-bar.institution { background: linear-gradient(180deg, var(--neon-orange), rgba(255, 149, 0, 0.5)); }
+
+        .streak-star {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: var(--neon-yellow);
+            font-size: 1.2rem;
+            animation: starPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes starPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        /* Volume Panel */
+        .volume-chart {
+            height: 80px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            gap: 3px;
+            position: relative;
+        }
+
+        .volume-bar {
+            flex: 1;
+            max-width: 20px;
+            border-radius: 2px 2px 0 0;
+            transition: height 0.3s ease;
+        }
+
+        .volume-bar.up { background: linear-gradient(180deg, rgba(231, 76, 60, 0.8), rgba(231, 76, 60, 0.3)); }
+        .volume-bar.down { background: linear-gradient(180deg, rgba(0, 122, 255, 0.8), rgba(0, 122, 255, 0.3)); }
+        .volume-bar.spike { 
+            background: linear-gradient(180deg, var(--neon-green), rgba(46, 204, 113, 0.5)); 
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+        }
+
+        .volume-avg-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--neon-red);
+            box-shadow: 0 0 4px rgba(231, 76, 60, 0.5);
+        }
+
+        .volume-avg-label {
+            position: absolute;
+            right: 5px;
+            font-size: 0.6rem;
+            color: var(--neon-red);
+            background: var(--bg-deep);
+            padding: 1px 4px;
+            border-radius: 2px;
+        }
+
+        /* Legend */
+        .chart-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            padding: 15px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-line {
+            width: 20px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        .legend-line.ma5 { background: var(--neon-blue); }
+        .legend-line.ma20 { background: var(--neon-orange); }
+        .legend-line.ma120 { background: var(--text-muted); }
+        .legend-line.bb { background: rgba(90, 200, 250, 0.5); }
+
+        .legend-marker {
+            width: 12px;
+            height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+        }
+
+        /* Footer */
+        .dashboard-footer {
+            padding: 15px 30px;
+            background: rgba(0, 0, 0, 0.4);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .risk-metrics {
+            display: flex;
+            gap: 30px;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .metric-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .metric-value.green { color: var(--neon-green); }
+        .metric-value.yellow { color: var(--neon-yellow); }
+        .metric-value.cyan { color: var(--neon-cyan); }
+
+        .system-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--neon-green);
+            animation: statusBlink 1s ease-in-out infinite;
+        }
+
+        @keyframes statusBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .flow-stages {
+                flex-direction: column;
+            }
+            
+            .flow-arrow {
+                display: none;
+            }
+            
+            .sub-panels {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .dashboard-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .stock-price {
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+    
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>QUANTUM JUMP</h1>
+            <p class="subtitle">Prime Jennie Trading System</p>
+            <span class="version-badge">⚡ AGGRESSIVE MODE v2.0</span>
+        </header>
+
+        <!-- Part 1: Logic Flow -->
+        <section class="logic-flow-section">
+            <h2 class="section-title">
+                LOGIC FLOW PIPELINE
+                <span class="korean">트레이딩 로직 흐름도</span>
+            </h2>
+            
+            <div class="flow-container">
+                <div class="flow-stages">
+                    <!-- Stage 1: Scout -->
+                    <div class="flow-stage">
+                        <div class="stage-header">
+                            <div class="stage-icon scout">🔭</div>
+                            <div>
+                                <div class="stage-title cyan">SCOUT PHASE</div>
+                                <div class="stage-subtitle">Hunter & Judge AI</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">STEP 1</span>
+                                Universe Scanning
+                            </div>
+                            <div class="flow-box-content">
+                                KOSPI/KOSDAQ 전종목 스캔<br>
+                                뉴스/센티먼트 필터링 (Hunter)<br>
+                                기술적 스코어링 (Trend, Vol, S/R)
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">STEP 2</span>
+                                Score Filtering
+                            </div>
+                            <div class="flow-box-content">
+                                <span class="condition-tag pass">PASS</span> <code>Score ≥ 70</code> → Watchlist<br>
+                                <span class="condition-tag pass">SUPER</span> <code>Score ≥ 90</code> → Super Prime
+                            </div>
+                        </div>
+                        
+                        <div class="flow-arrow"></div>
+                    </div>
+
+                    <!-- Stage 2: Buy Pipeline -->
+                    <div class="flow-stage">
+                        <div class="stage-header">
+                            <div class="stage-icon buy">🎯</div>
+                            <div>
+                                <div class="stage-title green">BUY PIPELINE</div>
+                                <div class="stage-subtitle">Real-time Opportunity</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">STEP 3</span>
+                                Pre-Entry Gates
+                            </div>
+                            <div class="flow-box-content">
+                                ⏰ No-Trade: 09:00~09:30<br>
+                                <span class="condition-tag and">AND</span> Block if <code>VWAP Gap &gt; 2%</code> + <code>Vol &gt; 2x</code><br>
+                                ⏳ Cooldown: 180s between signals
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">STEP 4</span>
+                                Signal Triggers
+                            </div>
+                            <div class="flow-box-content">
+                                <div class="signal-list">
+                                    <span class="signal-badge standard">Golden Cross</span>
+                                    <span class="signal-badge standard">RSI Rebound</span>
+                                    <span class="signal-badge standard">Momentum 3%+</span>
+                                    <span class="signal-badge bull">RECON_BULL</span>
+                                    <span class="signal-badge bull">VCP_BREAKOUT</span>
+                                    <span class="signal-badge bull">VOL_BREAKOUT</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-arrow"></div>
+                    </div>
+
+                    <!-- Stage 3: Junho Guards -->
+                    <div class="flow-stage">
+                        <div class="stage-header">
+                            <div class="stage-icon guard">🛡️</div>
+                            <div>
+                                <div class="stage-title yellow">JUNHO GUARDS</div>
+                                <div class="stage-subtitle">Position Sizing & Risk</div>
+                            </div>
+                        </div>
+                        
+                        <div class="guard-wall">
+                            <div class="flow-box">
+                                <div class="flow-box-title">
+                                    <span class="step-num">GATE 1</span>
+                                    Base Risk Calculation
+                                </div>
+                                <div class="flow-box-content">
+                                    Base: <code>1.0%</code> of Equity<br>
+                                    Sector Overlap: <code>× 0.7</code><br>
+                                    <code>Qty = (Equity × Risk%) / (ATR × 2.0)</code>
+                                </div>
+                            </div>
+                            
+                            <div class="flow-box">
+                                <div class="flow-box-title">
+                                    <span class="step-num">GATE 2</span>
+                                    Heat & Weight Check
+                                </div>
+                                <div class="flow-box-content">
+                                    <span class="condition-tag and">REJECT</span> if <code>Portfolio Heat &gt; 5%</code><br>
+                                    <span class="condition-tag pass">CAP</span> Max Weight: 12% (18% if Score≥80)
+                                </div>
+                            </div>
+                            
+                            <div class="order-node">
+                                <button class="order-btn buy">▶ BUY ORDER</button>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-arrow"></div>
+                    </div>
+
+                    <!-- Stage 4: Sell Pipeline -->
+                    <div class="flow-stage">
+                        <div class="stage-header">
+                            <div class="stage-icon sell">📊</div>
+                            <div>
+                                <div class="stage-title red">SELL PIPELINE</div>
+                                <div class="stage-subtitle">Position Management</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">PROFIT</span>
+                                Profit Lock (ATR Clamp)
+                            </div>
+                            <div class="flow-box-content">
+                                L1: +1.5~3.0% → Lock <code>Breakeven</code><br>
+                                L2: +3.0~5.0% → Lock <code>+1.0%</code><br>
+                                Trailing: <code>-3.5%</code> from High (after +5%)
+                            </div>
+                        </div>
+                        
+                        <div class="flow-box">
+                            <div class="flow-box-title">
+                                <span class="step-num">DEFENSE</span>
+                                Stop Loss
+                            </div>
+                            <div class="flow-box-content">
+                                ATR Stop: <code>Entry - (ATR × 2.0)</code><br>
+                                Hard Stop: <code>-6.0%</code><br>
+                                Scale Out: 15~25% staged
+                            </div>
+                        </div>
+                        
+                        <div class="order-node">
+                            <button class="order-btn sell">■ SELL ORDER</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Part 2: Chart Dashboard -->
+        <section class="chart-section">
+            <h2 class="section-title">
+                TRADING DASHBOARD
+                <span class="korean">실시간 차트 인터페이스</span>
+            </h2>
+            
+            <div class="dashboard-container">
+                <!-- Dashboard Header -->
+                <div class="dashboard-header">
+                    <div class="stock-info">
+                        <div>
+                            <div class="stock-symbol">005930</div>
+                            <div class="stock-name">삼성전자</div>
+                        </div>
+                        <div class="status-badges">
+                            <span class="status-badge active">● WATCHING</span>
+                            <span class="status-badge score">SCORE 87</span>
+                        </div>
+                    </div>
+                    <div class="stock-price">
+                        <div class="current-price">₩78,500</div>
+                        <div class="price-change">+2,300 (+3.02%)</div>
+                    </div>
+                </div>
+
+                <!-- Chart Area -->
+                <div class="chart-area">
+                    <!-- Main Chart -->
+                    <div class="main-chart">
+                        <svg class="chart-svg" viewBox="0 0 1000 380" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id="bbGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" style="stop-color:rgba(90,200,250,0.15);stop-opacity:1" />
+                                    <stop offset="50%" style="stop-color:rgba(90,200,250,0.05);stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:rgba(90,200,250,0.15);stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Grid Lines -->
+                            <g stroke="rgba(255,255,255,0.03)" stroke-width="1">
+                                <line x1="0" y1="76" x2="1000" y2="76"/>
+                                <line x1="0" y1="152" x2="1000" y2="152"/>
+                                <line x1="0" y1="228" x2="1000" y2="228"/>
+                                <line x1="0" y1="304" x2="1000" y2="304"/>
+                            </g>
+                            
+                            <!-- Bollinger Band Area -->
+                            <path class="bb-area" fill="url(#bbGradient)" d="M50,200 Q150,140 250,180 T450,160 T650,140 T850,180 L850,280 Q650,320 450,300 T250,320 T50,280 Z"/>
+                            
+                            <!-- Bollinger Band Lines -->
+                            <path class="bb-line" d="M50,140 Q150,100 250,130 T450,110 T650,90 T850,130"/>
+                            <path class="bb-line" d="M50,260 Q150,300 250,270 T450,290 T650,310 T850,270"/>
+                            
+                            <!-- MA120 (Grey Dotted) -->
+                            <path class="ma-line ma120" d="M50,250 Q200,240 350,235 T550,225 T750,210 T950,195"/>
+                            
+                            <!-- MA20 (Orange) -->
+                            <path class="ma-line ma20" d="M50,230 Q150,220 250,210 T450,190 T650,170 T850,145"/>
+                            
+                            <!-- MA5 (Blue) -->
+                            <path class="ma-line ma5" d="M50,220 Q150,225 250,200 T400,175 T550,155 T700,130 T850,115"/>
+                            
+                            <!-- Candlesticks -->
+                            <g class="candlesticks">
+                                <!-- Day 1 - Down -->
+                                <line class="candle-wick down" x1="80" y1="210" x2="80" y2="250"/>
+                                <rect class="candle-down" x="72" y="220" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 2 - Down -->
+                                <line class="candle-wick down" x1="120" y1="215" x2="120" y2="260"/>
+                                <rect class="candle-down" x="112" y="225" width="16" height="25" rx="1"/>
+                                
+                                <!-- Day 3 - Up (RSI Rebound Point) -->
+                                <line class="candle-wick up" x1="160" y1="235" x2="160" y2="275"/>
+                                <rect class="candle-up" x="152" y="245" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 4 - Up -->
+                                <line class="candle-wick up" x1="200" y1="220" x2="200" y2="260"/>
+                                <rect class="candle-up" x="192" y="230" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 5 - Up -->
+                                <line class="candle-wick up" x1="240" y1="200" x2="240" y2="245"/>
+                                <rect class="candle-up" x="232" y="210" width="16" height="25" rx="1"/>
+                                
+                                <!-- Day 6 - Down -->
+                                <line class="candle-wick down" x1="280" y1="190" x2="280" y2="230"/>
+                                <rect class="candle-down" x="272" y="200" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 7 - Up (Golden Cross Point) -->
+                                <line class="candle-wick up" x1="320" y1="175" x2="320" y2="215"/>
+                                <rect class="candle-up" x="312" y="185" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 8 - Up -->
+                                <line class="candle-wick up" x1="360" y1="160" x2="360" y2="200"/>
+                                <rect class="candle-up" x="352" y="170" width="16" height="20" rx="1"/>
+                                
+                                <!-- Day 9 - Up (BB Lower Touch) -->
+                                <line class="candle-wick up" x1="400" y1="155" x2="400" y2="190"/>
+                                <rect class="candle-up" x="392" y="160" width="16" height="22" rx="1"/>
+                                
+                                <!-- Day 10 - Down -->
+                                <line class="candle-wick down" x1="440" y1="145" x2="440" y2="180"/>
+                                <rect class="candle-down" x="432" y="150" width="16" height="22" rx="1"/>
+                                
+                                <!-- Day 11 - Up -->
+                                <line class="candle-wick up" x1="480" y1="135" x2="480" y2="175"/>
+                                <rect class="candle-up" x="472" y="145" width="16" height="22" rx="1"/>
+                                
+                                <!-- Day 12 - Up (VCP Point) -->
+                                <line class="candle-wick up" x1="520" y1="125" x2="520" y2="165"/>
+                                <rect class="candle-up" x="512" y="130" width="16" height="28" rx="1"/>
+                                
+                                <!-- Day 13 - Up -->
+                                <line class="candle-wick up" x1="560" y1="115" x2="560" y2="155"/>
+                                <rect class="candle-up" x="552" y="120" width="16" height="28" rx="1"/>
+                                
+                                <!-- Day 14 - Up -->
+                                <line class="candle-wick up" x1="600" y1="105" x2="600" y2="145"/>
+                                <rect class="candle-up" x="592" y="110" width="16" height="28" rx="1"/>
+                                
+                                <!-- Day 15 - Up (Volume Breakout) -->
+                                <line class="candle-wick up" x1="640" y1="90" x2="640" y2="135"/>
+                                <rect class="candle-up" x="632" y="95" width="16" height="32" rx="1"/>
+                                
+                                <!-- Day 16 - Up -->
+                                <line class="candle-wick up" x1="680" y1="80" x2="680" y2="125"/>
+                                <rect class="candle-up" x="672" y="85" width="16" height="32" rx="1"/>
+                                
+                                <!-- Day 17 - Down (Profit Taking) -->
+                                <line class="candle-wick down" x1="720" y1="75" x2="720" y2="115"/>
+                                <rect class="candle-down" x="712" y="82" width="16" height="25" rx="1"/>
+                                
+                                <!-- Day 18 - Up -->
+                                <line class="candle-wick up" x1="760" y1="68" x2="760" y2="110"/>
+                                <rect class="candle-up" x="752" y="72" width="16" height="30" rx="1"/>
+                                
+                                <!-- Day 19 - Up -->
+                                <line class="candle-wick up" x1="800" y1="55" x2="800" y2="100"/>
+                                <rect class="candle-up" x="792" y="60" width="16" height="32" rx="1"/>
+                                
+                                <!-- Day 20 - Current -->
+                                <line class="candle-wick up" x1="840" y1="45" x2="840" y2="90"/>
+                                <rect class="candle-up" x="832" y="50" width="16" height="32" rx="1"/>
+                            </g>
+                            
+                            <!-- Price Levels -->
+                            <line class="price-level entry" x1="250" y1="200" x2="950" y2="200"/>
+                            <text class="price-label" fill="#2ECC71" x="955" y="204">ENTRY ₩76,200</text>
+                            
+                            <line class="price-level stop" x1="250" y1="260" x2="600" y2="260"/>
+                            <text class="price-label" fill="#E74C3C" x="605" y="264">STOP ₩71,700 (-6%)</text>
+                            
+                            <line class="price-level target" x1="400" y1="120" x2="950" y2="120"/>
+                            <text class="price-label" fill="#F1C40F" x="955" y="124">TRAILING HIGH</text>
+                            
+                            <!-- Signal Markers -->
+                            <!-- RSI Rebound -->
+                            <g class="signal-marker" transform="translate(160, 285)">
+                                <polygon class="signal-rsi-foreign" points="0,-12 10,6 -10,6"/>
+                                <text class="signal-label" y="18" text-anchor="middle">RSI+외인</text>
+                            </g>
+                            
+                            <!-- Golden Cross -->
+                            <g class="signal-marker" transform="translate(320, 225)">
+                                <polygon class="signal-golden-cross" points="0,-12 10,6 -10,6"/>
+                                <text class="signal-label" y="18" text-anchor="middle">GC</text>
+                            </g>
+                            
+                            <!-- VCP Breakout -->
+                            <g class="signal-marker" transform="translate(520, 175)">
+                                <polygon class="signal-vcp" points="0,-10 8,5 -8,5"/>
+                                <text class="signal-label" y="16" text-anchor="middle">VCP</text>
+                            </g>
+                            
+                            <!-- Volume Breakout -->
+                            <g class="signal-marker" transform="translate(640, 145)">
+                                <polygon class="signal-golden-cross" points="0,-12 10,6 -10,6"/>
+                                <text class="signal-label" y="18" text-anchor="middle">VOL BK</text>
+                            </g>
+                            
+                            <!-- Entry Point Arrow -->
+                            <g transform="translate(250, 200)">
+                                <circle r="8" fill="none" stroke="#2ECC71" stroke-width="2" stroke-dasharray="3 2">
+                                    <animate attributeName="r" values="8;12;8" dur="2s" repeatCount="indefinite"/>
+                                    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/>
+                                </circle>
+                                <text class="signal-label" fill="#2ECC71" y="-15" text-anchor="middle">▼ BUY</text>
+                            </g>
+                            
+                            <!-- Price Labels on Y-Axis -->
+                            <text fill="#636366" font-size="10" x="10" y="80">₩82,000</text>
+                            <text fill="#636366" font-size="10" x="10" y="156">₩79,000</text>
+                            <text fill="#636366" font-size="10" x="10" y="232">₩76,000</text>
+                            <text fill="#636366" font-size="10" x="10" y="308">₩73,000</text>
+                        </svg>
+                    </div>
+
+                    <!-- Sub Panels -->
+                    <div class="sub-panels">
+                        <!-- RSI Panel -->
+                        <div class="sub-panel">
+                            <div class="sub-panel-title">
+                                <span class="indicator rsi"></span>
+                                RSI (14)
+                            </div>
+                            <div class="rsi-chart">
+                                <div class="rsi-zone overbought"></div>
+                                <div class="rsi-zone oversold"></div>
+                                <svg width="100%" height="100%" viewBox="0 0 300 80" preserveAspectRatio="none">
+                                    <path class="rsi-line" d="M0,50 Q30,65 60,70 T120,55 T180,35 T240,25 T300,20"/>
+                                    <!-- Oversold marker -->
+                                    <circle cx="60" cy="70" r="4" fill="#2ECC71">
+                                        <animate attributeName="opacity" values="1;0.5;1" dur="1.5s" repeatCount="indefinite"/>
+                                    </circle>
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- Foreign/Institution Flow Panel -->
+                        <div class="sub-panel">
+                            <div class="sub-panel-title">
+                                <span class="indicator flow"></span>
+                                수급 (외국인/기관)
+                            </div>
+                            <span class="streak-star" title="3일 연속 순매수">⭐</span>
+                            <div class="flow-chart">
+                                <div class="flow-bar-group">
+                                    <div class="flow-bar foreign" style="height: 30px;"></div>
+                                    <div class="flow-bar institution" style="height: 20px;"></div>
+                                </div>
+                                <div class="flow-bar-group">
+                                    <div class="flow-bar foreign" style="height: 25px;"></div>
+                                    <div class="flow-bar institution" style="height: 35px;"></div>
+                                </div>
+                                <div class="flow-bar-group">
+                                    <div class="flow-bar foreign" style="height: 40px;"></div>
+                                    <div class="flow-bar institution" style="height: 30px;"></div>
+                                </div>
+                                <div class="flow-bar-group">
+                                    <div class="flow-bar foreign" style="height: 55px;"></div>
+                                    <div class="flow-bar institution" style="height: 45px;"></div>
+                                </div>
+                                <div class="flow-bar-group">
+                                    <div class="flow-bar foreign" style="height: 70px;"></div>
+                                    <div class="flow-bar institution" style="height: 60px;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Volume Panel -->
+                        <div class="sub-panel">
+                            <div class="sub-panel-title">
+                                <span class="indicator volume"></span>
+                                거래량
+                            </div>
+                            <div class="volume-chart">
+                                <div class="volume-avg-line" style="bottom: 35px;">
+                                    <span class="volume-avg-label" style="top: -8px;">20D AVG</span>
+                                </div>
+                                <div class="volume-bar down" style="height: 25px;"></div>
+                                <div class="volume-bar down" style="height: 30px;"></div>
+                                <div class="volume-bar up" style="height: 35px;"></div>
+                                <div class="volume-bar up" style="height: 28px;"></div>
+                                <div class="volume-bar up" style="height: 40px;"></div>
+                                <div class="volume-bar down" style="height: 32px;"></div>
+                                <div class="volume-bar up" style="height: 45px;"></div>
+                                <div class="volume-bar up" style="height: 38px;"></div>
+                                <div class="volume-bar up" style="height: 50px;"></div>
+                                <div class="volume-bar spike" style="height: 75px;"></div>
+                                <div class="volume-bar up" style="height: 55px;"></div>
+                                <div class="volume-bar up" style="height: 48px;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-line ma5"></span>
+                            MA5
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-line ma20"></span>
+                            MA20
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-line ma120"></span>
+                            MA120
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-line bb"></span>
+                            Bollinger Band
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-marker" style="color: #2ECC71;">▲</span>
+                            Buy Signal
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-marker" style="color: #9B59B6;">▲</span>
+                            VCP Signal
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard Footer -->
+                <div class="dashboard-footer">
+                    <div class="risk-metrics">
+                        <div class="metric">
+                            <div class="metric-label">Portfolio Heat</div>
+                            <div class="metric-value green">3.2%</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Position Risk</div>
+                            <div class="metric-value yellow">1.0%</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Weight</div>
+                            <div class="metric-value cyan">8.5%</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">ATR Stop</div>
+                            <div class="metric-value green">₩73,800</div>
+                        </div>
+                    </div>
+                    <div class="system-status">
+                        <span class="status-dot"></span>
+                        PRIME JENNIE ACTIVE • Last Signal: 14:32:15
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

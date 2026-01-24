@@ -7,6 +7,11 @@
   - `services/price-monitor/monitor.py`: Profit Lock 트리거 고정 2%/3.5% → **ATR 기반 동적** (`max(2%, ATR×1.5)`)
   - 백테스트 결과: 수익률 +4.20%→**+4.71%**, MDD 1.03%→**1.76%** (여전히 2% 미만)
 - **Implementing Junho's Safety Guards**: 공격적 운영(Risk 1.0%)에 대한 안전장치 구현 완료 - 조건부 비중(12%/18%), Heat 상한(5%), 섹터 감산(0.7x), Profit Lock 클램프(1.5~3%), VWAP 조건부 차단.
+- **Quantum Logic Visualization**: Jennie/Minji/Junho 3인 3색 시각화 컴포넌트 구현 및 대시보드 통합.
+  - `VisualLogic` 페이지 신설 및 Nested Routing 구현 (Junho/Minji/Jennie 탭).
+  - Jennie: Recharts 기반 모던 대시보드.
+  - Minji: HTML/SVG 기반 Cyberpunk 디자인.
+  - Junho: Lightweight-charts 기반 정석 차트.
 
 ## 2026-01-23
 - **Dashboard Operations Stabilization**: Airflow/Loki 연동 오류(401/502) 해결 및 Operations 페이지 기능 개선(시간 범위 필터, KST 표시, 서비스 목록 동기화).
