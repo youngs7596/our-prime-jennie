@@ -29,7 +29,7 @@ def _build_connection_url() -> str:
     user = os.getenv("MARIADB_USER") or get_secret("mariadb-user") or "root"
     password = os.getenv("MARIADB_PASSWORD") or get_secret("mariadb-password") or ""
     host = os.getenv("MARIADB_HOST") or get_secret("mariadb-host") or "localhost"
-    port = os.getenv("MARIADB_PORT", "3306")
+    port = os.getenv("MARIADB_PORT") or get_secret("mariadb-port") or "3306"
     dbname = os.getenv("MARIADB_DBNAME") or get_secret("mariadb-database") or "jennie_db"
 
     if not all([user, password, host, port, dbname]):

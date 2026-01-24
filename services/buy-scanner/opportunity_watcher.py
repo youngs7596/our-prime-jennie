@@ -29,14 +29,41 @@ class BarAggregator:
         self.current_bars: Dict[str, dict] = {}
         self.completed_bars: Dict[str, List[dict]] = defaultdict(list)
         self.lock = Lock()
-        self.max_bar_history = 60  # [CHANGED] 30 -> 60 (1시간 데이터 확보)
+        self.max_bar_history = 60
+        # [Phase 2] VWAP 엔진 스토리지: {code: {'date': 'YYYY-MM-DD', 'cum_pv': 0.0, 'cum_vol': 0.0, 'vwap': 0.0}}
+        self.vwap_store = defaultdict(lambda: {'date': None, 'cum_pv': 0.0, 'cum_vol': 0.0, 'vwap': 0.0})
+        # [Minji] 거래량 추적 (분당 거래량 리스트, 평균 계산용): {code: [vol1, vol2, ...]}
+        self.volume_history = defaultdict(list)
+        self.max_volume_history = 60  # 최근 60개 바(60분)의 거래량 추적
         
     def update(self, stock_code: str, price: float, volume: int = 0) -> Optional[dict]:
         """새 틱 데이터 수신 시 호출"""
         now = datetime.now(timezone.utc)
         bar_timestamp = self._get_bar_timestamp(now)
         
+        # [Phase 2] VWAP 실시간 계산 (KST 기준 날짜 관리)
         with self.lock:
+            # KST 변환 (UTC+9)
+            kst_now = now + timedelta(hours=9)
+            today_str = kst_now.strftime('%Y-%m-%d')
+            
+            vwap_info = self.vwap_store[stock_code]
+            
+            # 날짜 변경 시(또는 첫 데이터) 초기화
+            if vwap_info['date'] != today_str:
+                vwap_info['date'] = today_str
+                vwap_info['cum_pv'] = 0.0
+                vwap_info['cum_vol'] = 0.0
+                vwap_info['vwap'] = price # 초기값은 현재가
+            
+            # VWAP 누적 (Volume이 있을 때만 유효하지만, 0이라도 가격 갱신용으로 둠)
+            if volume > 0:
+                vwap_info['cum_pv'] += price * volume
+                vwap_info['cum_vol'] += volume
+                vwap_info['vwap'] = vwap_info['cum_pv'] / vwap_info['cum_vol']
+            
+            # (만약 장초반 Volume 0인 틱만 오면 VWAP은 첫 가격 유지)
+
             if stock_code not in self.current_bars:
                 self.current_bars[stock_code] = {
                     'timestamp': bar_timestamp,
@@ -57,6 +84,11 @@ class BarAggregator:
                 if len(self.completed_bars[stock_code]) > self.max_bar_history:
                     self.completed_bars[stock_code].pop(0)
                 
+                # [Minji] 완료된 바의 거래량을 히스토리에 추가
+                self.volume_history[stock_code].append(completed['volume'])
+                if len(self.volume_history[stock_code]) > self.max_volume_history:
+                    self.volume_history[stock_code].pop(0)
+                
                 self.current_bars[stock_code] = {
                     'timestamp': bar_timestamp,
                     'open': price,
@@ -75,6 +107,24 @@ class BarAggregator:
             bar['tick_count'] += 1
             
             return None
+    
+    def get_vwap(self, stock_code: str) -> float:
+        """현재 VWAP 반환"""
+        with self.lock:
+             return self.vwap_store[stock_code]['vwap']
+    
+    def get_volume_info(self, stock_code: str) -> dict:
+        """[Minji] 거래량 정보 반환 (현재 바 거래량 vs 평균)"""
+        with self.lock:
+            volumes = self.volume_history.get(stock_code, [])
+            if not volumes:
+                return {'current': 0, 'avg': 0, 'ratio': 0}
+            
+            current_vol = volumes[-1] if volumes else 0
+            avg_vol = sum(volumes) / len(volumes) if volumes else 1
+            ratio = current_vol / avg_vol if avg_vol > 0 else 0
+            
+            return {'current': current_vol, 'avg': avg_vol, 'ratio': ratio}
     
     def _get_bar_timestamp(self, dt: datetime) -> datetime:
         seconds = dt.second + (dt.minute * 60)
@@ -284,6 +334,23 @@ class BuyOpportunityWatcher:
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
         if len(recent_bars) < 20:
              return None
+
+        # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:20)
+        if not self._check_no_trade_window():
+            return None
+
+        # [Phase 2] Smart Entry: VWAP Filter
+        # 현재가가 VWAP보다 2% 이상 높으면 "비싼 가격"으로 간주하고 진입 컷
+        vwap = self.bar_aggregator.get_vwap(stock_code)
+        if vwap > 0 and current_price > vwap * 1.02:
+            # logger.debug(f"[{stock_code}] VWAP 필터 컷: Price {current_price} > VWAP {vwap:.0f} * 1.02")
+            return None
+        
+        # [Minji] 거래량 급증 필터: 이미 뉴스가 반영된 상태로 간주
+        volume_info = self.bar_aggregator.get_volume_info(stock_code)
+        if volume_info['ratio'] > 2.0:
+            # logger.debug(f"[{stock_code}] 거래량 급증 필터 컷: {volume_info['ratio']:.1f}x avg")
+            return None
 
         if not self._check_cooldown(stock_code):
             return None
@@ -941,6 +1008,28 @@ class BuyOpportunityWatcher:
         except Exception as e:
             logger.error(f"Legendary Pattern 체크 실패: {e}")
             return False
+
+    def _check_cooldown(self, stock_code: str) -> bool:
+        """쿨타임 체크 (Redis에 키가 없으면 True)"""
+        if not self.redis:
+            return True
+        key = f"buy_signal_cooldown:{stock_code}"
+        return not self.redis.exists(key)
+
+    def _check_no_trade_window(self) -> bool:
+        """장초 노이즈 구간(09:00~09:20) 진입 금지"""
+        now = datetime.now()  # 시스템 시간(KST 가정)
+        # UTC 환경일 경우 변환 필요하지만, 일단 시스템 로컬 시간 기준 09:00~09:20 설정
+        # (컨테이너가 KST면 문제없음. UTC면 +9시간 해줘야 함. 현재 메타데이터상 KST임)
+        
+        start_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+        end_time = now.replace(hour=9, minute=30, second=0, microsecond=0)  # [Minji] 30분으로 확대
+        
+        if start_time <= now <= end_time:
+            self.metrics['cooldown_blocked'] += 1  # 메트릭 재활용
+            # logger.debug("장초 진입 금지 시간 (09:00~09:20)")
+            return False
+        return True
 
     
     def _set_cooldown(self, stock_code: str) -> None:

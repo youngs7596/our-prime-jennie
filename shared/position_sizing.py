@@ -26,7 +26,7 @@ class PositionSizer:
         self.config = config
         
         # 설정값 (CONFIG 테이블에서 관리)
-        self.risk_per_trade_pct = config.get_float('RISK_PER_TRADE_PCT', default=2.0)  # 거래당 위험 2%
+        self.risk_per_trade_pct = config.get_float('RISK_PER_TRADE_PCT', default=1.0)  # 거래당 위험 1.0% (민지 권장 - 적정 공격)
         self.atr_multiplier = config.get_float('ATR_MULTIPLIER', default=2.0)  # ATR 배수
         self.min_quantity = config.get_int('MIN_QUANTITY', default=1)  # 최소 수량
         self.max_quantity = config.get_int('MAX_QUANTITY', default=1000)  # 최대 수량

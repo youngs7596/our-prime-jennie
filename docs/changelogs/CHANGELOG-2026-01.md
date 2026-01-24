@@ -1,5 +1,12 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-24
+- **Trading System Quantum Jump (Aggressive)**: 3명 AI(제니/준호/민지) 피드백 반영, 공격적 포지션 운영으로 전환.
+  - `shared/position_sizing.py`: Risk Sizing 0.5% → **1.0%** (종목당 투입 ~2,200만→~4,400만)
+  - `services/buy-scanner/opportunity_watcher.py`: No-Trade Window 09:20 → **09:30** 확대, **거래량 급증 필터** 추가 (avg×2 초과 시 진입 차단)
+  - `services/price-monitor/monitor.py`: Profit Lock 트리거 고정 2%/3.5% → **ATR 기반 동적** (`max(2%, ATR×1.5)`)
+  - 백테스트 결과: 수익률 +4.20%→**+4.71%**, MDD 1.03%→**1.76%** (여전히 2% 미만)
+
 ## 2026-01-23
 - **Dashboard Operations Stabilization**: Airflow/Loki 연동 오류(401/502) 해결 및 Operations 페이지 기능 개선(시간 범위 필터, KST 표시, 서비스 목록 동기화).
 - **Chart Phase Engine (Prime Council)**: Weinstein 4단계 이론 기반 차트 위상 분석 엔진 구현 (`shared/hybrid_scoring/chart_phase.py`). MA(20/60/120) 정배열/역배열 감지, Exhaustion(ADX+RSI+Z-Score) 점수화, Stage 4 매수 차단 및 Stage 2 보너스(1.2x) 적용.

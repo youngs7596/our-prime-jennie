@@ -801,13 +801,15 @@ class PortfolioEngine:
         actions: List[SellAction] = []
         sell_policy = sell_policy or {}
         trailing_enabled = bool(sell_policy.get("trailing_enabled", True))
-        trailing_activation_pct = float(sell_policy.get("trailing_activation_pct", 5.0))
+        trailing_activation_pct = float(sell_policy.get("trailing_activation_pct", 5.0)) # [Phase 1] 10->5%
         trailing_atr_mult = float(sell_policy.get("trailing_atr_mult", 1.5))
+        trailing_drop_pct = float(sell_policy.get("trailing_drop_pct", 3.5)) # [Phase 1] 7->3.5% (percentage drop)
+        min_trailing_profit = float(sell_policy.get("min_trailing_profit", 3.0)) # [Phase 1] 5->3%
         scale_out_enabled = bool(sell_policy.get("scale_out_enabled", True))
         scale_out_levels = sell_policy.get("scale_out_levels") or [
-            (5.0, 25.0),
-            (10.0, 25.0),
-            (15.0, 25.0),
+            (3.0, 30.0),  # [Phase 1] 5->3% (30%)
+            (7.0, 30.0),  # [Phase 1] 10->7% (30%)
+            (15.0, 40.0), # [Phase 1] 15% (나머지)
         ]
         rsi_overbought_threshold = float(sell_policy.get("rsi_overbought_threshold", rsi_thresholds[1]))
         rsi_min_profit_pct = float(sell_policy.get("rsi_min_profit_pct", 3.0))
@@ -837,8 +839,24 @@ class PortfolioEngine:
             quantity = pos.quantity
             partial = False
 
+            # 0. Profit Lock (이익 보존) - [Phase 1]
+            if reason is None:
+                high_profit_pct = ((pos.high_price - pos.avg_price) / pos.avg_price) * 100 if pos.avg_price > 0 else 0.0
+                
+                # L2: +3.5% 도달 시 +1.0% 보장
+                if high_profit_pct >= 3.5:
+                    lock_price = pos.avg_price * 1.01
+                    if price < lock_price:
+                        reason = "PROFIT_LOCK_L2"
+                
+                # L1: +2.0% 도달 시 +0.2% 보장 (본전)
+                elif high_profit_pct >= 2.0:
+                    lock_price = pos.avg_price * 1.002
+                    if price < lock_price:
+                        reason = "PROFIT_LOCK_L1"
+
             # 1. ATR 손절
-            if atr and atr_stop_mult:
+            if reason is None and atr and atr_stop_mult:
                 stop_price = pos.avg_price - (atr_stop_mult * atr)
                 if price < stop_price:
                     reason = "ATR_STOP"
@@ -849,12 +867,21 @@ class PortfolioEngine:
                 if profit_pct <= stop_loss_pct:
                     reason = "FIXED_STOP"
 
-            # 3. 트레일링 익절
-            if reason is None and trailing_enabled and atr:
+            # 3. 트레일링 익절 (% Drop 우선 적용)
+            if reason is None and trailing_enabled:
                 high_profit_pct = ((pos.high_price - pos.avg_price) / pos.avg_price) * 100 if pos.avg_price > 0 else 0.0
+                
                 if high_profit_pct >= trailing_activation_pct:
-                    trailing_stop_price = pos.high_price - (atr * trailing_atr_mult)
-                    if price <= trailing_stop_price:
+                    # Method A: Percentage Drop (from monitor.py)
+                    trailing_stop_price_pct = pos.high_price * (1 - trailing_drop_pct / 100.0)
+                    
+                    # Method B: ATR Drop (legacy)
+                    trailing_stop_price_atr = pos.high_price - (atr * trailing_atr_mult) if atr else 0
+                    
+                    # 더 타이트한(높은) 가격을 스탑 기준으로 사용
+                    trailing_stop_price = max(trailing_stop_price_pct, trailing_stop_price_atr)
+                    
+                    if price <= trailing_stop_price and profit_pct >= min_trailing_profit:
                         reason = "TRAILING_TP"
 
             # 4. 분할 익절

@@ -35,7 +35,8 @@ from dotenv import load_dotenv
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(PROJECT_ROOT)
 
-from shared import auth, database
+from shared import auth
+from shared.db.connection import ensure_engine_initialized, get_engine
 from shared.config import ConfigManager
 from shared.factor_scoring import FactorScorer
 from shared.market_regime import MarketRegimeDetector, StrategySelector
@@ -58,6 +59,14 @@ from utilities.backtest_gpt_v2 import (
     fetch_top_trading_value_codes,
     load_investor_trading,
     load_financial_metrics,
+)
+
+# 분봉 데이터 및 Scout history 로더
+from utilities.minute_data_loader import (
+    load_minute_prices_batch,
+    build_intraday_path,
+    load_scout_history,
+    load_llm_decisions,
 )
 
 logger = logging.getLogger(__name__)
@@ -709,6 +718,9 @@ class E2EBacktestEngine:
         use_llm_decisions: bool = False,  # Prime Council 제안: LLM 결정 활용
         max_volume_pct: float = 0.01,
         volume_full_fill: int = 100000,
+        # [NEW] 분봉 포함 풀세트 백테스트 옵션
+        use_real_minute_data: bool = False,  # 실제 분봉 데이터 사용
+        use_real_scout_history: bool = False,  # 실제 Scout history 사용 (watchlist_history)
     ):
         self.connection = connection
         self.start_date = start_date
@@ -782,6 +794,23 @@ class E2EBacktestEngine:
         self.financial_cache: Dict[str, pd.DataFrame] = {}
         self.intraday_cache: Dict[str, List[float]] = {}  # 일중 가격 캐시
         self.regime_detector = MarketRegimeDetector()
+        
+        # [NEW] 분봉 데이터 캐시
+        self.minute_cache: Dict[str, pd.DataFrame] = {}  # 실제 분봉 데이터
+        self.scout_history_cache: Dict = {}  # Scout history by date
+        self.use_real_minute_data = use_real_minute_data
+        self.use_real_scout_history = use_real_scout_history
+        
+        # [NEW] Price Monitor 매도 설정 (실제 운영 로직 재현)
+        self.profit_floor_activation = 15.0  # 수익 15% 도달 시 바닥 설정
+        self.profit_floor_level = 10.0  # 바닥 10%
+        self.trailing_activation_pct = 10.0  # 트레일링 활성화 수익률
+        self.trailing_drop_from_high_pct = 7.0  # 고점 대비 하락률
+        self.trailing_min_profit_pct = 5.0  # 트레일링 최소 수익 가드
+        self.scale_out_min_amount = 500000  # 분할매도 최소 금액
+        self.position_profit_floors: Dict[str, float] = {}  # 종목별 수익 바닥
+        self.position_high_watermarks: Dict[str, float] = {}  # 종목별 고점
+        self.position_scale_out_levels: Dict[str, int] = {}  # 종목별 분할매도 레벨
         
         # 결과
         self.equity_curve: List[Tuple[datetime, float]] = []
@@ -929,35 +958,50 @@ class E2EBacktestEngine:
         return fallback
     
     def _get_intraday_price(self, code: str, date: datetime, slot_idx: int) -> float:
-        """특정 슬롯의 일중 가격 반환"""
+        """특정 슬롯의 일중 가격 반환
+        
+        [NEW] 실제 분봉 데이터가 있으면 우선 사용, 없으면 기존 시뮬레이션 fallback
+        """
         key = f"{code}_{date.strftime('%Y%m%d')}"
+        
         if key not in self.intraday_cache:
-            df = self.price_cache.get(code)
-            if df is None or df.empty:
-                return 0.0
-            row = df.loc[date] if date in df.index else get_row_at_or_before(df, date)
-            if row is None:
-                return 0.0
-            open_price = float(row.get("OPEN_PRICE", row["CLOSE_PRICE"]))
-            if open_price <= 0:
-                open_price = float(row.get("CLOSE_PRICE", 0))
-
-            high_price = float(row.get("HIGH_PRICE", row["CLOSE_PRICE"]))
-            low_price = float(row.get("LOW_PRICE", row["CLOSE_PRICE"]))
-            close_price = float(row["CLOSE_PRICE"])
-            atr = self._get_prev_atr(df, date, fallback=open_price * 0.02)
+            # [NEW] 실제 분봉 데이터 확인
+            if self.use_real_minute_data and code in self.minute_cache:
+                minute_df = self.minute_cache[code]
+                path = build_intraday_path(minute_df, date.date() if isinstance(date, datetime) else date)
+                if path and len(path) >= 10:  # 최소 10개 슬롯 있어야 유효
+                    self.intraday_cache[key] = path
+                    # logger.debug(f"[{code}] 실제 분봉 데이터 사용: {len(path)}개 슬롯")
             
-            if self.intraday_mode == "ohlc":
-                self.intraday_cache[key] = self._simulate_intraday_path_ohlc(
-                    open_price, high_price, low_price, close_price,
-                )
-            elif self.intraday_mode == "brw":
-                regime = self._detect_regime(date)
-                self.intraday_cache[key] = self._simulate_intraday_path_brw(
-                    open_price, high_price, low_price, close_price, atr, regime,
-                )
-            else:  # atr 모드
-                self.intraday_cache[key] = self._simulate_intraday_path_v2(open_price, atr)
+            # Fallback: 기존 시뮬레이션
+            if key not in self.intraday_cache:
+                df = self.price_cache.get(code)
+                if df is None or df.empty:
+                    return 0.0
+                row = df.loc[date] if date in df.index else get_row_at_or_before(df, date)
+                if row is None:
+                    return 0.0
+                open_price = float(row.get("OPEN_PRICE", row["CLOSE_PRICE"]))
+                if open_price <= 0:
+                    open_price = float(row.get("CLOSE_PRICE", 0))
+
+                high_price = float(row.get("HIGH_PRICE", row["CLOSE_PRICE"]))
+                low_price = float(row.get("LOW_PRICE", row["CLOSE_PRICE"]))
+                close_price = float(row["CLOSE_PRICE"])
+                atr = self._get_prev_atr(df, date, fallback=open_price * 0.02)
+                
+                if self.intraday_mode == "ohlc":
+                    self.intraday_cache[key] = self._simulate_intraday_path_ohlc(
+                        open_price, high_price, low_price, close_price,
+                    )
+                elif self.intraday_mode == "brw":
+                    regime = self._detect_regime(date)
+                    self.intraday_cache[key] = self._simulate_intraday_path_brw(
+                        open_price, high_price, low_price, close_price, atr, regime,
+                    )
+                else:  # atr 모드
+                    self.intraday_cache[key] = self._simulate_intraday_path_v2(open_price, atr)
+        
         path = self.intraday_cache.get(key, [])
         if 0 <= slot_idx < len(path):
             return path[slot_idx]
@@ -1020,10 +1064,33 @@ class E2EBacktestEngine:
             if not fin_df.empty:
                 self.financial_cache[code] = fin_df
         
+        # [NEW] 5. 분봉 데이터 로드 (use_real_minute_data=True일 때)
+        if self.use_real_minute_data:
+            logger.info("   ... 분봉 데이터 로드")
+            minute_codes = [c for c in stock_codes if c != "0001"]
+            self.minute_cache = load_minute_prices_batch(
+                self.connection,
+                stock_codes=minute_codes,
+                start_date=self.start_date,
+                end_date=self.end_date,
+            )
+            logger.info(f"   ... 분봉 데이터: {len(self.minute_cache)}개 종목")
+        
+        # [NEW] 6. Scout history 로드 (use_real_scout_history=True일 때)
+        if self.use_real_scout_history:
+            logger.info("   ... Scout history 로드")
+            self.scout_history_cache = load_scout_history(
+                self.connection,
+                start_date=self.start_date,
+                end_date=self.end_date,
+            )
+            logger.info(f"   ... Scout history: {len(self.scout_history_cache)}일")
+        
         logger.info(
             f"✅ 데이터 로드 완료: "
             f"가격={len(self.price_cache)}, 뉴스={len(self.news_cache)}, "
-            f"수급={len(self.investor_cache)}, 재무={len(self.financial_cache)}"
+            f"수급={len(self.investor_cache)}, 재무={len(self.financial_cache)}, "
+            f"분봉={len(self.minute_cache)}, Scout history={len(self.scout_history_cache)}"
         )
 
     def _load_stock_name(self, code: str) -> None:
@@ -1222,6 +1289,35 @@ class E2EBacktestEngine:
                             f"🤖 [{current_date.strftime('%Y-%m-%d')}] LLM 결정 활용: "
                             f"{len(llm_watchlist)}개 BUY 신호"
                         )
+            # [NEW] 실제 Scout history 우선 사용 (캐시된 데이터)
+            if scout_result is None and self.use_real_scout_history and i > 0:
+                # 전일 Scout 스냅샷 사용 (아침에 전일 결과를 보고 매매)
+                snapshot_date = trading_days[i - 1]
+                if hasattr(snapshot_date, 'date'):
+                    snapshot_key = snapshot_date.date()
+                else:
+                    snapshot_key = snapshot_date
+                
+                if snapshot_key in self.scout_history_cache:
+                    history_items = self.scout_history_cache[snapshot_key]
+                    for item in history_items:
+                        self._ensure_code_loaded(item["code"])
+                    
+                    # is_tradable이 True인 종목만 필터링
+                    tradable_items = [item for item in history_items if item.get("is_tradable", 1)]
+                    
+                    if tradable_items:
+                        regime = self._detect_regime(current_date)
+                        scout_result = ScoutSnapshot(
+                            date=current_date,
+                            regime=regime,
+                            hot_watchlist=tradable_items[:self.scout_top_n],
+                        )
+                        logger.info(
+                            f"📋 [{current_date.strftime('%Y-%m-%d')}] 실제 Scout history 사용: "
+                            f"{len(tradable_items)}개 종목 (전일 스냅샷)"
+                        )
+            
             if scout_result is None and self.use_watchlist_history and i > 0:
                 snapshot_date = trading_days[i - 1]
                 history_items = self._load_watchlist_history_snapshot(snapshot_date)
@@ -1550,11 +1646,14 @@ def parse_args():
     default_end = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")  # 어제
     default_start = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")  # 6개월 전
     
-    parser = argparse.ArgumentParser(description="Scout 기반 E2E 백테스트 시뮬레이터")
+    parser = argparse.ArgumentParser(
+        description="Scout 기반 E2E 백테스트 시뮬레이터",
+        formatter_class=argparse.RawDescriptionHelpFormatter,  # % 포맷 확장 비활성화
+    )
     
     # 기본 설정
-    parser.add_argument("--start-date", type=str, default=default_start, help=f"시작일 (YYYY-MM-DD, 기본: {default_start})")
-    parser.add_argument("--end-date", type=str, default=default_end, help=f"종료일 (YYYY-MM-DD, 기본: {default_end})")
+    parser.add_argument("--start-date", type=str, default=default_start, help="시작일 YYYY-MM-DD")
+    parser.add_argument("--end-date", type=str, default=default_end, help="종료일 YYYY-MM-DD")
     parser.add_argument("--capital", type=float, default=210_000_000, help="초기 자본금")
     parser.add_argument("--verbose", action="store_true", help="상세 로그 출력")
     
@@ -1580,13 +1679,13 @@ def parse_args():
         type=str,
         choices=["ohlc", "atr", "brw"],
         default="ohlc",
-        help="일중 경로 모드 (ohlc: ZigZag, atr: 시가+전일ATR, brw: Bounded Random Walk)",
+        help="intraday path mode: ohlc/atr/brw",
     )
     parser.add_argument(
         "--static-universe",
         action="store_false",
         dest="dynamic_universe",
-        help="유니버스를 고정(시뮬레이션 시작일 기준)합니다.",
+        help="Fix universe to simulation start date",
     )
     parser.add_argument(
         "--use-watchlist-history",
@@ -1597,18 +1696,29 @@ def parse_args():
         "--max-volume-pct",
         type=float,
         default=0.01,
-        help="일 거래량 대비 최대 체결 비율 (기본 0.01 = 1%)",
+        help="일 거래량 대비 최대 체결 비율, 기본 0.01 즉 1퍼센트",
     )
     parser.add_argument(
         "--volume-full-fill",
         type=int,
         default=100000,
-        help="체결 확률 100% 기준 거래량",
+        help="Full fill probability base volume",
     )
     parser.add_argument(
         "--use-llm-decisions",
         action="store_true",
         help="LLM_DECISION_LEDGER의 실제 LLM 판단 이력을 활용합니다 (Prime Council 제안).",
+    )
+    # [NEW] 분봉 포함 풀세트 백테스트 옵션
+    parser.add_argument(
+        "--use-real-minute-data",
+        action="store_true",
+        help="실제 분봉 데이터를 사용합니다. 2025-12-17 이후 데이터 가용",
+    )
+    parser.add_argument(
+        "--use-real-scout-history",
+        action="store_true",
+        help="실제 Scout history를 캐시하여 사용합니다.",
     )
     
     return parser.parse_args()
@@ -1632,11 +1742,12 @@ def main():
     logger.info(f"   기간: {args.start_date} ~ {args.end_date}")
     logger.info(f"   초기 자본: {args.capital:,.0f}원")
     
-    # DB 연결
-    conn = database.get_db_connection()
-    if not conn:
-        logger.error("DB 연결 실패")
+    # DB 연결 (shared.db.connection 사용)
+    if not ensure_engine_initialized():
+        logger.error("DB 엔진 초기화 실패")
         return
+    
+    conn = get_engine().raw_connection()
     
     try:
         # 엔진 초기화 (CLI 파라미터 사용)
@@ -1663,6 +1774,9 @@ def main():
             use_llm_decisions=args.use_llm_decisions,  # Prime Council 제안
             max_volume_pct=args.max_volume_pct,
             volume_full_fill=args.volume_full_fill,
+            # [NEW] 분봉 포함 풀세트 백테스트 옵션
+            use_real_minute_data=args.use_real_minute_data,
+            use_real_scout_history=args.use_real_scout_history,
         )
         
         # 매수 신호 임계값 저장 (실행 시 사용)

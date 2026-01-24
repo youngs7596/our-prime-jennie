@@ -251,6 +251,52 @@ class PriceMonitor:
                 potential_signal = {"signal": True, "reason": f"Profit Floor Hit ({profit_pct:.1f}% < Floor {floor}%)", "quantity_pct": 100.0}
             
             # =====================================================================
+            # 0.1 High-Priority Profit Lock (Round Trip 방지) - [NEW]
+            # [Minji/Junho] ATR 기반 동적 트리거로 변경: 변동성에 맞춰 조정
+            # =====================================================================
+            if not potential_signal:
+                # ATR 기반 동적 트리거 계산
+                atr_pct = (atr / buy_price) * 100 if (atr and buy_price > 0) else 2.0
+                profit_lock_l1_trigger = max(2.0, atr_pct * 1.5)  # [Minji] 최소 2%, ATR 기반 동적
+                profit_lock_l2_trigger = max(3.5, atr_pct * 2.5)  # L2도 비례 상향
+                
+                # Level 1: 동적 트리거 도달 시 -> 본전(+0.2% fee/tax 고려) 보장
+                if profit_pct >= profit_lock_l1_trigger:
+                    lock_stop = 0.2
+                    if profit_pct < lock_stop: # 이미 떨어졌으면 즉시 청산
+                         potential_signal = {"signal": True, "reason": f"Profit Lock L1 Break (Hit {profit_lock_l1_trigger:.1f}%, Now {profit_pct:.2f}% < {lock_stop}%)", "quantity_pct": 100.0}
+                
+                # Level 2: 동적 트리거 도달 시 -> +1.0% 이익 보장
+                if not potential_signal and profit_pct >= profit_lock_l2_trigger:
+                    lock_stop = 1.0
+                    # 주의: 여기서는 "도달 이력"이 기준이 되어야 하지만,
+                    # 현재 High Watermark가 Trailing 섹션에 있음. 
+                    # 간소화를 위해 '현재가' 기준으로 즉시 판단하되,
+                    # 엄밀하게는 High Watermark를 먼저 업데이트하고 판정해야 함.
+                    pass # 뒤쪽 High Watermark 로직과 통합 고려하여 여기선 pass하고,
+                         # Trailing 섹션에서 통합 처리하거나 별도로 High를 관리해야 함.
+            
+            # [수정] High Watermark 업데이트를 최상단으로 이동 (Profit Lock을 위해)
+            watermark = update_high_watermark(stock_code, current_price, buy_price)
+            high_price = watermark.get('high_price', current_price)
+            high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+
+            # Profit Lock 실행 (High Price 기준) - ATR 기반 동적 트리거
+            if not potential_signal:
+                # ATR 기반 동적 트리거 계산 (위에서 이미 계산했으나, 없을 경우 대비)
+                atr_pct = (atr / buy_price) * 100 if (atr and buy_price > 0) else 2.0
+                profit_lock_l1_trigger = max(2.0, atr_pct * 1.5)
+                profit_lock_l2_trigger = max(3.5, atr_pct * 2.5)
+                
+                # L2: 고점이 L2 트리거 이상이었는데, 현재 수익이 1.0% 미만이면 청산
+                if high_profit_pct >= profit_lock_l2_trigger and profit_pct < 1.0:
+                    potential_signal = {"signal": True, "reason": f"Profit Lock L2 (High {high_profit_pct:.1f}% >= {profit_lock_l2_trigger:.1f}%, Now {profit_pct:.1f}% < 1.0%)", "quantity_pct": 100.0}
+                
+                # L1: 고점이 L1 트리거 이상이었는데, 현재 수익이 0.2% 미만이면 청산
+                elif high_profit_pct >= profit_lock_l1_trigger and profit_pct < 0.2:
+                    potential_signal = {"signal": True, "reason": f"Profit Lock L1 (High {high_profit_pct:.1f}% >= {profit_lock_l1_trigger:.1f}%, Now {profit_pct:.1f}% < 0.2%)", "quantity_pct": 100.0}
+            
+            # =====================================================================
             # 0.5 MACD Divergence Early Warning
             # =====================================================================
             macd_bearish_warning = False
@@ -316,9 +362,9 @@ class PriceMonitor:
             # =====================================================================
             if not potential_signal:
                 trailing_enabled = self.config.get_bool('TRAILING_TAKE_PROFIT_ENABLED', default=True)
-                activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=10.0)  # 10%로 상향
-                min_trailing_profit = self.config.get_float('TRAILING_MIN_PROFIT_PCT', default=5.0)  # 최소 수익률 가드
-                drop_from_high_pct = self.config.get_float('TRAILING_DROP_FROM_HIGH_PCT', default=7.0)  # 고점 대비 하락률
+                activation_pct = self.config.get_float('TRAILING_TAKE_PROFIT_ACTIVATION_PCT', default=5.0)  # 10% -> 5% 하향 (조기 활성화)
+                min_trailing_profit = self.config.get_float('TRAILING_MIN_PROFIT_PCT', default=3.0)  # 5% -> 3% 하향 (최소 보장)
+                drop_from_high_pct = self.config.get_float('TRAILING_DROP_FROM_HIGH_PCT', default=3.5)  # 7% -> 3.5% 하향 (타이트하게)
                 
                 # MACD bearish divergence 시 더 빠른 익절 (20% 조기 활성화)
                 if macd_bearish_warning:
@@ -329,12 +375,13 @@ class PriceMonitor:
                     activation_pct = activation_pct * 0.7  # 30% 조기 활성화 (10% → 7%)
                     drop_from_high_pct = drop_from_high_pct * 0.7  # 더 타이트한 드롭 (7% → 4.9%)
                 
-                # High Watermark 업데이트
-                watermark = update_high_watermark(stock_code, current_price, buy_price)
-                high_price = watermark.get('high_price', current_price)
+                
+                # High Watermark는 위에서 이미 업데이트함 (line 260 근처)
+                # watermark = update_high_watermark(stock_code, current_price, buy_price)
+                # high_price = watermark.get('high_price', current_price)
 
                 if trailing_enabled:
-                    high_profit_pct = ((high_price - buy_price) / buy_price) * 100 if buy_price > 0 else 0
+                    # high_profit_pct 이미 계산됨
                     
                     # 조건 1: 고점 수익률이 활성화 조건 이상
                     if high_profit_pct >= activation_pct:
@@ -369,11 +416,11 @@ class PriceMonitor:
                     
                     # --- 시장 국면별 동적 Scale-out 레벨 설정 ---
                     if market_regime == "BULL":
-                        levels = [(8.0, 20.0), (15.0, 25.0), (25.0, 25.0), (35.0, 15.0)]  # L1~L4
+                        levels = [(3.0, 25.0), (7.0, 25.0), (15.0, 25.0), (25.0, 15.0)]  # L1: 8->3%, L2: 15->7%
                     elif market_regime == "BEAR":
-                        levels = [(3.0, 20.0), (7.0, 25.0), (10.0, 25.0), (15.0, 15.0)]
+                        levels = [(2.0, 25.0), (5.0, 25.0), (8.0, 25.0), (12.0, 15.0)]   # L1: 3->2%, L2: 7->5%
                     else:  # SIDEWAYS
-                        levels = [(5.0, 20.0), (10.0, 25.0), (15.0, 25.0), (20.0, 15.0)]
+                        levels = [(3.0, 25.0), (7.0, 25.0), (12.0, 25.0), (18.0, 15.0)]  # L1: 5->3%, L2: 10->7%
                     
                     # --- 최소 거래금액 가드 ---
                     MIN_TRANSACTION_AMOUNT = 500_000  # 50만원
