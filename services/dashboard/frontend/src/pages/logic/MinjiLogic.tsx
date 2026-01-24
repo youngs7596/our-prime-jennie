@@ -1,7 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useWebSocket, BuySignal } from '../../lib/useWebSocket';
 
 const MinjiLogic: React.FC = () => {
+    // Real-time WebSocket Integration
+    const [lastSignal, setLastSignal] = useState<BuySignal | null>(null);
+    const { isConnected } = useWebSocket({
+        onMessage: (msg) => {
+            if (msg.type === 'buy_signal') {
+                setLastSignal(msg.data);
+            }
+        }
+    });
+
+    // Display data (Fallback to mock if no signal yet)
+    const displayData = lastSignal ? {
+        name: lastSignal.stock_name,
+        code: lastSignal.stock_code,
+        price: lastSignal.price.toLocaleString(),
+        change: "+0.0%", // Change not in signal, default to 0
+        status: lastSignal.signal_type
+    } : {
+        name: "TECH PRIME",
+        code: "005930.KS",
+        price: "72,500",
+        change: "+2.3%",
+        status: "Active Monitoring"
+    };
     // Styles from the HTML file, adapted for Styled-Components or inline styles
     // Since we are in a React environment with Tailwind available, we can mix approaches.
     // However, to preserve the exact look of Minji's HTML, we'll use a style block or scoped styles.
@@ -247,12 +272,15 @@ const MinjiLogic: React.FC = () => {
             <div className="dashboard-container">
                 <div className="dashboard-header">
                     <div>
-                        <div style={{ fontFamily: "'Orbitron'", fontSize: "1.2rem" }}>TECH PRIME</div>
-                        <div style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>005930.KS</div>
+                        <div style={{ fontFamily: "'Orbitron'", fontSize: "1.2rem" }}>
+                            {displayData.name}
+                            {isConnected && <span className="ml-2 inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Connected" />}
+                        </div>
+                        <div style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>{displayData.code}</div>
                     </div>
                     <div>
-                        <div className="stock-price">72,500</div>
-                        <div style={{ color: "var(--neon-green)", textAlign: "right" }}>+2.3%</div>
+                        <div className="stock-price">{displayData.price}</div>
+                        <div style={{ color: "var(--neon-green)", textAlign: "right" }}>{displayData.change}</div>
                     </div>
                 </div>
 
@@ -312,7 +340,7 @@ const MinjiLogic: React.FC = () => {
                     </div>
                     <div className="sub-panel" style={{ background: "rgba(0,0,0,0.3)", padding: "10px", borderRadius: "8px" }}>
                         <div style={{ fontSize: "0.7rem", color: "var(--neon-green)", marginBottom: "5px" }}>STATUS</div>
-                        <div style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}>Active Monitoring</div>
+                        <div style={{ fontSize: "0.8rem", color: "var(--text-primary)" }}>{displayData.status}</div>
                         <div style={{ fontSize: "0.7rem", color: "var(--neon-yellow)" }}>Heat: 3.2% / 5.0%</div>
                     </div>
                 </div>

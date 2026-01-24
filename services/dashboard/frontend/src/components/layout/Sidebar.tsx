@@ -107,7 +107,7 @@ export function Sidebar() {
           // Check if parent or any child is active
           const active = isItemActive(item);
           // Check if parent specifically is active (if it has a path)
-          const parentMatch = location.pathname === item.path;
+
 
           return (
             <div key={item.path}>
@@ -146,7 +146,7 @@ export function Sidebar() {
                 >
                   {item.children.map((child) => {
                     const childActive = location.pathname === child.path;
-                    const ChildIcon = child.icon || Function; // Fallback
+
                     return (
                       <NavLink
                         key={child.path}

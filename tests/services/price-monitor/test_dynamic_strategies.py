@@ -33,6 +33,8 @@ class TestDynamicStrategies(unittest.TestCase):
         
         # Mock BarAggregator
         self.watcher.bar_aggregator = MagicMock()
+        self.watcher.bar_aggregator.get_volume_info.return_value = {'current': 1000, 'avg': 1000, 'ratio': 1.0}
+        self.watcher.bar_aggregator.get_vwap.return_value = 100.0
         
         # Set default regime
         self.watcher.market_regime = "BULL"

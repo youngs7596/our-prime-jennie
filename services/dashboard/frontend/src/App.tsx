@@ -8,7 +8,7 @@ import { SystemPage } from '@/pages/System'
 import { NewsPage } from '@/pages/News'
 import { AnalystPage } from '@/pages/Analyst'
 import FactorsPage from '@/pages/Factors'
-import VisualLogic from '@/pages/VisualLogic'
+
 import { TradingPage } from '@/pages/Trading'
 import { SettingsPage } from '@/pages/Settings'
 import Operations from '@/pages/Operations'

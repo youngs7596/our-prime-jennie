@@ -165,6 +165,31 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# --- Redis Subscriber ---
+async def redis_subscriber_task(redis_client):
+    """Redis Pub/Sub 구독 및 WebSocket 브로드캐스트"""
+    pubsub = redis_client.pubsub()
+    await pubsub.subscribe("dashboard:stream")
+    logger.info("📡 Redis Pub/Sub 구독 시작: dashboard:stream")
+    
+    try:
+        async for message in pubsub.listen():
+            if message["type"] == "message":
+                try:
+                    data = json.loads(message["data"])
+                    # logger.info(f"   (WS) Relay: {data.get('type')}")
+                    await manager.broadcast(data)
+                except Exception as e:
+                    logger.error(f"메시지 처리 오류: {e}")
+    except asyncio.CancelledError:
+        logger.info("Redis Subscriber 작업 취소됨")
+    except Exception as e:
+        logger.error(f"Redis Subscriber 오류: {e}")
+    finally:
+        await pubsub.close()
+        logger.info("Redis Pub/Sub 구독 종료")
+
+
 # --- Lifespan 이벤트 ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -181,9 +206,38 @@ async def lifespan(app: FastAPI):
         logger.info("✅ DB 엔진 초기화 및 스키마 검증(Auto-Create) 완료")
     except Exception as e:
         logger.error(f"❌ DB 엔진 초기화 실패: {e}")
+    
     # Redis 연결
-    get_redis()
+    r = get_redis()
+    
+    # [Start] Redis Subscriber Background Task
+    subscriber_task = None
+    if r:
+        try:
+            import redis.asyncio as aioredis
+            # Force 127.0.0.1 to avoid localhost ambiguity in some environments
+            redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
+            redis_port = os.getenv("REDIS_PORT", "6379")
+            redis_url = f"redis://{redis_host}:{redis_port}/0"
+            
+            async_redis = aioredis.from_url(redis_url, decode_responses=True)
+            subscriber_task = asyncio.create_task(redis_subscriber_task(async_redis))
+            logger.info(f"✅ Async Redis Subscriber 시작됨 ({redis_url})")
+        except ImportError:
+            logger.warning("⚠️ redis.asyncio 모듈 없음 - 실시간 브로드캐스트 비활성화")
+        except Exception as e:
+            logger.error(f"❌ Async Redis 초기화 실패: {e}")
+
     yield
+    
+    # [Cleanup]
+    if subscriber_task:
+        subscriber_task.cancel()
+        try:
+            await subscriber_task
+        except asyncio.CancelledError:
+            pass
+            
     logger.info("👋 Dashboard Backend 종료")
 
 from shared.version import PROJECT_NAME, VERSION, get_service_title

@@ -1049,8 +1049,12 @@ class BuyOpportunityWatcher:
         except Exception as e:
             logger.warning(f"Cooldown 설정 실패: {e}")
     
+        except Exception as e:
+            logger.error(f"매수 신호 발행 오류: {e}")
+            return False
+            
     def publish_signal(self, signal: dict) -> bool:
-        """매수 신호 RabbitMQ 발행"""
+        """매수 신호 RabbitMQ 발행 및 Redis Pub/Sub 전송"""
         if not self.tasks_publisher:
             logger.warning("RabbitMQ Publisher 없음 - 신호 발행 불가")
             return False
@@ -1082,11 +1086,35 @@ class BuyOpportunityWatcher:
                 'source': 'buy_scanner_websocket',
             }
             
+            # 1. RabbitMQ 발행
             msg_id = self.tasks_publisher.publish(payload)
+            
             if msg_id:
                 logger.info(f"✅ 매수 신호 발행: {signal['stock_code']} - {signal['signal_type']} (ID: {msg_id})")
                 self.metrics['signal_count'] += 1
                 self.metrics['last_signal_time'] = datetime.now(timezone.utc).isoformat()
+                
+                # 2. [Live Integration] Redis Pub/Sub 발행 (For Dashboard)
+                if self.redis:
+                    try:
+                        # 대시보드 시각화용 경량 페이로드
+                        dashboard_payload = {
+                            "type": "buy_signal",
+                            "data": {
+                                "stock_code": signal['stock_code'],
+                                "stock_name": signal['stock_name'],
+                                "price": signal['current_price'],
+                                "time": signal['timestamp'],
+                                "signal_type": signal['signal_type'],
+                                "reason": signal['signal_reason'],
+                                "regime": signal['market_regime']
+                            }
+                        }
+                        self.redis.publish("dashboard:stream", json.dumps(dashboard_payload))
+                        # logger.debug(f"   (Live) Redis Pub/Sub 발행: {signal['stock_code']}")
+                    except Exception as redis_e:
+                        logger.warning(f"   (Live) Redis Pub/Sub 발행 실패: {redis_e}")
+
                 return True
             else:
                 logger.error(f"❌ 매수 신호 발행 실패: {signal['stock_code']}")

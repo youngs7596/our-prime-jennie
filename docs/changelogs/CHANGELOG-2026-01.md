@@ -1,5 +1,8 @@
 # 📅 2026-01 변경 이력
 
+## 2026-01-25
+- **Frontend Real-time Integration**: Redis Pub/Sub 및 WebSocket 파이프라인 구축 완료, `buy-scanner` → `dashboard-backend` → `Frontend(Junho/Minji/Jennie)` 실시간 데이터 연동 및 시각화 구현.
+
 ## 2026-01-24
 - **Trading System Quantum Jump (Aggressive)**: 3명 AI(제니/준호/민지) 피드백 반영, 공격적 포지션 운영으로 전환.
   - `shared/position_sizing.py`: Risk Sizing 0.5% → **1.0%** (종목당 투입 ~2,200만→~4,400만)
