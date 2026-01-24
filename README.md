@@ -127,6 +127,7 @@ my-prime-jennie/
 | 📱 **텔레그램 알림** | 매수/매도 체결 실시간 알림 |
 | 🛡️ **Fact-Checker** | LLM 환각 탐지 및 Telegram 경고 알림 |
 | 🛡️ **Fact-Checker** | LLM 환각 탐지 및 Telegram 경고 알림 |
+| 🛡️ **Portfolio Heat Shield** | **[New]** 계좌 파산 방지 (Total Risk Max 5%), 섹터 쏠림 방지 |
 | ⚡ **Circuit Breaker** | KIS API 장애 대응 (자동 차단/복구) |
 | 📈 **Chart Phase Engine** | **[New]** Weinstein 4단계 차트 파동 분석 (Accumulation/Uptrend/Distribution/Downtrend) |
 
@@ -290,6 +291,18 @@ def call_kis_api():
 | **HALF_OPEN** | 복구 시도, 일부 호출만 허용하여 테스트 |
 
 - **상태 변화 알림**: Telegram으로 OPEN/HALF_OPEN/CLOSED 상태 변화 알림
+
+### 10. Risk Management & Safety Guards (Junho's System)
+
+**"Maximize Aggression, Minimize Ruin" (공격성 극대화, 파산 최소화)**
+
+준호(Junho)의 피드백을 반영한 **Risk 1.0% 공격적 트레이딩**과 이를 뒷받침하는 **이중 안전장치**입니다.
+
+- **Portfolio Heat Shield**: 전체 계좌 리스크를 **5%**로 제한. (모든 종목 동시 손절 시에도 -5%로 방어)
+- **Dynamic Position Sizing**: 기본 12%, A+ 셋업(LLM≥80) 시 **18%** 베팅.
+- **Smart Profit Lock**: ATR 기반으로 수익 반납을 방지하는 동적 익절 트리거.
+
+👉 **상세 내용 보기**: [docs/safety_guards_and_risk.md](docs/safety_guards_and_risk.md)
 
 ---
 
