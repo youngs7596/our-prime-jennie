@@ -6,6 +6,7 @@
   - `services/buy-scanner/opportunity_watcher.py`: No-Trade Window 09:20 → **09:30** 확대, **거래량 급증 필터** 추가 (avg×2 초과 시 진입 차단)
   - `services/price-monitor/monitor.py`: Profit Lock 트리거 고정 2%/3.5% → **ATR 기반 동적** (`max(2%, ATR×1.5)`)
   - 백테스트 결과: 수익률 +4.20%→**+4.71%**, MDD 1.03%→**1.76%** (여전히 2% 미만)
+- **Implementing Junho's Safety Guards**: 공격적 운영(Risk 1.0%)에 대한 안전장치 구현 완료 - 조건부 비중(12%/18%), Heat 상한(5%), 섹터 감산(0.7x), Profit Lock 클램프(1.5~3%), VWAP 조건부 차단.
 
 ## 2026-01-23
 - **Dashboard Operations Stabilization**: Airflow/Loki 연동 오류(401/502) 해결 및 Operations 페이지 기능 개선(시간 범위 필터, KST 표시, 서비스 목록 동기화).

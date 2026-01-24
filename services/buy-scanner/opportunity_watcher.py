@@ -339,17 +339,24 @@ class BuyOpportunityWatcher:
         if not self._check_no_trade_window():
             return None
 
-        # [Phase 2] Smart Entry: VWAP Filter
-        # 현재가가 VWAP보다 2% 이상 높으면 "비싼 가격"으로 간주하고 진입 컷
-        vwap = self.bar_aggregator.get_vwap(stock_code)
-        if vwap > 0 and current_price > vwap * 1.02:
-            # logger.debug(f"[{stock_code}] VWAP 필터 컷: Price {current_price} > VWAP {vwap:.0f} * 1.02")
-            return None
-        
-        # [Minji] 거래량 급증 필터: 이미 뉴스가 반영된 상태로 간주
+        # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
+        # 기존 VWAP 2% 단독 차단 + 거래량 2x 단독 차단 → 통합
         volume_info = self.bar_aggregator.get_volume_info(stock_code)
+        vwap = self.bar_aggregator.get_vwap(stock_code)
+        
+        risk_conditions = 0
+        
+        # 조건 1: 거래량 급증 (> 2x 평균)
         if volume_info['ratio'] > 2.0:
-            # logger.debug(f"[{stock_code}] 거래량 급증 필터 컷: {volume_info['ratio']:.1f}x avg")
+            risk_conditions += 1
+        
+        # 조건 2: VWAP 이격 과대 (> 2%)
+        if vwap > 0 and current_price > vwap * 1.02:
+            risk_conditions += 1
+        
+        # 2개 이상 조건 충족 시 차단 (거래량 급증 + VWAP 이격 = 뉴스반영 상태)
+        if risk_conditions >= 2:
+            # logger.debug(f"[{stock_code}] 조건부 차단: 거래량 {volume_info['ratio']:.1f}x + VWAP 이격")
             return None
 
         if not self._check_cooldown(stock_code):

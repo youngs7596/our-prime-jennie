@@ -255,10 +255,11 @@ class PriceMonitor:
             # [Minji/Junho] ATR 기반 동적 트리거로 변경: 변동성에 맞춰 조정
             # =====================================================================
             if not potential_signal:
-                # ATR 기반 동적 트리거 계산
+                # [Minji/Junho] ATR 기반 동적 트리거 + 상·하한 클램프
                 atr_pct = (atr / buy_price) * 100 if (atr and buy_price > 0) else 2.0
-                profit_lock_l1_trigger = max(2.0, atr_pct * 1.5)  # [Minji] 최소 2%, ATR 기반 동적
-                profit_lock_l2_trigger = max(3.5, atr_pct * 2.5)  # L2도 비례 상향
+                # [Junho] L1: min 1.5% ~ max 3.0%, L2: min 3.0% ~ max 5.0%
+                profit_lock_l1_trigger = max(1.5, min(3.0, atr_pct * 1.5))
+                profit_lock_l2_trigger = max(3.0, min(5.0, atr_pct * 2.5))
                 
                 # Level 1: 동적 트리거 도달 시 -> 본전(+0.2% fee/tax 고려) 보장
                 if profit_pct >= profit_lock_l1_trigger:
@@ -283,10 +284,10 @@ class PriceMonitor:
 
             # Profit Lock 실행 (High Price 기준) - ATR 기반 동적 트리거
             if not potential_signal:
-                # ATR 기반 동적 트리거 계산 (위에서 이미 계산했으나, 없을 경우 대비)
+                # [Junho] ATR 기반 동적 트리거 + 상·하한 클램프 (위와 동일)
                 atr_pct = (atr / buy_price) * 100 if (atr and buy_price > 0) else 2.0
-                profit_lock_l1_trigger = max(2.0, atr_pct * 1.5)
-                profit_lock_l2_trigger = max(3.5, atr_pct * 2.5)
+                profit_lock_l1_trigger = max(1.5, min(3.0, atr_pct * 1.5))
+                profit_lock_l2_trigger = max(3.0, min(5.0, atr_pct * 2.5))
                 
                 # L2: 고점이 L2 트리거 이상이었는데, 현재 수익이 1.0% 미만이면 청산
                 if high_profit_pct >= profit_lock_l2_trigger and profit_pct < 1.0:
