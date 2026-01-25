@@ -39,6 +39,7 @@ const navItems = [
       { path: '/visual-logic/junho', label: 'Junho (준호)', icon: Zap },
       { path: '/visual-logic/minji', label: 'Minji (민지)', icon: Sparkles },
       { path: '/visual-logic/jennie', label: 'Jennie (제니)', icon: Star },
+      { path: '/visual-logic/new', label: 'Dynamic (New)', icon: Target },
     ]
   },
   { path: '/trading', icon: Zap, label: 'Trading' },

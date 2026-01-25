@@ -218,7 +218,7 @@ export default function JunhoLogic() {
     }, []);
 
     // Update charts when data changes
-    useEffect(() => {
+    const updateCharts = useCallback(() => {
         if (!candleSeriesRef.current) return;
 
         // Map data to series format
@@ -251,18 +251,21 @@ export default function JunhoLogic() {
             if (!d.signals?.length) return [];
             return d.signals.map(sig => {
                 if (sig === "GOLDEN_CROSS") {
-                    return { time: d.time, position: "belowBar", color: THEME.markerGC, shape: "arrowUp", text: "GC ▲" };
+                    return { time: d.time, position: "belowBar" as const, color: THEME.markerGC, shape: "arrowUp" as const, text: "GC ▲" };
                 }
                 if (sig === "BB_LOWER_TOUCH") {
-                    return { time: d.time, position: "belowBar", color: THEME.markerBB, shape: "circle", text: "BB ●" };
+                    return { time: d.time, position: "belowBar" as const, color: THEME.markerBB, shape: "circle" as const, text: "BB ●" };
                 }
-                return { time: d.time, position: "belowBar", color: THEME.markerRF, shape: "diamond", text: "RSI+F ◆" };
+                return { time: d.time, position: "belowBar" as const, color: THEME.markerRF, shape: "diamond" as const, text: "RSI+F ◆" };
             });
         });
         // @ts-ignore
         candleSeriesRef.current.setMarkers(markers);
+    }, [chartData]);
 
-    }, [chartData]); // Re-render charts when data updates
+    useEffect(() => {
+        updateCharts();
+    }, [updateCharts]);
 
     useEffect(() => {
         // Initialize Charts only once
@@ -360,6 +363,13 @@ export default function JunhoLogic() {
             window.removeEventListener('resize', handleResize);
         };
     }, []);
+
+    // Force initial data load once charts are ready
+    useEffect(() => {
+        if (candleSeriesRef.current && chartData.length > 0) {
+            updateCharts();
+        }
+    }, [updateCharts]);
 
     return (
         <div style={wrapStyle} className="h-full">

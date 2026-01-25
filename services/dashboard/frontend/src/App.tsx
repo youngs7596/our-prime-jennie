@@ -16,6 +16,7 @@ import LogicLayout from '@/pages/logic/Layout'
 import JunhoLogic from '@/pages/logic/JunhoLogic'
 import MinjiLogic from '@/pages/logic/MinjiLogic'
 import JennieLogic from '@/pages/logic/JennieLogic'
+import VisualLogicNew from '@/pages/logic/VisualLogicNew'
 
 import { ArchitecturePage } from '@/pages/Architecture'
 import SuperPrimePage from '@/pages/SuperPrime'
@@ -63,6 +64,7 @@ function App() {
             <Route path="junho" element={<JunhoLogic />} />
             <Route path="minji" element={<MinjiLogic />} />
             <Route path="jennie" element={<JennieLogic />} />
+            <Route path="new" element={<VisualLogicNew />} />
           </Route>
           <Route path="trading" element={<TradingPage />} />
           <Route path="operations" element={<Operations />} />

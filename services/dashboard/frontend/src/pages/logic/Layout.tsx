@@ -13,6 +13,7 @@ export default function LogicLayout() {
         { path: 'junho', label: 'Junho\'s Logic' },
         { path: 'minji', label: 'Minji\'s Logic' },
         { path: 'jennie', label: 'Jennie\'s Logic' },
+        { path: 'new', label: 'Dynamic (New)' },
     ];
 
     return (
