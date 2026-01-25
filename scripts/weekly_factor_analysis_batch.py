@@ -95,7 +95,7 @@ class WeeklyFactorAnalysisBatch:
             return False
         
 
-        python_executable = sys.executable if sys.executable else 'python'
+        python_executable = sys.executable if sys.executable else 'python3'
         cmd = [python_executable, str(script_path)]
         if args:
             cmd.extend(args)

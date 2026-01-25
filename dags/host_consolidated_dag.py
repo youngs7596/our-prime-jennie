@@ -38,7 +38,7 @@ with DAG(
 ) as dag_weekly:
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
-        bash_command='export MARIADB_HOST=mariadb && export MARIADB_PORT=3306 && export MARIADB_USER=root && cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/weekly_factor_analysis_batch.py',
+        bash_command='export MARIADB_HOST=mariadb && export MARIADB_PORT=3306 && export MARIADB_USER=root && cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/weekly_factor_analysis_batch.py',
         env=COMMON_ENV,
     )
 
@@ -53,7 +53,7 @@ with DAG(
 ) as dag_collector:
     run_collector = BashOperator(
         task_id='collect_full_market_data',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/collect_full_market_data_parallel.py',
+        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/collect_full_market_data_parallel.py',
         env=COMMON_ENV,
     )
 
@@ -84,6 +84,6 @@ with DAG(
 ) as dag_ai_perf:
     run_ai_perf = BashOperator(
         task_id='analyze_ai_performance',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python scripts/analyze_ai_performance.py',
+        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/analyze_ai_performance.py',
         env=COMMON_ENV,
     )
