@@ -94,7 +94,9 @@ class WeeklyFactorAnalysisBatch:
             logger.error(f"❌ 스크립트를 찾을 수 없습니다: {script_path}")
             return False
         
-        cmd = [sys.executable, str(script_path)]
+
+        python_executable = sys.executable if sys.executable else 'python'
+        cmd = [python_executable, str(script_path)]
         if args:
             cmd.extend(args)
         

@@ -7,6 +7,7 @@
 - **Frontend Real-time Integration**: Redis Pub/Sub 및 WebSocket 파이프라인 구축 완료, `buy-scanner` → `dashboard-backend` → `Frontend(Junho/Minji/Jennie)` 실시간 데이터 연동 및 시각화 구현.
 - **Frontend Logic Pages Enhancement**: Junho(차트 초기화 버그 수정), Minji(매수 마커 추가), Jennie(활성 상태 배지 및 추세선 추가) 시각화 고도화.
 - **Visual Logic Consolidation**: 기존 다중 페르소나(Junho/Minji/Jennie) 시각화 페이지를 `VisualLogic`(구 `VisualLogicNew`) 단일 시뮬레이터로 통합 및 전면 한글화 완료. Legacy 실시간 모니터링 코드는 제거하여 유지보수 효율성 증대.
+- **System Ops Fixes**: `weekly_factor_analysis` DAG 실패 원인(Empty sys.executable in Airflow) 수정 및 Jenkins 빌드 타임아웃 오류 분석.
 
 
 ## 2026-01-24
