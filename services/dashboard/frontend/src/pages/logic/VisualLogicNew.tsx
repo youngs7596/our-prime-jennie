@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
     createChart,
     ISeriesApi,
@@ -310,7 +310,12 @@ function generateBearScenario(): ScenarioData {
 
 export default function VisualLogicNew() {
     const [scenario, setScenario] = useState<MarketRegime>('SIDEWAYS');
-    const [activeData, setActiveData] = useState<ScenarioData>(generateSidewaysScenario());
+
+    const activeData = useMemo(() => {
+        if (scenario === 'SIDEWAYS') return generateSidewaysScenario();
+        else if (scenario === 'BULL') return generateBullScenario();
+        else return generateBearScenario();
+    }, [scenario]);
 
     // Element Refs
     const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -320,12 +325,6 @@ export default function VisualLogicNew() {
     const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbUSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbLSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-
-    useEffect(() => {
-        if (scenario === 'SIDEWAYS') setActiveData(generateSidewaysScenario());
-        else if (scenario === 'BULL') setActiveData(generateBullScenario());
-        else setActiveData(generateBearScenario());
-    }, [scenario]);
 
     // Chart Initialization
     useEffect(() => {
@@ -382,7 +381,7 @@ export default function VisualLogicNew() {
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
-    }, []);
+    }, [scenario]);
 
     // Data Update
     useEffect(() => {
