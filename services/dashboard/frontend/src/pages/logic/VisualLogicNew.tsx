@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     createChart,
     ISeriesApi,
@@ -68,7 +68,6 @@ const createDate = (daysAgo: number) => {
 // Scenario A: Sideways Market (Defensive)
 function generateSidewaysScenario(): ScenarioData {
     const data: MockDatum[] = [];
-    let price = 10000;
     const events: TradeEvent[] = [];
 
     // 50 days of data
@@ -145,7 +144,6 @@ function generateSidewaysScenario(): ScenarioData {
 // Scenario B: Bull Market (Aggressive)
 function generateBullScenario(): ScenarioData {
     const data: MockDatum[] = [];
-    let price = 10000;
     const events: TradeEvent[] = [];
 
     // 60 days of data
@@ -231,7 +229,6 @@ function generateBullScenario(): ScenarioData {
 // Scenario C: Bear Market (Crash / Deep Value)
 function generateBearScenario(): ScenarioData {
     const data: MockDatum[] = [];
-    let price = 10000;
     const events: TradeEvent[] = [];
 
     // 60 days of data
@@ -453,8 +450,8 @@ export default function VisualLogicNew() {
                 <button
                     onClick={() => setScenario('BULL')}
                     className={`flex-1 p-4 rounded-xl border transition-all duration-300 ${scenario === 'BULL'
-                            ? 'bg-green-500/10 border-green-500 text-green-400'
-                            : 'bg-[#1A1A1F] border-white/5 hover:bg-[#242429]'
+                        ? 'bg-green-500/10 border-green-500 text-green-400'
+                        : 'bg-[#1A1A1F] border-white/5 hover:bg-[#242429]'
                         }`}
                 >
                     <div className="flex justify-between items-center mb-2">
@@ -469,8 +466,8 @@ export default function VisualLogicNew() {
                 <button
                     onClick={() => setScenario('BEAR')}
                     className={`flex-1 p-4 rounded-xl border transition-all duration-300 ${scenario === 'BEAR'
-                            ? 'bg-red-500/10 border-red-500 text-red-400'
-                            : 'bg-[#1A1A1F] border-white/5 hover:bg-[#242429]'
+                        ? 'bg-red-500/10 border-red-500 text-red-400'
+                        : 'bg-[#1A1A1F] border-white/5 hover:bg-[#242429]'
                         }`}
                 >
                     <div className="flex justify-between items-center mb-2">
@@ -502,7 +499,7 @@ export default function VisualLogicNew() {
                                 <div className="text-center">
                                     <div className="text-gray-500">Total Return</div>
                                     <div className={`font-bold ${activeData.regime === 'BULL' ? 'text-green-400' :
-                                            activeData.regime === 'SIDEWAYS' ? 'text-blue-400' : 'text-red-400'
+                                        activeData.regime === 'SIDEWAYS' ? 'text-blue-400' : 'text-red-400'
                                         }`}>
                                         {activeData.stats.totalReturn}
                                     </div>
