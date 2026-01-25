@@ -15,8 +15,7 @@ import {
   Map,
   Zap,
   Server,
-  Sparkles,
-  Star,
+
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -35,12 +34,6 @@ const navItems = [
     path: '/visual-logic',
     icon: LineChart,
     label: 'Visual Logic',
-    children: [
-      { path: '/visual-logic/junho', label: 'Junho (준호)', icon: Zap },
-      { path: '/visual-logic/minji', label: 'Minji (민지)', icon: Sparkles },
-      { path: '/visual-logic/jennie', label: 'Jennie (제니)', icon: Star },
-      { path: '/visual-logic/new', label: 'Dynamic (New)', icon: Target },
-    ]
   },
   { path: '/trading', icon: Zap, label: 'Trading' },
 
@@ -57,14 +50,8 @@ export function Sidebar() {
   const location = useLocation()
   const { logout, user } = useAuthStore()
 
-  // Helper to check if a path is active (including children)
-  const isItemActive = (item: any) => {
-    if (location.pathname === item.path) return true;
-    if (item.children) {
-      return item.children.some((child: any) => location.pathname === child.path);
-    }
-    return false;
-  };
+  // Helper to check if a path is active
+  const isItemActive = (path: string) => location.pathname === path;
 
   return (
     <motion.aside
@@ -105,10 +92,7 @@ export function Sidebar() {
       {/* Navigation - Raydium Neon Style */}
       <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => {
-          // Check if parent or any child is active
-          const active = isItemActive(item);
-          // Check if parent specifically is active (if it has a path)
-
+          const active = isItemActive(item.path);
 
           return (
             <div key={item.path}>
@@ -117,7 +101,7 @@ export function Sidebar() {
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
                   'hover:bg-raydium-purple/10',
-                  active && !item.children && 'bg-raydium-purple/20 border border-raydium-purple/40 shadow-neon-purple'
+                  active && 'bg-raydium-purple/20 border border-raydium-purple/40 shadow-neon-purple'
                 )}
               >
                 <item.icon
@@ -137,34 +121,6 @@ export function Sidebar() {
                   {item.label}
                 </motion.span>
               </NavLink>
-
-              {/* Render Children if any and not collapsed */}
-              {item.children && !collapsed && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="ml-9 mt-1 space-y-1 border-l border-white/10 pl-2"
-                >
-                  {item.children.map((child) => {
-                    const childActive = location.pathname === child.path;
-
-                    return (
-                      <NavLink
-                        key={child.path}
-                        to={child.path}
-                        className={cn(
-                          'flex items-center gap-2 px-3 py-2 rounded-lg transition-all',
-                          'hover:text-white hover:bg-white/5',
-                          childActive ? 'text-raydium-purpleLight bg-raydium-purple/10' : 'text-muted-foreground'
-                        )}
-                      >
-                        {child.icon && <child.icon className="w-4 h-4" />}
-                        <span className="text-sm">{child.label}</span>
-                      </NavLink>
-                    )
-                  })}
-                </motion.div>
-              )}
             </div>
           )
         })}

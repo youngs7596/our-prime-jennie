@@ -12,11 +12,7 @@ import FactorsPage from '@/pages/Factors'
 import { TradingPage } from '@/pages/Trading'
 import { SettingsPage } from '@/pages/Settings'
 import Operations from '@/pages/Operations'
-import LogicLayout from '@/pages/logic/Layout'
-import JunhoLogic from '@/pages/logic/JunhoLogic'
-import MinjiLogic from '@/pages/logic/MinjiLogic'
-import JennieLogic from '@/pages/logic/JennieLogic'
-import VisualLogicNew from '@/pages/logic/VisualLogicNew'
+import VisualLogic from '@/pages/logic/VisualLogic'
 
 import { ArchitecturePage } from '@/pages/Architecture'
 import SuperPrimePage from '@/pages/SuperPrime'
@@ -59,13 +55,7 @@ function App() {
           <Route path="news" element={<NewsPage />} />
           <Route path="analyst" element={<AnalystPage />} />
           <Route path="logic" element={<FactorsPage />} />
-          <Route path="visual-logic" element={<LogicLayout />}>
-            <Route index element={<Navigate to="junho" replace />} />
-            <Route path="junho" element={<JunhoLogic />} />
-            <Route path="minji" element={<MinjiLogic />} />
-            <Route path="jennie" element={<JennieLogic />} />
-            <Route path="new" element={<VisualLogicNew />} />
-          </Route>
+          <Route path="visual-logic" element={<VisualLogic />} />
           <Route path="trading" element={<TradingPage />} />
           <Route path="operations" element={<Operations />} />
           <Route path="settings" element={<SettingsPage />} />

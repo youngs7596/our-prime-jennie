@@ -105,27 +105,27 @@ function generateSidewaysScenario(): ScenarioData {
         if (i === 15) {
             datum.open = 9400; datum.close = 9600; datum.low = 9300; datum.high = 9650; // Forced dip & recover
             datum.rsi = 32; // Dropped to 30 then up
-            datum.marker = { text: "Buy: RSI Rebound", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
-            events.push({ step: i, type: "BUY", title: "Entry Executed", desc: "RSI Rebound (32) + Support Level" });
+            datum.marker = { text: "매수: RSI 반등", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
+            events.push({ step: i, type: "BUY", title: "진입 실행", desc: "RSI 반등(32) + 지지선 확인 진입" });
         }
 
         // T=18: Check Risk (Pass)
         if (i === 18) {
-            events.push({ step: i, type: "INFO", title: "Safety Guard", desc: "Risk Check Passed. Volatility Normal." });
+            events.push({ step: i, type: "INFO", title: "안전 장치", desc: "리스크 점검 통과. 변동성 정상 범위." });
         }
 
         // T=25: Scale Out L1 (+3%)
         if (i === 25) {
             datum.close = 9900; datum.high = 9950;
-            datum.marker = { text: "Sell: Scale-out L1", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Scale-out L1 (+3%)", desc: "Securing initial profit in Box regime." });
+            datum.marker = { text: "매도: 1차 익절", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "1차 분할 매도 (+3%)", desc: "박스권 내 초기 수익 확보." });
         }
 
         // T=35: Profit Lock Triggered (Price drops back)
         if (i === 35) {
             datum.close = 9650;
-            datum.marker = { text: "Sell: Profit Lock", color: "#E74C3C", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Profit Lock Activated", desc: "Price dropped. Exiting to protect break-even." });
+            datum.marker = { text: "매도: 수익 보존", color: "#E74C3C", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "Profit Lock 발동", desc: "가격 하락 반전. 손실 방지를 위해 본전 청산." });
         }
 
         data.push(datum);
@@ -133,11 +133,11 @@ function generateSidewaysScenario(): ScenarioData {
 
     return {
         regime: 'SIDEWAYS',
-        title: "Defensive Sniper (Box Range)",
-        description: "Optimized for Sideways/Volatile markets. Focuses on 'RSI Rebound' and 'BB Lower Touch' entries with tight 'Profit Lock' and early 'Scale-out' to secure small gains repeatedly.",
+        title: "디펜시브 스나이퍼 (박스권)",
+        description: "횡보/변동성 장세에 최적화. RSI 반등 및 밴드 하단 터치를 노리며, 짧은 호흡으로 수익을 방어합니다.",
         data,
         events,
-        stats: { totalReturn: "+2.4%", riskReward: "1 : 2.5", duration: "20 Days", winRate: "High (65%)" }
+        stats: { totalReturn: "+2.4%", riskReward: "1 : 2.5", duration: "20일", winRate: "높음 (65%)" }
     };
 }
 
@@ -185,32 +185,32 @@ function generateBullScenario(): ScenarioData {
 
         // T=12: Breakout Entry
         if (i === 12) {
-            datum.marker = { text: "Buy: Breakout", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
-            events.push({ step: i, type: "BUY", title: "Aggressive Entry", desc: "Short-term High Breakout + Vol 3x + Score 85" });
+            datum.marker = { text: "매수: 돌파", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
+            events.push({ step: i, type: "BUY", title: "공격적 진입", desc: "단기 고점 돌파 + 거래량 3배 + 점수 85점" });
         }
 
         // T=25: Scale Out L1 (+7%) - Bull regime has higher targets
         if (i === 25) {
-            datum.marker = { text: "Sell: Scale L1", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Scale-out L1 (+7%)", desc: "Bull Logic: Higher partial profit target." });
+            datum.marker = { text: "매도: 1차 익절", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "1차 분할 매도 (+7%)", desc: "상승장 로직: 목표 수익률 상향 적용." });
         }
 
         // T=35: Scale Out L2 (+15%)
         if (i === 35) {
-            datum.marker = { text: "Sell: Scale L2", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Scale-out L2 (+15%)", desc: "Locking in major gains. Letting winners run." });
+            datum.marker = { text: "매도: 2차 익절", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "2차 분할 매도 (+15%)", desc: "대세 상승 수익 확정. 잔여 물량 홀딩." });
         }
 
         // T=45: Trailing Stop Activated
         if (i === 45) {
-            events.push({ step: i, type: "INFO", title: "Trailing Active", desc: "High reached. Stop set to -3.5% from High." });
+            events.push({ step: i, type: "INFO", title: "트레일링 스톱 활성화", desc: "고점 갱신. 고점 대비 -3.5%로 스톱 라인 상향." });
         }
 
         // T=55: Trailing Stop Hit (Exit)
         if (i === 55) {
             datum.close = datum.open - 300; // sharp drop
-            datum.marker = { text: "Exit: Trailing", color: "#E74C3C", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Trailing Stop Hit", desc: "Full Exit. Trend reversal detected." });
+            datum.marker = { text: "매도: 트레일링", color: "#E74C3C", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "트레일링 스톱 체결", desc: "전량 매도. 추세 반전 감지." });
         }
 
         data.push(datum);
@@ -218,11 +218,11 @@ function generateBullScenario(): ScenarioData {
 
     return {
         regime: 'BULL',
-        title: "Trend Hunter (Bull Market)",
-        description: "Optimized for Strong Bull markets. Identifies 'Volume Breakouts' and 'Momentum'. Uses wider 'Scale-out' targets (7%/15%) and 'Trailing Stop' to maximize run-up while managing risk.",
+        title: "트렌드 헌터 (상승장)",
+        description: "강세장에 최적화. 거래량 동반 돌파 및 모멘텀을 추종합니다. 트레일링 스톱과 넓은 익절 폭(7%/15%)으로 추세 끝까지 수익을 냅니다.",
         data,
         events,
-        stats: { totalReturn: "+14.8%", riskReward: "1 : 5.2", duration: "43 Days", winRate: "Mod (45%)" }
+        stats: { totalReturn: "+14.8%", riskReward: "1 : 5.2", duration: "43일", winRate: "중립 (45%)" }
     };
 }
 
@@ -267,28 +267,28 @@ function generateBearScenario(): ScenarioData {
         // T=15: Deep Oversold Entry (RSI < 25)
         if (i === 15) {
             datum.rsi = 22; // Deep oversold
-            datum.marker = { text: "Buy: Deep Value", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
-            events.push({ step: i, type: "BUY", title: "Counter-Trend Entry", desc: "Bear Market Logic: RSI Extreme Oversold (<25). Expecting dead-cat bounce." });
+            datum.marker = { text: "매수: 과매도", color: "#2ECC71", position: "belowBar", shape: "arrowUp" };
+            events.push({ step: i, type: "BUY", title: "역추세 진입", desc: "하락장 로직: RSI 과매도(<25). 기술적 반등(Dead-cat) 예상." });
         }
 
         // T=18: Quick Scale Out L1 (+2%)
         if (i === 18) {
             // Bounce happened
             datum.close = datum.open + 200;
-            datum.marker = { text: "Sell: Scale L1", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
-            events.push({ step: i, type: "SELL", title: "Quick Scale-out L1 (+2%)", desc: "Bear Logic: Taking profit early. Cash is king." });
+            datum.marker = { text: "매도: 1차 익절", color: "#F1C40F", position: "aboveBar", shape: "arrowDown" };
+            events.push({ step: i, type: "SELL", title: "빠른 익절 (+2%)", desc: "하락장 로직: 반등 시 즉시 현금화." });
         }
 
         // T=22: Stop Loss (Re-crash)
         if (i === 22) {
             datum.close = datum.open - 400; // Crash resumes
-            datum.marker = { text: "Exit: Stop", color: "#E74C3C", position: "aboveBar", shape: "square" };
-            events.push({ step: i, type: "SELL", title: "Defensive Exit", desc: "Re-entry failure. Exiting to preserve capital." });
+            datum.marker = { text: "매도: 손절", color: "#E74C3C", position: "aboveBar", shape: "square" };
+            events.push({ step: i, type: "SELL", title: "방어적 탈출", desc: "재진입 실패. 자본 보존을 위해 즉시 청산." });
         }
 
         // T=40: No Trade Zone
         if (i === 40) {
-            events.push({ step: i, type: "WARNING", title: "Trade Blocked", desc: "System blocked entry. Momentum is too negative." });
+            events.push({ step: i, type: "WARNING", title: "거래 차단", desc: "시스템 진입 차단. 하락 모멘텀 과다." });
         }
 
         data.push(datum);
@@ -296,11 +296,11 @@ function generateBearScenario(): ScenarioData {
 
     return {
         regime: 'BEAR',
-        title: "Crisis Manager (Bear Market)",
-        description: "Optimized for Bear/Crash markets. Extremely conservative. Only enters on 'Deep RSI Oversold' (<25). Takes profits very early (+2%/+5%) and uses tight stops. Often stays 100% Cash.",
+        title: "위기 관리자 (하락장)",
+        description: "폭락장에 최적화. 극도로 보수적입니다. 침체권(RSI < 25) 기술적 반등만 노리며, 줄 때 먹고(2%) 빠집니다.",
         data,
         events,
-        stats: { totalReturn: "-0.5% (vs Market -15%)", riskReward: "1 : 1.5", duration: "12 Days", winRate: "Low (30%)" }
+        stats: { totalReturn: "-0.5% (vs 시장 -15%)", riskReward: "1 : 1.5", duration: "12일", winRate: "낮음 (30%)" }
     };
 }
 
@@ -308,7 +308,7 @@ function generateBearScenario(): ScenarioData {
 
 // --- Component ---
 
-export default function VisualLogicNew() {
+export default function VisualLogic() {
     const [scenario, setScenario] = useState<MarketRegime>('SIDEWAYS');
 
     const activeData = useMemo(() => {
@@ -421,10 +421,10 @@ export default function VisualLogicNew() {
         <div className="p-6 bg-[#0D0D0F] min-h-screen text-gray-200 font-sans">
             <header className="mb-8">
                 <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">
-                    Adaptive Trading Logic Visualization
+                    프라임 제니 적응형 트레이딩 로직
                 </h1>
                 <p className="text-gray-500 mt-2 text-sm">
-                    Prime Jennie's sophisticated engine adapts entry, exit, and risk management strategies based on the current Market Regime.
+                    현재 시장 국면(Market Regime)에 따라 진입, 청산, 리스크 관리 전략을 동적으로 최적화합니다.
                 </p>
             </header>
 
@@ -438,11 +438,11 @@ export default function VisualLogicNew() {
                         }`}
                 >
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-lg">Scenario A: Sideways (Box)</span>
-                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">Defensive</span>
+                        <span className="font-bold text-lg">시나리오 A: 횡보장 (박스권)</span>
+                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">방어형</span>
                     </div>
-                    <p className="text-xs text-justify opacity-70">
-                        "Defense is the best offense." In consolidating markets, we use RSI Rebounds and Band touches to scalp small profits while using tight Profit Locks to prevent round-trip losses.
+                    <p className="text-xs text-left opacity-70">
+                        "방어가 최선의 공격입니다." RSI 반등과 볼린저 밴드 하단을 공략해 짧은 수익을 반복하며, 조기 수익 확정(Profit Lock)으로 손실을 차단합니다.
                     </p>
                 </button>
 
@@ -454,11 +454,11 @@ export default function VisualLogicNew() {
                         }`}
                 >
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-lg">Scenario B: Bull (Trend)</span>
-                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">Aggressive</span>
+                        <span className="font-bold text-lg">시나리오 B: 상승장 (추세)</span>
+                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded">공격형</span>
                     </div>
-                    <p className="text-xs text-justify opacity-70">
-                        "Let winners run." In trending markets, we identify breakouts and volume surges. We widen profit targets and use trailing stops to capture the maximum potential of the trend.
+                    <p className="text-xs text-left opacity-70">
+                        "수익을 끝까지 추구합니다." 돌파 매매와 거래량 급증을 포착하며, 목표가를 상향하고 트레일링 스톱을 넓게 설정해 추세를 극대화합니다.
                     </p>
                 </button>
 
@@ -470,11 +470,11 @@ export default function VisualLogicNew() {
                         }`}
                 >
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-lg">Scenario C: Bear (Crash)</span>
-                        <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">Survival</span>
+                        <span className="font-bold text-lg">시나리오 C: 하락장 (폭락)</span>
+                        <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded">생존형</span>
                     </div>
-                    <p className="text-xs text-justify opacity-70">
-                        "Cash is King." In crashing markets, we strictly limit entries to extreme oversold bounces (RSI &lt; 25). Profits are taken immediately (+2%) to avoid holding falling knives.
+                    <p className="text-xs text-left opacity-70">
+                        "현금이 왕입니다." 과매도(RSI &lt; 25) 구간에서만 제한적으로 진입하며, 짧은 반등에 즉시 매도하여 리스크를 최소화합니다.
                     </p>
                 </button>
             </div>
@@ -496,7 +496,7 @@ export default function VisualLogicNew() {
                             </div>
                             <div className="flex gap-4 text-xs font-mono">
                                 <div className="text-center">
-                                    <div className="text-gray-500">Total Return</div>
+                                    <div className="text-gray-500">누적 수익률</div>
                                     <div className={`font-bold ${activeData.regime === 'BULL' ? 'text-green-400' :
                                         activeData.regime === 'SIDEWAYS' ? 'text-blue-400' : 'text-red-400'
                                         }`}>
@@ -504,7 +504,7 @@ export default function VisualLogicNew() {
                                     </div>
                                 </div>
                                 <div className="text-center">
-                                    <div className="text-gray-500">Risk : Reward</div>
+                                    <div className="text-gray-500">손익비</div>
                                     <div className="text-white">{activeData.stats.riskReward}</div>
                                 </div>
                             </div>
@@ -514,9 +514,9 @@ export default function VisualLogicNew() {
                         <div ref={chartContainerRef} className="w-full h-[350px] bg-black/20 rounded-lg overflow-hidden relative" />
 
                         <div className="flex gap-4 mt-4 text-xs text-gray-500 justify-center">
-                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded-sm"></span> Buy Signal</div>
-                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-500 rounded-sm"></span> Partial Sell (Scale-out)</div>
-                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded-sm"></span> Full Exit</div>
+                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded-sm"></span> 매수 신호</div>
+                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-500 rounded-sm"></span> 분할 매도</div>
+                            <div className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded-sm"></span> 전량 매도</div>
                             <div className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500"></span> MA5</div>
                             <div className="flex items-center gap-1"><span className="w-3 h-0.5 bg-yellow-600"></span> MA20</div>
                         </div>
@@ -526,7 +526,7 @@ export default function VisualLogicNew() {
                 {/* Right: Narrative Log */}
                 <div className="bg-[#1A1A1F] rounded-xl border border-white/10 p-4 flex flex-col h-full">
                     <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                        <span className="text-lg">📜</span> Execution Narrative
+                        <span className="text-lg">📜</span> 매매 실행 로그
                     </h3>
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                         <AnimatePresence mode='popLayout'>
@@ -569,8 +569,8 @@ export default function VisualLogicNew() {
             </div>
 
             <div className="mt-8 text-center text-xs text-gray-600">
-                * This visualizer simulates the Prime Jennie logic engine using deterministic scenarios.<br />
-                Actual market performance may vary depending on real-time liquidity and slippage.
+                * 이 시각화 도구는 프라임 제니의 결정론적 시나리오를 시뮬레이션한 것입니다.<br />
+                실제 시장 성과는 유동성 및 슬리피지에 따라 달라질 수 있습니다.
             </div>
         </div>
     );
