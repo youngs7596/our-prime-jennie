@@ -8,6 +8,7 @@
 - **Frontend Logic Pages Enhancement**: Junho(차트 초기화 버그 수정), Minji(매수 마커 추가), Jennie(활성 상태 배지 및 추세선 추가) 시각화 고도화.
 - **Visual Logic Consolidation**: 기존 다중 페르소나(Junho/Minji/Jennie) 시각화 페이지를 `VisualLogic`(구 `VisualLogicNew`) 단일 시뮬레이터로 통합 및 전면 한글화 완료. Legacy 실시간 모니터링 코드는 제거하여 유지보수 효율성 증대.
 - **System Ops Fixes**: `weekly_factor_analysis` DAG 실패 원인(Empty sys.executable in Airflow) 수정 및 Jenkins 빌드 타임아웃 오류 분석.
+- **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
 
 
 ## 2026-01-24
