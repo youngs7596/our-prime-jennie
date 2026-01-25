@@ -23,6 +23,7 @@ app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Mock 데이터
+# Mock 데이터
 STOCK_DATA = {
     "005930": {"name": "삼성전자", "base_price": 70000},
     "000660": {"name": "SK하이닉스", "base_price": 130000},
@@ -30,6 +31,17 @@ STOCK_DATA = {
     "035720": {"name": "카카오", "base_price": 45000},
     "0001": {"name": "KOSPI", "base_price": 2500},
 }
+
+def _get_stock_data(code):
+    """종목 데이터 반환 (없으면 랜덤 생성)"""
+    if code in STOCK_DATA:
+        return STOCK_DATA[code]
+    
+    # 동적 생성
+    return {
+        "name": f"Mock Stock {code}",
+        "base_price": random.randint(1000, 500000)
+    }
 
 # 토큰 저장소
 tokens = {}
@@ -70,6 +82,18 @@ def token():
         "expires_in": 86400
     }), 200
 
+@app.route('/oauth2/Approval', methods=['POST'])
+def approval():
+    """WebSocket 접속용 승인키 발급"""
+    # data = request.json  # grant_type, appkey, secretkey 등이 옴
+    
+    # Mock 승인키 생성
+    approval_key = f"mock_approval_key_{int(time.time())}_{random.randint(1000,9999)}"
+    
+    return jsonify({
+        "approval_key": approval_key
+    }), 200
+
 @app.route('/uapi/domestic-stock/v1/quotations/inquire-price', methods=['GET'])
 @app.route('/uapi/domestic-stock/v1/quotations/inquire-price-2', methods=['GET'])
 def inquire_price():
@@ -83,13 +107,7 @@ def inquire_price():
             "msg1": "종목코드 파라미터 누락"
         }), 400
     
-    if stock_code not in STOCK_DATA:
-        return jsonify({
-            "rt_cd": "1",
-            "msg1": "종목코드 없음"
-        }), 404
-    
-    stock = STOCK_DATA[stock_code]
+    stock = _get_stock_data(stock_code)
     
     # 랜덤 가격 변동 (-3% ~ +3%)
     price_change = random.uniform(-0.03, 0.03)
@@ -170,10 +188,7 @@ def inquire_daily_price():
     """일별 시세 조회"""
     stock_code = request.args.get('fid_input_iscd')
     
-    if stock_code not in STOCK_DATA:
-        return jsonify({"rt_cd": "1", "msg1": "종목코드 없음"}), 404
-    
-    stock = STOCK_DATA[stock_code]
+    stock = _get_stock_data(stock_code)
     base_price = stock["base_price"]
     
     # 최근 30일 데이터 생성
@@ -338,8 +353,8 @@ def handle_subscribe(data):
     sid = flask_request.sid
     codes = data.get('codes', [])
     
-    # 등록된 종목만 구독
-    valid_codes = [c for c in codes if c in STOCK_DATA]
+    # 모든 코드를 유효한 것으로 처리 (동적 생성)
+    valid_codes = codes
     
     subscribed_clients[sid] = valid_codes
     print(f"[WS] 종목 구독: {valid_codes} (클라이언트: {sid})")
@@ -347,7 +362,7 @@ def handle_subscribe(data):
     emit('subscribed', {
         'total': len(valid_codes),
         'codes': valid_codes,
-        'invalid': [c for c in codes if c not in STOCK_DATA]
+        'invalid': []
     })
     
     # 가격 스트리밍 시작
@@ -370,7 +385,7 @@ def start_price_streaming(sid, codes):
                 if stop_event.is_set():
                     break
                 
-                stock = STOCK_DATA.get(code)
+                stock = _get_stock_data(code)
                 if not stock:
                     continue
                 
@@ -404,6 +419,54 @@ def start_price_streaming(sid, codes):
     thread = threading.Thread(target=stream_prices, daemon=True)
     thread.start()
     streaming_threads[sid] = thread
+
+
+
+# =============================================================================
+# Scenario Testing API
+# =============================================================================
+
+@app.route('/api/scenario/golden-cross', methods=['POST'])
+def trigger_golden_cross():
+    """Golden Cross 시나리오 발동 (단기 이평 상향 돌파)"""
+    data = request.json or {}
+    code = data.get('code', '005930') 
+    base_price = data.get('base_price', 70000)
+    
+    # Golden Cross Pattern: 
+    # Starts below MA20, then surges above it with volume spike
+    # We will simulate a quick price increase sequence
+    
+    steps = [
+        # Time, Price, Volume
+        (0.0, base_price * 0.98, 1000), # Start slightly low
+        (1.0, base_price * 0.99, 2000), 
+        (2.0, base_price * 1.00, 5000), # Breakout point
+        (3.0, base_price * 1.01, 15000), # Surge with volume
+        (4.0, base_price * 1.02, 20000),
+        (5.0, base_price * 1.025, 10000)
+    ]
+    
+    def run_scenario():
+        logger.info(f"🚀 Starting Golden Cross scenario for {code}")
+        for delay, price, vol in steps:
+            time.sleep(1.0) # 1 sec interval
+            
+            payload = {
+                'stock_code': code,
+                'stock_name': f"Mock Stock {code}",
+                'current_price': int(price), 
+                'high': int(price*1.01),
+                'low': int(price*0.99),
+                'volume': int(vol), 
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            socketio.emit('price_update', payload) # Broadcast
+            logger.info(f"   Simulated Price: {code} -> {int(price)}")
+
+    threading.Thread(target=run_scenario).start()
+    return jsonify({"status": "started", "scenario": "golden_cross", "code": code})
 
 
 # =============================================================================

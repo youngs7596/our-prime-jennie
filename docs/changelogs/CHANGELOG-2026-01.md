@@ -1,9 +1,7 @@
 # 📅 2026-01 변경 이력
 
-## 2026-01-25
 - **Visual Logic Expansion (Side/Bull/Bear)**: 기존 시각화의 한계를 넘어 '실제 트레이딩 로직 기반' 시나리오 페이지(`VisualLogicNew`) 신설.
-  - 시장 국면(Sideways, Bull, Bear)별 대응 전략(Profit Lock, Breakout, Deep Oversold)을 시뮬레이션 및 시각화.
-  - Execution Narrative를 통해 매매 판단 근거를 T-Log 형태로 제공.
+- **Automated Mock Trading Verification**: Mock 환경에서 완전 자동화된 트레이딩 절차 검증 완료. Scenario Endpoint(`/api/scenario/golden-cross`) 구현 및 `buy-executor` Consumer Conflict(Real/Mock) 해결.
 - **Frontend Real-time Integration**: Redis Pub/Sub 및 WebSocket 파이프라인 구축 완료, `buy-scanner` → `dashboard-backend` → `Frontend(Junho/Minji/Jennie)` 실시간 데이터 연동 및 시각화 구현.
 - **Frontend Logic Pages Enhancement**: Junho(차트 초기화 버그 수정), Minji(매수 마커 추가), Jennie(활성 상태 배지 및 추세선 추가) 시각화 고도화.
 - **Visual Logic Consolidation**: 기존 다중 페르소나(Junho/Minji/Jennie) 시각화 페이지를 `VisualLogic`(구 `VisualLogicNew`) 단일 시뮬레이터로 통합 및 전면 한글화 완료. Legacy 실시간 모니터링 코드는 제거하여 유지보수 효율성 증대.

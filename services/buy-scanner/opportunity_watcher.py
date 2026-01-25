@@ -3,6 +3,8 @@
 # Hot Watchlist 실시간 매수 신호 감지 (WebSocket 기반) + Supply/Demand & Legendary Pattern
 # buy-scanner가 매수용 WebSocket을 담당
 
+
+import os
 import time
 import logging
 import json
@@ -153,9 +155,12 @@ class BuyOpportunityWatcher:
             tasks_publisher: RabbitMQPublisher (buy-signals 큐)
             redis_url: Redis 연결 URL
         """
+
         self.config = config
         self.tasks_publisher = tasks_publisher
-        self.bar_aggregator = BarAggregator(bar_interval_seconds=60)
+        # [Config] Bar Interval (기본 60초, Mock=5초 등 설정 가능)
+        bar_int = int(os.getenv('BAR_INTERVAL_SECONDS', 60))
+        self.bar_aggregator = BarAggregator(bar_interval_seconds=bar_int)
         self.stop_event = Event()
         
         # Redis 연결 설정
@@ -326,13 +331,19 @@ class BuyOpportunityWatcher:
             # 강세장=50, 횡보=40, 약세=30
             dynamic_rsi = self._get_dynamic_rsi_threshold()
             
+
             strategies = [
                 {"id": "GOLDEN_CROSS", "params": {"short_window": 5, "long_window": 20}},
-                {"id": "RSI_REBOUND", "params": {"threshold": dynamic_rsi}}
+                {"id": "RSI_REBOUND", "params": {"threshold": dynamic_rsi}},
+                {"id": "MOMENTUM", "params": {"threshold": 1.5}} 
             ]
 
+
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
-        if len(recent_bars) < 20:
+        
+        # [Config] 최소 바 개수 (기본 20개, Mock/Dev 모드에서 조절 가능)
+        min_bars = int(os.getenv('MIN_REQUIRED_BARS', 20))
+        if len(recent_bars) < min_bars:
              return None
 
         # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:20)
