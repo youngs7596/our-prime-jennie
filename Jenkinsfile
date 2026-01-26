@@ -87,9 +87,9 @@ pipeline {
                     # [Fix] 손상된 캐시만 정리 (24시간 이상 된 것)
                     docker builder prune -f --filter "until=24h" || true
                     
-                    # 캐시 활용 + 최신 베이스 이미지 풀 (--no-cache 제거로 빌드 속도 향상)
+                    # 캐시 활용 (기존 이미지/레이어 적극 재사용)
                     # 병렬 빌드 무제한 (COMPOSE_PARALLEL_LIMIT 제거)
-                    docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --pull --parallel
+                    docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --parallel
                 '''
             }
         }

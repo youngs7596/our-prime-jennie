@@ -14,6 +14,7 @@
   - Backend: `monitor.py`에 로직 스냅샷 Redis 캐싱 구현 및 `routers/logic.py` 생성.
   - Frontend: `VisualLogic.tsx`에 'REAL' 모드 추가, 차트 위 Stop Loss/Profit Floor/Buy Price 라인 랜더링.
 - **Airflow Timezone Fix (KST)**: 모든 DAG(`scout`, `asset`, `monitor` 등)의 스케줄링 기준을 UTC에서 KST(Asia/Seoul)로 명시적 변경하여 요일/시간 불일치 문제 해결.
+- **Jenkins Build Optimization**: `Jenkinsfile`에서 Docker build 시 `--pull` 옵션 제거, WSL2 Host Docker의 레이어 캐시를 100% 활용하여 재빌드 속도 획기적 단축.
 
 ## 2026-01-24
 - **Trading System Quantum Jump (Aggressive)**: 3명 AI(제니/준호/민지) 피드백 반영, 공격적 포지션 운영으로 전환.
