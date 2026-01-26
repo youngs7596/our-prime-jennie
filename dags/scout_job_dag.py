@@ -2,9 +2,12 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 import sys
+import pendulum
 
 sys.path.append('/opt/airflow')
 from shared.airflow_utils import send_telegram_alert
+
+kst = pendulum.timezone("Asia/Seoul")
 
 default_args = {
     'owner': 'jennie',
@@ -15,15 +18,13 @@ default_args = {
 }
 
 # KST 08:30 - 15:30 (Every 30 mins)
-# UTC: 23:30 (prev), 00:00, 00:30 ... 06:30
-# Cron: "0,30 23,0-6 * * 1-5" (Approx)
-
+# Mon-Fri (1-5) in KST
 with DAG(
     'scout_job_v1',
     default_args=default_args,
     description='AI Scout Job (Intraday)',
-    schedule_interval='0,30 23,0-6 * * 1-5', 
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0,30 8-15 * * 1-5', 
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['scout', 'ai'],
 ) as dag:

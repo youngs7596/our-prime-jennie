@@ -3,7 +3,7 @@ import pika
 import json
 import datetime
 
-QUEUE_NAME = 'sell-orders'
+QUEUE_NAME = 'sell-orders-mock'
 
 def inject_mq_signal():
     connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))

@@ -6,6 +6,10 @@ import sys
 sys.path.append('/opt/airflow')
 from shared.airflow_utils import send_telegram_alert
 
+import pendulum
+
+kst = pendulum.timezone("Asia/Seoul")
+
 default_args = {
     'owner': 'jennie',
     'depends_on_past': False,
@@ -27,12 +31,12 @@ COMMON_ENV = {
     'TZ': 'Asia/Seoul',
 }
 
-# 1. Weekly Factor Analysis (Friday 22:00 KST -> 13:00 UTC)
+# 1. Weekly Factor Analysis (Friday 22:00 KST)
 with DAG(
     'weekly_factor_analysis',
     default_args=default_args,
-    schedule_interval='0 13 * * 5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 22 * * 5', # 22:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['analysis', 'factor', 'weekly'],
 ) as dag_weekly:
@@ -42,12 +46,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 2. Daily Price Collector (Weekday 16:00 KST -> 07:00 UTC)
+# 2. Daily Price Collector (Weekday 16:00 KST)
 with DAG(
     'daily_market_data_collector',
     default_args=default_args,
-    schedule_interval='0 7 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 16 * * 1-5', # 16:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'collector', 'daily'],
 ) as dag_collector:
@@ -57,12 +61,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 3. Daily Briefing (Weekday 17:00 KST -> 08:00 UTC)
+# 3. Daily Briefing (Weekday 17:00 KST)
 with DAG(
     'daily_briefing_report',
     default_args=default_args,
-    schedule_interval='0 8 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 17 * * 1-5', # 17:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['briefing', 'report'],
 ) as dag_briefing:
@@ -73,12 +77,12 @@ with DAG(
         bash_command='curl -s -X POST http://host.docker.internal:8086/report',
     )
 
-# 4. AI Performance Analysis (Weekday 07:00 KST -> 22:00 UTC Prev Day)
+# 4. AI Performance Analysis (Weekday 07:00 KST)
 with DAG(
     'daily_ai_performance_analysis',
     default_args=default_args,
-    schedule_interval='0 22 * * 0-4',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 7 * * 1-5', # 07:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['analysis', 'ai', 'performance'],
 ) as dag_ai_perf:

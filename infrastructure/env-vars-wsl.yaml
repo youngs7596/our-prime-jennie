@@ -54,7 +54,8 @@ CIRCUIT_BREAKER_TIMEOUT: "60"
 USE_RABBITMQ: "true"
 USE_CLOUD_TASKS: "false"
 RABBITMQ_URL: "amqp://guest:guest@127.0.0.1:5672/"
-RABBITMQ_QUEUE_SELL_ORDERS: "sell-orders"
+RABBITMQ_QUEUE_SELL_ORDERS: "sell-orders-real"
+RABBITMQ_QUEUE_BUY_SIGNALS: "buy-signals-real"
 
 # 9. 뉴스 감성 분석 설정
 MAX_SENTIMENT_DOCS_PER_RUN: "40"

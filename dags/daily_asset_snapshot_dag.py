@@ -27,12 +27,12 @@ COMMON_ENV = {
 }
 
 # Schedule: 15:45 KST (Market Close + Settlement Time)
-# UTC: 06:45
+# KST time directly
 with DAG(
     'daily_asset_snapshot',
     default_args=default_args,
     description='Daily Asset Snapshot (Total Asset, Cash, Stock Eval)',
-    schedule_interval='45 6 * * 1-5', # 06:45 UTC = 15:45 KST
+    schedule_interval='45 15 * * 1-5', # 15:45 KST
     start_date=datetime(2025, 1, 1, tzinfo=local_tz),
     catchup=False,
     tags=['asset', 'snapshot', 'statistics'],

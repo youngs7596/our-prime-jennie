@@ -5,11 +5,21 @@ import {
     Time,
     ColorType,
     LineStyle,
+    IPriceLine,
 } from 'lightweight-charts';
 import { motion, AnimatePresence } from 'framer-motion';
+import { logicApi, LogicStatusResponse } from '../../api/logic';
+import { watchlistApi } from '../../lib/api';
 
 // --- Types ---
-type MarketRegime = 'SIDEWAYS' | 'BULL' | 'BEAR';
+type MarketRegime = 'SIDEWAYS' | 'BULL' | 'BEAR' | 'REAL';
+
+type PriceLineDef = {
+    price: number;
+    color: string;
+    title: string;
+    lineStyle: LineStyle;
+};
 
 type TradeEvent = {
     step: number;
@@ -24,6 +34,7 @@ type ScenarioData = {
     description: string;
     data: MockDatum[];
     events: TradeEvent[];
+    priceLines: PriceLineDef[];
     stats: {
         totalReturn: string;
         riskReward: string;
@@ -146,6 +157,7 @@ function generateSidewaysScenario(): ScenarioData {
     const length = 60;
     const basePrices = generateBaseData(length, 10000);
     const events: TradeEvent[] = [];
+    const priceLines: PriceLineDef[] = [];
 
     // 1. Create Price Action (Sine wave for box pattern)
     // Intention: Perfect box range 9500 ~ 10500
@@ -218,6 +230,7 @@ function generateSidewaysScenario(): ScenarioData {
         description: "횡보장에서는 '쌀 때 사서 비쌀 때 파는' 정석적인 박스권 매매를 수행합니다. 볼린저 밴드 하단과 RSI 과매도를 정확히 타격합니다.",
         data,
         events,
+        priceLines,
         stats: { totalReturn: "+3.2%", riskReward: "1 : 3.5", duration: "20일", winRate: "높음 (75%)" }
     };
 }
@@ -226,6 +239,7 @@ function generateBullScenario(): ScenarioData {
     const length = 60;
     const basePrices = generateBaseData(length, 10000);
     const events: TradeEvent[] = [];
+    const priceLines: PriceLineDef[] = [];
 
     // Intention: Breakout + Trend Following
     for (let i = 0; i < length; i++) {
@@ -302,6 +316,7 @@ function generateBullScenario(): ScenarioData {
         description: "상승 추세에서는 거래량이 실린 돌파 시점에 진입하여, MA20을 깨지 않는 한 끝까지 보유합니다 (Let profits run).",
         data,
         events,
+        priceLines,
         stats: { totalReturn: "+28.4%", riskReward: "1 : 7.2", duration: "43일", winRate: "중립 (50%)" }
     };
 }
@@ -310,6 +325,7 @@ function generateBearScenario(): ScenarioData {
     const length = 60;
     const basePrices = generateBaseData(length, 10000);
     const events: TradeEvent[] = [];
+    const priceLines: PriceLineDef[] = [];
 
     // Intention: Crash -> Oversold bounce -> Crash again
     for (let i = 0; i < length; i++) {
@@ -370,7 +386,93 @@ function generateBearScenario(): ScenarioData {
         description: "하락장에서는 현금을 지키는 것이 1순위입니다. RSI 20 이하의 투매(Panic Sell) 구간에서만 짧게 진입하여 반등만 취합니다.",
         data,
         events,
+        priceLines,
         stats: { totalReturn: "+3.0%", riskReward: "1 : 2.0", duration: "3일", winRate: "낮음 (30%)" }
+    };
+}
+
+function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData {
+    const { chart_data, snapshot, stock_code } = response;
+
+    // Map Chart Data
+    const data: MockDatum[] = chart_data.map(d => ({
+        time: d.time as Time,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+        volume: d.volume,
+        ma5: d.close, // TODO: calculate MA
+        ma20: d.close,
+        bbUpper: d.close * 1.05, // TODO: calculate
+        bbLower: d.close * 0.95,
+        rsi: snapshot?.rsi || 50,
+        vwap: d.close,
+    }));
+
+    const events: TradeEvent[] = [];
+    const priceLines: PriceLineDef[] = [];
+
+    if (snapshot) {
+        // Stop Loss Line
+        if (snapshot.stop_loss_price) {
+            priceLines.push({
+                price: snapshot.stop_loss_price,
+                color: '#EF4444',
+                title: 'Stop Loss',
+                lineStyle: LineStyle.Solid
+            });
+        }
+        // Profit Floor
+        if (snapshot.profit_floor_price) {
+            priceLines.push({
+                price: snapshot.profit_floor_price,
+                color: '#3B82F6',
+                title: 'Profit Floor',
+                lineStyle: LineStyle.Dotted
+            });
+        }
+        // Buy Price
+        if (snapshot.buy_price) {
+            priceLines.push({
+                price: snapshot.buy_price,
+                color: '#10B981',
+                title: 'Buy Price',
+                lineStyle: LineStyle.Dashed
+            });
+        }
+
+        // Add Logic Reason
+        if (snapshot.active_signal) {
+            events.push({
+                step: data.length - 1,
+                type: 'SELL',
+                title: '매도 신호 발생',
+                desc: snapshot.active_signal.reason
+            });
+        } else {
+            events.push({
+                step: data.length - 1,
+                type: 'INFO',
+                title: '현재 상태: 홀딩',
+                desc: `수익률: ${snapshot.profit_pct.toFixed(2)}%, RSI: ${snapshot.rsi?.toFixed(1) || 'N/A'}`
+            });
+        }
+    }
+
+    return {
+        regime: 'REAL',
+        title: `${snapshot?.stock_name || stock_code} (Real-Time)`,
+        description: "실시간 감시 데이터를 기반으로 한 로직 시각화입니다.",
+        data,
+        events,
+        priceLines,
+        stats: {
+            totalReturn: snapshot ? `${snapshot.profit_pct.toFixed(1)}%` : '-',
+            riskReward: "-",
+            duration: "-",
+            winRate: "-"
+        }
     };
 }
 
@@ -380,12 +482,42 @@ function generateBearScenario(): ScenarioData {
 
 export default function VisualLogic() {
     const [scenario, setScenario] = useState<MarketRegime>('SIDEWAYS');
+    const [realStock, setRealStock] = useState<string>('');
+    const [watchlist, setWatchlist] = useState<{ stock_code: string, stock_name: string }[]>([]);
+    const [realData, setRealData] = useState<ScenarioData | null>(null);
+
+    // Fetch Watchlist
+    useEffect(() => {
+        watchlistApi.getAll(100).then(items => {
+            // @ts-ignore
+            setWatchlist(items);
+            if (items.length > 0) setRealStock(items[0].stock_code);
+        }).catch(err => console.error(err));
+    }, []);
+
+    // Fetch Real Data when mode is REAL and stock changes
+    useEffect(() => {
+        if (scenario === 'REAL' && realStock) {
+            logicApi.getStatus(realStock).then(res => {
+                setRealData(convertRealDataToScenario(res));
+            }).catch(err => console.error(err));
+            // Poll every 5 seconds for real-time updates
+            const interval = setInterval(() => {
+                logicApi.getStatus(realStock).then(res => {
+                    setRealData(convertRealDataToScenario(res));
+                }).catch(err => console.error(err));
+            }, 5000);
+            return () => clearInterval(interval);
+        }
+    }, [scenario, realStock]);
+
 
     const activeData = useMemo(() => {
         if (scenario === 'SIDEWAYS') return generateSidewaysScenario();
         else if (scenario === 'BULL') return generateBullScenario();
-        else return generateBearScenario();
-    }, [scenario]);
+        else if (scenario === 'BEAR') return generateBearScenario();
+        else return realData || generateSidewaysScenario(); // Fallback
+    }, [scenario, realData]);
 
     // Element Refs
     const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -395,6 +527,7 @@ export default function VisualLogic() {
     const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbUSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbLSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+    const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Chart Initialization
     useEffect(() => {
@@ -483,6 +616,23 @@ export default function VisualLogic() {
         // @ts-ignore
         candleSeriesRef.current.setMarkers(markers);
 
+        // Price Lines
+        priceLinesRef.current.forEach(line => candleSeriesRef.current?.removePriceLine(line));
+        priceLinesRef.current = [];
+
+        if (activeData.priceLines) {
+            activeData.priceLines.forEach(line => {
+                const pl = candleSeriesRef.current?.createPriceLine({
+                    price: line.price,
+                    color: line.color,
+                    title: line.title,
+                    lineStyle: line.lineStyle,
+                    axisLabelVisible: true,
+                });
+                if (pl) priceLinesRef.current.push(pl);
+            });
+        }
+
         chartRef.current.timeScale().fitContent();
 
     }, [activeData]);
@@ -547,6 +697,35 @@ export default function VisualLogic() {
                         "현금이 왕입니다." 과매도(RSI &lt; 25) 구간에서만 제한적으로 진입하며, 짧은 반등에 즉시 매도하여 리스크를 최소화합니다.
                     </p>
                 </button>
+            </div>
+
+            {/* Read Logic Selector */}
+            <div className="mb-6">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => setScenario('REAL')}
+                        className={`px-6 py-2 rounded-lg font-bold border transition-all ${scenario === 'REAL'
+                            ? 'bg-purple-500 text-white border-purple-500'
+                            : 'bg-[#1A1A1F] text-gray-400 border-white/10 hover:bg-[#242429]'
+                            }`}
+                    >
+                        🔮 Real-Time Observability
+                    </button>
+
+                    {scenario === 'REAL' && (
+                        <select
+                            value={realStock}
+                            onChange={(e) => setRealStock(e.target.value)}
+                            className="bg-[#1A1A1F] border border-white/20 text-white rounded px-4 py-2"
+                        >
+                            {watchlist.map(item => (
+                                <option key={item.stock_code} value={item.stock_code}>
+                                    {item.stock_name} ({item.stock_code})
+                                </option>
+                            ))}
+                        </select>
+                    )}
+                </div>
             </div>
 
             {/* Main Content Area */}

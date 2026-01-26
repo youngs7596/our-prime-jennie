@@ -226,10 +226,32 @@ class PriceMonitor:
             
             daily_prices = database.get_daily_prices(session, stock_code, limit=30)
             
-            # ATR 계산 (여러 조건에서 사용)
+            # ATR & RSI 계산 (Logic Observability를 위해 상단으로 이동)
             atr = None
+            rsi = None
             if not daily_prices.empty and len(daily_prices) >= 15:
                 atr = strategy.calculate_atr(daily_prices, period=14)
+                # RSI Calculation (Moved up)
+                prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
+                rsi = strategy.calculate_rsi(prices[::-1], period=14)
+
+            # Logic Snapshot 초기화
+            logic_snapshot = {
+                "timestamp": datetime.now().isoformat(),
+                "stock_code": stock_code,
+                "stock_name": stock_name,
+                "current_price": current_price,
+                "buy_price": buy_price,
+                "profit_pct": profit_pct,
+                "rsi": rsi,
+                "atr": atr,
+                "stop_loss_price": None,
+                "take_profit_price": None, # Fixed Target
+                "profit_floor_price": None,
+                "trailing_stop_price": None,
+                "is_safe": True, # 기본값
+                "active_signal": None
+            }
             
             potential_signal = None
             
@@ -247,6 +269,11 @@ class PriceMonitor:
                     logger.info(f"🛡️ [{stock_name}] Profit Floor 설정: +{PROFIT_FLOOR_LEVEL}% (현재 +{profit_pct:.1f}%)")
             
             floor = get_profit_floor(stock_code)
+            if floor:
+                 # Floor %를 가격으로 변환하여 저장
+                 floor_price = buy_price * (1 + floor / 100.0)
+                 logic_snapshot['profit_floor_price'] = floor_price
+
             if floor and profit_pct < floor:
                 potential_signal = {"signal": True, "reason": f"Profit Floor Hit ({profit_pct:.1f}% < Floor {floor}%)", "quantity_pct": 100.0}
             
@@ -346,6 +373,8 @@ class PriceMonitor:
                     logger.debug(f"   [{stock_name}] ATR Mult 조정: Stage {chart_phase_stage}, Exhaustion {chart_phase_exhaustion:.0f}")
                 
                 stop_price = buy_price - (mult * atr)
+                logic_snapshot['stop_loss_price'] = stop_price # ATR Stop capture
+                
                 if current_price < stop_price:
                     potential_signal = {"signal": True, "reason": f"ATR Stop (Price {current_price:,.0f} < {stop_price:,.0f})", "quantity_pct": 100.0}
             
@@ -356,6 +385,10 @@ class PriceMonitor:
 
                 if profit_pct <= stop_loss:
                     potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
+                
+                # ATR Stop이 없으면 Fixed Stop이라도 기록
+                if not logic_snapshot['stop_loss_price']:
+                     logic_snapshot['stop_loss_price'] = buy_price * (1 + stop_loss / 100.0)
 
 
             # =====================================================================
@@ -388,7 +421,8 @@ class PriceMonitor:
                     if high_profit_pct >= activation_pct:
                         # 고점 대비 하락률 기반 스탑 가격 계산 (ATR 대신 %)
                         trailing_stop_price = high_price * (1 - drop_from_high_pct / 100)
-                        
+                        logic_snapshot['trailing_stop_price'] = trailing_stop_price
+
                         # 조건 2: 현재가가 스탑 라인 이하
                         # 조건 3: 현재 수익률이 최소 수익률 이상 (핵심 가드!)
                         if current_price <= trailing_stop_price and profit_pct >= min_trailing_profit:
@@ -462,10 +496,7 @@ class PriceMonitor:
             # 4. RSI 과열 & 5. 고정 목표 & 6. Death Cross & 7. Max Holding
             # =====================================================================
             if not potential_signal:
-                # RSI Check
-                if not daily_prices.empty and len(daily_prices) >= 15:
-                    prices = daily_prices['CLOSE_PRICE'].tolist() + [current_price]
-                    rsi = strategy.calculate_rsi(prices[::-1], period=14)
+                    # RSI Calculated already at top
                     threshold = self.config.get_float_for_symbol(stock_code, 'SELL_RSI_OVERBOUGHT_THRESHOLD', default=75.0)
                     min_rsi_profit = self.config.get_float('SELL_RSI_MIN_PROFIT_PCT', default=3.0)
                     rsi_already_sold = get_rsi_overbought_sold(stock_code)
@@ -533,6 +564,14 @@ class PriceMonitor:
                     return self._check_sell_signal(session, stock_code, stock_name, db_buy_price, current_price, holding, check_db_freshness=False)
                 
                 logger.info(f"✅ [Double-Check] DB 검증 완료. 신호 유효함.")
+            
+            # === [Final] Save Logic Snapshot to Redis ===
+            if potential_signal:
+                logic_snapshot['active_signal'] = potential_signal
+                logic_snapshot['is_safe'] = False
+            
+            # 60초 TTL (실시간성이 중요하므로 짧게 유지)
+            redis_cache.set_redis_data(f"logic:snapshot:{stock_code}", logic_snapshot, ttl=60)
             
             return potential_signal
 

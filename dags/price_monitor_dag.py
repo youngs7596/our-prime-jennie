@@ -6,6 +6,10 @@ import sys
 sys.path.append('/opt/airflow')
 from shared.airflow_utils import send_telegram_alert
 
+import pendulum
+
+kst = pendulum.timezone("Asia/Seoul")
+
 default_args = {
     'owner': 'jennie',
     'depends_on_past': False,
@@ -14,15 +18,15 @@ default_args = {
     'on_failure_callback': send_telegram_alert,
 }
 
-# Start: 09:00 KST -> 00:00 UTC
-# Stop: 15:30 KST -> 06:30 UTC
+# Start: 09:00 KST
+# Stop: 15:30 KST
 
 with DAG(
     'price_monitor_ops',
     default_args=default_args,
     description='Price Monitor Start/Stop',
-    schedule_interval='0 0 * * 1-5', # Default trigger for Start
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 9 * * 1-5', # 09:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['price', 'monitor', 'ops'],
 ) as dag:
@@ -35,14 +39,14 @@ with DAG(
     )
     
     # 2. Stop Price Monitor (Separate DAG)
-    # 15:30 KST -> 06:30 UTC
+    # 15:30 KST
 
 with DAG(
     'price_monitor_stop_ops',
     default_args=default_args,
     description='Price Monitor Stop (15:30 KST)',
-    schedule_interval='30 6 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='30 15 * * 1-5', # 15:30 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['price', 'monitor', 'ops'],
 ) as dag_stop:

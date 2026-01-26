@@ -9,6 +9,10 @@ import os
 sys.path.append('/opt/airflow')
 from shared.airflow_utils import send_telegram_alert
 
+import pendulum
+
+kst = pendulum.timezone("Asia/Seoul")
+
 default_args = {
     'owner': 'jennie',
     'depends_on_past': False,
@@ -37,12 +41,12 @@ COMMON_ENV = {
 }
 
 # KST Schedules
-# 1. Collect Intraday Prices: 09:00 - 15:35 KST -> 00:00 - 06:35 UTC. 5 min interval.
+# 1. Collect Intraday Prices: 09:00 - 15:35 KST. 5 min interval.
 with DAG(
     'collect_intraday',
     default_args=default_args,
-    schedule_interval='*/5 0-6 * * 1-5', 
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='*/5 9-15 * * 1-5', # KST explicitly
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'intraday', 'price'],
 ) as dag_intraday:
@@ -53,12 +57,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 2. Analyst Feedback Update: 18:00 KST -> 09:00 UTC
+# 2. Analyst Feedback Update: 18:00 KST
 with DAG(
     'analyst_feedback_update',
     default_args=default_args,
-    schedule_interval='0 9 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='0 18 * * 1-5', # 18:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['analysis', 'feedback', 'llm'],
 ) as dag_feedback:
@@ -69,12 +73,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 3. Collect Daily Prices (FDR): 18:15 KST -> 09:15 UTC
+# 3. Collect Daily Prices (FDR): 18:15 KST
 with DAG(
     'collect_daily_prices',
     default_args=default_args,
-    schedule_interval='15 9 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='15 18 * * 1-5', # 18:15 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'daily', 'price'],
 ) as dag_daily_price:
@@ -85,12 +89,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 4. Collect Investor Trading: 18:30 KST -> 09:30 UTC
+# 4. Collect Investor Trading: 18:30 KST
 with DAG(
     'collect_investor_trading',
     default_args=default_args,
-    schedule_interval='30 9 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='30 18 * * 1-5', # 18:30 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'investor', 'trading'],
 ) as dag_trading:
@@ -101,12 +105,12 @@ with DAG(
         env=COMMON_ENV,
     )
 
-# 5. Collect DART Filings: 18:45 KST -> 09:45 UTC
+# 5. Collect DART Filings: 18:45 KST
 with DAG(
     'collect_dart_filings',
     default_args=default_args,
-    schedule_interval='45 9 * * 1-5',
-    start_date=datetime(2025, 1, 1),
+    schedule_interval='45 18 * * 1-5', # 18:45 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'dart', 'filings'],
 ) as dag_dart:

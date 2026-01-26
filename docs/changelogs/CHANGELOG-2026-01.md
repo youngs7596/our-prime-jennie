@@ -7,7 +7,13 @@
 - **Visual Logic Consolidation**: 기존 다중 페르소나(Junho/Minji/Jennie) 시각화 페이지를 `VisualLogic`(구 `VisualLogicNew`) 단일 시뮬레이터로 통합 및 전면 한글화 완료. Legacy 실시간 모니터링 코드는 제거하여 유지보수 효율성 증대.
 - **System Ops Fixes**: `weekly_factor_analysis` DAG 실패 원인(Empty sys.executable in Airflow) 수정 및 Jenkins 빌드 타임아웃 오류 분석.
 - **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
+- **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
 
+## 2026-01-26
+- **Logic Observability Implementation**: AI의 매매 논리를 실시간으로 시각화하는 Full-Stack 기능 구현.
+  - Backend: `monitor.py`에 로직 스냅샷 Redis 캐싱 구현 및 `routers/logic.py` 생성.
+  - Frontend: `VisualLogic.tsx`에 'REAL' 모드 추가, 차트 위 Stop Loss/Profit Floor/Buy Price 라인 랜더링.
+- **Airflow Timezone Fix (KST)**: 모든 DAG(`scout`, `asset`, `monitor` 등)의 스케줄링 기준을 UTC에서 KST(Asia/Seoul)로 명시적 변경하여 요일/시간 불일치 문제 해결.
 
 ## 2026-01-24
 - **Trading System Quantum Jump (Aggressive)**: 3명 AI(제니/준호/민지) 피드백 반영, 공격적 포지션 운영으로 전환.
