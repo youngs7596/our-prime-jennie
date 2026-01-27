@@ -615,3 +615,107 @@ def get_daily_prices(session: Session, stock_code: str, limit: int = 60) -> List
     )
     return session.execute(stmt).scalars().all()
 
+
+def get_minute_prices(session: Session, stock_code: str, days: int = 3, aggregate: str = "1m") -> List[dict]:
+    """
+    Get minute-level prices for a stock.
+
+    Args:
+        session: SQLAlchemy session
+        stock_code: Stock code
+        days: Number of days to fetch (default 3)
+        aggregate: Aggregation level - "1m" (1-minute), "5m" (5-minute), "1d" (daily)
+
+    Returns:
+        List of OHLCV dict with time, open, high, low, close, volume
+    """
+    from datetime import datetime, timedelta, timezone
+
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+
+    if aggregate == "1d":
+        # Return daily prices instead
+        daily_prices = get_daily_prices(session, stock_code, limit=days)
+        return [
+            {
+                "time": p.price_date.strftime("%Y-%m-%d"),
+                "open": float(p.open_price) if p.open_price else 0.0,
+                "high": float(p.high_price) if p.high_price else 0.0,
+                "low": float(p.low_price) if p.low_price else 0.0,
+                "close": float(p.close_price) if p.close_price else 0.0,
+                "volume": float(p.volume) if p.volume else 0.0
+            }
+            for p in daily_prices
+            if p.open_price and p.high_price and p.low_price and p.close_price
+        ]
+
+    # Fetch minute prices
+    stmt = (
+        select(models.StockMinutePrice)
+        .where(models.StockMinutePrice.stock_code == stock_code)
+        .where(models.StockMinutePrice.price_time >= start_date)
+        .order_by(models.StockMinutePrice.price_time.asc())
+    )
+    minute_prices = list(session.execute(stmt).scalars().all())
+
+    if not minute_prices:
+        return []
+
+    if aggregate == "1m":
+        # Return raw 1-minute data
+        return [
+            {
+                "time": p.price_time.strftime("%Y-%m-%d %H:%M"),
+                "open": float(p.open_price) if p.open_price else 0.0,
+                "high": float(p.high_price) if p.high_price else 0.0,
+                "low": float(p.low_price) if p.low_price else 0.0,
+                "close": float(p.close_price) if p.close_price else 0.0,
+                "volume": float(p.volume) if p.volume else 0.0
+            }
+            for p in minute_prices
+            if p.open_price and p.high_price and p.low_price and p.close_price
+        ]
+
+    elif aggregate == "5m":
+        # Aggregate to 5-minute candles
+        result = []
+        bucket = None
+
+        for p in minute_prices:
+            if not (p.open_price and p.high_price and p.low_price and p.close_price):
+                continue
+
+            # Calculate 5-minute bucket
+            minute = p.price_time.minute
+            bucket_minute = (minute // 5) * 5
+            bucket_time = p.price_time.replace(minute=bucket_minute, second=0, microsecond=0)
+            bucket_key = bucket_time.strftime("%Y-%m-%d %H:%M")
+
+            if bucket is None or bucket["time"] != bucket_key:
+                # Start new bucket
+                if bucket:
+                    result.append(bucket)
+                bucket = {
+                    "time": bucket_key,
+                    "open": float(p.open_price),
+                    "high": float(p.high_price),
+                    "low": float(p.low_price),
+                    "close": float(p.close_price),
+                    "volume": float(p.volume) if p.volume else 0.0
+                }
+            else:
+                # Update existing bucket
+                bucket["high"] = max(bucket["high"], float(p.high_price))
+                bucket["low"] = min(bucket["low"], float(p.low_price))
+                bucket["close"] = float(p.close_price)
+                bucket["volume"] += float(p.volume) if p.volume else 0.0
+
+        if bucket:
+            result.append(bucket)
+
+        return result
+
+    return []
+

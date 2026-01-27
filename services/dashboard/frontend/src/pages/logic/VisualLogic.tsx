@@ -7,7 +7,7 @@ import {
     LineStyle,
 } from 'lightweight-charts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { logicApi, LogicStatusResponse } from '../../api/logic';
+import { logicApi, LogicStatusResponse, BuyLogicSnapshot, Timeframe } from '../../api/logic';
 import { watchlistApi } from '../../lib/api';
 
 // --- Types ---
@@ -391,9 +391,8 @@ function generateBearScenario(): ScenarioData {
 }
 
 function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData {
-    const { chart_data, snapshot, stock_code } = response;
+    const { chart_data, snapshot, stock_code, buy_snapshot, signal_history } = response;
 
-    // Map Chart Data
     // Map Chart Data and Ensure Validity
     const validData = chart_data
         .filter(d => d && d.time && typeof d.close === 'number' && !isNaN(d.close))
@@ -404,20 +403,45 @@ function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData 
         index === self.findIndex((t) => t.time === item.time)
     );
 
-    const data: MockDatum[] = uniqueData.map(d => ({
-        time: d.time as Time,
-        open: d.open || 0,
-        high: d.high || 0,
-        low: d.low || 0,
-        close: d.close || 0,
-        volume: d.volume || 0,
-        ma5: d.close, // TODO: calculate real MA
-        ma20: d.close,
-        bbUpper: d.close * 1.05,
-        bbLower: d.close * 0.95,
-        rsi: (snapshot?.rsi !== null && snapshot?.rsi !== undefined) ? snapshot.rsi : 50,
-        vwap: d.close,
-    }));
+    // Create a map for signal markers by time
+    const signalsByTime: Record<string, { type: 'BUY' | 'SELL', signal_type: string, reason: string }> = {};
+    if (signal_history && signal_history.length > 0) {
+        for (const sig of signal_history) {
+            // Extract date part for daily, or full time for minute
+            const timeKey = sig.timestamp.split('T')[0]; // Use date part for matching
+            signalsByTime[timeKey] = { type: sig.type, signal_type: sig.signal_type, reason: sig.reason };
+        }
+    }
+
+    const data: MockDatum[] = uniqueData.map(d => {
+        const datum: MockDatum = {
+            time: d.time as Time,
+            open: d.open || 0,
+            high: d.high || 0,
+            low: d.low || 0,
+            close: d.close || 0,
+            volume: d.volume || 0,
+            ma5: d.close, // TODO: calculate real MA
+            ma20: d.close,
+            bbUpper: d.close * 1.05,
+            bbLower: d.close * 0.95,
+            rsi: (snapshot?.rsi !== null && snapshot?.rsi !== undefined) ? snapshot.rsi : 50,
+            vwap: buy_snapshot?.vwap || d.close,
+        };
+
+        // Add marker if there's a signal for this time
+        const sig = signalsByTime[d.time];
+        if (sig) {
+            datum.marker = {
+                text: sig.type === 'BUY' ? `매수: ${sig.signal_type}` : `매도: ${sig.signal_type}`,
+                color: sig.type === 'BUY' ? '#2ECC71' : '#E74C3C',
+                position: sig.type === 'BUY' ? 'belowBar' : 'aboveBar',
+                shape: sig.type === 'BUY' ? 'arrowUp' : 'arrowDown'
+            };
+        }
+
+        return datum;
+    });
 
     const events: TradeEvent[] = [];
     const priceLines: PriceLineDef[] = [];
@@ -469,9 +493,36 @@ function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData 
         }
     }
 
+    // Add buy snapshot info as event
+    if (buy_snapshot) {
+        if (buy_snapshot.triggered_signal) {
+            events.push({
+                step: data.length - 1,
+                type: 'BUY',
+                title: `매수 신호: ${buy_snapshot.triggered_signal}`,
+                desc: `Regime: ${buy_snapshot.market_regime}, LLM: ${buy_snapshot.llm_score?.toFixed(0)}`
+            });
+        } else if (!buy_snapshot.risk_gate.passed) {
+            const blockedCheck = buy_snapshot.risk_gate.checks.find(c => !c.passed);
+            events.push({
+                step: data.length - 1,
+                type: 'WARNING',
+                title: 'Risk Gate 차단',
+                desc: blockedCheck ? `${blockedCheck.name}: ${blockedCheck.value} (${blockedCheck.threshold})` : 'Risk conditions not met'
+            });
+        } else {
+            events.push({
+                step: data.length - 1,
+                type: 'INFO',
+                title: '매수 대기',
+                desc: `Risk Gate 통과, 신호 대기 중 (RSI: ${buy_snapshot.rsi?.toFixed(1) || 'N/A'})`
+            });
+        }
+    }
+
     return {
         regime: 'REAL',
-        title: `${snapshot?.stock_name || stock_code} (Real-Time)`,
+        title: `${snapshot?.stock_name || buy_snapshot?.stock_name || stock_code} (Real-Time)`,
         description: "실시간 감시 데이터를 기반으로 한 로직 시각화입니다.",
         data,
         events,
@@ -494,6 +545,8 @@ export default function VisualLogic() {
     const [realStock, setRealStock] = useState<string>('');
     const [watchlist, setWatchlist] = useState<{ stock_code: string, stock_name: string }[]>([]);
     const [realData, setRealData] = useState<ScenarioData | null>(null);
+    const [timeframe, setTimeframe] = useState<Timeframe>('1d');
+    const [buySnapshot, setBuySnapshot] = useState<BuyLogicSnapshot | null>(null);
 
     // Fetch Watchlist
     useEffect(() => {
@@ -507,18 +560,19 @@ export default function VisualLogic() {
     // Fetch Real Data when mode is REAL and stock changes
     useEffect(() => {
         if (scenario === 'REAL' && realStock) {
-            logicApi.getStatus(realStock).then(res => {
-                setRealData(convertRealDataToScenario(res));
-            }).catch(err => console.error(err));
-            // Poll every 5 seconds for real-time updates
-            const interval = setInterval(() => {
-                logicApi.getStatus(realStock).then(res => {
+            const fetchData = () => {
+                logicApi.getStatus(realStock, timeframe).then(res => {
                     setRealData(convertRealDataToScenario(res));
+                    setBuySnapshot(res.buy_snapshot);
                 }).catch(err => console.error(err));
-            }, 5000);
+            };
+
+            fetchData();
+            // Poll every 5 seconds for real-time updates
+            const interval = setInterval(fetchData, 5000);
             return () => clearInterval(interval);
         }
-    }, [scenario, realStock]);
+    }, [scenario, realStock, timeframe]);
 
 
     const activeData = useMemo(() => {
@@ -659,15 +713,7 @@ export default function VisualLogic() {
                 console.error('[VisualLogic] CRITICAL: setData failed with SORTED data!', err);
             }
         }
-        // ma5SeriesRef.current?.setData(ma5);
-        // ma20SeriesRef.current?.setData(ma20);
-        // bbUSeriesRef.current?.setData(bbU);
-        // bbLSeriesRef.current?.setData(bbL);
-
-
-
-        // Map markers
-        /*
+        // Map markers (Signal History)
         const markers = data
             .filter(d => d.marker)
             .map(d => ({
@@ -677,29 +723,15 @@ export default function VisualLogic() {
                 shape: d.marker!.shape,
                 text: d.marker!.text,
             }));
-        // @ts-ignore
-        candleSeriesRef.current.setMarkers(markers);
-        */
-        // candleSeriesRef.current.setMarkers([]);
 
-        // Price Lines
-        // priceLinesRef.current.forEach(line => candleSeriesRef.current?.removePriceLine(line));
-        // priceLinesRef.current = [];
-
-        /*
-        if (activeData.priceLines) {
-            activeData.priceLines.forEach(line => {
-                const pl = candleSeriesRef.current?.createPriceLine({
-                    price: line.price,
-                    color: line.color,
-                    title: line.title,
-                    lineStyle: line.lineStyle,
-                    axisLabelVisible: true,
-                });
-                if (pl) priceLinesRef.current.push(pl);
-            });
+        if (markers.length > 0) {
+            try {
+                // @ts-ignore - lightweight-charts types issue
+                candleSeriesRef.current.setMarkers(markers);
+            } catch (err) {
+                console.warn('[VisualLogic] Markers setting failed:', err);
+            }
         }
-        */
 
         chartRef.current.timeScale().fitContent();
 
@@ -769,7 +801,7 @@ export default function VisualLogic() {
 
             {/* Read Logic Selector */}
             <div className="mb-6">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 flex-wrap">
                     <button
                         onClick={() => setScenario('REAL')}
                         className={`px-6 py-2 rounded-lg font-bold border transition-all ${scenario === 'REAL'
@@ -781,20 +813,128 @@ export default function VisualLogic() {
                     </button>
 
                     {scenario === 'REAL' && (
-                        <select
-                            value={realStock}
-                            onChange={(e) => setRealStock(e.target.value)}
-                            className="bg-[#1A1A1F] border border-white/20 text-white rounded px-4 py-2"
-                        >
-                            {watchlist.map(item => (
-                                <option key={item.stock_code} value={item.stock_code}>
-                                    {item.stock_name} ({item.stock_code})
-                                </option>
-                            ))}
-                        </select>
+                        <>
+                            <select
+                                value={realStock}
+                                onChange={(e) => setRealStock(e.target.value)}
+                                className="bg-[#1A1A1F] border border-white/20 text-white rounded px-4 py-2"
+                            >
+                                {watchlist.map(item => (
+                                    <option key={item.stock_code} value={item.stock_code}>
+                                        {item.stock_name} ({item.stock_code})
+                                    </option>
+                                ))}
+                            </select>
+
+                            {/* Timeframe Toggle */}
+                            <div className="flex items-center gap-1 bg-[#1A1A1F] rounded-lg p-1 border border-white/10">
+                                {(['1m', '5m', '1d'] as Timeframe[]).map(tf => (
+                                    <button
+                                        key={tf}
+                                        onClick={() => setTimeframe(tf)}
+                                        className={`px-3 py-1 rounded text-xs font-bold transition-all ${timeframe === tf
+                                            ? 'bg-purple-500 text-white'
+                                            : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        {tf === '1m' ? '1분' : tf === '5m' ? '5분' : '일봉'}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
             </div>
+
+            {/* Risk Gate & Signal Checks Panels (only in REAL mode) */}
+            {scenario === 'REAL' && buySnapshot && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                    {/* Risk Gate Panel */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-[#1A1A1F] rounded-xl border border-white/10 p-4"
+                    >
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <span className={`w-3 h-3 rounded-full ${buySnapshot.risk_gate.passed ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                🛡️ Risk Gate
+                            </h3>
+                            <span className={`text-xs font-bold px-2 py-1 rounded ${buySnapshot.risk_gate.passed ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {buySnapshot.risk_gate.passed ? 'PASSED' : 'BLOCKED'}
+                            </span>
+                        </div>
+                        <div className="space-y-2">
+                            {buySnapshot.risk_gate.checks.map((check, idx) => (
+                                <div key={idx} className={`flex justify-between items-center p-2 rounded ${check.passed ? 'bg-green-500/5' : 'bg-red-500/10'}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-sm ${check.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                            {check.passed ? '✓' : '✗'}
+                                        </span>
+                                        <span className="text-sm text-gray-300">{check.name}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className={`text-xs font-mono ${check.passed ? 'text-green-400' : 'text-red-400'}`}>
+                                            {check.value}
+                                        </span>
+                                        <span className="text-xs text-gray-500 ml-2">({check.threshold})</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-white/5 flex justify-between text-xs text-gray-500">
+                            <span>VWAP: ₩{buySnapshot.vwap?.toLocaleString() || '-'}</span>
+                            <span>Vol Ratio: {buySnapshot.volume_ratio?.toFixed(1) || '-'}x</span>
+                            <span>RSI: {buySnapshot.rsi?.toFixed(1) || '-'}</span>
+                        </div>
+                    </motion.div>
+
+                    {/* Signal Checks Panel */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                        className="bg-[#1A1A1F] rounded-xl border border-white/10 p-4"
+                    >
+                        <div className="flex justify-between items-center mb-3">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                📊 Signal Checks
+                            </h3>
+                            {buySnapshot.triggered_signal && (
+                                <span className="text-xs font-bold px-2 py-1 rounded bg-green-500/20 text-green-400">
+                                    🎯 {buySnapshot.triggered_signal}
+                                </span>
+                            )}
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                            {buySnapshot.signal_checks.length > 0 ? (
+                                buySnapshot.signal_checks.map((check, idx) => (
+                                    <div key={idx} className={`p-2 rounded border ${check.triggered ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-800/30 border-white/5'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <span className={`text-sm font-medium ${check.triggered ? 'text-green-400' : 'text-gray-400'}`}>
+                                                {check.triggered ? '🔔' : '⏸️'} {check.strategy}
+                                            </span>
+                                            <span className={`text-xs ${check.triggered ? 'text-green-400' : 'text-gray-500'}`}>
+                                                {check.triggered ? 'TRIGGERED' : 'NO'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1 truncate" title={check.reason}>
+                                            {check.reason}
+                                        </p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-500 text-center py-4">Risk Gate 통과 후 체크됨</p>
+                            )}
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-white/5 flex justify-between text-xs text-gray-500">
+                            <span>Regime: {buySnapshot.market_regime || '-'}</span>
+                            <span>LLM: {buySnapshot.llm_score?.toFixed(0) || '-'}</span>
+                            <span>Tier: {buySnapshot.trade_tier || '-'}</span>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
 
             {/* Main Content Area */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

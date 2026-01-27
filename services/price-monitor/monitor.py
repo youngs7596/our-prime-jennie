@@ -572,12 +572,48 @@ class PriceMonitor:
             
             # 60초 TTL (실시간성이 중요하므로 짧게 유지)
             redis_cache.set_redis_data(f"logic:snapshot:{stock_code}", logic_snapshot, ttl=60)
-            
+
+            # [Logic Observability] 신호 발생 시 히스토리에 추가
+            if potential_signal:
+                self._save_signal_history(stock_code, stock_name, 'SELL', potential_signal['reason'], current_price)
+
             return potential_signal
 
         except Exception as e:
             logger.error(f"[{stock_name}] 신호 체크 오류: {e}", exc_info=True)
             return None
+
+    def _save_signal_history(self, stock_code: str, stock_name: str, signal_type: str, reason: str, price: float):
+        """
+        [Logic Observability] 신호 히스토리를 Redis에 저장 (최근 50개, 7일 TTL)
+        """
+        import json
+        try:
+            key = f"logic:signals:{stock_code}"
+            signal_entry = {
+                "timestamp": datetime.now().isoformat(),
+                "type": signal_type,  # BUY or SELL
+                "signal_type": reason.split(':')[0] if ':' in reason else reason[:30],
+                "reason": reason,
+                "price": price,
+                "stock_name": stock_name
+            }
+
+            # Get existing history
+            existing = redis_cache.get_redis_data(key) or []
+            if not isinstance(existing, list):
+                existing = []
+
+            # Add new entry and keep only last 50
+            existing.append(signal_entry)
+            existing = existing[-50:]
+
+            # Save with 7-day TTL
+            redis_cache.set_redis_data(key, existing, ttl=7*24*3600)
+            logger.debug(f"   [Observability] Signal history saved: {stock_code} {signal_type}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Signal history 저장 실패 ({stock_code}): {e}")
 
     def _on_websocket_price_update(self, stock_code, current_price, current_high):
         try:

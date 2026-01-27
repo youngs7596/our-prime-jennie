@@ -1,6 +1,7 @@
 
 import { api } from '../lib/api';
 
+// Sell Logic Snapshot (from Price Monitor)
 export interface LogicSnapshot {
     timestamp: string;
     stock_code: string;
@@ -22,6 +23,50 @@ export interface LogicSnapshot {
     } | null;
 }
 
+// Risk Gate Check Result
+export interface RiskGateCheck {
+    name: string;
+    passed: boolean;
+    value: string;
+    threshold: string;
+}
+
+// Signal Check Result
+export interface SignalCheck {
+    strategy: string;
+    triggered: boolean;
+    reason: string;
+}
+
+// Buy Logic Snapshot (from Buy Scanner)
+export interface BuyLogicSnapshot {
+    timestamp: string;
+    stock_code: string;
+    stock_name: string;
+    current_price: number;
+    vwap: number;
+    volume_ratio: number;
+    rsi: number | null;
+    market_regime: string;
+    llm_score: number;
+    trade_tier: string;
+    risk_gate: {
+        passed: boolean;
+        checks: RiskGateCheck[];
+    };
+    signal_checks: SignalCheck[];
+    triggered_signal: string | null;
+}
+
+// Signal History Entry
+export interface SignalHistoryEntry {
+    timestamp: string;
+    type: 'BUY' | 'SELL';
+    signal_type: string;
+    reason: string;
+    price: number;
+}
+
 export interface ChartDataPoint {
     time: string;
     open: number;
@@ -31,15 +76,20 @@ export interface ChartDataPoint {
     volume: number;
 }
 
+export type Timeframe = '1m' | '5m' | '1d';
+
 export interface LogicStatusResponse {
     stock_code: string;
     snapshot: LogicSnapshot | null;
+    buy_snapshot: BuyLogicSnapshot | null;
+    signal_history: SignalHistoryEntry[];
     chart_data: ChartDataPoint[];
+    timeframe: Timeframe;
 }
 
 export const logicApi = {
-    getStatus: async (stockCode: string): Promise<LogicStatusResponse> => {
-        const response = await api.get(`/logic/status/${stockCode}`);
+    getStatus: async (stockCode: string, timeframe: Timeframe = '1d'): Promise<LogicStatusResponse> => {
+        const response = await api.get(`/logic/status/${stockCode}?timeframe=${timeframe}`);
         return response.data;
     }
 };

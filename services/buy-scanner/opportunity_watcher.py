@@ -1,7 +1,8 @@
 # services/buy-scanner/opportunity_watcher.py
-# Version: v1.1
+# Version: v1.2
 # Hot Watchlist 실시간 매수 신호 감지 (WebSocket 기반) + Supply/Demand & Legendary Pattern
 # buy-scanner가 매수용 WebSocket을 담당
+# + Logic Observability: Buy Logic Snapshot 저장 (2026-01-27)
 
 
 import os
@@ -320,171 +321,285 @@ class BuyOpportunityWatcher:
         
         return None
     
-    def _check_buy_signal(self, stock_code: str, current_price: float, 
+    def _check_buy_signal(self, stock_code: str, current_price: float,
                           completed_bar: dict) -> Optional[dict]:
-        """매수 신호 체크"""
+        """매수 신호 체크 + Logic Observability 스냅샷 저장"""
         stock_info = self.hot_watchlist.get(stock_code, {})
         strategies = stock_info.get('strategies', [])
-        
+
         if not strategies:
             # [FIX] Jennie CSO Review: 시장 상황에 따른 동적 RSI 기준값
             # 강세장=50, 횡보=40, 약세=30
             dynamic_rsi = self._get_dynamic_rsi_threshold()
-            
+
 
             strategies = [
                 {"id": "GOLDEN_CROSS", "params": {"short_window": 5, "long_window": 20}},
                 {"id": "RSI_REBOUND", "params": {"threshold": dynamic_rsi}},
-                {"id": "MOMENTUM", "params": {"threshold": 1.5}} 
+                {"id": "MOMENTUM", "params": {"threshold": 1.5}}
             ]
 
 
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
-        
+
         # [Config] 최소 바 개수 (기본 20개, Mock/Dev 모드에서 조절 가능)
         min_bars = int(os.getenv('MIN_REQUIRED_BARS', 20))
-        if len(recent_bars) < min_bars:
-             return None
 
-        # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:20)
-        if not self._check_no_trade_window():
+        # [Logic Observability] Risk Gate 체크 결과 수집
+        volume_info = self.bar_aggregator.get_volume_info(stock_code)
+        vwap = self.bar_aggregator.get_vwap(stock_code)
+
+        # RSI 계산 (스냅샷용)
+        closes = [b['close'] for b in recent_bars] if recent_bars else []
+        current_rsi = self._calculate_simple_rsi(closes, period=14) if len(closes) >= 15 else None
+
+        risk_gate_checks = []
+        risk_gate_passed = True
+
+        # 조건 0: 최소 바 개수
+        bar_check_passed = len(recent_bars) >= min_bars
+        risk_gate_checks.append({
+            "name": "Min Bars",
+            "passed": bar_check_passed,
+            "value": str(len(recent_bars)),
+            "threshold": f">= {min_bars}"
+        })
+        if not bar_check_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+            return None
+
+        # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:30)
+        no_trade_window_passed = self._check_no_trade_window()
+        risk_gate_checks.append({
+            "name": "No-Trade Window",
+            "passed": no_trade_window_passed,
+            "value": datetime.now().strftime("%H:%M"),
+            "threshold": "Not 09:00~09:30"
+        })
+        if not no_trade_window_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
         # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
-        # 기존 VWAP 2% 단독 차단 + 거래량 2x 단독 차단 → 통합
-        volume_info = self.bar_aggregator.get_volume_info(stock_code)
-        vwap = self.bar_aggregator.get_vwap(stock_code)
-        
         risk_conditions = 0
-        
+
         # 조건 1: 거래량 급증 (> 2x 평균)
-        if volume_info['ratio'] > 2.0:
+        volume_check_passed = volume_info['ratio'] <= 2.0
+        if not volume_check_passed:
             risk_conditions += 1
-        
+        risk_gate_checks.append({
+            "name": "Volume Gate",
+            "passed": volume_check_passed,
+            "value": f"{volume_info['ratio']:.1f}x",
+            "threshold": "<= 2.0x"
+        })
+
         # 조건 2: VWAP 이격 과대 (> 2%)
-        if vwap > 0 and current_price > vwap * 1.02:
+        vwap_deviation = ((current_price - vwap) / vwap * 100) if vwap > 0 else 0
+        vwap_check_passed = not (vwap > 0 and current_price > vwap * 1.02)
+        if not vwap_check_passed:
             risk_conditions += 1
-        
+        risk_gate_checks.append({
+            "name": "VWAP Gate",
+            "passed": vwap_check_passed,
+            "value": f"{vwap_deviation:.1f}%",
+            "threshold": "<= 2.0%"
+        })
+
         # 2개 이상 조건 충족 시 차단 (거래량 급증 + VWAP 이격 = 뉴스반영 상태)
-        if risk_conditions >= 2:
-            # logger.debug(f"[{stock_code}] 조건부 차단: 거래량 {volume_info['ratio']:.1f}x + VWAP 이격")
+        combined_risk_passed = risk_conditions < 2
+        risk_gate_checks.append({
+            "name": "Combined Risk",
+            "passed": combined_risk_passed,
+            "value": f"{risk_conditions} conditions",
+            "threshold": "< 2 risk flags"
+        })
+        if not combined_risk_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
-        if not self._check_cooldown(stock_code):
+        # Cooldown 체크
+        cooldown_passed = self._check_cooldown(stock_code)
+        risk_gate_checks.append({
+            "name": "Cooldown",
+            "passed": cooldown_passed,
+            "value": "Active" if not cooldown_passed else "Clear",
+            "threshold": "No recent signal"
+        })
+        if not cooldown_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
         
         signal_type = None
         signal_reason = ""
-        
+        signal_checks = []  # [Logic Observability] 전략별 체크 결과 수집
+
         # [NEW] 상승장 전용 전략 먼저 체크 (기존 전략보다 우선 적용)
         if self.market_regime in ['BULL', 'STRONG_BULL']:
             # 1. RECON_BULL_ENTRY: 고점수 RECON 종목 자동 진입
             result = self._check_recon_bull_entry(stock_code, stock_info)
             if result:
                 signal_type, signal_reason = result
-            
+                signal_checks.append({"strategy": "RECON_BULL_ENTRY", "triggered": True, "reason": signal_reason})
+            else:
+                signal_checks.append({"strategy": "RECON_BULL_ENTRY", "triggered": False, "reason": "Conditions not met"})
+
             # 2. MOMENTUM_CONTINUATION: 모멘텀 지속 종목
             if not signal_type:
                 result = self._check_momentum_continuation(stock_code, stock_info, recent_bars)
                 if result:
                     signal_type, signal_reason = result
+                    signal_checks.append({"strategy": "MOMENTUM_CONTINUATION", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "MOMENTUM_CONTINUATION", "triggered": False, "reason": "MA5 <= MA20 or price change < 2%"})
 
             # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파)
             if not signal_type:
                 result = self._check_short_term_high_breakout(stock_code, recent_bars)
                 if result:
                     signal_type, signal_reason = result
+                    signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "No breakout or volume < 2x"})
 
             # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파)
             if not signal_type:
                 result = self._check_volume_breakout_1min(stock_code, recent_bars)
                 if result:
                     signal_type, signal_reason = result
+                    signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "No resistance break or volume < 3x"})
 
             # ================================================================
             # [NEW] Jennie CSO 지시: 추가 Bull Market 전략 (2026-01-17)
             # ================================================================
-            
+
             # 5. BULL_PULLBACK: 상승 추세 중 건전한 조정 후 반등
             if not signal_type:
                 result = self._check_bull_pullback(recent_bars)
                 if result:
                     signal_type, signal_reason = result
+                    signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": False, "reason": "No pullback pattern"})
 
             # 6. VCP_BREAKOUT: 변동성 축소 후 거래량 동반 돌파
             if not signal_type:
                 result = self._check_vcp_breakout(recent_bars)
                 if result:
                     signal_type, signal_reason = result
-                    
+                    signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "No VCP pattern"})
+
             # 7. INSTITUTIONAL_ENTRY: 기관/외국인 매수세 캔들 패턴
             if not signal_type:
                 result = self._check_institutional_buying(recent_bars)
                 if result:
                     signal_type, signal_reason = result
+                    signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": True, "reason": signal_reason})
+                else:
+                    signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": False, "reason": "No institutional pattern"})
 
         # [EXISTING] 신호가 없으면 기존 전략 루프 실행
         # 단, 강세장(BULL/STRONG_BULL)에서는 역추세 전략(RSI, BB) 비활성화
         if not signal_type:
             # 강세장에서는 역추세 전략 스킵
             is_bull_market = self.market_regime in ['BULL', 'STRONG_BULL']
-            
+
             for strat in strategies:
                 strat_id = strat.get('id')
                 params = strat.get('params', {})
-                
+
                 if strat_id == "GOLDEN_CROSS":
                     triggered, reason = self._check_golden_cross(recent_bars, params)
                     if triggered:
                         signal_type = "GOLDEN_CROSS"
                         signal_reason = reason
-                        
+
                         # [Super Prime] Legendary Pattern Check
                         if self._check_legendary_pattern(stock_code, recent_bars):
                              signal_type = "GOLDEN_CROSS_SUPER_PRIME"
                              signal_reason += " + Legendary Pattern (Foreign Buy)"
                              logger.info(f"🚨 [{stock_code}] SUPER PRIME 신호 격상! (Legendary Pattern)")
-                        
+
+                        signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": True, "reason": signal_reason})
                         break
-                
+                    else:
+                        # MA 값 계산해서 이유 표시
+                        if len(closes) >= 20:
+                            ma5 = sum(closes[-5:]) / 5
+                            ma20 = sum(closes[-20:]) / 20
+                            signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": False, "reason": f"MA5({ma5:.0f}) {'>' if ma5 > ma20 else '<='} MA20({ma20:.0f})"})
+                        else:
+                            signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": False, "reason": reason or "Not enough data"})
+
                 elif strat_id == "RSI_REBOUND":
                     # 강세장에서는 RSI Rebound 비활성화 (거의 발생 안 함 + 가짜 신호 방지)
                     if is_bull_market:
+                        signal_checks.append({"strategy": "RSI_REBOUND", "triggered": False, "reason": "Disabled in Bull market"})
                         continue
-                        
+
                     triggered, reason = self._check_rsi_rebound(recent_bars, params)
                     if triggered:
                         signal_type = "RSI_REBOUND"
                         signal_reason = reason
+                        signal_checks.append({"strategy": "RSI_REBOUND", "triggered": True, "reason": signal_reason})
                         break
-                        
+                    else:
+                        threshold = params.get('threshold', 30)
+                        signal_checks.append({"strategy": "RSI_REBOUND", "triggered": False, "reason": f"RSI {current_rsi:.1f if current_rsi else 'N/A'} > {threshold}"})
+
                 elif strat_id == "RSI_OVERSOLD":
                     continue
-                        
+
                 elif strat_id == "BB_LOWER":
                     # 강세장에서는 BB 하단 터치 전략 비활성화 (Band Walk 위험)
                     if is_bull_market:
+                        signal_checks.append({"strategy": "BB_LOWER", "triggered": False, "reason": "Disabled in Bull market"})
                         continue
 
                     triggered, reason = self._check_bb_lower(recent_bars, params, current_price)
                     if triggered:
                         signal_type = "BB_LOWER"
                         signal_reason = reason
+                        signal_checks.append({"strategy": "BB_LOWER", "triggered": True, "reason": signal_reason})
                         break
-                
+                    else:
+                        signal_checks.append({"strategy": "BB_LOWER", "triggered": False, "reason": reason or "Price above BB Lower"})
+
                 elif strat_id == "MOMENTUM":
                     triggered, reason = self._check_momentum(recent_bars, params)
                     if triggered:
                         signal_type = "MOMENTUM"
                         signal_reason = reason
+                        signal_checks.append({"strategy": "MOMENTUM", "triggered": True, "reason": signal_reason})
                         break
+                    else:
+                        signal_checks.append({"strategy": "MOMENTUM", "triggered": False, "reason": reason or "Momentum below threshold"})
+
+        # [Logic Observability] 스냅샷 저장 (신호 유무와 관계없이)
+        self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                      current_rsi, risk_gate_passed, risk_gate_checks, signal_checks, signal_type)
 
         if not signal_type:
             return None
-        
+
         self._set_cooldown(stock_code)
         logger.info(f"🔔 [{stock_code}] {signal_type} 신호 감지: {signal_reason}")
-        
+
+        # [Logic Observability] 신호 히스토리 저장
+        self._save_signal_history(stock_code, stock_info.get('name', stock_code), 'BUY', signal_type, signal_reason, current_price)
+
         signal = {
             'stock_code': stock_code,
             'stock_name': stock_info.get('name', stock_code),
@@ -495,11 +610,10 @@ class BuyOpportunityWatcher:
             'market_regime': self.market_regime,
             'source': 'buy_scanner_websocket',
             'timestamp': datetime.now(timezone.utc).isoformat(),
-            'timestamp': datetime.now(timezone.utc).isoformat(),
             'trade_tier': stock_info.get('trade_tier', 'TIER1'),
             'is_super_prime': (signal_type == "GOLDEN_CROSS_SUPER_PRIME")
         }
-        
+
         return signal
 
     def _check_golden_cross(self, bars: List[dict], params: dict) -> tuple:
@@ -589,23 +703,98 @@ class BuyOpportunityWatcher:
     def _calculate_simple_rsi(self, prices: List[float], period: int = 14) -> Optional[float]:
         if len(prices) < period + 1:
             return None
-        
+
         deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
         recent_deltas = deltas[-(period):]
-        
+
         gains = [d for d in recent_deltas if d > 0]
         losses = [-d for d in recent_deltas if d < 0]
-        
+
         avg_gain = sum(gains) / period if gains else 0
         avg_loss = sum(losses) / period if losses else 0
-        
+
         if avg_loss == 0:
             return 100.0
-        
+
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
         return rsi
-    
+
+    def _save_buy_logic_snapshot(self, stock_code: str, stock_info: dict,
+                                  current_price: float, vwap: float,
+                                  volume_info: dict, rsi: Optional[float],
+                                  risk_gate_passed: bool, risk_gate_checks: List[dict],
+                                  signal_checks: List[dict], triggered_signal: Optional[str]):
+        """
+        [Logic Observability] Buy Logic 스냅샷을 Redis에 저장
+        - Dashboard에서 실시간으로 "왜 매수를 안 하는지" 확인 가능
+        """
+        if not self.redis:
+            return
+
+        try:
+            snapshot = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "stock_code": stock_code,
+                "stock_name": stock_info.get('name', stock_code),
+                "current_price": current_price,
+                "vwap": vwap,
+                "volume_ratio": volume_info.get('ratio', 0),
+                "rsi": rsi,
+                "market_regime": self.market_regime,
+                "llm_score": stock_info.get('llm_score', 0),
+                "trade_tier": stock_info.get('trade_tier', 'UNKNOWN'),
+                "risk_gate": {
+                    "passed": risk_gate_passed,
+                    "checks": risk_gate_checks
+                },
+                "signal_checks": signal_checks,
+                "triggered_signal": triggered_signal
+            }
+
+            key = f"buy_logic:snapshot:{stock_code}"
+            self.redis.setex(key, 60, json.dumps(snapshot))  # 60초 TTL
+            # logger.debug(f"   [Observability] Buy logic snapshot saved: {stock_code}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Buy logic snapshot 저장 실패 ({stock_code}): {e}")
+
+    def _save_signal_history(self, stock_code: str, stock_name: str, signal_type: str,
+                             signal_name: str, reason: str, price: float):
+        """
+        [Logic Observability] 신호 히스토리를 Redis에 저장 (최근 50개, 7일 TTL)
+        """
+        if not self.redis:
+            return
+
+        try:
+            key = f"logic:signals:{stock_code}"
+            signal_entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "type": signal_type,  # BUY or SELL
+                "signal_type": signal_name,
+                "reason": reason,
+                "price": price,
+                "stock_name": stock_name
+            }
+
+            # Get existing history
+            existing_raw = self.redis.get(key)
+            existing = json.loads(existing_raw) if existing_raw else []
+            if not isinstance(existing, list):
+                existing = []
+
+            # Add new entry and keep only last 50
+            existing.append(signal_entry)
+            existing = existing[-50:]
+
+            # Save with 7-day TTL
+            self.redis.setex(key, 7*24*3600, json.dumps(existing))
+            logger.debug(f"   [Observability] Signal history saved: {stock_code} {signal_type}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Signal history 저장 실패 ({stock_code}): {e}")
+
     def _check_recon_bull_entry(self, stock_code: str, stock_info: dict) -> Optional[tuple]:
         """
         RECON_BULL_ENTRY: 상승장에서 고점수 RECON 종목 자동 진입
@@ -956,19 +1145,6 @@ class BuyOpportunityWatcher:
         logger.info(f"🐋 [INSTITUTIONAL_ENTRY] {reason}")
         return ("INSTITUTIONAL_ENTRY", reason)
 
-    def _check_cooldown(self, stock_code: str) -> bool:
-        if not self.redis:
-            return True
-        
-        try:
-            cooldown_key = f"buy_signal_cooldown:{stock_code}"
-            if self.redis.exists(cooldown_key):
-                self.metrics['cooldown_blocked'] += 1
-                return False
-            return True
-        except Exception:
-            return True
-
     def _check_legendary_pattern(self, stock_code: str, bars: List[dict]) -> bool:
         """
         [Super Prime] 전설의 타이밍 패턴 여부 확인 (Realtime Version)
@@ -1053,17 +1229,13 @@ class BuyOpportunityWatcher:
     def _set_cooldown(self, stock_code: str) -> None:
         if not self.redis:
             return
-        
+
         try:
             cooldown_key = f"buy_signal_cooldown:{stock_code}"
             self.redis.setex(cooldown_key, self.cooldown_seconds, "1")
         except Exception as e:
             logger.warning(f"Cooldown 설정 실패: {e}")
-    
-        except Exception as e:
-            logger.error(f"매수 신호 발행 오류: {e}")
-            return False
-            
+
     def publish_signal(self, signal: dict) -> bool:
         """매수 신호 RabbitMQ 발행 및 Redis Pub/Sub 전송"""
         if not self.tasks_publisher:
