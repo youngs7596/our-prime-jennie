@@ -37,22 +37,26 @@ async def get_logic_status(stock_code: str):
         chart_data = []
         with get_session() as session:
             # Fetch daily prices
-            df = repo.get_daily_prices(session, stock_code, limit=60)
-            if not df.empty:
-                # Convert DataFrame to list of dicts compatible with frontend
+            prices = repo.get_daily_prices(session, stock_code, limit=60)
+            if prices:
+                # Convert ORM objects to list of dicts compatible with frontend
                 # Expected: time, open, high, low, close, volume
-                # df columns: PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, TRADE_VOLUME
-                for _, row in df.iterrows():
+                for p in prices:
                     chart_data.append({
-                        "time": row['PRICE_DATE'].strftime("%Y-%m-%d"),
-                        "open": float(row['OPEN_PRICE']),
-                        "high": float(row['HIGH_PRICE']),
-                        "low": float(row['LOW_PRICE']),
-                        "close": float(row['CLOSE_PRICE']),
-                        "volume": float(row['TRADE_VOLUME'])
+                        "time": p.price_date.strftime("%Y-%m-%d"),
+                        "open": float(p.open_price) if p.open_price else 0.0,
+                        "high": float(p.high_price) if p.high_price else 0.0,
+                        "low": float(p.low_price) if p.low_price else 0.0,
+                        "close": float(p.close_price) if p.close_price else 0.0,
+                        "volume": float(p.volume) if p.volume else 0.0
                     })
+
+        
         
         # 3. Combine and Return
+        # Lightweight Charts suggests data must be in ascending order
+        chart_data.sort(key=lambda x: x['time'])
+        
         return {
             "stock_code": stock_code,
             "snapshot": snapshot,

@@ -5,7 +5,6 @@ import {
     Time,
     ColorType,
     LineStyle,
-    IPriceLine,
 } from 'lightweight-charts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { logicApi, LogicStatusResponse } from '../../api/logic';
@@ -395,18 +394,28 @@ function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData 
     const { chart_data, snapshot, stock_code } = response;
 
     // Map Chart Data
-    const data: MockDatum[] = chart_data.map(d => ({
+    // Map Chart Data and Ensure Validity
+    const validData = chart_data
+        .filter(d => d && d.time && typeof d.close === 'number' && !isNaN(d.close))
+        .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+    // Remove duplicates
+    const uniqueData = validData.filter((item, index, self) =>
+        index === self.findIndex((t) => t.time === item.time)
+    );
+
+    const data: MockDatum[] = uniqueData.map(d => ({
         time: d.time as Time,
-        open: d.open,
-        high: d.high,
-        low: d.low,
-        close: d.close,
-        volume: d.volume,
-        ma5: d.close, // TODO: calculate MA
+        open: d.open || 0,
+        high: d.high || 0,
+        low: d.low || 0,
+        close: d.close || 0,
+        volume: d.volume || 0,
+        ma5: d.close, // TODO: calculate real MA
         ma20: d.close,
-        bbUpper: d.close * 1.05, // TODO: calculate
+        bbUpper: d.close * 1.05,
         bbLower: d.close * 0.95,
-        rsi: snapshot?.rsi || 50,
+        rsi: (snapshot?.rsi !== null && snapshot?.rsi !== undefined) ? snapshot.rsi : 50,
         vwap: d.close,
     }));
 
@@ -455,7 +464,7 @@ function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData 
                 step: data.length - 1,
                 type: 'INFO',
                 title: '현재 상태: 홀딩',
-                desc: `수익률: ${snapshot.profit_pct.toFixed(2)}%, RSI: ${snapshot.rsi?.toFixed(1) || 'N/A'}`
+                desc: `수익률: ${(snapshot.profit_pct ?? 0).toFixed(2)}%, RSI: ${snapshot.rsi?.toFixed(1) || 'N/A'}`
             });
         }
     }
@@ -468,7 +477,7 @@ function convertRealDataToScenario(response: LogicStatusResponse): ScenarioData 
         events,
         priceLines,
         stats: {
-            totalReturn: snapshot ? `${snapshot.profit_pct.toFixed(1)}%` : '-',
+            totalReturn: snapshot ? `${(snapshot.profit_pct ?? 0).toFixed(1)}%` : '-',
             riskReward: "-",
             duration: "-",
             winRate: "-"
@@ -527,7 +536,7 @@ export default function VisualLogic() {
     const ma20SeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbUSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const bbLSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-    const priceLinesRef = useRef<IPriceLine[]>([]);
+    // const priceLinesRef = useRef<IPriceLine[]>([]);
 
     // Chart Initialization
     useEffect(() => {
@@ -591,19 +600,74 @@ export default function VisualLogic() {
         if (!chartRef.current || !candleSeriesRef.current) return;
 
         const { data } = activeData;
-        const candles = data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close }));
-        const ma5 = data.map(d => ({ time: d.time, value: d.ma5 }));
-        const ma20 = data.map(d => ({ time: d.time, value: d.ma20 }));
-        const bbU = data.map(d => ({ time: d.time, value: d.bbUpper }));
-        const bbL = data.map(d => ({ time: d.time, value: d.bbLower }));
 
-        candleSeriesRef.current.setData(candles);
-        ma5SeriesRef.current?.setData(ma5);
-        ma20SeriesRef.current?.setData(ma20);
-        bbUSeriesRef.current?.setData(bbU);
-        bbLSeriesRef.current?.setData(bbL);
+        // Strict validation with LOGGING
+        console.log('[VisualLogic] Processing', data.length, 'candles');
+        const validCandles = data
+            .filter(d => {
+                const isValid = d && d.time &&
+                    typeof d.open === 'number' && !isNaN(d.open) &&
+                    typeof d.high === 'number' && !isNaN(d.high) &&
+                    typeof d.low === 'number' && !isNaN(d.low) &&
+                    typeof d.close === 'number' && !isNaN(d.close);
+                if (!isValid) console.warn('[VisualLogic] Invalid Candle Dropped:', d);
+                return isValid;
+            })
+            .map(d => ({
+                time: d.time as string,
+                open: d.open,
+                high: d.high,
+                low: d.low,
+                close: d.close,
+                ma5: d.ma5,
+                ma20: d.ma20,
+                bbUpper: d.bbUpper,
+                bbLower: d.bbLower,
+                volume: d.volume,
+                rsi: d.rsi,
+                vwap: d.vwap,
+            }));
+
+        // Deduplicate and Sort
+        const uniqueCandlesMap = new Map();
+        validCandles.forEach(c => uniqueCandlesMap.set(c.time, c));
+        const sortedCandles = Array.from(uniqueCandlesMap.values()).sort((a, b) => (a.time > b.time ? 1 : -1));
+
+        const finalCandles = sortedCandles.map(c => ({
+            ...c,
+            time: c.time as Time
+        }));
+
+        console.log(`[VisualLogic] setData | Original: ${data.length} | Final: ${finalCandles.length}`);
+
+        if (finalCandles.length > 0) {
+            try {
+                candleSeriesRef.current.setData(finalCandles);
+
+                // Set Indicators
+                const ma5Data = finalCandles.map(c => ({ time: c.time, value: c.ma5 }));
+                const ma20Data = finalCandles.map(c => ({ time: c.time, value: c.ma20 }));
+                const bbUData = finalCandles.map(c => ({ time: c.time, value: c.bbUpper }));
+                const bbLData = finalCandles.map(c => ({ time: c.time, value: c.bbLower }));
+
+                if (ma5SeriesRef.current) ma5SeriesRef.current.setData(ma5Data);
+                if (ma20SeriesRef.current) ma20SeriesRef.current.setData(ma20Data);
+                if (bbUSeriesRef.current) bbUSeriesRef.current.setData(bbUData);
+                if (bbLSeriesRef.current) bbLSeriesRef.current.setData(bbLData);
+
+            } catch (err) {
+                console.error('[VisualLogic] CRITICAL: setData failed with SORTED data!', err);
+            }
+        }
+        // ma5SeriesRef.current?.setData(ma5);
+        // ma20SeriesRef.current?.setData(ma20);
+        // bbUSeriesRef.current?.setData(bbU);
+        // bbLSeriesRef.current?.setData(bbL);
+
+
 
         // Map markers
+        /*
         const markers = data
             .filter(d => d.marker)
             .map(d => ({
@@ -615,11 +679,14 @@ export default function VisualLogic() {
             }));
         // @ts-ignore
         candleSeriesRef.current.setMarkers(markers);
+        */
+        // candleSeriesRef.current.setMarkers([]);
 
         // Price Lines
-        priceLinesRef.current.forEach(line => candleSeriesRef.current?.removePriceLine(line));
-        priceLinesRef.current = [];
+        // priceLinesRef.current.forEach(line => candleSeriesRef.current?.removePriceLine(line));
+        // priceLinesRef.current = [];
 
+        /*
         if (activeData.priceLines) {
             activeData.priceLines.forEach(line => {
                 const pl = candleSeriesRef.current?.createPriceLine({
@@ -632,10 +699,11 @@ export default function VisualLogic() {
                 if (pl) priceLinesRef.current.push(pl);
             });
         }
+        */
 
         chartRef.current.timeScale().fitContent();
 
-    }, [activeData]);
+    }, [activeData, scenario]);
 
     return (
         <div className="p-6 bg-[#0D0D0F] min-h-screen text-gray-200 font-sans">
@@ -761,6 +829,12 @@ export default function VisualLogic() {
 
                         {/* Chart Area */}
                         <div ref={chartContainerRef} className="w-full h-[350px] bg-black/20 rounded-lg overflow-hidden relative" />
+
+                        {/* 
+                        <div className="w-full h-[350px] bg-red-900/20 rounded-lg flex items-center justify-center border border-red-500">
+                             <h2 className="text-2xl font-bold text-red-500">CHART DISABLED FOR DEBUGGING</h2>
+                        </div>
+                        */}
 
                         <div className="flex gap-4 mt-4 text-xs text-gray-500 justify-center">
                             <div className="flex items-center gap-1"><span className="w-3 h-3 bg-green-500 rounded-sm"></span> 매수 신호</div>

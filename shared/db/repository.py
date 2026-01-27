@@ -600,3 +600,18 @@ def delete_config(session: Session, config_key: str) -> bool:
         session.rollback()
         logger.error(f"❌ DB: delete_config ('{config_key}') 실패! (에러: {e})")
         return False
+
+
+def get_daily_prices(session: Session, stock_code: str, limit: int = 60) -> List[models.StockDailyPrice]:
+    """
+    Get daily prices for a stock.
+    Returns List of StockDailyPrice objects ordered by date desc.
+    """
+    stmt = (
+        select(models.StockDailyPrice)
+        .where(models.StockDailyPrice.stock_code == stock_code)
+        .order_by(models.StockDailyPrice.price_date.desc())
+        .limit(limit)
+    )
+    return session.execute(stmt).scalars().all()
+
