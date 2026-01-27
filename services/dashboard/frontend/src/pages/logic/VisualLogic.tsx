@@ -846,8 +846,8 @@ export default function VisualLogic() {
                 </div>
             </div>
 
-            {/* Risk Gate & Signal Checks Panels (only in REAL mode) */}
-            {scenario === 'REAL' && buySnapshot && (
+            {/* Risk Gate & Signal Checks Panels (only in REAL mode with valid data) */}
+            {scenario === 'REAL' && buySnapshot && buySnapshot.risk_gate && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
                     {/* Risk Gate Panel */}
                     <motion.div
@@ -865,7 +865,7 @@ export default function VisualLogic() {
                             </span>
                         </div>
                         <div className="space-y-2">
-                            {buySnapshot.risk_gate.checks.map((check, idx) => (
+                            {(buySnapshot.risk_gate.checks || []).map((check, idx) => (
                                 <div key={idx} className={`flex justify-between items-center p-2 rounded ${check.passed ? 'bg-green-500/5' : 'bg-red-500/10'}`}>
                                     <div className="flex items-center gap-2">
                                         <span className={`text-sm ${check.passed ? 'text-green-400' : 'text-red-400'}`}>
@@ -907,8 +907,8 @@ export default function VisualLogic() {
                             )}
                         </div>
                         <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                            {buySnapshot.signal_checks.length > 0 ? (
-                                buySnapshot.signal_checks.map((check, idx) => (
+                            {(buySnapshot.signal_checks || []).length > 0 ? (
+                                (buySnapshot.signal_checks || []).map((check, idx) => (
                                     <div key={idx} className={`p-2 rounded border ${check.triggered ? 'bg-green-500/10 border-green-500/30' : 'bg-gray-800/30 border-white/5'}`}>
                                         <div className="flex justify-between items-center">
                                             <span className={`text-sm font-medium ${check.triggered ? 'text-green-400' : 'text-gray-400'}`}>
