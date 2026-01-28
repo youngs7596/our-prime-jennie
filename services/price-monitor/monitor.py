@@ -12,6 +12,11 @@ import pytz
 # shared 패키지 임포트
 # sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
+# [Fix] Import robustly from sibling (safety.py) even when run from root
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 import shared.database as database
 import shared.strategy as strategy
 import shared.redis_cache as redis_cache
