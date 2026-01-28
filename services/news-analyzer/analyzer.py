@@ -255,23 +255,60 @@ def handle_analyze_message(page_content: str, metadata: Dict[str, Any]) -> bool:
     content_lines = page_content.split('\n')
     news_title = content_lines[0].replace("뉴스 제목: ", "") if content_lines else "제목 없음"
     
-    batch_item = {
-        "id": 0,
-        "title": news_title,
-        "summary": news_title
-    }
+    # [Fast Track] Emergency Keyword Check
+    # Keywords: 속보, 긴급, 전쟁, 관세, Emergency, Breaking, 파병, 계엄
+    FAST_TRACK_KEYWORDS = ["속보", "긴급", "전쟁", "관세", "Emergency", "Breaking", "파병", "계엄", "공습", "폭격"]
+    is_emergency = any(k in news_title for k in FAST_TRACK_KEYWORDS)
     
-    # Call LLM
-    try:
-        results = brain.analyze_news_unified([batch_item])
-        if not results:
-            logger.warning(f"⚠️ [Analyzer] LLM 결과 없음: {news_title[:30]}...")
-            return True  # ACK anyway
+    results = []
+    
+    if is_emergency:
+        # 🚀 Use GPT-5-Nano (Reasoning Tier)
+        logger.info(f"🚀 [Analyzer] Fast Track Detected: {news_title}")
+        try:
+            # result is a single dict
+            fast_result = brain.analyze_news_fast_track(news_title, news_title)
+            results = [fast_result]
+        except Exception as e:
+            logger.error(f"❌ [Analyzer] Fast Track Failed: {e}")
+            # Fallback to normal flow? No, just fail or retry? 
+            # If fast track fails, we might want to ACK to avoid blocking or Retry?
+            # Let's retry via normal flow if Fast Track fails? 
+            # For now, if empty results, it goes to warning below.
+            pass
+    else:
+        # 🐢 Use Local Ollama (Batched logic but here single)
+        batch_item = {
+            "id": 0,
+            "title": news_title,
+            "summary": news_title
+        }
         
+        # Call LLM
+        try:
+            results = brain.analyze_news_unified([batch_item])
+        except Exception as e:
+            logger.error(f"❌ [Analyzer] Normal Analysis Failed: {e}")
+            return False
+
+    if not results:
+        logger.warning(f"⚠️ [Analyzer] LLM 결과 없음: {news_title[:30]}...")
+        return True  # ACK anyway
+    
+    # Save Results (Common Logic)
+    try:
         sentiment = results[0].get("sentiment", {})
         score = sentiment.get("score", 50)
         reason = sentiment.get("reason", "N/A")
         
+        # Competitor Risk also available in Unified/FastTrack result
+        competitor_risk = results[0].get("competitor_risk", {})
+        risk_detected = competitor_risk.get("is_detected", False)
+        
+        if risk_detected:
+            # Append risk info to reason
+            reason += f" [RISK: {competitor_risk.get('type')}]"
+
         success = _save_sentiment_to_db(
             stock_code=stock_code,
             stock_name=metadata.get("stock_name", ""),
@@ -283,13 +320,16 @@ def handle_analyze_message(page_content: str, metadata: Dict[str, Any]) -> bool:
         )
         
         if success:
-            logger.info(f"✅ [Analyzer] {metadata.get('stock_name', stock_code)}: {score}점")
+            track_icon = "🚀" if is_emergency else "🐢"
+            logger.info(f"✅ [Analyzer] {track_icon} {metadata.get('stock_name', stock_code)}: {score}점 - {news_title[:20]}")
         
         return True  # ACK
-    
+
     except Exception as e:
-        logger.error(f"❌ [Analyzer] 분석 오류: {e}")
+        logger.error(f"❌ [Analyzer] 결과 저장 실패: {e}")
         return False  # Don't ACK, will retry
+    
+
 
 
 # ==============================================================================

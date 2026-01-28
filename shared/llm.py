@@ -331,6 +331,80 @@ class JennieBrain:
         return fallback_results
 
 
+    def analyze_news_fast_track(self, title: str, summary: str) -> dict:
+        """
+        [Fast Track] 긴급 뉴스(전쟁, 관세 등)를 위한 초고속/고성능 분석
+        Model: gpt-5-nano (Cost: $0.05/1M input)
+        """
+        # 1. Use OpenAI (Reasoning Tier provider)
+        provider = self._get_provider(LLMTier.REASONING)
+        if provider is None:
+            return {'id': 0, 'sentiment': {'score': 50, 'reason': 'Provider Init Failed'}, 'competitor_risk': {}}
+
+        # 2. Prepare Item (Unified Prompt expects list)
+        items = [{'id': 0, 'title': title, 'summary': summary}]
+        
+        try:
+            from shared.llm_prompts import build_unified_analysis_prompt
+            prompt = build_unified_analysis_prompt(items)
+            
+            # Explicitly request 'gpt-5-nano' as agreed
+            target_model = "gpt-5-nano"
+            
+            # Use Unified Schema
+            # (Duplicate from analyze_news_unified for safety)
+            UNIFIED_SCHEMA = {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "sentiment": {
+                                    "type": "object", 
+                                    "properties": {"score": {"type": "integer"}, "reason": {"type": "string"}},
+                                    "required": ["score", "reason"]
+                                },
+                                "competitor_risk": {
+                                    "type": "object",
+                                    "properties": {
+                                        "is_detected": {"type": "boolean"},
+                                        "type": {"type": "string"},
+                                        "benefit_score": {"type": "integer"},
+                                        "reason": {"type": "string"}
+                                    },
+                                    "required": ["is_detected", "type", "benefit_score", "reason"]
+                                }
+                            },
+                            "required": ["id", "sentiment", "competitor_risk"]
+                        }
+                    }
+                },
+                "required": ["results"]
+            }
+            
+            logger.info(f"🚀 [Fast Track] 긴급 뉴스 분석 요청 ({target_model}): {title[:30]}...")
+            
+            result = provider.generate_json(
+                prompt,
+                UNIFIED_SCHEMA,
+                temperature=0.0,
+                model_name=target_model
+            )
+            
+            # Extract single result
+            results = result.get('results', [])
+            if results:
+                return results[0]
+            return self._get_unified_fallback_response(items, "Empty Result")[0]
+            
+        except Exception as e:
+            logger.error(f"❌ [Fast Track] 분석 실패: {e}")
+            return self._get_unified_fallback_response(items, f"Error: {str(e)[:50]}")[0]
+
+
     # -----------------------------------------------------------------
     # 토론 (Bull vs Bear)
     # -----------------------------------------------------------------

@@ -384,7 +384,22 @@ class PriceMonitor:
                 if stop_loss > 0: stop_loss = -stop_loss
 
                 if profit_pct <= stop_loss:
-                    potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
+                    # [Gap Down Safety] 갭락 시 5분 대기
+                    if not hasattr(self, 'safety_guard'):
+                         # Lazy Init (sibling import)
+                         from safety import GapDownSafety
+                         self.safety_guard = GapDownSafety(self.config)
+                    
+                    safety = self.safety_guard.check_safety(datetime.now(), profit_pct)
+                    
+                    if safety['is_safe']:
+                        potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}
+                    else:
+                        # 안전장치 발동 (매도 보류)
+                        logger.warning(f"🛡️ [{stock_name}] {safety['reason']}")
+                        # 관찰용으로 로직 스냅샷에는 기록 (is_safe=False)
+                        logic_snapshot['is_safe'] = False
+                        logic_snapshot['active_signal'] = f"SAFETY_HOLD: {safety['reason']}"
                 
                 # ATR Stop이 없으면 Fixed Stop이라도 기록
                 if not logic_snapshot['stop_loss_price']:
