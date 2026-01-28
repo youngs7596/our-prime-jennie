@@ -424,6 +424,7 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
     try:
         from shared.db.models import NewsSentiment
         from datetime import datetime
+        from sqlalchemy import text
         
         # 중복 URL 체크 (이미 저장된 뉴스면 Skip)
         existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == url).first()
@@ -442,7 +443,11 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
                 published_at_dt = datetime.strptime(published_at[:19], '%Y-%m-%d %H:%M:%S')
         elif isinstance(published_at, datetime):
             published_at_dt = published_at
+            
+        if not published_at_dt:
+            published_at_dt = datetime.utcnow()
 
+        # 1. NewsSentiment (Detail)
         new_sentiment = NewsSentiment(
             stock_code=stock_code,
             news_title=title,
@@ -452,12 +457,49 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
             published_at=published_at_dt
         )
         session.add(new_sentiment)
+        
+        # 2. STOCK_NEWS_SENTIMENT (Aggregated/Legacy) -> Sync!
+        # 모델 정의가 수정되었으므로 Raw SQL 대신 모델 사용 가능하나, 안전하게 Raw SQL 유지하되 컬럼명 맞춤
+        # 스키마: STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, SUMMARY, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE
+        
+        # 카테고리 추출 (reason에서 "Duplicate" 등으로 시작하지 않는 한)
+        category = "General"
+        if reason and "Category:" in reason:
+            try:
+                # "Category: 실적 (Positive)" 형태 파싱
+                parts = reason.split("Category:")
+                if len(parts) > 1:
+                    cat_part = parts[1].split("(")[0].strip()
+                    if cat_part:
+                        category = cat_part
+            except:
+                pass
+
+        session.execute(text("""
+            INSERT INTO STOCK_NEWS_SENTIMENT 
+            (STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, SUMMARY, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE)
+            VALUES (:stock_code, :news_date, :url, :title, :summary, :category, :score, NOW(), 'ANALYZER')
+            ON DUPLICATE KEY UPDATE
+                SENTIMENT_SCORE = VALUES(SENTIMENT_SCORE),
+                CATEGORY = VALUES(CATEGORY),
+                SCRAPED_AT = NOW()
+        """), {
+            'stock_code': stock_code,
+            'news_date': published_at_dt,
+            'url': url,
+            'title': title,
+            'summary': reason[:1000] if reason else '', # reason을 summary로 활용
+            'category': category,
+            'score': score
+        })
+
         # session_scope 컨텍스트 매니저가 commit/rollback을 처리합니다.
-        logger.info(f"✅ [DB] 뉴스 감성 저장 완료: {stock_code} ({score}점)")
+        logger.info(f"✅ [DB] 뉴스 감성 저장 완료 (Sync): {stock_code} ({score}점)")
         
     except Exception as e:
         logger.error(f"❌ [DB] 뉴스 감성 저장 실패: {e}")
         # session_scope에서 rollback을 처리하도록 예외를 다시 발생시킵니다.
+        raise e
 
 
 # ============================================================================

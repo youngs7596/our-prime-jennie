@@ -511,11 +511,13 @@ class StockNewsSentiment(Base):
 
     id = Column("ID", Integer, primary_key=True)
     stock_code = Column("STOCK_CODE", String(20), nullable=False, index=True)
-    news_date = Column("NEWS_DATE", Date, nullable=False)
+    news_title = Column("HEADLINE", String(1000), nullable=True)
+    news_summary = Column("SUMMARY", Text, nullable=True)
     sentiment_score = Column("SENTIMENT_SCORE", Float, nullable=True)  # -100 ~ +100
     category = Column("CATEGORY", String(50), nullable=True)  # 실적, 수주, 규제 등
-    news_count = Column("NEWS_COUNT", Integer, default=1)
-    created_at = Column("CREATED_AT", DateTime, server_default=func.now())
+    article_url = Column("ARTICLE_URL", String(2000), nullable=True, unique=True)
+    source = Column("SOURCE", String(50), default='NAVER')
+    scraped_at = Column("SCRAPED_AT", DateTime, server_default=func.now())
 
 
 class StockDisclosures(Base):

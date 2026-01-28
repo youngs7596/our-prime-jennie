@@ -127,16 +127,53 @@ def _save_sentiment_to_db(
         return False
 
 
+def _check_if_article_exists_in_db(source_url: str) -> bool:
+    """DB에 이미 존재하는 뉴스인지 확인 (LLM 불필요 호출 방지)"""
+    if not source_url:
+        return False
+        
+    try:
+        from shared.db.models import NewsSentiment
+        from shared.db.connection import session_scope
+        
+        with session_scope() as session:
+            existing = session.query(NewsSentiment.id).filter(NewsSentiment.source_url == source_url).first()
+            return existing is not None
+    except Exception as e:
+        logger.error(f"❌ DB 중복 체크 실패: {e}")
+        return False
+
+
 def _process_batch_analysis(batch: list) -> int:
     """배치 분석 수행 및 저장"""
     if not batch:
         return 0
     
+    # 1. Pre-filter duplicates (Save GPU/LLM cost)
+    unique_batch = []
+    skipped_count = 0
+    
+    for item in batch:
+        metadata = item["metadata"]
+        url = metadata.get("source_url")
+        
+        if _check_if_article_exists_in_db(url):
+            skipped_count += 1
+            continue
+            
+        unique_batch.append(item)
+    
+    if skipped_count > 0:
+        logger.info(f"ℹ️ [Analyzer] 중복 뉴스 {skipped_count}건 분석 생략 (Skip)")
+        
+    if not unique_batch:
+        return 0
+
     brain = get_jennie_brain()
     
     # Prepare items for LLM
     batch_items = []
-    for idx, item in enumerate(batch):
+    for idx, item in enumerate(unique_batch):
         content_lines = item["page_content"].split('\n')
         news_title = content_lines[0].replace("뉴스 제목: ", "") if content_lines else "제목 없음"
         
@@ -157,10 +194,10 @@ def _process_batch_analysis(batch: list) -> int:
     saved = 0
     for result in results:
         idx = result.get("id")
-        if idx is None or idx >= len(batch):
+        if idx is None or idx >= len(unique_batch):
             continue
         
-        item = batch[idx]
+        item = unique_batch[idx]
         metadata = item["metadata"]
         
         stock_code = metadata.get("stock_code")
@@ -187,7 +224,7 @@ def _process_batch_analysis(batch: list) -> int:
         if success:
             saved += 1
     
-    logger.info(f"✅ [Analyzer] 배치 분석 완료: {saved}/{len(batch)}건 저장")
+    logger.info(f"✅ [Analyzer] 배치 분석 완료: {saved}/{len(unique_batch)}건 저장 (Skipped: {skipped_count})")
     return saved
 
 
@@ -205,6 +242,12 @@ def handle_analyze_message(page_content: str, metadata: Dict[str, Any]) -> bool:
     if not stock_code:
         logger.info("[Analyzer] 종목 코드 없음 (일반 뉴스) → Skip")
         return True  # ACK but don't analyze
+    
+    # CRITICAL: Check DB for Duplicate BEFORE LLM Call
+    source_url = metadata.get("source_url")
+    if _check_if_article_exists_in_db(source_url):
+        logger.info(f"ℹ️ [Analyzer] 이미 분석된 뉴스입니다. (Skip): {metadata.get('stock_name')} - URL 중복")
+        return True # ACK to remove from stream
     
     brain = get_jennie_brain()
     
