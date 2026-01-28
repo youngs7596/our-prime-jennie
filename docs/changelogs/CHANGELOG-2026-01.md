@@ -9,6 +9,10 @@
 - **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
 - **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
 
+
+## 2026-01-28
+- **Emergency News Pipeline (Safety)**: 현대차 급락 사태 재발 방지를 위한 **Gap Down Safety**(시초가 -5% 이하 5분 대기) 및 **Fast Track**(전쟁/속보 키워드 즉시 감지 via `gpt-5-nano`) 구축.
+
 ## 2026-01-27
 - **Visual Logic Stabilization (Real-time)**: "Real-Time Observability" 모드에서 발생하던 차트 크래시(White Screen) 문제 해결 (Frontend Data Deduplication & Strict Validation). 보조지표(MA, BB)와 캔들 데이터 동기화 이슈를 잡고, 실시간 데이터 스트림의 불안정성(중복/Unsorted)을 견고하게 처리하도록 로직 강화.
 

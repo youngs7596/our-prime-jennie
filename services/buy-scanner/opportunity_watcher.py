@@ -521,7 +521,10 @@ class BuyOpportunityWatcher:
                 params = strat.get('params', {})
 
                 if strat_id == "GOLDEN_CROSS":
-                    triggered, reason = self._check_golden_cross(recent_bars, params)
+                    # [Updated] Pass volume_ratio for filtration (1.2x threshold)
+                    vol_ratio = volume_info.get('ratio', 0)
+                    triggered, reason = self._check_golden_cross(recent_bars, params, vol_ratio)
+
                     if triggered:
                         signal_type = "GOLDEN_CROSS"
                         signal_reason = reason
@@ -539,7 +542,13 @@ class BuyOpportunityWatcher:
                         if len(closes) >= 20:
                             ma5 = sum(closes[-5:]) / 5
                             ma20 = sum(closes[-20:]) / 20
-                            signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": False, "reason": f"MA5({ma5:.0f}) {'>' if ma5 > ma20 else '<='} MA20({ma20:.0f})"})
+                            base_reason = f"MA5({ma5:.0f}) {'>' if ma5 > ma20 else '<='} MA20({ma20:.0f})"
+                            
+                            # Add specific volume failure reason if applicable
+                            if reason and "Weak Volume" in reason:
+                                base_reason += f" ({reason})"
+                                
+                            signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": False, "reason": base_reason})
                         else:
                             signal_checks.append({"strategy": "GOLDEN_CROSS", "triggered": False, "reason": reason or "Not enough data"})
 
@@ -616,7 +625,7 @@ class BuyOpportunityWatcher:
 
         return signal
 
-    def _check_golden_cross(self, bars: List[dict], params: dict) -> tuple:
+    def _check_golden_cross(self, bars: List[dict], params: dict, volume_ratio: float = 0.0) -> tuple:
         closes = [b['close'] for b in bars]
         short_w = params.get('short_window', 5)
         long_w = params.get('long_window', 20)
@@ -630,8 +639,20 @@ class BuyOpportunityWatcher:
         prev_closes = closes[:-1]
         prev_ma_short = sum(prev_closes[-short_w:]) / short_w if len(prev_closes) >= short_w else ma_short
         
-        if (prev_ma_short <= ma_long) and (ma_short > ma_long):
-            return True, f"MA({short_w}) crossed above MA({long_w})"
+        # 1. Golden Cross Condition
+        cross_triggered = (prev_ma_short <= ma_long) and (ma_short > ma_long)
+        
+        if cross_triggered:
+            # 2. Volume Threshold Check (>= 1.2x)
+            # If volume_ratio is 0 (missing data), we skip the check (or fail safe? let's be strict: fail)
+            # Actually for start-up, ratio might be 0. Let's allow 0 if bar_count < 5?
+            # Sticking to strictly > 1.2 as requested.
+            
+            if volume_ratio < 1.2:
+                return False, f"Weak Volume ({volume_ratio:.1f}x < 1.2x)"
+            
+            return True, f"MA({short_w}) > MA({long_w}) w/ Vol {volume_ratio:.1f}x"
+            
         return False, ""
 
     def _check_rsi_rebound(self, bars: List[dict], params: dict) -> tuple:
