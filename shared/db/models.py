@@ -511,6 +511,8 @@ class StockNewsSentiment(Base):
 
     id = Column("ID", Integer, primary_key=True)
     stock_code = Column("STOCK_CODE", String(20), nullable=False, index=True)
+    news_date = Column("NEWS_DATE", Date, nullable=False)
+    press = Column("PRESS", String(255), nullable=True)
     news_title = Column("HEADLINE", String(1000), nullable=True)
     news_summary = Column("SUMMARY", Text, nullable=True)
     sentiment_score = Column("SENTIMENT_SCORE", Float, nullable=True)  # -100 ~ +100
