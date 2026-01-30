@@ -77,20 +77,6 @@ def register_custom_jobs():
                 "args": ["--days", "3", "--codes", "200"]
             }
         },
-        # [NEW] Macro Council (3현자 매크로 분석) - 매일 07:30
-        {
-            "job_id": "macro-council",
-            "description": "Daily Macro Council (07:30) - 3현자 매크로 분석",
-            "queue": f"{SCOPE}.jobs.data.trading",  # scheduler-worker가 리스닝하는 큐
-            "cron_expr": "30 7 * * 1-5",  # 평일 07:30 KST
-            "enabled": True,
-            "reschedule_mode": "scheduler",
-            "timeout_sec": 600,  # 10분 (Council 분석 ~2분)
-            "default_params": {
-                "python_path": "python3",
-                "script": "scripts/run_macro_council.py"
-            }
-        }
     ]
 
     print(f"🚀 Registering additional jobs to {SCHEDULER_URL}...")
