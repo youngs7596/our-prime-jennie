@@ -18,17 +18,18 @@ RUN apt-get update && apt-get install -y \
     cargo \
     && rm -rf /var/lib/apt/lists/*
 
-# shared / configs / build script 복사
+# [Layer Caching] 의존성 먼저 설치 (requirements.txt 변경 시에만 재설치)
+COPY services/price-monitor/requirements.txt /app/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# shared / configs / build script 복사 (자주 변경되는 파일)
 COPY shared/ /app/shared/
 COPY prompts/ /app/prompts/
 COPY schemas/ /app/schemas/
 COPY configs/ /app/configs/
 COPY scripts/build_strategy_core.sh /app/scripts/build_strategy_core.sh
 RUN chmod +x /app/scripts/build_strategy_core.sh && /app/scripts/build_strategy_core.sh
-
-# 서비스 의존성 설치
-COPY services/price-monitor/requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
 
 # 서비스 코드 복사
 COPY services/price-monitor/*.py /app/

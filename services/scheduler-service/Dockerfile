@@ -8,7 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy shared libs
+# [Layer Caching] 의존성 먼저 설치
+COPY services/scheduler-service/requirements.txt /app/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# Copy shared libs (자주 변경되는 파일)
 COPY shared/ /app/shared/
 
 # Copy service code
@@ -16,9 +21,6 @@ COPY services/scheduler-service/ /app/
 
 # Copy scripts (for worker)
 COPY scripts/ /app/scripts/
-
-# Install deps
-RUN pip install --no-cache-dir -r requirements.txt
 
 ENV PORT=8095
 ENV PYTHONPATH=/app

@@ -13,16 +13,18 @@ RUN apt-get update && apt-get install -y \
     libaio1t64 \
     && rm -rf /var/lib/apt/lists/*
 
-# shared 패키지 복사
+# [Layer Caching] 의존성 먼저 설치
+COPY services/daily-briefing/requirements.txt /app/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# shared 패키지 복사 (자주 변경되는 파일)
 COPY shared/ /app/shared/
 COPY prompts/ /app/prompts/
 COPY schemas/ /app/schemas/
 
 # 서비스 코드 복사
-COPY services/daily-briefing/*.py services/daily-briefing/requirements.txt /app/
-
-# 의존성 설치
-RUN pip install --no-cache-dir -r requirements.txt
+COPY services/daily-briefing/*.py /app/
 
 # 환경 변수
 ENV PORT=8080

@@ -13,9 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 USER airflow
 
-# Install project dependencies
+# [Layer Caching] Install project dependencies
 COPY services/airflow/requirements.txt /requirements.txt
-RUN pip install --no-cache-dir -r /requirements.txt
-
-# Install PyMySQL driver for MariaDB support
-RUN pip install --no-cache-dir pymysql
+RUN --mount=type=cache,target=/home/airflow/.cache/pip \
+    pip install -r /requirements.txt && \
+    pip install pymysql

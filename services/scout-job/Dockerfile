@@ -19,9 +19,10 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
     rustup show
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Copy requirements and install Python dependencies
+# [Layer Caching] Copy requirements and install Python dependencies
 COPY services/scout-job/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy shared modules & resources
 COPY shared /app/shared

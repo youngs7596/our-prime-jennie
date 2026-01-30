@@ -8,9 +8,10 @@ WORKDIR /app
 # curl 설치 (헬스체크용)
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# 의존성 설치
+# [Layer Caching] 의존성 설치
 COPY services/ollama-gateway/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY services/ollama-gateway/main.py .
