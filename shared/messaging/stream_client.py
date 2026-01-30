@@ -25,10 +25,12 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://10.178.0.2:6379/0")
 
 # Stream Names
 STREAM_NEWS_RAW = "stream:news:raw"  # Collector -> Archiver/Analyzer
+STREAM_MACRO_RAW = "stream:macro:raw"  # TelegramCollector -> MacroAnalyzer
 
 # Consumer Groups
 GROUP_ARCHIVER = "group_archiver"
 GROUP_ANALYZER = "group_analyzer"
+GROUP_MACRO_ANALYZER = "group_macro_analyzer"
 
 # Default Settings
 DEFAULT_BLOCK_MS = 2000  # 2 seconds

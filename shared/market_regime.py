@@ -18,6 +18,12 @@ shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 - SIDEWAYS: 평균 회귀 (Mean Reversion)
 - BEAR: 방어적 전략 (Iron Shield)
 
+매크로 인사이트 연동 (3현자 Council 권고):
+----------------------------------------
+- 외부 정보 가중치 ≤10%
+- RISK_OFF 단독 발동 금지
+- 다중 검증 필수 (최소 2개 채널)
+
 사용 예시:
 ---------
 >>> from shared.market_regime import MarketRegimeDetector, StrategySelector
@@ -25,6 +31,10 @@ shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 >>> detector = MarketRegimeDetector()
 >>> regime, context = detector.detect_regime(kospi_df, current_price)
 >>> print(f"현재 시장: {regime}")
+>>>
+>>> # 매크로 인사이트 연동 (선택적)
+>>> regime, context = detector.detect_regime_with_macro(kospi_df, current_price)
+>>> print(f"매크로 반영 시장: {regime}")
 >>>
 >>> selector = StrategySelector()
 >>> strategies = selector.select_strategies(regime)
@@ -34,7 +44,7 @@ shared/market_regime.py - my-prime-jennie 시장 국면 분석 모듈
 import logging
 import os
 import pandas as pd
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 from shared import strategy
 from shared.config import ConfigManager
 
@@ -235,19 +245,19 @@ class MarketRegimeDetector:
         """
         if regime == self.REGIME_STRONG_BULL:
             return {
-                "stop_loss_pct": -0.05,      # 급등장: 변동성 허용 (여유 있게)
+                "stop_loss_pct": -0.07,      # 급등장: -7% (손절 후 67% 반등 분석 반영)
                 "target_profit_pct": 0.15,   # 급등장: 길게 먹기 (추세 추종)
                 "position_size_ratio": 1.0   # 비중 100% (풀시드)
             }
         elif regime == self.REGIME_BULL:
             return {
-                "stop_loss_pct": -0.05,      # [Updated] 상승장: -5% (Backtest 4.36% 기준)
+                "stop_loss_pct": -0.05,      # 상승장: -5% (Backtest 4.36% 기준)
                 "target_profit_pct": 0.10,
                 "position_size_ratio": 1.0
             }
         elif regime == self.REGIME_SIDEWAYS:
             return {
-                "stop_loss_pct": -0.05,      # [Updated] 횡보장: -5% (Backtest 4.36% 기준)
+                "stop_loss_pct": -0.05,      # 횡보장: -5% (Backtest 4.36% 기준)
                 "target_profit_pct": 0.10,    # [Updated] 횡보장: 10% (Backtest 4.36% 기준)
                 "position_size_ratio": 0.5   # 비중 50% 축소
             }
@@ -264,6 +274,99 @@ class MarketRegimeDetector:
                 "target_profit_pct": 0.05,
                 "position_size_ratio": 0.5
             }
+
+    def detect_regime_with_macro(
+        self,
+        kospi_prices_df: pd.DataFrame,
+        kospi_current: float,
+        quiet: bool = False,
+        use_llm: bool = False
+    ) -> Tuple[str, Dict[str, Any]]:
+        """
+        KOSPI 데이터 + 매크로 인사이트를 종합하여 시장 국면을 분석합니다.
+
+        3현자 Council 권고:
+        - 외부 정보 가중치 ≤10%
+        - RISK_OFF 단독 발동 금지 (경고만 제공)
+        - 다중 검증 필수
+
+        Args:
+            kospi_prices_df: KOSPI 일봉 데이터 (날짜 오름차순)
+            kospi_current: KOSPI 현재가
+            quiet: 로깅 억제 여부
+            use_llm: 매크로 분석에 LLM 사용 여부
+
+        Returns:
+            (regime, enriched_context): 시장 상황과 매크로 정보가 포함된 컨텍스트
+        """
+        # 1. 기존 가격 기반 Regime 분석
+        base_regime, base_context = self.detect_regime(kospi_prices_df, kospi_current, quiet=True)
+
+        # 2. 매크로 인사이트 조회
+        try:
+            from shared.macro_insight import (
+                get_macro_regime_adjustment,
+                apply_macro_adjustment_to_regime,
+            )
+
+            macro_adjustment = get_macro_regime_adjustment(use_llm=use_llm)
+
+            # 3. 매크로 신호 적용
+            adjusted_regime, enriched_context = apply_macro_adjustment_to_regime(
+                base_regime,
+                base_context,
+                macro_adjustment
+            )
+
+            # 4. 로깅
+            if not quiet:
+                macro_info = enriched_context.get("macro_influence", {})
+                signal_type = macro_adjustment.get("signal_details", {}).get("signal_type", "N/A")
+
+                if macro_info.get("should_adjust"):
+                    direction = macro_info.get("direction", "neutral")
+                    weight = macro_info.get("weight", 0)
+                    logger.info(
+                        f"   (Market Regime + Macro) 📊 {adjusted_regime} "
+                        f"(매크로: {signal_type}, 방향: {direction}, 가중치: {weight:.1%})"
+                    )
+                else:
+                    # RISK_OFF_HINT 경고 표시
+                    if "warning" in macro_info:
+                        logger.warning(f"   (Market Regime + Macro) ⚠️ {macro_info['warning']}")
+
+                    # 기본 로깅
+                    self._log_regime(adjusted_regime, enriched_context)
+
+            return adjusted_regime, enriched_context
+
+        except ImportError:
+            if not quiet:
+                logger.warning("   (Market Regime) macro_insight 모듈 로드 실패, 가격 기반 분석만 사용")
+            if not quiet:
+                self._log_regime(base_regime, base_context)
+            return base_regime, base_context
+
+        except Exception as e:
+            if not quiet:
+                logger.error(f"   (Market Regime) 매크로 연동 오류: {e}")
+            if not quiet:
+                self._log_regime(base_regime, base_context)
+            return base_regime, base_context
+
+    def _log_regime(self, regime: str, context: Dict[str, Any]):
+        """Regime 로깅 헬퍼"""
+        scores = context.get("regime_scores", {})
+        max_score = scores.get(regime, 0)
+
+        if regime == self.REGIME_STRONG_BULL:
+            logger.info(f"   (Market Regime) 🚀 급등장 감지! (점수: {max_score:.1f})")
+        elif regime == self.REGIME_BULL:
+            logger.info(f"   (Market Regime) 📈 상승장 감지 (점수: {max_score:.1f})")
+        elif regime == self.REGIME_BEAR:
+            logger.warning(f"   (Market Regime) 📉 하락장 감지 (점수: {max_score:.1f})")
+        else:
+            logger.info(f"   (Market Regime) ➡️ 횡보장 감지 (점수: {max_score:.1f})")
 
 
 # backtest.py (v3.5 - 제니's 픽!)

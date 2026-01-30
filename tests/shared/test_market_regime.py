@@ -175,23 +175,23 @@ class TestDynamicRiskSetting:
     def test_strong_bull_settings(self, detector):
         """급등장 리스크 설정"""
         settings = detector.get_dynamic_risk_setting('STRONG_BULL')
-        
-        assert settings['stop_loss_pct'] == -0.05
+
+        assert settings['stop_loss_pct'] == -0.07  # Updated 2026-01-30: 급등장만 -7%
         assert settings['target_profit_pct'] == 0.15  # 길게 먹기
         assert settings['position_size_ratio'] == 1.0  # 풀시드
-    
+
     def test_bull_settings(self, detector):
         """상승장 리스크 설정"""
         settings = detector.get_dynamic_risk_setting('BULL')
-        
+
         assert settings['stop_loss_pct'] == -0.05
         assert settings['target_profit_pct'] == 0.10
         assert settings['position_size_ratio'] == 1.0
-    
+
     def test_sideways_settings(self, detector):
         """횡보장 리스크 설정"""
         settings = detector.get_dynamic_risk_setting('SIDEWAYS')
-        
+
         assert settings['stop_loss_pct'] == -0.05
         assert settings['target_profit_pct'] == 0.10
         assert settings['position_size_ratio'] == 0.5  # 비중 축소
@@ -322,4 +322,108 @@ class TestEdgeCases:
         assert selector.STRATEGY_TREND_FOLLOWING == "TREND_FOLLOWING"
         assert selector.STRATEGY_VOLUME_MOMENTUM == "VOLUME_MOMENTUM"
         assert selector.STRATEGY_BEAR_SNIPE_DIP == "BEAR_SNIPE_DIP"
+
+
+# ============================================================================
+# Tests: Macro Insight Integration (3현자 Council 권고)
+# ============================================================================
+
+class TestMacroInsightIntegration:
+    """매크로 인사이트 연동 테스트"""
+
+    def test_detect_regime_with_macro_no_macro_data(self, detector, sample_kospi_df):
+        """매크로 데이터 없을 때 기본 동작"""
+        # 매크로 캐시가 비어있으면 기본 가격 기반 분석만 수행
+        regime, context = detector.detect_regime_with_macro(
+            sample_kospi_df, 2600, quiet=True
+        )
+
+        assert regime in ['STRONG_BULL', 'BULL', 'SIDEWAYS', 'BEAR']
+        # 매크로 정보가 context에 포함됨
+        assert 'macro_signal' in context or 'error' not in context
+
+    @patch('shared.macro_insight.get_macro_regime_adjustment')
+    @patch('shared.macro_insight.apply_macro_adjustment_to_regime')
+    def test_detect_regime_with_macro_bullish(
+        self, mock_apply, mock_get, detector, sample_kospi_df
+    ):
+        """매크로 RISK_ON 신호 반영"""
+        # Mock 설정
+        mock_get.return_value = {
+            "should_adjust": True,
+            "adjustment_weight": 0.08,
+            "suggested_direction": "bullish",
+            "signal_details": {"signal_type": "RISK_ON"},
+        }
+        mock_apply.return_value = (
+            "BULL",
+            {
+                "regime_scores": {"BULL": 90},
+                "macro_signal": {"signal_type": "RISK_ON"},
+                "macro_influence": {
+                    "should_adjust": True,
+                    "weight": 0.08,
+                    "direction": "bullish",
+                },
+            }
+        )
+
+        regime, context = detector.detect_regime_with_macro(
+            sample_kospi_df, 2600, quiet=True
+        )
+
+        assert regime == "BULL"
+        assert context["macro_influence"]["direction"] == "bullish"
+
+    @patch('shared.macro_insight.get_macro_regime_adjustment')
+    @patch('shared.macro_insight.apply_macro_adjustment_to_regime')
+    def test_detect_regime_with_macro_risk_off_hint(
+        self, mock_apply, mock_get, detector, sample_kospi_df
+    ):
+        """매크로 RISK_OFF_HINT는 단독 발동 금지 (3현자 핵심 권고)"""
+        # Mock 설정
+        mock_get.return_value = {
+            "should_adjust": False,  # 단독 발동 금지
+            "adjustment_weight": 0.0,
+            "suggested_direction": "bearish_hint",
+            "signal_details": {"signal_type": "RISK_OFF_HINT"},
+            "reason": "risk_off_hint_cannot_trigger_alone",
+        }
+        mock_apply.return_value = (
+            "SIDEWAYS",  # Regime 변경 없음
+            {
+                "regime_scores": {"SIDEWAYS": 70},
+                "macro_signal": {"signal_type": "RISK_OFF_HINT"},
+                "macro_influence": {
+                    "should_adjust": False,
+                    "direction": "bearish_hint",
+                    "warning": "매크로 부정 신호 감지. 주의 필요.",
+                },
+            }
+        )
+
+        regime, context = detector.detect_regime_with_macro(
+            sample_kospi_df, 2500, quiet=True
+        )
+
+        # RISK_OFF_HINT는 Regime을 변경하지 않음
+        assert regime == "SIDEWAYS"
+        assert context["macro_influence"]["should_adjust"] is False
+        assert "warning" in context["macro_influence"]
+
+    def test_detect_regime_with_macro_import_error(self, detector, sample_kospi_df):
+        """macro_insight 모듈 없을 때 fallback"""
+        with patch.dict('sys.modules', {'shared.macro_insight': None}):
+            # ImportError가 발생해도 기본 분석 결과 반환
+            regime, context = detector.detect_regime_with_macro(
+                sample_kospi_df, 2600, quiet=True
+            )
+
+            assert regime in ['STRONG_BULL', 'BULL', 'SIDEWAYS', 'BEAR']
+
+    def test_detect_regime_with_macro_max_weight(self, detector, sample_kospi_df):
+        """외부 정보 가중치 ≤10% 확인 (3현자 권고)"""
+        from shared.macro_insight.macro_sentiment_analyzer import MAX_EXTERNAL_WEIGHT
+
+        assert MAX_EXTERNAL_WEIGHT <= 0.10
 

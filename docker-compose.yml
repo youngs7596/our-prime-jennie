@@ -1093,6 +1093,55 @@ services:
     depends_on:
       - news-collector
 
+  # ============================================================================
+  # Macro Insight Services (텔레그램 매크로 정보 수집/분석)
+  # 3현자 Council 권고: 외부 정보 가중치 ≤10%, RISK_OFF 단독 발동 금지
+  # ============================================================================
+
+  # Telegram Collector - 증권사 리서치 채널 메시지 수집
+  telegram-collector:
+    build:
+      context: .
+      dockerfile: services/telegram-collector/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - REDIS_URL=redis://localhost:6379/0
+      - TELEGRAM_SESSION_NAME=telegram_collector
+      - TELEGRAM_MAX_MESSAGES=50
+      - TELEGRAM_MESSAGE_AGE_HOURS=24
+    volumes:
+      - ./.telegram_sessions:/app/.telegram_sessions
+      - ./secrets.json:/app/secrets.json:ro
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=telegram-collector
+      - stack=my-prime-jennie
+    container_name: telegram-collector
+
+  # Macro Aggregator - 매크로 신호 분석 및 집계
+  macro-aggregator:
+    build:
+      context: .
+      dockerfile: services/macro-aggregator/Dockerfile
+    profiles: [ "real" ]
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    environment:
+      - REDIS_URL=redis://localhost:6379/0
+      - MACRO_CONSUMER_NAME=macro_aggregator_1
+      - MACRO_LLM_MODE=auto  # auto: 장외 시간에만 gpt-oss LLM 사용
+    network_mode: host
+    restart: unless-stopped
+    labels:
+      - app=macro-aggregator
+      - stack=my-prime-jennie
+    depends_on:
+      - telegram-collector
+    container_name: macro-aggregator
+
 networks:
   msa-network:
     driver: bridge
