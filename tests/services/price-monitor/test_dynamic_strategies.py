@@ -35,9 +35,13 @@ class TestDynamicStrategies(unittest.TestCase):
         self.watcher.bar_aggregator = MagicMock()
         self.watcher.bar_aggregator.get_volume_info.return_value = {'current': 1000, 'avg': 1000, 'ratio': 1.0}
         self.watcher.bar_aggregator.get_vwap.return_value = 100.0
-        
-        # Set default regime
-        self.watcher.market_regime = "BULL"
+
+        # Set default regime (use NEUTRAL to skip bull-market specific strategies)
+        self.watcher.market_regime = "NEUTRAL"
+
+        # Mock DB/Redis dependent functions
+        self.watcher._save_buy_logic_snapshot = MagicMock()
+        self.watcher._check_legendary_pattern = MagicMock(return_value=False)
 
     def tearDown(self):
         self.modules_patcher.stop()
@@ -69,6 +73,11 @@ class TestDynamicStrategies(unittest.TestCase):
         self.watcher.bar_aggregator.get_recent_bars.return_value = [{"open": 100, "high": 110, "low": 90, "close": 100, "volume": 1000}] * 30
         self.watcher._check_cooldown = MagicMock(return_value=True)
 
+        # Mock time-based gates to pass (these depend on current time)
+        self.watcher._check_no_trade_window = MagicMock(return_value=True)
+        self.watcher._check_danger_zone = MagicMock(return_value=True)
+        self.watcher._check_rsi_guard = MagicMock(return_value=True)
+
         # Execute
         result = self.watcher._check_buy_signal(stock_code, 100.0, {})
         
@@ -91,6 +100,11 @@ class TestDynamicStrategies(unittest.TestCase):
         self.watcher._check_golden_cross = MagicMock(return_value=(True, "Golden Cross!"))
         self.watcher.bar_aggregator.get_recent_bars.return_value = [{"open": 100, "high": 110, "low": 90, "close": 100, "volume": 1000}] * 30
         self.watcher._check_cooldown = MagicMock(return_value=True)
+
+        # Mock time-based gates to pass (these depend on current time)
+        self.watcher._check_no_trade_window = MagicMock(return_value=True)
+        self.watcher._check_danger_zone = MagicMock(return_value=True)
+        self.watcher._check_rsi_guard = MagicMock(return_value=True)
 
         result = self.watcher._check_buy_signal(stock_code, 100.0, {})
         
