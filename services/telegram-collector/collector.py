@@ -223,10 +223,17 @@ async def collect_channel_messages(
     collected = []
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
 
-    # Docker 환경에서는 /app/.telegram_sessions 사용
-    if os.path.exists("/app/.telegram_sessions"):
-        session_dir = "/app/.telegram_sessions"
-    else:
+    # Docker 환경에서 세션 디렉토리 탐색 (우선순위 순)
+    session_dir = None
+    for candidate in [
+        "/opt/airflow/.telegram_sessions",  # Airflow container
+        "/app/.telegram_sessions",           # telegram-collector container
+        os.path.join(PROJECT_ROOT, ".telegram_sessions"),  # Local development
+    ]:
+        if os.path.exists(candidate):
+            session_dir = candidate
+            break
+    if session_dir is None:
         session_dir = os.path.join(PROJECT_ROOT, ".telegram_sessions")
     os.makedirs(session_dir, exist_ok=True)
     session_path = os.path.join(session_dir, TELEGRAM_SESSION_NAME)

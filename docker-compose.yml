@@ -1018,6 +1018,7 @@ services:
       - ./config:/opt/airflow/config
       - ./secrets.json:/opt/airflow/secrets.json
       - ./scripts:/opt/airflow/scripts
+      - ./.telegram_sessions:/opt/airflow/.telegram_sessions
       # Mount docker socket to allow triggering other containers
       - /var/run/docker.sock:/var/run/docker.sock
     command: scheduler
