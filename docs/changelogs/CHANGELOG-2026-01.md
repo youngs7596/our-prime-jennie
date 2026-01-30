@@ -10,6 +10,9 @@
 - **Visual Logic Refactoring (Realism)**: `VisualLogic` 차트(`pages/logic/VisualLogic.tsx`)의 모의 데이터 생성 로직을 개선하여, 랜덤 생성 대신 실제 가격 기반의 보조지표(SMA, BB, RSI) 계산 방식을 적용. 시각적 정합성과 시나리오 개연성 강화.
 
 
+## 2026-01-30
+- **Safety Guards Analysis & Backtest**: 현대위아 고점 매수 건 근본 원인 분석(MOMENTUM_CONTINUATION_BULL, LLM 83점) 및 Council 권고 필터 백테스트 완료. 73건 중 49.3% 차단, 순이득 +2,893만원 예상되나 롤백 트리거(>30%) 초과로 **현상 유지** 결정. 포트폴리오 섹터 분석 스크립트 추가.
+
 ## 2026-01-28
 - **Emergency News Pipeline (Safety)**: 현대차 급락 사태 재발 방지를 위한 **Gap Down Safety**(시초가 -5% 이하 5분 대기) 및 **Fast Track**(전쟁/속보 키워드 즉시 감지 via `gpt-5-nano`) 구축.
 

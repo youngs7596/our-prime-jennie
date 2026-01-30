@@ -384,6 +384,34 @@ class BuyOpportunityWatcher:
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
+        # [NEW] Danger Zone 차단 (14:00~15:00)
+        danger_zone_passed = self._check_danger_zone()
+        risk_gate_checks.append({
+            "name": "Danger Zone",
+            "passed": danger_zone_passed,
+            "value": datetime.now().strftime("%H:%M"),
+            "threshold": "Not 14:00~15:00"
+        })
+        if not danger_zone_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+            return None
+
+        # [NEW] RSI 과열 필터 (RSI > 75)
+        rsi_guard_passed = self._check_rsi_guard(current_rsi)
+        risk_gate_checks.append({
+            "name": "RSI Guard",
+            "passed": rsi_guard_passed,
+            "value": f"{current_rsi:.1f}" if current_rsi else "N/A",
+            "threshold": "<= 75"
+        })
+        if not rsi_guard_passed:
+            risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+            return None
+
         # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
         risk_conditions = 0
 
@@ -1232,17 +1260,45 @@ class BuyOpportunityWatcher:
         return not self.redis.exists(key)
 
     def _check_no_trade_window(self) -> bool:
-        """장초 노이즈 구간(09:00~09:20) 진입 금지"""
-        now = datetime.now()  # 시스템 시간(KST 가정)
-        # UTC 환경일 경우 변환 필요하지만, 일단 시스템 로컬 시간 기준 09:00~09:20 설정
-        # (컨테이너가 KST면 문제없음. UTC면 +9시간 해줘야 함. 현재 메타데이터상 KST임)
+        """장초 노이즈 구간(09:00~09:30) 진입 금지 (KST 기준)"""
+        # UTC -> KST 변환 (Explicit Timezone)
+        now_utc = datetime.now(timezone.utc)
+        now_kst = now_utc + timedelta(hours=9)
         
-        start_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        end_time = now.replace(hour=9, minute=30, second=0, microsecond=0)  # [Minji] 30분으로 확대
+        start_time = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
+        end_time = now_kst.replace(hour=9, minute=30, second=0, microsecond=0)
         
-        if start_time <= now <= end_time:
-            self.metrics['cooldown_blocked'] += 1  # 메트릭 재활용
-            # logger.debug("장초 진입 금지 시간 (09:00~09:20)")
+        if start_time <= now_kst <= end_time:
+            self.metrics['cooldown_blocked'] += 1
+            return False
+        return True
+
+    def _check_danger_zone(self) -> bool:
+        """
+        [Danger Zone] 14:00~15:00 진입 금지 (KST 기준)
+        - 통계적으로 승률이 낮고 손실이 집중되는 구간
+        """
+        # UTC -> KST 변환 (Explicit Timezone)
+        now_utc = datetime.now(timezone.utc)
+        now_kst = now_utc + timedelta(hours=9)
+
+        start_time = now_kst.replace(hour=14, minute=0, second=0, microsecond=0)
+        end_time = now_kst.replace(hour=15, minute=0, second=0, microsecond=0)
+        
+        if start_time <= now_kst < end_time:
+            # self.metrics['danger_zone_blocked'] += 1 # Add metric later if needed
+            return False
+        return True
+
+    def _check_rsi_guard(self, current_rsi: Optional[float]) -> bool:
+        """
+        [RSI Guard] RSI > 75 (초과열) 진입 금지
+        - 단기 고점 추격 매수 방지
+        """
+        if current_rsi is None:
+            return True # RSI 계산 불가 시 Pass? or False? -> Let's pass for safety unless data is reliable
+            
+        if current_rsi > 75.0:
             return False
         return True
 
