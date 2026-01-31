@@ -30,7 +30,7 @@ class TestE2EPipeline:
         session = patch_session_scope
         
         # --- 1. Buy Execution ---
-        executor = BuyExecutorClass(kis=mock_kis, config=setup_config, gemini_api_key="test_key")
+        executor = BuyExecutorClass(kis=mock_kis, config=setup_config)
         
         # Mock Scan Result (Input from Buy Scanner)
         scan_result = {
