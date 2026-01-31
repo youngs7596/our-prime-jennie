@@ -259,11 +259,19 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-01-31 오후)
+### 최근 세션 (2026-01-31 밤)
+- **주제**: Dashboard Redesign (Vercel/Stripe Style) & Performance Optimization
+- **파일**: `.ai/sessions/session-2026-01-31-22-00.md`
+- **완료**:
+  - 15페이지 → 6페이지 통합
+  - Raydium Neon → GitHub Dark 테마
+  - API 요청 80% 감소, KIS API 병렬화
+- **TODO**: DB 인덱스 실제 생성 (마이그레이션)
+
+### 이전 세션 (2026-01-31 오후)
 - **주제**: Multi-Broker Gateway Abstraction 구현
 - **파일**: `.ai/sessions/session-2026-01-31-16-20.md`
 - **완료**: BrokerClient Protocol, BrokerFactory, KISBrokerAdapter
-- **TODO**: 키움증권 REST API 연동 (https://openapi.kiwoom.com)
 
 ### 이전 세션 (2026-01-31 오전)
 - **주제**: 무중단 배포(Zero-Downtime Deployment) 구현 및 빌드 최적화
