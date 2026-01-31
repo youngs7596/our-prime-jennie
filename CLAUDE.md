@@ -258,11 +258,16 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-01-30)
+### 최근 세션 (2026-01-31)
+- **주제**: 무중단 배포(Zero-Downtime Deployment) 구현 및 빌드 최적화
+- **파일**: `.ai/sessions/session-2026-01-31-13-33.md`
+- **완료**: Graceful Shutdown, Rolling Deployment, pytest 병렬화
+- **결과**: 빌드 시간 7분 42초 → 6분 07초 (20% 개선)
+
+### 이전 세션 (2026-01-30)
 - **주제**: 진입 로직 개선 (Cooldown, GOLDEN_CROSS 거래량, No-Trade Window, DIP_BUY)
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
-- **다음 주제**: 서비스 중단 없이 주요 로직 변경 방법 (Hot Reload / Feature Flag)
 
 ---
-*Last Updated: 2026-01-30*
+*Last Updated: 2026-01-31*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*
