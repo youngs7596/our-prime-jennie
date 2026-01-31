@@ -175,7 +175,7 @@ class TestBuyExecutorSignalProcessing:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key",
+                
                 telegram_bot=mock_telegram
             )
             
@@ -211,7 +211,7 @@ class TestBuyExecutorSignalProcessing:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key",
+                
                 telegram_bot=mock_telegram
             )
             
@@ -251,7 +251,7 @@ class TestSafetyConstraints:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             mock_session = MagicMock()
@@ -280,7 +280,7 @@ class TestSafetyConstraints:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             mock_session = MagicMock()
@@ -308,7 +308,7 @@ class TestSafetyConstraints:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             mock_session = MagicMock()
@@ -344,7 +344,7 @@ class TestDiversificationCheck:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             candidate = {
@@ -388,7 +388,7 @@ class TestDiversificationCheck:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             candidate = {
@@ -588,7 +588,7 @@ class TestDryRunMode:
             buy_exec = executor_module.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             candidates = [{
@@ -641,7 +641,7 @@ class TestIdempotency:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             candidates = [{
@@ -687,7 +687,7 @@ class TestIdempotency:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key"
+                
             )
             
             # 삼성전자만 후보로 넘기면 필터링되어 빈 리스트가 됨
@@ -715,7 +715,7 @@ class TestEmergencyStopCheck:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key",
+                
                 telegram_bot=mock_telegram
             )
             
@@ -734,7 +734,7 @@ class TestEmergencyStopCheck:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key",
+                
                 telegram_bot=mock_telegram
             )
             
@@ -761,7 +761,7 @@ class TestEmergencyStopCheck:
             buy_exec = executor.BuyExecutor(
                 kis=mock_kis,
                 config=mock_config,
-                gemini_api_key="test_key",
+                
                 telegram_bot=mock_telegram
             )
             

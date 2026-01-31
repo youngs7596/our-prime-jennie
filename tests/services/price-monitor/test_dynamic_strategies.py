@@ -27,7 +27,13 @@ class TestDynamicStrategies(unittest.TestCase):
         
         self.BuyOpportunityWatcher = self.watcher_module.BuyOpportunityWatcher
 
+        # Create a proper mock config with return values for get_* methods
         self.mock_config = MagicMock()
+        self.mock_config.get_int.return_value = 75  # For RISK_GATE_RSI_MAX, SIGNAL_COOLDOWN_SECONDS, etc.
+        self.mock_config.get_float.return_value = 2.0  # For RISK_GATE_VOLUME_RATIO, etc.
+        self.mock_config.get_bool.return_value = True
+        self.mock_config.get.return_value = None
+
         self.mock_publisher = MagicMock()
         self.watcher = self.BuyOpportunityWatcher(self.mock_config, self.mock_publisher)
         
