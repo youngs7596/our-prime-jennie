@@ -19,44 +19,57 @@ logger = logging.getLogger(__name__)
 def fetch_current_prices_from_kis(stock_codes: List[str]) -> Dict[str, float]:
     """
     KIS Gateway API를 통해 여러 종목의 실시간 현재가를 조회합니다.
-    
+    concurrent.futures를 사용하여 병렬로 요청합니다.
+
     Args:
         stock_codes: 종목 코드 리스트
-        
+
     Returns:
         {stock_code: current_price} 딕셔너리
     """
     import httpx
-    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     kis_gateway_url = os.getenv("KIS_GATEWAY_URL", "http://127.0.0.1:8080")
     prices = {}
-    
+
     if not stock_codes:
         return prices
-    
+
+    def fetch_single_price(code: str) -> tuple:
+        """단일 종목 가격 조회"""
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.post(
+                    f"{kis_gateway_url}/api/market-data/snapshot",
+                    json={"stock_code": code, "is_index": False}
+                )
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("success") and result.get("data"):
+                        data = result["data"]
+                        price = data.get("stck_prpr") or data.get("price") or data.get("current_price")
+                        if price:
+                            return (code, float(price))
+        except Exception as e:
+            logger.debug(f"종목 {code} 현재가 조회 실패: {e}")
+        return (code, None)
+
     try:
-        with httpx.Client(timeout=10.0) as client:
-            for code in stock_codes:
+        # 최대 10개 동시 요청 (KIS API 부하 고려)
+        max_workers = min(10, len(stock_codes))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(fetch_single_price, code): code for code in stock_codes}
+            for future in as_completed(futures, timeout=15):
                 try:
-                    # KIS Gateway의 Snapshot API 사용 (POST /api/market-data/snapshot)
-                    response = client.post(
-                        f"{kis_gateway_url}/api/market-data/snapshot",
-                        json={"stock_code": code, "is_index": False}
-                    )
-                    if response.status_code == 200:
-                        result = response.json()
-                        if result.get("success") and result.get("data"):
-                            data = result["data"]
-                            # KIS API 응답에서 현재가 추출 (stck_prpr 또는 price)
-                            price = data.get("stck_prpr") or data.get("price") or data.get("current_price")
-                            if price:
-                                prices[code] = float(price)
+                    code, price = future.result()
+                    if price is not None:
+                        prices[code] = price
                 except Exception as e:
-                    logger.debug(f"종목 {code} 현재가 조회 실패: {e}")
-                    continue
+                    logger.debug(f"현재가 조회 future 에러: {e}")
     except Exception as e:
-        logger.warning(f"KIS Gateway 연결 실패: {e}")
-    
+        logger.warning(f"KIS Gateway 병렬 조회 실패: {e}")
+
     return prices
 
 

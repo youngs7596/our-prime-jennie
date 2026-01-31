@@ -7,9 +7,12 @@ import './index.css'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30 * 1000, // 30초
+      staleTime: 60 * 1000, // 1분 - 데이터가 "신선"한 것으로 간주되는 시간
+      gcTime: 10 * 60 * 1000, // 10분 - 캐시에 유지되는 시간 (구 cacheTime)
       refetchOnWindowFocus: false,
-      retry: 2,
+      refetchOnReconnect: false,
+      retry: 1, // 재시도 횟수 줄임
+      retryDelay: 1000,
     },
   },
 })
@@ -21,4 +24,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 )
-

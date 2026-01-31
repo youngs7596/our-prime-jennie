@@ -72,7 +72,7 @@ class WatchList(Base):
     sales_growth = Column("SALES_GROWTH", Float, nullable=True)
     eps_growth = Column("EPS_GROWTH", Float, nullable=True)
     financial_updated_at = Column("FINANCIAL_UPDATED_AT", DateTime, nullable=True)
-    llm_score = Column("LLM_SCORE", Float, default=0)
+    llm_score = Column("LLM_SCORE", Float, default=0, index=True)  # 인덱스 추가 (정렬 쿼리 최적화)
     llm_reason = Column("LLM_REASON", Text, nullable=True)
     llm_updated_at = Column("LLM_UPDATED_AT", DateTime, nullable=True)
     # Project Recon v1.1
@@ -93,7 +93,7 @@ class TradeLog(Base):
     quantity = Column("QUANTITY", Integer)
     price = Column("PRICE", Float)
     reason = Column("REASON", Text, nullable=True)
-    trade_timestamp = Column("TRADE_TIMESTAMP", DateTime, default=datetime.utcnow)
+    trade_timestamp = Column("TRADE_TIMESTAMP", DateTime, default=datetime.utcnow, index=True)  # 인덱스 추가 (최근 거래 조회 최적화)
     strategy_signal = Column("STRATEGY_SIGNAL", String(100))
     key_metrics_json = Column("KEY_METRICS_JSON", Text)
     market_context_json = Column("MARKET_CONTEXT_JSON", Text)

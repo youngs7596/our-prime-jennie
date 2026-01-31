@@ -76,7 +76,8 @@ function PositionsTab() {
   const { data: positions, isLoading } = useQuery({
     queryKey: ['portfolio-positions'],
     queryFn: portfolioApi.getPositions,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1분 (30초 → 1분)
+    staleTime: 30000,
   })
 
   const { data: summary } = useQuery({
@@ -330,7 +331,8 @@ function TradingTab() {
   const { data: recentTrades } = useQuery({
     queryKey: ['recent-trades'],
     queryFn: () => tradesApi.getRecent(20),
-    refetchInterval: 10000,
+    refetchInterval: 30000, // 30초 (10초 → 30초)
+    staleTime: 15000,
   })
 
   const orderMutation = useMutation({

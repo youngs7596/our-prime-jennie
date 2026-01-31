@@ -103,26 +103,30 @@ function InfrastructureTab() {
   const { data: dockerStatus, isLoading: dockerLoading, refetch: refetchDocker } = useQuery({
     queryKey: ['system-docker'],
     queryFn: systemApi.getDocker,
-    refetchInterval: 5000,
+    refetchInterval: 15000, // 15초 (5초 → 15초)
+    staleTime: 10000,
   })
 
   const { data: rabbitmqStatus, refetch: refetchRabbitMQ } = useQuery({
     queryKey: ['system-rabbitmq'],
     queryFn: systemApi.getRabbitMQ,
-    refetchInterval: 5000,
+    refetchInterval: 15000, // 15초 (5초 → 15초)
+    staleTime: 10000,
   })
 
   const { data: realtimeDetails, isLoading: realtimeLoading, refetch: refetchRealtime } = useQuery({
     queryKey: ['system-realtime'],
     queryFn: systemApi.getRealtimeMonitor,
-    refetchInterval: 1000,
+    refetchInterval: 5000, // 5초 (1초 → 5초, 80% 감소)
+    staleTime: 3000,
   })
 
   const { data: containerLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
     queryKey: ['container-logs', selectedContainer],
     queryFn: () => systemApi.getContainerLogs(selectedContainer!),
     enabled: !!selectedContainer,
-    refetchInterval: 5000,
+    refetchInterval: 10000, // 10초 (5초 → 10초)
+    staleTime: 5000,
   })
 
   const handleRefreshAll = () => {

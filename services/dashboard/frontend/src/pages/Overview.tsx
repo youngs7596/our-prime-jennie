@@ -93,47 +93,55 @@ export function OverviewPage() {
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
     queryKey: ['portfolio-summary'],
     queryFn: portfolioApi.getSummary,
-    refetchInterval: 60000,
+    refetchInterval: 120000, // 2분 (1분 → 2분)
+    staleTime: 60000,
   })
 
   const { data: positions } = useQuery({
     queryKey: ['portfolio-positions'],
     queryFn: portfolioApi.getPositions,
-    refetchInterval: 60000,
+    refetchInterval: 120000, // 2분 (1분 → 2분)
+    staleTime: 60000,
   })
 
   const { data: scoutStatus } = useQuery({
     queryKey: ['scout-status'],
     queryFn: scoutApi.getStatus,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1분 (30초 → 1분)
+    staleTime: 30000,
   })
 
   const { data: recentTrades } = useQuery({
     queryKey: ['recent-trades'],
     queryFn: () => tradesApi.getRecent(5),
+    staleTime: 60000,
   })
 
   const { data: marketRegime } = useQuery({
     queryKey: ['market-regime'],
     queryFn: marketApi.getRegime,
-    refetchInterval: 300000,
+    refetchInterval: 300000, // 5분 유지
+    staleTime: 180000,
   })
 
   const { data: councilReview } = useQuery({
     queryKey: ['council-review'],
     queryFn: councilApi.getDailyReview,
-    refetchInterval: 600000,
+    refetchInterval: 600000, // 10분 유지
+    staleTime: 300000,
   })
 
   const { data: llmStats } = useQuery({
     queryKey: ['llm-stats'],
     queryFn: llmApi.getStats,
-    refetchInterval: 120000,
+    refetchInterval: 300000, // 5분 (2분 → 5분)
+    staleTime: 120000,
   })
 
   const { data: llmConfig } = useQuery({
     queryKey: ['llm-config'],
     queryFn: llmApi.getConfig,
+    staleTime: 600000, // 설정은 자주 안 바뀜
   })
 
   // Portfolio pie chart data
@@ -147,7 +155,8 @@ export function OverviewPage() {
   const { data: history } = useQuery({
     queryKey: ['portfolio-history'],
     queryFn: () => portfolioApi.getHistory(30),
-    refetchInterval: 60000 * 60,
+    refetchInterval: 60000 * 60, // 1시간 유지
+    staleTime: 60000 * 30, // 30분
   })
 
   const chartData = history?.map((item: any) => ({

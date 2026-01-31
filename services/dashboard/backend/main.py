@@ -475,28 +475,36 @@ async def get_news_sentiment_api(
             keys = r.keys("sentiment:*")
             items = []
             import json
-            
-            # [Fix] 종목명 매핑을 위해 WatchList 조회 (Redis에 없을 경우 대비)
-            stock_names_map = {}
-            try:
-                with get_session() as session:
-                    # 간단히 모든 최근 종목 이름을 가져옴 (혹은 필요한 것만 in 절로 최적화 가능하지만 여기서 간단히)
-                    # 성능 이슈가 있다면 keys에서 code 추출 후 IN 쿼리 사용 권장
-                    w_list = session.query(WatchList.stock_code, WatchList.stock_name).all()
-                    for w in w_list:
-                        stock_names_map[w.stock_code] = w.stock_name
-            except Exception as e:
-                logger.warning(f"종목명 매핑 조회 실패: {e}")
 
-            for key in keys[:limit*2]: # Limit보다 넉넉히 조회 후 정렬
+            # Redis 키에서 종목 코드 추출 (limit*2개만)
+            target_keys = keys[:limit * 2]
+            stock_codes_needed = set()
+            for key in target_keys:
+                code = key.split(":")[-1] if isinstance(key, str) else key.decode().split(":")[-1]
+                stock_codes_needed.add(code)
+
+            # [최적화] 필요한 종목만 IN 쿼리로 조회 (N+1 문제 해결)
+            stock_names_map = {}
+            if stock_codes_needed:
+                try:
+                    with get_session() as session:
+                        w_list = session.query(WatchList.stock_code, WatchList.stock_name).filter(
+                            WatchList.stock_code.in_(list(stock_codes_needed))
+                        ).all()
+                        for w in w_list:
+                            stock_names_map[w.stock_code] = w.stock_name
+                except Exception as e:
+                    logger.warning(f"종목명 매핑 조회 실패: {e}")
+
+            for key in target_keys:
                 code = key.split(":")[-1] if isinstance(key, str) else key.decode().split(":")[-1]
                 data = r.get(key)
                 if data:
                     parsed = json.loads(data) if isinstance(data, str) else json.loads(data.decode())
-                    
+
                     # Redis에 저장된 이름 사용, 없으면 DB 매핑 사용, 없으면 코드 사용
                     s_name = parsed.get("stock_name") or stock_names_map.get(code) or code
-                    
+
                     items.append({
                         "stock_code": code,
                         "stock_name": s_name,

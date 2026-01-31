@@ -32,18 +32,21 @@ export function ScoutPage() {
   const { data: status } = useQuery({
     queryKey: ['scout-status'],
     queryFn: scoutApi.getStatus,
-    refetchInterval: 5000,
+    refetchInterval: 30000, // 30초 (5초 → 30초, 83% 감소)
+    staleTime: 15000,
   })
 
   const { data: results } = useQuery({
     queryKey: ['scout-results'],
     queryFn: scoutApi.getResults,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 1분 (30초 → 1분)
+    staleTime: 30000,
   })
 
   const { data: watchlist } = useQuery({
     queryKey: ['watchlist'],
     queryFn: () => watchlistApi.getAll(20),
+    staleTime: 60000,
   })
 
   const isRunning = status?.status === 'running'
