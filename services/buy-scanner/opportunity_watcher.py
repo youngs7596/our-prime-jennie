@@ -174,11 +174,11 @@ class BuyOpportunityWatcher:
         self.score_threshold = 65
         self.last_watchlist_load = 0
         self.watchlist_refresh_interval = 60
-        self.supply_demand_cache: Dict[str, pd.DataFrame] = {} # {code: DataFrame}
+        self.supply_demand_cache: Dict[str, pd.DataFrame] = {}  # {code: DataFrame}
+        self.watchlist_entry_cache: Dict[str, dict] = {}  # {code: {"entry_date": date, "entry_price": float}}
 
-        
-        # Cooldown (중복 시그널 방지)
-        self.cooldown_seconds = 180
+        # Cooldown (중복 시그널 방지) - 설정에서 로드 (기본 600초)
+        self.cooldown_seconds = self.config.get_int("SIGNAL_COOLDOWN_SECONDS", default=600)
         
         # 메트릭
         self.metrics = {
@@ -273,6 +273,9 @@ class BuyOpportunityWatcher:
             # [Added] Supply/Demand 데이터 로드 (for Legendary Pattern)
             self._load_supply_demand_data(list(self.hot_watchlist.keys()))
 
+            # [Added] Watchlist 진입 히스토리 로드 (for DIP_BUY)
+            self._load_watchlist_entry_data(list(self.hot_watchlist.keys()))
+
             self.metrics['watchlist_loads'] += 1
             return True
             
@@ -290,12 +293,12 @@ class BuyOpportunityWatcher:
         """수급 데이터 로드 (by FactorRepository)"""
         if not stock_codes:
             return
-        
+
         try:
             # 쓰레드에서 호출될 수 있으므로 DB 초기화 보장
             from shared.db.connection import ensure_engine_initialized
             ensure_engine_initialized()
-            
+
             with session_scope(readonly=True) as session:
                 repo = FactorRepository(session)
                 # 최근 30일치 외국인 수급 데이터 조회
@@ -303,6 +306,57 @@ class BuyOpportunityWatcher:
                 logger.info(f"   (Supply) {len(self.supply_demand_cache)}개 종목 수급 데이터 로드 완료")
         except Exception as e:
             logger.error(f"❌ 수급 데이터 로드 실패: {e}")
+
+    def _load_watchlist_entry_data(self, stock_codes: List[str]):
+        """
+        [DIP_BUY 전략용] Watchlist 진입 히스토리 로드
+
+        최근 5일간 Watchlist에 처음 등장한 종목의 진입일/진입가격 캐시
+        """
+        if not stock_codes:
+            return
+
+        try:
+            from shared.db.connection import ensure_engine_initialized
+            ensure_engine_initialized()
+            from sqlalchemy import text
+
+            with session_scope(readonly=True) as session:
+                # 최근 5일간 watchlist 히스토리에서 각 종목의 첫 등장 정보 조회
+                # MariaDB 문법 사용, 컬럼명: PRICE_DATE (not TRADE_DATE)
+                codes_str = ",".join([f"'{c}'" for c in stock_codes])
+                query = text(f"""
+                    SELECT
+                        fe.STOCK_CODE,
+                        fe.ENTRY_DATE,
+                        p.CLOSE_PRICE AS ENTRY_PRICE
+                    FROM (
+                        SELECT
+                            STOCK_CODE,
+                            MIN(SNAPSHOT_DATE) AS ENTRY_DATE
+                        FROM watchlist_history
+                        WHERE SNAPSHOT_DATE >= DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+                          AND STOCK_CODE IN ({codes_str})
+                        GROUP BY STOCK_CODE
+                    ) fe
+                    LEFT JOIN stock_daily_prices_3y p
+                        ON fe.STOCK_CODE = p.STOCK_CODE
+                        AND DATE(fe.ENTRY_DATE) = DATE(p.PRICE_DATE)
+                """)
+                result = session.execute(query)
+                rows = result.fetchall()
+
+                self.watchlist_entry_cache = {}
+                for row in rows:
+                    self.watchlist_entry_cache[row[0]] = {
+                        "entry_date": row[1],
+                        "entry_price": row[2]
+                    }
+
+                logger.info(f"   (DIP_BUY) {len(self.watchlist_entry_cache)}개 종목 진입 히스토리 로드 완료")
+        except Exception as e:
+            logger.warning(f"⚠️ Watchlist 진입 히스토리 로드 실패: {e}")
+            self.watchlist_entry_cache = {}
 
     
     def on_price_update(self, stock_code: str, price: float, volume: int = 0) -> Optional[dict]:
@@ -370,13 +424,13 @@ class BuyOpportunityWatcher:
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
-        # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:30)
+        # [Phase 1] 장초 노이즈 구간 차단 (09:00~09:15) - 30분에서 15분으로 축소
         no_trade_window_passed = self._check_no_trade_window()
         risk_gate_checks.append({
             "name": "No-Trade Window",
             "passed": no_trade_window_passed,
             "value": datetime.now().strftime("%H:%M"),
-            "threshold": "Not 09:00~09:30"
+            "threshold": "Not 09:00~09:15"
         })
         if not no_trade_window_passed:
             risk_gate_passed = False
@@ -398,13 +452,14 @@ class BuyOpportunityWatcher:
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
-        # [NEW] RSI 과열 필터 (RSI > 75)
+        # [NEW] RSI 과열 필터
+        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=75)
         rsi_guard_passed = self._check_rsi_guard(current_rsi)
         risk_gate_checks.append({
             "name": "RSI Guard",
             "passed": rsi_guard_passed,
             "value": f"{current_rsi:.1f}" if current_rsi else "N/A",
-            "threshold": "<= 75"
+            "threshold": f"<= {rsi_max}"
         })
         if not rsi_guard_passed:
             risk_gate_passed = False
@@ -415,27 +470,31 @@ class BuyOpportunityWatcher:
         # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
         risk_conditions = 0
 
-        # 조건 1: 거래량 급증 (> 2x 평균)
-        volume_check_passed = volume_info['ratio'] <= 2.0
+        # 설정에서 Risk Gate 임계값 로드
+        volume_ratio_limit = self.config.get_float("RISK_GATE_VOLUME_RATIO", default=2.0)
+        vwap_deviation_limit = self.config.get_float("RISK_GATE_VWAP_DEVIATION", default=0.02)
+
+        # 조건 1: 거래량 급증 (> 설정값 x 평균)
+        volume_check_passed = volume_info['ratio'] <= volume_ratio_limit
         if not volume_check_passed:
             risk_conditions += 1
         risk_gate_checks.append({
             "name": "Volume Gate",
             "passed": volume_check_passed,
             "value": f"{volume_info['ratio']:.1f}x",
-            "threshold": "<= 2.0x"
+            "threshold": f"<= {volume_ratio_limit}x"
         })
 
-        # 조건 2: VWAP 이격 과대 (> 2%)
+        # 조건 2: VWAP 이격 과대 (> 설정값 %)
         vwap_deviation = ((current_price - vwap) / vwap * 100) if vwap > 0 else 0
-        vwap_check_passed = not (vwap > 0 and current_price > vwap * 1.02)
+        vwap_check_passed = not (vwap > 0 and current_price > vwap * (1 + vwap_deviation_limit))
         if not vwap_check_passed:
             risk_conditions += 1
         risk_gate_checks.append({
             "name": "VWAP Gate",
             "passed": vwap_check_passed,
             "value": f"{vwap_deviation:.1f}%",
-            "threshold": "<= 2.0%"
+            "threshold": f"<= {vwap_deviation_limit * 100:.1f}%"
         })
 
         # 2개 이상 조건 충족 시 차단 (거래량 급증 + VWAP 이격 = 뉴스반영 상태)
@@ -537,6 +596,15 @@ class BuyOpportunityWatcher:
                     signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": True, "reason": signal_reason})
                 else:
                     signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": False, "reason": "No institutional pattern"})
+
+        # [NEW] DIP_BUY: Watchlist 진입 1-3일 후 조정 매수 (시장 상황 무관)
+        if not signal_type:
+            result = self._check_dip_buy(stock_code, current_price, stock_info)
+            if result:
+                signal_type, signal_reason = result
+                signal_checks.append({"strategy": "DIP_BUY", "triggered": True, "reason": signal_reason})
+            else:
+                signal_checks.append({"strategy": "DIP_BUY", "triggered": False, "reason": "No dip entry condition"})
 
         # [EXISTING] 신호가 없으면 기존 전략 루프 실행
         # 단, 강세장(BULL/STRONG_BULL)에서는 역추세 전략(RSI, BB) 비활성화
@@ -671,14 +739,12 @@ class BuyOpportunityWatcher:
         cross_triggered = (prev_ma_short <= ma_long) and (ma_short > ma_long)
         
         if cross_triggered:
-            # 2. Volume Threshold Check (>= 1.2x)
-            # If volume_ratio is 0 (missing data), we skip the check (or fail safe? let's be strict: fail)
-            # Actually for start-up, ratio might be 0. Let's allow 0 if bar_count < 5?
-            # Sticking to strictly > 1.2 as requested.
-            
-            if volume_ratio < 1.2:
-                return False, f"Weak Volume ({volume_ratio:.1f}x < 1.2x)"
-            
+            # 2. Volume Threshold Check - 설정에서 로드
+            min_volume_ratio = self.config.get_float("GOLDEN_CROSS_MIN_VOLUME_RATIO", default=1.5)
+
+            if volume_ratio < min_volume_ratio:
+                return False, f"Weak Volume ({volume_ratio:.1f}x < {min_volume_ratio}x)"
+
             return True, f"MA({short_w}) > MA({long_w}) w/ Vol {volume_ratio:.1f}x"
             
         return False, ""
@@ -709,16 +775,6 @@ class BuyOpportunityWatcher:
         if prev_rsi < threshold and curr_rsi >= threshold:
             return True, f"RSI Rebound: {prev_rsi:.1f} -> {curr_rsi:.1f} (CrossUp {threshold})"
             
-        return False, ""
-
-    def _check_rsi_oversold(self, bars: List[dict], params: dict) -> tuple:
-        # [DEPRECATED] Only for legacy support or manual override
-        closes = [b['close'] for b in bars]
-        threshold = params.get('threshold', 30)
-        rsi = self._calculate_simple_rsi(closes, period=14)
-        
-        if rsi and rsi <= threshold:
-            return True, f"RSI={rsi:.1f} <= {threshold}"
         return False, ""
 
     def _check_bb_lower(self, bars: List[dict], params: dict, current_price: float) -> tuple:
@@ -1194,6 +1250,64 @@ class BuyOpportunityWatcher:
         logger.info(f"🐋 [INSTITUTIONAL_ENTRY] {reason}")
         return ("INSTITUTIONAL_ENTRY", reason)
 
+    def _check_dip_buy(self, stock_code: str, current_price: float, stock_info: dict) -> Optional[tuple]:
+        """
+        [NEW] DIP_BUY: Watchlist 진입 1-3일 후 -2%~-5% 하락 시 매수
+
+        분석 결과: Watchlist 진입 후 1일 뒤 매수가 가장 많았고,
+        단기 조정 후 매수하면 승률이 높음
+
+        Trigger Condition:
+        1. Watchlist 진입 후 1-3일 경과
+        2. 진입가 대비 -2% ~ -5% 하락
+        3. LLM Score >= 65
+        4. RSI 30-50 구간 (과매도 아닌 건전한 조정)
+        """
+        try:
+            # 1. 진입 데이터 확인
+            entry_data = self.watchlist_entry_cache.get(stock_code)
+            if not entry_data or not entry_data.get("entry_price"):
+                return None
+
+            entry_date = entry_data["entry_date"]
+            entry_price = entry_data["entry_price"]
+
+            if not entry_date or not entry_price:
+                return None
+
+            # 2. 경과일 계산 (1-3일)
+            from datetime import date
+            today = date.today()
+
+            if hasattr(entry_date, 'date'):
+                entry_date = entry_date.date()
+
+            days_since_entry = (today - entry_date).days
+
+            if days_since_entry < 1 or days_since_entry > 3:
+                return None
+
+            # 3. 하락률 계산 (-2% ~ -5%)
+            price_change_pct = ((current_price - entry_price) / entry_price) * 100
+
+            if price_change_pct > -2.0 or price_change_pct < -5.0:
+                return None
+
+            # 4. LLM Score 체크
+            llm_score = stock_info.get('llm_score', 0)
+            if llm_score < 65:
+                return None
+
+            reason = (f"Watchlist 진입 {days_since_entry}일차, "
+                     f"진입가({entry_price:,.0f}) 대비 {price_change_pct:.1f}%, "
+                     f"LLM {llm_score:.1f}")
+            logger.info(f"📉 [{stock_code}] DIP_BUY 조건 충족: {reason}")
+            return ("DIP_BUY", reason)
+
+        except Exception as e:
+            logger.debug(f"DIP_BUY 체크 실패 ({stock_code}): {e}")
+            return None
+
     def _check_legendary_pattern(self, stock_code: str, bars: List[dict]) -> bool:
         """
         [Super Prime] 전설의 타이밍 패턴 여부 확인 (Realtime Version)
@@ -1260,14 +1374,18 @@ class BuyOpportunityWatcher:
         return not self.redis.exists(key)
 
     def _check_no_trade_window(self) -> bool:
-        """장초 노이즈 구간(09:00~09:30) 진입 금지 (KST 기준)"""
+        """장초 노이즈 구간(09:00~09:15) 진입 금지 (KST 기준)
+
+        분석 결과: 09:15-09:30 구간의 수익률이 양호하여 금지 구간 축소
+        기존 30분 → 15분으로 단축하여 매수 기회 확대
+        """
         # UTC -> KST 변환 (Explicit Timezone)
         now_utc = datetime.now(timezone.utc)
         now_kst = now_utc + timedelta(hours=9)
-        
+
         start_time = now_kst.replace(hour=9, minute=0, second=0, microsecond=0)
-        end_time = now_kst.replace(hour=9, minute=30, second=0, microsecond=0)
-        
+        end_time = now_kst.replace(hour=9, minute=15, second=0, microsecond=0)
+
         if start_time <= now_kst <= end_time:
             self.metrics['cooldown_blocked'] += 1
             return False
@@ -1292,13 +1410,14 @@ class BuyOpportunityWatcher:
 
     def _check_rsi_guard(self, current_rsi: Optional[float]) -> bool:
         """
-        [RSI Guard] RSI > 75 (초과열) 진입 금지
+        [RSI Guard] RSI 초과열 진입 금지
         - 단기 고점 추격 매수 방지
         """
         if current_rsi is None:
-            return True # RSI 계산 불가 시 Pass? or False? -> Let's pass for safety unless data is reliable
-            
-        if current_rsi > 75.0:
+            return True  # RSI 계산 불가 시 Pass
+
+        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=75)
+        if current_rsi > rsi_max:
             return False
         return True
 

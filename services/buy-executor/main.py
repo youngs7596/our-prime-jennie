@@ -167,15 +167,11 @@ def initialize_service():
         from shared.notification import TelegramBot
         telegram_bot = TelegramBot(token=telegram_token, chat_id=telegram_chat_id)
         logger.info("✅ Telegram Bot 초기화 완료")
-        
-        # 5. Gemini API 초기화
-        gemini_api_key = auth.get_secret(os.getenv("SECRET_ID_GEMINI_API_KEY"))
-        
-        # 6. Buy Executor 초기화
+
+        # 5. Buy Executor 초기화
         executor = BuyExecutor(
             kis=kis,
             config=config_manager,
-            gemini_api_key=gemini_api_key,
             telegram_bot=telegram_bot
         )
         logger.info("✅ Buy Executor 초기화 완료")

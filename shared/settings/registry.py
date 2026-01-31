@@ -86,6 +86,19 @@ REGISTRY = {
 
     # ===== 운영 설정 (Operations) =====
     "DISABLE_MARKET_OPEN_CHECK": {"value": False, "type": "bool", "desc": "장 운영시간 체크 비활성화 (true 시 장외 시간에도 서비스 실행)", "category": "Operations", "db_priority": True},
+
+    # ===== Risk Gate (buy-scanner 진입 필터) =====
+    "RISK_GATE_VOLUME_RATIO": {"value": 2.0, "type": "float", "desc": "거래량 급등 경고 기준 (평균 대비 배수)", "category": "RiskGate", "db_priority": True},
+    "RISK_GATE_VWAP_DEVIATION": {"value": 0.02, "type": "float", "desc": "VWAP 이격 경고 기준 (2% = 0.02)", "category": "RiskGate", "db_priority": True},
+    "RISK_GATE_RSI_MAX": {"value": 75, "type": "int", "desc": "RSI 과열 진입 금지 기준", "category": "RiskGate", "db_priority": True},
+    "GOLDEN_CROSS_MIN_VOLUME_RATIO": {"value": 1.5, "type": "float", "desc": "골든크로스 신호 최소 거래량 배수", "category": "RiskGate", "db_priority": True},
+
+    # ===== 시간 기반 필터 =====
+    "NO_TRADE_WINDOW_START": {"value": "09:00", "type": "str", "desc": "장초 노이즈 구간 시작 (KST)", "category": "RiskGate", "db_priority": True},
+    "NO_TRADE_WINDOW_END": {"value": "09:15", "type": "str", "desc": "장초 노이즈 구간 종료 (KST)", "category": "RiskGate", "db_priority": True},
+    "DANGER_ZONE_START": {"value": "14:00", "type": "str", "desc": "위험 구간 시작 (KST)", "category": "RiskGate", "db_priority": True},
+    "DANGER_ZONE_END": {"value": "15:00", "type": "str", "desc": "위험 구간 종료 (KST)", "category": "RiskGate", "db_priority": True},
+    "SIGNAL_COOLDOWN_SECONDS": {"value": 600, "type": "int", "desc": "동일 종목 신호 쿨다운 (초)", "category": "RiskGate", "db_priority": True},
 }
 
 

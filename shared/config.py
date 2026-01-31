@@ -107,21 +107,8 @@ class ConfigManager:
                 "desc": "볼린저 밴드 계산 기간",
                 "category": "Buying"
             },
-            'BUY_RSI_OVERSOLD_THRESHOLD': {
-                "value": 30,
-                "desc": "매수 시그널 발생을 위한 RSI 과매도 기준값",
-                "category": "Buying"
-            },
-            'BUY_GOLDEN_CROSS_SHORT': {
-                "value": 5,
-                "desc": "골든크로스 판단용 단기 이동평균일",
-                "category": "Buying"
-            },
-            'BUY_GOLDEN_CROSS_LONG': {
-                "value": 20,
-                "desc": "골든크로스 판단용 장기 이동평균일",
-                "category": "Buying"
-            },
+            # BUY_RSI_OVERSOLD_THRESHOLD, BUY_GOLDEN_CROSS_SHORT, BUY_GOLDEN_CROSS_LONG
+            # -> registry.py로 이동됨 (중복 제거)
             'BUY_QUANTITY_PER_TRADE': {
                 "value": 1,
                 "desc": "1회 주문 시 기본 매수 수량",
@@ -191,11 +178,7 @@ class ConfigManager:
                 "desc": "단일 종목 최대 평가금액 비중 (%)",
                 "category": "Risk"
             },
-            'CASH_KEEP_PCT': {
-                "value": 10,
-                "desc": "최소 현금 보유 비중 (%)",
-                "category": "Risk"
-            },
+            # CASH_KEEP_PCT -> registry.py로 이동됨 (중복 제거)
             'RISK_PER_TRADE_PCT': {
                 "value": 2.0,
                 "desc": "트레이드 당 리스크 허용치 (%)",

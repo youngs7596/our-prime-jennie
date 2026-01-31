@@ -1369,3 +1369,54 @@ def delete_rsi_overbought_sold(stock_code: str, redis_client=None) -> bool:
     [Redis] 종목의 RSI 과열 매도 상태를 삭제합니다. (전량 매도 시 호출)
     """
     return set_rsi_overbought_sold(stock_code, is_sold=False, redis_client=redis_client)
+
+
+# ============================================================================
+# 통합 거래 허용 체크 (Emergency Stop + Pause + 기타 조건)
+# ============================================================================
+
+def check_trading_allowed(
+    operation: str = "BUY",
+    source: str = "auto",
+    redis_client=None
+) -> tuple[bool, str]:
+    """
+    [통합] 거래가 허용되는지 확인합니다.
+
+    buy-executor, sell-executor에서 공통으로 사용하는 체크 로직.
+
+    Args:
+        operation: "BUY" 또는 "SELL"
+        source: "auto" (자동 매매) 또는 "manual" (수동 명령)
+        redis_client: 테스트용 Redis 클라이언트
+
+    Returns:
+        (allowed: bool, reason: str)
+        - (True, "") : 거래 허용
+        - (False, "Emergency Stop Active") : 긴급 중지
+        - (False, "Trading Paused") : 매수 일시 중지 (BUY만 해당)
+
+    사용 예:
+        from shared.redis_cache import check_trading_allowed
+
+        allowed, reason = check_trading_allowed("BUY", "auto")
+        if not allowed:
+            return {"status": "skipped", "reason": reason}
+    """
+    # 1. Emergency Stop 체크 (모든 거래 차단)
+    if is_trading_stopped(redis_client):
+        # 수동 매도는 Emergency Stop에서도 허용 (포지션 정리 목적)
+        if operation == "SELL" and source == "manual":
+            logger.warning("⚠️ [Emergency Stop] 수동 매도는 허용됩니다.")
+        else:
+            return False, "Emergency Stop Active"
+
+    # 2. Trading Pause 체크 (매수만 차단)
+    if operation == "BUY" and is_trading_paused(redis_client):
+        # 수동 매수는 Pause에서도 허용
+        if source == "manual":
+            logger.info("ℹ️ [Paused] 수동 매수는 허용됩니다.")
+        else:
+            return False, "Trading Paused"
+
+    return True, ""

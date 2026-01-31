@@ -1,6 +1,25 @@
 # youngs75_jennie/utils.py
 # Version: v3.5
 # [모듈] 공통 유틸리티 함수 (재시도, 에러 처리 등)
+#
+# =====================================================================
+# ⚠️ DEPRECATED (2026-01-31)
+# =====================================================================
+# 이 모듈은 프로덕션 코드에서 더 이상 사용되지 않습니다.
+# 30일 후(2026-03-01) 삭제 예정입니다.
+#
+# 대체 모듈:
+# - 재시도 로직: tenacity 라이브러리 직접 사용
+# - 에러 처리: 각 서비스에서 개별 구현
+# =====================================================================
+
+import warnings
+warnings.warn(
+    "shared.utils is deprecated and will be removed after 2026-03-01. "
+    "Use tenacity library for retry logic.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 import logging
 import time

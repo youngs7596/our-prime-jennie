@@ -3,8 +3,6 @@
 # Buy Executor - 매수 결재 및 주문 실행 로직
 
 import logging
-import json
-import traceback
 from datetime import datetime, timezone, timedelta
 
 # shared 패키지 임포트
@@ -30,18 +28,16 @@ logger = logging.getLogger(__name__)
 
 class BuyExecutor:
     """매수 결재 및 주문 실행 클래스"""
-    
-    def __init__(self, kis, config, gemini_api_key, telegram_bot=None):
+
+    def __init__(self, kis, config, telegram_bot=None):
         """
         Args:
             kis: KIS API 클라이언트
             config: ConfigManager 인스턴스
-            gemini_api_key: Gemini API 키
             telegram_bot: TelegramBot 인스턴스 (optional)
         """
         self.kis = kis
         self.config = config
-        self.gemini_api_key = gemini_api_key
         self.telegram_bot = telegram_bot
         
         self.position_sizer = PositionSizer(config)
@@ -651,10 +647,6 @@ class BuyExecutor:
             logger.error(f"안전장치 체크 오류: {e}", exc_info=True)
             return {"allowed": False, "reason": f"Safety check error: {e}"}
     
-    def _llm_ranking_decision(self, candidates: list, market_regime: str) -> dict:
-        """LLM 랭킹 결재 (사용 안함 - Fast Hands 대체)"""
-        pass
-
     def _check_diversification(self, session, candidate: dict, current_portfolio: list, available_cash: float, position_size: int, current_price: float, override_max_sector_pct: float = None, override_max_stock_pct: float = None) -> tuple:
         """포트폴리오 분산 검증"""
         try:
