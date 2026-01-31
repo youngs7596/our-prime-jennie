@@ -95,3 +95,6 @@ temp_*.txt
 local_test_*.log
 htmlcov/
 coverage_report/
+
+# Telegram session files (sensitive)
+.telegram_sessions/

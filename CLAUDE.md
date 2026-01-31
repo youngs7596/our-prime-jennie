@@ -258,6 +258,11 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
+### 최근 세션 (2026-01-30)
+- **주제**: 진입 로직 개선 (Cooldown, GOLDEN_CROSS 거래량, No-Trade Window, DIP_BUY)
+- **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
+- **다음 주제**: 서비스 중단 없이 주요 로직 변경 방법 (Hot Reload / Feature Flag)
+
 ---
 *Last Updated: 2026-01-30*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*
