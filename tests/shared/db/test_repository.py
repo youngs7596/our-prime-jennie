@@ -971,12 +971,12 @@ class TestAdditionalCoverage:
     def test_get_config_exception(self, db_session, mocker):
         """get_config 예외 처리 (라인 498-500)"""
         from shared.db.repository import get_config
-        
-        # session.query를 mock하여 예외 발생
-        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
-        
+
+        # session.scalars를 mock하여 예외 발생 (SQLAlchemy 2.0 style)
+        mocker.patch.object(db_session, 'scalars', side_effect=Exception("DB error"))
+
         value = get_config(db_session, "ANY_KEY")
-        
+
         assert value is None
     
     def test_set_config_with_description(self, session_with_config):
@@ -1003,12 +1003,12 @@ class TestAdditionalCoverage:
     def test_set_config_exception(self, db_session, mocker):
         """set_config 예외 처리 (라인 540-543)"""
         from shared.db.repository import set_config
-        
-        # session.query를 mock하여 예외 발생
-        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
-        
+
+        # session.scalars를 mock하여 예외 발생 (SQLAlchemy 2.0 style)
+        mocker.patch.object(db_session, 'scalars', side_effect=Exception("DB error"))
+
         result = set_config(db_session, "ANY_KEY", "ANY_VALUE")
-        
+
         assert result is False
     
     def test_set_config_long_value(self, db_session):
@@ -1026,11 +1026,11 @@ class TestAdditionalCoverage:
     def test_delete_config_exception(self, db_session, mocker):
         """delete_config 예외 처리 (라인 558-561)"""
         from shared.db.repository import delete_config
-        
-        # session.query를 mock하여 예외 발생
-        mocker.patch.object(db_session, 'query', side_effect=Exception("DB error"))
-        
+
+        # session.execute를 mock하여 예외 발생 (SQLAlchemy 2.0 style)
+        mocker.patch.object(db_session, 'execute', side_effect=Exception("DB error"))
+
         result = delete_config(db_session, "ANY_KEY")
-        
+
         assert result is False
 
