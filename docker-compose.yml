@@ -315,13 +315,15 @@ services:
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
+    # Graceful Shutdown: SIGTERM 수신 후 30초 대기
+    stop_grace_period: 30s
     labels:
       - app=buy-scanner
       - stack=my-prime-jennie
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')" ]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD", "curl", "-sf", "http://localhost:8081/health" ]
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 40s
 
@@ -380,13 +382,15 @@ services:
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
+    # Graceful Shutdown: SIGTERM 수신 후 30초 대기 (주문 완료 대기)
+    stop_grace_period: 30s
     labels:
       - app=buy-executor
       - stack=my-prime-jennie
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/health')" ]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD", "curl", "-sf", "http://localhost:8082/health" ]
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 40s
 
@@ -439,13 +443,15 @@ services:
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
+    # Graceful Shutdown: SIGTERM 수신 후 30초 대기 (주문 완료 대기)
+    stop_grace_period: 30s
     labels:
       - app=sell-executor
       - stack=my-prime-jennie
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')" ]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD", "curl", "-sf", "http://localhost:8083/health" ]
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 40s
 
@@ -560,13 +566,15 @@ services:
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
     restart: unless-stopped
+    # Graceful Shutdown: SIGTERM 수신 후 30초 대기
+    stop_grace_period: 30s
     labels:
       - app=price-monitor
       - stack=my-prime-jennie
     healthcheck:
-      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')" ]
-      interval: 30s
-      timeout: 10s
+      test: [ "CMD", "curl", "-sf", "http://localhost:8088/health" ]
+      interval: 10s
+      timeout: 5s
       retries: 3
       start_period: 40s
 

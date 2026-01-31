@@ -53,6 +53,7 @@ from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
 from shared.rabbitmq import RabbitMQWorker  # [변경] shared 모듈 사용
+from shared.graceful_shutdown import GracefulShutdown, TaskTracker, init_global_shutdown
 
 from executor import SellExecutor
 
@@ -69,11 +70,18 @@ app = Flask(__name__)
 # 전역 변수
 executor = None
 rabbitmq_worker = None
+shutdown_handler: GracefulShutdown = None
+task_tracker: TaskTracker = None
 
 
 def _process_sell_request(sell_request, request_source: str = "http") -> dict:
     if not executor:
         raise RuntimeError("Service not initialized")
+
+    # Graceful Shutdown 체크: 종료 중이면 새 작업 거부
+    # 단, 매도 주문은 손실 방지를 위해 진행 중인 건은 완료해야 함
+    if shutdown_handler and shutdown_handler.is_shutting_down():
+        logger.warning("🛑 [Graceful Shutdown] 종료 중이지만 매도 주문은 완료합니다...")
 
     if not sell_request:
         raise ValueError("Invalid request payload")
@@ -101,14 +109,26 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
         current_price
     )
 
-    result = executor.execute_sell_order(
-        stock_code=stock_code,
-        stock_name=stock_name,
-        quantity=quantity,
-        sell_reason=sell_reason,
-        dry_run=dry_run,
-        current_price=current_price
-    )
+    # 작업 추적 (in_flight_tasks 증가)
+    if task_tracker:
+        with task_tracker.track():
+            result = executor.execute_sell_order(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                quantity=quantity,
+                sell_reason=sell_reason,
+                dry_run=dry_run,
+                current_price=current_price
+            )
+    else:
+        result = executor.execute_sell_order(
+            stock_code=stock_code,
+            stock_name=stock_name,
+            quantity=quantity,
+            sell_reason=sell_reason,
+            dry_run=dry_run,
+            current_price=current_price
+        )
     return result
 
 
@@ -135,10 +155,25 @@ def _start_rabbitmq_worker_if_needed():
     rabbitmq_worker.start()
 
 
+def _on_shutdown_callback():
+    """Graceful Shutdown 시 호출되는 콜백"""
+    logger.info("🛑 [Graceful Shutdown] sell-executor 종료 콜백 실행...")
+
+    # RabbitMQ Worker 정지
+    if rabbitmq_worker:
+        try:
+            rabbitmq_worker.stop()
+            logger.info("   - RabbitMQ Worker 정지 요청")
+        except Exception as e:
+            logger.warning(f"   - RabbitMQ Worker 정지 오류: {e}")
+
+    logger.info("✅ [Graceful Shutdown] sell-executor 콜백 완료")
+
+
 def initialize_service():
     """서비스 초기화"""
-    global executor
-    
+    global executor, shutdown_handler, task_tracker
+
     logger.info("=== Sell Executor Service 초기화 시작 ===")
     load_dotenv()
     
@@ -191,7 +226,16 @@ def initialize_service():
         # 6. Sell Executor 초기화
         executor = SellExecutor(kis=kis, config=config_manager, telegram_bot=telegram_bot)
         logger.info("✅ Sell Executor 초기화 완료")
-        
+
+        # 7. Graceful Shutdown Handler 초기화
+        shutdown_handler = init_global_shutdown(
+            timeout=30,
+            on_shutdown=_on_shutdown_callback,
+            service_name="sell-executor"
+        )
+        task_tracker = TaskTracker(shutdown_handler)
+        logger.info("✅ Graceful Shutdown Handler 초기화 완료")
+
         logger.info("=== Sell Executor Service 초기화 완료 ===")
 
         _start_rabbitmq_worker_if_needed()
@@ -205,10 +249,56 @@ def initialize_service():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    if executor:
-        return jsonify({"status": "ok", "service": "sell-executor"}), 200
+    """Enhanced health check with detailed status"""
+    is_ready = executor is not None
+    is_live = True
+
+    # Graceful Shutdown 상태
+    shutdown_status = {}
+    if shutdown_handler:
+        shutdown_status = shutdown_handler.get_health_status()
+        is_shutting_down = shutdown_status.get("shutting_down", False)
     else:
-        return jsonify({"status": "initializing"}), 503
+        is_shutting_down = False
+        shutdown_status = {"shutting_down": False, "in_flight_tasks": 0, "uptime_seconds": 0}
+
+    # 의존성 체크
+    checks = {}
+
+    # RabbitMQ Worker 체크
+    if rabbitmq_worker and rabbitmq_worker._thread and rabbitmq_worker._thread.is_alive():
+        checks["rabbitmq"] = "ok"
+    elif rabbitmq_worker:
+        checks["rabbitmq"] = "worker_stopped"
+    else:
+        checks["rabbitmq"] = "not_initialized"
+
+    # 전체 상태 결정
+    if not is_ready:
+        status = "initializing"
+        http_status = 503
+    elif is_shutting_down:
+        status = "shutting_down"
+        http_status = 503
+    elif checks.get("rabbitmq") != "ok":
+        status = "degraded"
+        http_status = 200
+    else:
+        status = "healthy"
+        http_status = 200
+
+    response = {
+        "status": status,
+        "service": "sell-executor",
+        "ready": is_ready and not is_shutting_down,
+        "live": is_live,
+        "shutting_down": is_shutting_down,
+        "checks": checks,
+        "in_flight_tasks": shutdown_status.get("in_flight_tasks", 0),
+        "uptime_seconds": shutdown_status.get("uptime_seconds", 0)
+    }
+
+    return jsonify(response), http_status
 
 
 @app.route('/execute', methods=['POST'])

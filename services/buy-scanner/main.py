@@ -45,6 +45,7 @@ from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
 from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
+from shared.graceful_shutdown import GracefulShutdown, init_global_shutdown
 # from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage # Removed
 # from shared.scheduler_client import mark_job_run # Polling 제거로 미사용
 
@@ -85,12 +86,43 @@ websocket_lock = threading.Lock()
 stream_consumer: 'StreamPriceConsumer' = None
 use_redis_streams = False
 
+# Graceful Shutdown Handler
+shutdown_handler: GracefulShutdown = None
+
+
+def _on_shutdown_callback():
+    """Graceful Shutdown 시 호출되는 콜백"""
+    logger.info("🛑 [Graceful Shutdown] buy-scanner 종료 콜백 실행...")
+
+    # 1. BuyOpportunityWatcher stop_event 설정
+    if opportunity_watcher:
+        opportunity_watcher.stop_event.set()
+        logger.info("   - BuyOpportunityWatcher stop_event 설정")
+
+    # 2. Redis Streams Consumer 정지
+    if stream_consumer:
+        try:
+            stream_consumer.stop()
+            logger.info("   - Redis Streams Consumer 정지")
+        except Exception as e:
+            logger.warning(f"   - Redis Streams Consumer 정지 오류: {e}")
+
+    # 3. KIS WebSocket 정지
+    if kis_client and hasattr(kis_client, 'websocket'):
+        try:
+            kis_client.websocket.stop()
+            logger.info("   - KIS WebSocket 정지")
+        except Exception as e:
+            logger.warning(f"   - KIS WebSocket 정지 오류: {e}")
+
+    logger.info("✅ [Graceful Shutdown] buy-scanner 콜백 완료")
+
 
 def initialize_service():
     """서비스 초기화"""
     global scanner, rabbitmq_publisher, scheduler_job_worker, scheduler_job_publisher, scheduler_job_queue
-    global kis_client, opportunity_watcher, is_websocket_mode
-    
+    global kis_client, opportunity_watcher, is_websocket_mode, shutdown_handler
+
     logger.info("=== Buy Scanner Service 초기화 시작 ===")
     load_dotenv()
     
@@ -160,9 +192,17 @@ def initialize_service():
         else:
              logger.warning("⚠️ USE_WEBSOCKET_MODE=false 입니다. buy-scanner는 이제 실시간 전용입니다.")
         
+        # 7. Graceful Shutdown Handler 초기화
+        shutdown_handler = init_global_shutdown(
+            timeout=30,
+            on_shutdown=_on_shutdown_callback,
+            service_name="buy-scanner"
+        )
+        logger.info("✅ Graceful Shutdown Handler 초기화 완료")
+
         logger.info("=== Buy Scanner Service 초기화 완료 ===")
         return True
-        
+
     except Exception as e:
         logger.critical(f"❌ 초기화 실패: {e}", exc_info=True)
         return False
@@ -470,10 +510,63 @@ def _on_price_update(stock_code: str, current_price: float, current_high: float)
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    if opportunity_watcher and rabbitmq_publisher:
-        return jsonify({"status": "ok", "service": "buy-scanner", "mode": "realtime-stream"}), 200
+    """Enhanced health check with detailed status"""
+    # 기본 상태 확인
+    is_ready = opportunity_watcher is not None and rabbitmq_publisher is not None
+    is_live = True  # 프로세스 살아있음
+
+    # Graceful Shutdown 상태
+    shutdown_status = {}
+    if shutdown_handler:
+        shutdown_status = shutdown_handler.get_health_status()
+        is_shutting_down = shutdown_status.get("shutting_down", False)
     else:
-        return jsonify({"status": "initializing"}), 503
+        is_shutting_down = False
+        shutdown_status = {"shutting_down": False, "in_flight_tasks": 0, "uptime_seconds": 0}
+
+    # 의존성 체크
+    checks = {}
+
+    # Redis 체크
+    try:
+        if opportunity_watcher and opportunity_watcher.redis:
+            opportunity_watcher.redis.ping()
+            checks["redis"] = "ok"
+        else:
+            checks["redis"] = "not_initialized"
+    except Exception as e:
+        checks["redis"] = f"error: {str(e)[:50]}"
+
+    # RabbitMQ 체크
+    checks["rabbitmq"] = "ok" if rabbitmq_publisher else "not_initialized"
+
+    # 전체 상태 결정
+    if not is_ready:
+        status = "initializing"
+        http_status = 503
+    elif is_shutting_down:
+        status = "shutting_down"
+        http_status = 503  # 종료 중에는 새 트래픽 받지 않음
+    elif checks.get("redis") != "ok":
+        status = "degraded"
+        http_status = 200
+    else:
+        status = "healthy"
+        http_status = 200
+
+    response = {
+        "status": status,
+        "service": "buy-scanner",
+        "mode": "realtime-stream",
+        "ready": is_ready and not is_shutting_down,
+        "live": is_live,
+        "shutting_down": is_shutting_down,
+        "checks": checks,
+        "in_flight_tasks": shutdown_status.get("in_flight_tasks", 0),
+        "uptime_seconds": shutdown_status.get("uptime_seconds", 0)
+    }
+
+    return jsonify(response), http_status
 
 
 

@@ -46,6 +46,7 @@ from shared.kis.client import KISClient as KIS_API
 from shared.config import ConfigManager
 from shared.rabbitmq import RabbitMQPublisher
 from shared.notification import TelegramBot
+from shared.graceful_shutdown import GracefulShutdown, init_global_shutdown
 
 from monitor import PriceMonitor
 
@@ -67,12 +68,31 @@ rabbitmq_url = None
 rabbitmq_sell_queue = None
 tasks_publisher = None
 monitor_lock = threading.Lock()
+shutdown_handler: GracefulShutdown = None
+
+
+def _on_shutdown_callback():
+    """Graceful Shutdown 시 호출되는 콜백"""
+    global is_monitoring
+    logger.info("🛑 [Graceful Shutdown] price-monitor 종료 콜백 실행...")
+
+    # Price Monitor 정지
+    with monitor_lock:
+        is_monitoring = False
+        if price_monitor:
+            try:
+                price_monitor.stop_monitoring()
+                logger.info("   - PriceMonitor stop_monitoring() 호출")
+            except Exception as e:
+                logger.warning(f"   - PriceMonitor 정지 오류: {e}")
+
+    logger.info("✅ [Graceful Shutdown] price-monitor 콜백 완료")
 
 
 def initialize_service():
     """서비스 초기화"""
-    global price_monitor, rabbitmq_url, rabbitmq_sell_queue, tasks_publisher
-    
+    global price_monitor, rabbitmq_url, rabbitmq_sell_queue, tasks_publisher, shutdown_handler
+
     logger.info("=== Price Monitor Service 초기화 시작 (Redis Streams Mode) ===")
     load_dotenv()
     
@@ -121,12 +141,20 @@ def initialize_service():
             telegram_bot=telegram_bot
         )
         logger.info("✅ Price Monitor 초기화 완료")
-        
+
+        # 7. Graceful Shutdown Handler 초기화
+        shutdown_handler = init_global_shutdown(
+            timeout=30,
+            on_shutdown=_on_shutdown_callback,
+            service_name="price-monitor"
+        )
+        logger.info("✅ Graceful Shutdown Handler 초기화 완료")
+
         logger.info("=== Price Monitor Service 초기화 완료 ===")
         # 자동 시작 (환경변수에 따라)
         if os.getenv("AUTO_START_MONITOR", "true").lower() == "true":
             _start_monitor_thread(trigger_source="auto_start")
-            
+
         return True
         
     except Exception as e:
@@ -136,14 +164,55 @@ def initialize_service():
 
 @app.route('/health', methods=['GET'])
 def health_check():
-    if price_monitor:
-        return jsonify({
-            "status": "ok",
-            "service": "price-monitor",
-            "is_monitoring": is_monitoring
-        }), 200
+    """Enhanced health check with detailed status"""
+    is_ready = price_monitor is not None
+    is_live = True
+
+    # Graceful Shutdown 상태
+    shutdown_status = {}
+    if shutdown_handler:
+        shutdown_status = shutdown_handler.get_health_status()
+        is_shutting_down = shutdown_status.get("shutting_down", False)
     else:
-        return jsonify({"status": "initializing"}), 503
+        is_shutting_down = False
+        shutdown_status = {"shutting_down": False, "in_flight_tasks": 0, "uptime_seconds": 0}
+
+    # 의존성 체크
+    checks = {}
+
+    # RabbitMQ Publisher 체크
+    checks["rabbitmq"] = "ok" if tasks_publisher else "not_initialized"
+
+    # 모니터링 상태
+    checks["monitoring_active"] = "ok" if is_monitoring else "stopped"
+
+    # 전체 상태 결정
+    if not is_ready:
+        status = "initializing"
+        http_status = 503
+    elif is_shutting_down:
+        status = "shutting_down"
+        http_status = 503
+    elif not is_monitoring:
+        status = "degraded"
+        http_status = 200
+    else:
+        status = "healthy"
+        http_status = 200
+
+    response = {
+        "status": status,
+        "service": "price-monitor",
+        "is_monitoring": is_monitoring,
+        "ready": is_ready and not is_shutting_down,
+        "live": is_live,
+        "shutting_down": is_shutting_down,
+        "checks": checks,
+        "in_flight_tasks": shutdown_status.get("in_flight_tasks", 0),
+        "uptime_seconds": shutdown_status.get("uptime_seconds", 0)
+    }
+
+    return jsonify(response), http_status
 
 
 @app.route('/start', methods=['POST'])

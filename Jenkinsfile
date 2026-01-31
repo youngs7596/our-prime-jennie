@@ -102,26 +102,79 @@ pipeline {
                 }
             }
             steps {
-                echo '🚀 Deploying to development environment...'
+                echo '🚀 Rolling Deploy to development environment...'
 
                 withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
-                        git config --global --add safe.directory "*" 
-                        
+                        git config --global --add safe.directory "*"
+
                         cd /home/youngs75/projects/my-prime-jennie
 
                         # 1. 최신 코드 강제 동기화 (development 브랜치)
                         git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
                         git reset --hard FETCH_HEAD
                         git clean -fd
-                        
-                        # 2. --profile real 추가해서 기존 real 컨테이너 내리기
-                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real down --remove-orphans --timeout 30 || true
-                        
-                        # 3. --profile real 추가 + 강제 빌드 + 강제 재생성
-                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --build --force-recreate
-                        
-                        # 4. 상태 확인
+
+                        echo "=========================================="
+                        echo "🔄 Rolling Deployment 시작 (무중단 배포)"
+                        echo "=========================================="
+
+                        # 핵심 트레이딩 서비스 순서 (의존성 고려)
+                        # kis-gateway → buy-scanner → buy-executor → sell-executor → price-monitor
+                        TRADING_SERVICES="kis-gateway buy-scanner buy-executor sell-executor price-monitor"
+
+                        # 2. Rolling Deploy: 서비스별 순차 재시작
+                        for SERVICE in $TRADING_SERVICES; do
+                            echo ""
+                            echo "🔄 [$SERVICE] 배포 시작..."
+
+                            # 2-1. 새 이미지로 서비스 재시작 (--no-deps: 의존 서비스 재시작 방지)
+                            docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --build --no-deps $SERVICE
+
+                            # 2-2. Health check 대기 (최대 60초)
+                            CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-${SERVICE}-1"
+                            echo "   ⏳ Health check 대기 중: $CONTAINER_NAME"
+
+                            for i in $(seq 1 30); do
+                                # 컨테이너 상태 확인
+                                HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unknown")
+
+                                if [ "$HEALTH" = "healthy" ]; then
+                                    echo "   ✅ [$SERVICE] healthy (${i}회차 체크)"
+                                    break
+                                elif [ "$HEALTH" = "unhealthy" ]; then
+                                    echo "   ❌ [$SERVICE] unhealthy! 로그 확인 필요"
+                                    docker logs --tail 20 $CONTAINER_NAME
+                                    break
+                                fi
+
+                                if [ $i -eq 30 ]; then
+                                    echo "   ⚠️ [$SERVICE] Health check 타임아웃 (계속 진행)"
+                                fi
+
+                                sleep 2
+                            done
+
+                            # 2-3. 안정화 대기 (5초)
+                            echo "   💤 안정화 대기 (5초)..."
+                            sleep 5
+
+                            echo "   ✅ [$SERVICE] 배포 완료"
+                        done
+
+                        echo ""
+                        echo "=========================================="
+                        echo "🎯 기타 서비스 일괄 업데이트"
+                        echo "=========================================="
+
+                        # 3. 비핵심 서비스 일괄 업데이트 (scout-job, daily-briefing 등)
+                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --build
+
+                        # 4. 최종 상태 확인
+                        echo ""
+                        echo "=========================================="
+                        echo "📊 배포 완료 - 서비스 상태"
+                        echo "=========================================="
                         docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real ps
                     '''
                 }
