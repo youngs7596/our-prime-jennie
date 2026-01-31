@@ -32,13 +32,13 @@ pipeline {
                 }
             }
             steps {
-                echo '🧪 Running Unit Tests (with pip cache)...'
+                echo '🧪 Running Unit Tests (parallel with pytest-xdist)...'
                 sh '''
-                    # pip 캐시 활용 (--no-cache-dir 제거 → 빌드 속도 향상)
+                    # pip 캐시 활용
                     pip install -q -r requirements.txt
-                    
-                    # Run pytest for services tests
-                    pytest tests/services/ tests/shared/ -v --tb=short
+
+                    # [최적화] pytest-xdist로 병렬 테스트 실행 (-n auto: CPU 코어 수만큼 워커)
+                    pytest tests/services/ tests/shared/ -n auto -v --tb=short --dist=loadfile
                 '''
             }
             post {
@@ -57,11 +57,13 @@ pipeline {
                 }
             }
             steps {
-                echo '🔗 Running Integration Tests (reusing cached packages)...'
+                echo '🔗 Running Integration Tests (parallel)...'
                 sh '''
-                    # 캐시된 패키지 재사용 (-q: quiet mode)
+                    # 캐시된 패키지 재사용
                     pip install -q -r requirements.txt
-                    pytest tests/integration/ -v --tb=short --junitxml=integration-test-results.xml
+
+                    # [최적화] Integration Test도 병렬화 (-n 4: 4 workers, DB 경합 방지)
+                    pytest tests/integration/ -n 4 -v --tb=short --dist=loadfile --junitxml=integration-test-results.xml
                 '''
             }
             post {
