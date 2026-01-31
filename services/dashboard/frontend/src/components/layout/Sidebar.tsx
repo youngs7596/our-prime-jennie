@@ -34,12 +34,12 @@ export function Sidebar() {
     <aside
       className={cn(
         'fixed left-0 top-0 h-screen z-40 flex flex-col',
-        'border-r border-white/5 bg-black transition-all duration-200',
+        'border-r border-border bg-black transition-all duration-200',
         collapsed ? 'w-16' : 'w-[240px]'
       )}
     >
       {/* Logo */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-white/5">
+      <div className="flex items-center justify-between h-14 px-4 border-b border-border">
         <div
           className={cn(
             'flex items-center gap-3 overflow-hidden transition-all duration-200',
@@ -111,7 +111,7 @@ export function Sidebar() {
       </nav>
 
       {/* User & Logout */}
-      <div className="p-3 border-t border-white/5">
+      <div className="p-3 border-t border-border">
         <div
           className={cn(
             'flex items-center gap-3 mb-2 px-2',

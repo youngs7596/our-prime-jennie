@@ -4,44 +4,44 @@
 
 @layer base {
   :root {
-    /* Vercel/Stripe Minimal Dark Theme */
+    /* Vercel/Stripe Inspired Dark Theme - More Contrast */
 
-    /* Background: Pure black */
-    --background: 0 0% 0%;
-    --foreground: 0 0% 98%;
+    /* Background: Near black */
+    --background: 220 13% 5%;      /* #0D1117 - GitHub dark */
+    --foreground: 0 0% 98%;        /* #FAFAFA */
 
-    /* Card: Near black */
-    --card: 0 0% 4%;
+    /* Card: Slightly lighter for contrast */
+    --card: 220 13% 8%;            /* #151B23 */
     --card-foreground: 0 0% 98%;
 
     /* Popover */
-    --popover: 0 0% 4%;
+    --popover: 220 13% 10%;        /* #1C2129 */
     --popover-foreground: 0 0% 98%;
 
     /* Primary: White */
     --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
+    --primary-foreground: 220 13% 5%;
 
     /* Secondary */
-    --secondary: 0 0% 15%;
+    --secondary: 220 13% 18%;      /* #262D38 */
     --secondary-foreground: 0 0% 98%;
 
     /* Muted */
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 64%;
+    --muted: 220 13% 15%;          /* #21272F */
+    --muted-foreground: 220 9% 55%;  /* #8B949E */
 
-    /* Accent: Vercel Blue */
-    --accent: 210 100% 50%;
+    /* Accent: Blue */
+    --accent: 212 100% 48%;        /* #0070F3 - Vercel blue */
     --accent-foreground: 0 0% 98%;
 
     /* Destructive */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    /* Border */
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 210 100% 50%;
+    /* Border: More visible */
+    --border: 220 13% 20%;         /* #2D3748 */
+    --input: 220 13% 15%;
+    --ring: 212 100% 48%;
 
     --radius: 0.5rem;
   }
@@ -60,17 +60,17 @@
 }
 
 @layer components {
-  /* Minimal Card */
+  /* Card with visible border */
   .card {
-    @apply bg-card rounded-lg border border-white/5;
+    @apply bg-card rounded-lg border border-border;
   }
 
   .card-interactive {
-    @apply bg-card rounded-lg border border-white/5 transition-colors duration-200;
-    @apply hover:bg-white/[0.02] hover:border-white/10;
+    @apply bg-card rounded-lg border border-border transition-colors duration-200;
+    @apply hover:bg-secondary/50 hover:border-border/80;
   }
 
-  /* Profit Colors - no glow */
+  /* Profit Colors */
   .profit-positive {
     @apply text-green-500;
   }
@@ -98,7 +98,7 @@
     @apply font-mono tabular-nums;
   }
 
-  /* Status Indicators - minimal */
+  /* Status Indicators */
   .status-dot {
     @apply w-2 h-2 rounded-full;
   }
@@ -132,5 +132,5 @@
 
 /* Selection */
 ::selection {
-  @apply bg-white/20;
+  @apply bg-accent/30;
 }
