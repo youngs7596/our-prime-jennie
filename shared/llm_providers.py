@@ -633,7 +633,7 @@ class GeminiLLMProvider(BaseLLMProvider):
                         # Try parsing JSON manually if API returns text
                         try:
                             return json.loads(text)
-                        except:
+                        except (json.JSONDecodeError, TypeError):
                             # Try finding JSON block
                             start = text.find("{")
                             end = text.rfind("}") + 1

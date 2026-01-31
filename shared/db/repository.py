@@ -5,7 +5,7 @@ from typing import Dict, Iterable, List, Optional, Set
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from . import models
@@ -538,10 +538,10 @@ def get_config(session: Session, config_key: str, silent: bool = False) -> str |
         설정값 (문자열) 또는 None
     """
     try:
-        config = session.query(models.Config).filter(
-            models.Config.config_key == config_key
-        ).first()
-        
+        # SQLAlchemy 2.0 style
+        stmt = select(models.Config).where(models.Config.config_key == config_key)
+        config = session.scalars(stmt).first()
+
         if config:
             logger.info(f"✅ DB: CONFIG '{config_key}' 값 로드 성공.")
             return config.config_value
@@ -568,10 +568,10 @@ def set_config(session: Session, config_key: str, config_value: str, description
         성공 여부
     """
     try:
-        config = session.query(models.Config).filter(
-            models.Config.config_key == config_key
-        ).first()
-        
+        # SQLAlchemy 2.0 style
+        stmt = select(models.Config).where(models.Config.config_key == config_key)
+        config = session.scalars(stmt).first()
+
         if config:
             # UPDATE
             config.config_value = config_value
@@ -587,7 +587,7 @@ def set_config(session: Session, config_key: str, config_value: str, description
                 last_updated=datetime.now(timezone.utc)
             )
             session.add(config)
-        
+
         session.commit()
         logger.info(f"✅ DB: CONFIG '{config_key}' 값 '{config_value[:50]}...'로 저장 성공." if len(config_value) > 50 else f"✅ DB: CONFIG '{config_key}' 값 '{config_value}'로 저장 성공.")
         return True
@@ -599,16 +599,15 @@ def set_config(session: Session, config_key: str, config_value: str, description
 
 def delete_config(session: Session, config_key: str) -> bool:
     """
-    CONFIG 테이블에서 설정값 삭제 (SQLAlchemy ORM)
+    CONFIG 테이블에서 설정값 삭제 (SQLAlchemy 2.0 style)
     """
     try:
-        result = session.query(models.Config).filter(
-            models.Config.config_key == config_key
-        ).delete()
+        stmt = delete(models.Config).where(models.Config.config_key == config_key)
+        result = session.execute(stmt)
         session.commit()
-        if result:
+        if result.rowcount:
             logger.info(f"✅ DB: CONFIG '{config_key}' 삭제 성공.")
-        return result > 0
+        return result.rowcount > 0
     except Exception as e:
         session.rollback()
         logger.error(f"❌ DB: delete_config ('{config_key}') 실패! (에러: {e})")

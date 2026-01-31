@@ -120,3 +120,20 @@ with DAG(
         cwd='/opt/airflow',
         env=COMMON_ENV,
     )
+
+# 6. Data Cleanup (Weekly): 03:00 KST on Sunday
+# 보관 정책: NEWS_SENTIMENT(30일), STOCK_MINUTE_PRICE(7일), LLM_DECISION_LEDGER(90일) 등
+with DAG(
+    'data_cleanup_weekly',
+    default_args=default_args,
+    schedule_interval='0 3 * * 0',  # 매주 일요일 03:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
+    catchup=False,
+    tags=['maintenance', 'cleanup', 'retention'],
+) as dag_cleanup:
+    run_cleanup = BashOperator(
+        task_id='run_cleanup_old_data',
+        bash_command='python scripts/cleanup_old_data.py',
+        cwd='/opt/airflow',
+        env=COMMON_ENV,
+    )

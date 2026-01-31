@@ -723,7 +723,7 @@ class QuantScorer:
             try:
                 from shared import strategy
                 rsi = strategy.calculate_rsi(daily_prices_df, period=14)
-            except:
+            except (ImportError, AttributeError):
                 rsi = self._calculate_rsi(daily_prices_df, period=14)
             
             if rsi is not None:
@@ -841,7 +841,7 @@ class QuantScorer:
             rs = gain / loss
             rsi = 100 - (100 / (1 + rs))
             return float(rsi.iloc[-1])
-        except:
+        except (KeyError, IndexError, ZeroDivisionError, ValueError):
             return None
     
     # 뉴스 역신호 카테고리 (분석 결과 기각으로 미사용)

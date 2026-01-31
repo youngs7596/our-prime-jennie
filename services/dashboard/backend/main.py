@@ -472,16 +472,27 @@ async def get_news_sentiment_api(
             }
         else:
             # 전체 감성 점수 (상위 N개) - sentiment:* 키 조회
-            keys = r.keys("sentiment:*")
-            items = []
+            # [최적화] KEYS → SCAN 패턴 변경 (Redis 블로킹 방지)
             import json
 
-            # Redis 키에서 종목 코드 추출 (limit*2개만)
-            target_keys = keys[:limit * 2]
+            # scan_iter는 커서 기반으로 비블로킹 조회
+            target_keys = []
+            max_keys = limit * 2  # 필요한 만큼만 수집
+            for key in r.scan_iter(match="sentiment:*", count=100):
+                target_keys.append(key)
+                if len(target_keys) >= max_keys:
+                    break
+
+            if not target_keys:
+                return {"items": []}
+
+            # 키에서 종목 코드 추출
             stock_codes_needed = set()
+            key_code_map = {}  # key -> code 매핑
             for key in target_keys:
                 code = key.split(":")[-1] if isinstance(key, str) else key.decode().split(":")[-1]
                 stock_codes_needed.add(code)
+                key_code_map[key if isinstance(key, str) else key.decode()] = code
 
             # [최적화] 필요한 종목만 IN 쿼리로 조회 (N+1 문제 해결)
             stock_names_map = {}
@@ -496,23 +507,28 @@ async def get_news_sentiment_api(
                 except Exception as e:
                     logger.warning(f"종목명 매핑 조회 실패: {e}")
 
-            for key in target_keys:
-                code = key.split(":")[-1] if isinstance(key, str) else key.decode().split(":")[-1]
-                data = r.get(key)
-                if data:
-                    parsed = json.loads(data) if isinstance(data, str) else json.loads(data.decode())
+            # [최적화] MGET으로 한 번에 조회 (N+1 → 1 요청)
+            values = r.mget(target_keys)
+            items = []
+            for key, data in zip(target_keys, values):
+                if not data:
+                    continue
+                key_str = key if isinstance(key, str) else key.decode()
+                code = key_code_map.get(key_str, key_str.split(":")[-1])
+                parsed = json.loads(data) if isinstance(data, str) else json.loads(data.decode())
 
-                    # Redis에 저장된 이름 사용, 없으면 DB 매핑 사용, 없으면 코드 사용
-                    s_name = parsed.get("stock_name") or stock_names_map.get(code) or code
+                # Redis에 저장된 이름 사용, 없으면 DB 매핑 사용, 없으면 코드 사용
+                s_name = parsed.get("stock_name") or stock_names_map.get(code) or code
 
-                    items.append({
-                        "stock_code": code,
-                        "stock_name": s_name,
-                        "sentiment_score": parsed.get("score"),
-                        "reason": parsed.get("reason"),
-                        "source_url": parsed.get("source_url"),
-                        "updated_at": parsed.get("updated_at")
-                    })
+                items.append({
+                    "stock_code": code,
+                    "stock_name": s_name,
+                    "sentiment_score": parsed.get("score"),
+                    "reason": parsed.get("reason"),
+                    "source_url": parsed.get("source_url"),
+                    "updated_at": parsed.get("updated_at")
+                })
+
             items.sort(key=lambda x: x["sentiment_score"] or 0, reverse=True)
             return {"items": items[:limit]}
     except Exception as e:

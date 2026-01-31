@@ -80,8 +80,8 @@ def safe_request(client, method, url, headers=None, params=None, data=None, tr_i
                                 # 재시도 후에도 같은 에러면 실제 유지보수/장애로 판단
                                 logger.warning(f"   (Request) ⚠️ KIS API 유지보수/장애 모드 감지 (Empty 500 Error). 재시도 후에도 실패. (TR_ID: {tr_id})")
                                 return None
-                    except:
-                        pass # JSON 파싱 실패 시 일반 500 처리로 넘어감
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        pass  # JSON 파싱 실패 시 일반 500 처리로 넘어감
 
                     # 일반적인 500 에러는 1회 재시도
                     if attempt == 0:

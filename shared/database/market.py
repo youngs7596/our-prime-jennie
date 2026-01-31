@@ -472,8 +472,8 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
                     cat_part = parts[1].split("(")[0].strip()
                     if cat_part:
                         category = cat_part
-            except:
-                pass
+            except (IndexError, ValueError, AttributeError):
+                pass  # 카테고리 파싱 실패는 무시
 
         session.execute(text("""
             INSERT INTO STOCK_NEWS_SENTIMENT 

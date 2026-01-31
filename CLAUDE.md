@@ -259,14 +259,22 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-01-31 밤)
+### 최근 세션 (2026-02-01 새벽)
+- **주제**: DB 인덱스 & 시스템 최적화
+- **파일**: `.ai/sessions/session-2026-02-01-00-10.md`
+- **완료**:
+  - MariaDB 인덱스 54개 생성
+  - Frontend 번들 최적화 (lazy loading, chunk splitting)
+  - Redis KEYS → SCAN 패턴 변경
+  - 데이터 보관 정책 (1년) 및 Cleanup DAG
+  - bare except → 구체적 예외 타입
+  - SQLAlchemy 2.0 API 표준화 (repository.py)
+  - macro-aggregator 의존성 수정
+
+### 이전 세션 (2026-01-31 밤)
 - **주제**: Dashboard Redesign (Vercel/Stripe Style) & Performance Optimization
 - **파일**: `.ai/sessions/session-2026-01-31-22-00.md`
-- **완료**:
-  - 15페이지 → 6페이지 통합
-  - Raydium Neon → GitHub Dark 테마
-  - API 요청 80% 감소, KIS API 병렬화
-- **TODO**: DB 인덱스 실제 생성 (마이그레이션)
+- **완료**: 15페이지 → 6페이지 통합, GitHub Dark 테마
 
 ### 이전 세션 (2026-01-31 오후)
 - **주제**: Multi-Broker Gateway Abstraction 구현
@@ -283,5 +291,5 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
 
 ---
-*Last Updated: 2026-01-31*
+*Last Updated: 2026-02-01*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*

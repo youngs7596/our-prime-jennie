@@ -79,7 +79,8 @@ def cache_response(ttl_seconds: int = 5):
             if cached:
                 try:
                     return json.loads(cached)
-                except:
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    # 손상된 캐시 데이터는 무시하고 새로 조회
                     pass
             
             # 캐시 미스 -> 함수 실행

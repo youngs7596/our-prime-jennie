@@ -136,20 +136,23 @@ class DailyReporter:
                 'llm_score': w.get('llm_score', 0),
                 'filter_reason': w.get('filter_reason', 'N/A')[:100] if w.get('filter_reason') else 'N/A'
             } for w in watchlist[:10]]
-        except:
+        except (KeyError, TypeError, IndexError) as e:
+            logger.warning(f"Watchlist 요약 생성 실패: {e}")
             watchlist_summary = []
-        
+
         # 5. 최근 뉴스 (Top Global Sentiment)
         try:
             recent_news = self._get_recent_news_sentiment(session)
-        except:
+        except Exception as e:
+            logger.warning(f"최근 뉴스 조회 실패: {e}")
             recent_news = []
-            
+
         # 6. 어제 대비 AUM 변동
         try:
             yesterday_aum = self._get_yesterday_aum(session)
             daily_change_pct = ((total_aum - yesterday_aum) / yesterday_aum * 100) if yesterday_aum > 0 else 0
-        except:
+        except Exception as e:
+            logger.warning(f"AUM 변동 계산 실패: {e}")
             yesterday_aum = total_aum
             daily_change_pct = 0
             
@@ -378,7 +381,8 @@ class DailyReporter:
                 'score': row[2],
                 'headline': row[3][:50] if row[3] else 'N/A'
             } for row in rows]
-        except:
+        except Exception as e:
+            logger.warning(f"뉴스 감성 조회 실패: {e}")
             return []
     
 
@@ -479,7 +483,8 @@ class DailyReporter:
             result = session.execute(text("SELECT CONFIG_VALUE FROM CONFIG WHERE CONFIG_KEY = 'DAILY_AUM_YESTERDAY'"))
             row = result.fetchone()
             return float(row[0]) if row else 0
-        except:
+        except (TypeError, ValueError, IndexError) as e:
+            logger.warning(f"어제 AUM 조회 실패: {e}")
             return 0
     
     def _format_basic_message(self, data: Dict) -> str:

@@ -487,8 +487,8 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
     finally:
         try:
             sio.disconnect()
-        except:
-            pass
+        except Exception:
+            pass  # 소켓 정리 실패는 무시
 
 
 def _on_price_update(stock_code: str, current_price: float, current_high: float):

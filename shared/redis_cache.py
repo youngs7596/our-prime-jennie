@@ -472,13 +472,20 @@ def get_all_competitor_benefits(redis_client=None) -> Dict[str, Dict[str, Any]]:
         return {}
     
     try:
-        keys = r.keys("competitor_benefit:*")
+        # [최적화] KEYS → SCAN 패턴 변경 (Redis 블로킹 방지)
+        keys = list(r.scan_iter(match="competitor_benefit:*", count=100))
+        if not keys:
+            return {}
+
         results = {}
-        for key in keys:
-            stock_code = key.replace("competitor_benefit:", "")
-            data_json = r.get(key)
-            if data_json:
-                results[stock_code] = json.loads(data_json)
+        # [최적화] MGET으로 한 번에 조회
+        values = r.mget(keys)
+        for key, data_json in zip(keys, values):
+            if not data_json:
+                continue
+            key_str = key if isinstance(key, str) else key.decode()
+            stock_code = key_str.replace("competitor_benefit:", "")
+            results[stock_code] = json.loads(data_json)
         return results
     except Exception as e:
         logger.error(f"❌ [Redis] 경쟁사 수혜 전체 조회 실패: {e}")

@@ -209,8 +209,8 @@ def update_watchlist_financial_data(connection, stock_code):
         logger.error(f"   (Financial) {stock_code} 재무 데이터 업데이트 실패: {e}")
         try:
             connection.rollback()
-        except:
-            pass
+        except Exception:
+            pass  # 롤백 실패는 무시
         return False
 
 
