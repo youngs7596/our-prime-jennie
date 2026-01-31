@@ -5,25 +5,14 @@ import { OverviewPage } from '@/pages/Overview'
 import { PortfolioPage } from '@/pages/Portfolio'
 import { ScoutPage } from '@/pages/Scout'
 import { SystemPage } from '@/pages/System'
-import { NewsPage } from '@/pages/News'
-import { AnalystPage } from '@/pages/Analyst'
-import FactorsPage from '@/pages/Factors'
-
-import { TradingPage } from '@/pages/Trading'
+import { AnalyticsPage } from '@/pages/Analytics'
 import { SettingsPage } from '@/pages/Settings'
-import Operations from '@/pages/Operations'
-import VisualLogic from '@/pages/logic/VisualLogic'
-
-import { ArchitecturePage } from '@/pages/Architecture'
-import SuperPrimePage from '@/pages/SuperPrime'
-import { PerformancePage } from '@/pages/Performance'
 import { useAuthStore } from '@/store/authStore'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
   const checkAuth = useAuthStore((state) => state.checkAuth)
 
-  // 토큰 유효성 확인
   if (!isAuthenticated || !checkAuth()) {
     return <Navigate to="/login" replace />
   }
@@ -49,18 +38,10 @@ function App() {
         >
           <Route index element={<OverviewPage />} />
           <Route path="portfolio" element={<PortfolioPage />} />
-          <Route path="performance" element={<PerformancePage />} />
           <Route path="scout" element={<ScoutPage />} />
           <Route path="system" element={<SystemPage />} />
-          <Route path="news" element={<NewsPage />} />
-          <Route path="analyst" element={<AnalystPage />} />
-          <Route path="logic" element={<FactorsPage />} />
-          <Route path="visual-logic" element={<VisualLogic />} />
-          <Route path="trading" element={<TradingPage />} />
-          <Route path="operations" element={<Operations />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
-          <Route path="architecture" element={<ArchitecturePage />} />
-          <Route path="super-prime" element={<SuperPrimePage />} />
         </Route>
 
         {/* Fallback */}

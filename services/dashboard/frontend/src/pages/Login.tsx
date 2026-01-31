@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -35,41 +34,23 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-raydium-dark bg-grid-pattern flex items-center justify-center p-4">
-      {/* Background Effects - Raydium Neon Glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-raydium-purple/30 rounded-full blur-[150px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-raydium-cyan/20 rounded-full blur-[150px] animate-pulse" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-raydium-blue/10 rounded-full blur-[200px]" />
-      </div>
-      <div className="noise-overlay" />
-
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md relative z-10"
-      >
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
         {/* Logo */}
-        <motion.div
-          initial={{ scale: 0.8 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="flex flex-col items-center mb-8"
-        >
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-raydium-purple to-raydium-cyan flex items-center justify-center mb-4 shadow-neon-purple animate-float">
-            <span className="text-white font-bold text-3xl font-display">J</span>
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-16 h-16 rounded-xl bg-white flex items-center justify-center mb-4">
+            <span className="text-black font-bold text-2xl">J</span>
           </div>
-          <h1 className="text-3xl font-display font-bold gradient-text">
+          <h1 className="text-2xl font-semibold text-white">
             My Prime Jennie
           </h1>
-          <p className="text-raydium-cyan/70 mt-2">AI Trading Dashboard</p>
-        </motion.div>
+          <p className="text-muted-foreground mt-1 text-sm">AI Trading Dashboard</p>
+        </div>
 
         {/* Login Card */}
-        <Card neon="purple" className="border-raydium-purple/30">
+        <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-xl gradient-text">로그인</CardTitle>
+            <CardTitle className="text-lg">로그인</CardTitle>
             <CardDescription>
               지휘 통제실에 접속하려면 로그인하세요
             </CardDescription>
@@ -105,7 +86,7 @@ export function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-raydium-purpleLight transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white transition-colors"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -117,13 +98,9 @@ export function LoginPage() {
               </div>
 
               {error && (
-                <motion.p
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-sm text-red-400 text-center"
-                >
+                <p className="text-sm text-red-400 text-center">
                   {error}
-                </motion.p>
+                </p>
               )}
 
               <Button
@@ -148,7 +125,7 @@ export function LoginPage() {
         <p className="text-center text-xs text-muted-foreground mt-6">
           © 2025 My Prime Jennie. All rights reserved.
         </p>
-      </motion.div>
+      </div>
     </div>
   )
 }

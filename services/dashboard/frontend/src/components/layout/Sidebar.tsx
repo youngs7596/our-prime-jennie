@@ -1,85 +1,70 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
 import {
   LayoutDashboard,
   Briefcase,
   Brain,
   Activity,
-  Newspaper,
   Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Target,
-  LineChart,
-  Map,
-  Zap,
-  Server,
-
+  BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { useState } from 'react'
 
 const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Overview' },
+  { path: '/', icon: LayoutDashboard, label: 'Home' },
   { path: '/portfolio', icon: Briefcase, label: 'Portfolio' },
-  { path: '/performance', icon: LineChart, label: '투자 성과' },
-  { path: '/scout', icon: Brain, label: 'Scout Pipeline' },
-  { path: '/system', icon: Activity, label: 'System Status' },
-  { path: '/news', icon: Newspaper, label: 'News & Sentiment' },
-  { path: '/analyst', icon: Target, label: 'AI Analyst' },
-  { path: '/logic', icon: Brain, label: 'Trading Logic' },
-  {
-    path: '/visual-logic',
-    icon: LineChart,
-    label: 'Visual Logic',
-  },
-  { path: '/trading', icon: Zap, label: 'Trading' },
-
-  { path: '/architecture', icon: Map, label: 'Architecture' },
-  { path: '/super-prime', icon: Target, label: 'Super Prime' },
+  { path: '/scout', icon: Brain, label: 'Scout' },
+  { path: '/system', icon: Activity, label: 'System' },
+  { path: '/analytics', icon: BarChart3, label: 'Analytics' },
   { path: '/settings', icon: Settings, label: 'Settings' },
-  { path: '/arrow-buttons', icon: LineChart, label: 'Dev: UI' },
-  { path: '/operations', icon: Server, label: 'Operations' },
 ]
-
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
   const { logout, user } = useAuthStore()
 
-  // Helper to check if a path is active
-  const isItemActive = (path: string) => location.pathname === path;
+  const isItemActive = (path: string) => location.pathname === path
 
   return (
-    <motion.aside
-      initial={{ width: 280 }}
-      animate={{ width: collapsed ? 80 : 280 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="fixed left-0 top-0 h-screen z-40 flex flex-col border-r border-raydium-purple/20 bg-raydium-darker/90 backdrop-blur-xl"
+    <aside
+      className={cn(
+        'fixed left-0 top-0 h-screen z-40 flex flex-col',
+        'border-r border-white/5 bg-black transition-all duration-200',
+        collapsed ? 'w-16' : 'w-[240px]'
+      )}
     >
-      {/* Logo - Raydium Neon Style */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-raydium-purple/20">
-        <motion.div
-          initial={{ opacity: 1 }}
-          animate={{ opacity: collapsed ? 0 : 1 }}
-          className="flex items-center gap-3"
+      {/* Logo */}
+      <div className="flex items-center justify-between h-14 px-4 border-b border-white/5">
+        <div
+          className={cn(
+            'flex items-center gap-3 overflow-hidden transition-all duration-200',
+            collapsed && 'opacity-0 w-0'
+          )}
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-raydium-purple to-raydium-blue flex items-center justify-center shadow-neon-purple">
-            <span className="text-white font-bold text-lg">J</span>
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
+            <span className="text-black font-semibold text-sm">J</span>
           </div>
-          <div className="overflow-hidden">
-            <h1 className="font-display font-bold text-lg gradient-text">
-              Jennie
-            </h1>
-            <p className="text-xs text-raydium-cyan/70">AI Trading</p>
+          <span className="font-semibold text-sm text-white whitespace-nowrap">
+            Jennie
+          </span>
+        </div>
+        {collapsed && (
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
+            <span className="text-black font-semibold text-sm">J</span>
           </div>
-        </motion.div>
+        )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-lg hover:bg-raydium-purple/20 transition-colors text-muted-foreground hover:text-raydium-purpleLight"
+          className={cn(
+            'p-1.5 rounded-md transition-colors',
+            'text-muted-foreground hover:text-white hover:bg-white/5',
+            collapsed && 'mx-auto'
+          )}
         >
           {collapsed ? (
             <ChevronRight className="w-4 h-4" />
@@ -89,78 +74,89 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Navigation - Raydium Neon Style */}
-      <nav className="flex-1 py-4 px-2 space-y-1 overflow-y-auto custom-scrollbar">
+      {/* Navigation */}
+      <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto custom-scrollbar">
         {navItems.map((item) => {
-          const active = isItemActive(item.path);
+          const active = isItemActive(item.path)
 
           return (
-            <div key={item.path}>
-              <NavLink
-                to={item.path}
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md transition-colors duration-150',
+                'text-muted-foreground hover:text-white hover:bg-white/5',
+                active && 'bg-white/10 text-white'
+              )}
+            >
+              {/* Active indicator bar */}
+              <div
                 className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-300',
-                  'hover:bg-raydium-purple/10',
-                  active && 'bg-raydium-purple/20 border border-raydium-purple/40 shadow-neon-purple'
+                  'absolute left-0 w-0.5 h-5 rounded-r-full bg-white transition-opacity',
+                  active ? 'opacity-100' : 'opacity-0'
+                )}
+              />
+              <item.icon className="w-[18px] h-[18px] flex-shrink-0" />
+              <span
+                className={cn(
+                  'text-sm font-medium overflow-hidden whitespace-nowrap transition-all duration-200',
+                  collapsed ? 'opacity-0 w-0' : 'opacity-100'
                 )}
               >
-                <item.icon
-                  className={cn(
-                    'w-5 h-5 flex-shrink-0 transition-colors duration-300',
-                    active ? 'text-raydium-purpleLight' : 'text-muted-foreground'
-                  )}
-                />
-                <motion.span
-                  initial={{ opacity: 1 }}
-                  animate={{ opacity: collapsed ? 0 : 1, width: collapsed ? 0 : 'auto' }}
-                  className={cn(
-                    'text-sm font-medium overflow-hidden whitespace-nowrap transition-colors duration-300',
-                    active ? 'text-white' : 'text-muted-foreground'
-                  )}
-                >
-                  {item.label}
-                </motion.span>
-              </NavLink>
-            </div>
+                {item.label}
+              </span>
+            </NavLink>
           )
         })}
       </nav>
 
-      {/* User & Logout - Raydium Style */}
-      <div className="p-4 border-t border-raydium-purple/20">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-raydium-purple to-raydium-cyan flex items-center justify-center shadow-neon-purple">
-            <span className="text-white font-medium">
+      {/* User & Logout */}
+      <div className="p-3 border-t border-white/5">
+        <div
+          className={cn(
+            'flex items-center gap-3 mb-2 px-2',
+            collapsed && 'justify-center'
+          )}
+        >
+          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-sm font-medium">
               {user?.username?.[0]?.toUpperCase() || 'U'}
             </span>
           </div>
-          <motion.div
-            initial={{ opacity: 1 }}
-            animate={{ opacity: collapsed ? 0 : 1 }}
-            className="overflow-hidden"
+          <div
+            className={cn(
+              'overflow-hidden transition-all duration-200',
+              collapsed ? 'opacity-0 w-0' : 'opacity-100'
+            )}
           >
-            <p className="text-sm font-medium text-white">{user?.username || 'User'}</p>
-            <p className="text-xs text-raydium-cyan/70">{user?.role || 'admin'}</p>
-          </motion.div>
+            <p className="text-sm font-medium text-white truncate">
+              {user?.username || 'User'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {user?.role || 'admin'}
+            </p>
+          </div>
         </div>
         <button
           onClick={logout}
           className={cn(
-            'flex items-center gap-3 w-full px-3 py-2 rounded-xl',
+            'flex items-center gap-3 w-full px-3 py-2 rounded-md',
             'text-muted-foreground hover:text-red-400 hover:bg-red-500/10',
-            'transition-all duration-300 hover:shadow-neon-pink'
+            'transition-colors duration-150',
+            collapsed && 'justify-center'
           )}
         >
-          <LogOut className="w-5 h-5 flex-shrink-0" />
-          <motion.span
-            initial={{ opacity: 1 }}
-            animate={{ opacity: collapsed ? 0 : 1 }}
-            className="text-sm font-medium"
+          <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
+          <span
+            className={cn(
+              'text-sm font-medium overflow-hidden whitespace-nowrap transition-all duration-200',
+              collapsed ? 'opacity-0 w-0' : 'opacity-100'
+            )}
           >
             Logout
-          </motion.span>
+          </span>
         </button>
       </div>
-    </motion.aside>
+    </aside>
   )
 }

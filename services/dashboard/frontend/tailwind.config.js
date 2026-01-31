@@ -48,32 +48,9 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Raydium Neon Theme Colors
-        raydium: {
-          dark: "#0C0D14",
-          darker: "#080910",
-          card: "#131928",
-          cardHover: "#1a2235",
-          purple: "#7C3AED",
-          purpleLight: "#A855F7",
-          purpleBright: "#C084FC",
-          blue: "#3B82F6",
-          cyan: "#22D3EE",
-          cyanLight: "#67E8F9",
-          pink: "#EC4899",
-          magenta: "#D946EF",
-        },
-        // Jennie (하위 호환 - Raydium 매핑)
-        jennie: {
-          pink: "#EC4899",
-          purple: "#7C3AED",
-          blue: "#22D3EE",
-          gold: "#FBBF24",
-          dark: "#0C0D14",
-          darker: "#080910",
-        },
+        // Profit/Loss colors
         profit: {
-          positive: "#10B981",
+          positive: "#22C55E",
           negative: "#EF4444",
         },
       },
@@ -83,9 +60,8 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "Pretendard", "system-ui", "sans-serif"],
-        display: ["Outfit", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["Inter", "Geist Sans", "system-ui", "sans-serif"],
+        mono: ["Geist Mono", "JetBrains Mono", "monospace"],
       },
       keyframes: {
         "accordion-down": {
@@ -96,56 +72,20 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
         },
-        "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 20px rgba(124, 58, 237, 0.4)" },
-          "50%": { boxShadow: "0 0 40px rgba(124, 58, 237, 0.7)" },
+        "fade-in": {
+          from: { opacity: 0 },
+          to: { opacity: 1 },
         },
-        "neon-pulse": {
-          "0%, 100%": { opacity: 1 },
-          "50%": { opacity: 0.7 },
-        },
-        "gradient-shift": {
-          "0%": { backgroundPosition: "0% 50%" },
-          "50%": { backgroundPosition: "100% 50%" },
-          "100%": { backgroundPosition: "0% 50%" },
-        },
-        "float": {
-          "0%, 100%": { transform: "translateY(0)" },
-          "50%": { transform: "translateY(-10px)" },
-        },
-        "shimmer": {
-          "0%": { backgroundPosition: "-200% 0" },
-          "100%": { backgroundPosition: "200% 0" },
-        },
-        "glow-border": {
-          "0%, 100%": { borderColor: "rgba(124, 58, 237, 0.5)" },
-          "50%": { borderColor: "rgba(34, 211, 238, 0.5)" },
+        "slide-up": {
+          from: { opacity: 0, transform: "translateY(10px)" },
+          to: { opacity: 1, transform: "translateY(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
-        "neon-pulse": "neon-pulse 2s ease-in-out infinite",
-        "gradient-shift": "gradient-shift 3s ease infinite",
-        "float": "float 3s ease-in-out infinite",
-        "shimmer": "shimmer 2s linear infinite",
-        "glow-border": "glow-border 3s ease-in-out infinite",
-      },
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "raydium-gradient": "linear-gradient(135deg, #7C3AED 0%, #3B82F6 50%, #22D3EE 100%)",
-        "raydium-dark": "linear-gradient(180deg, #0C0D14 0%, #080910 100%)",
-        "neon-glow": "radial-gradient(ellipse at center, rgba(124, 58, 237, 0.15) 0%, transparent 70%)",
-        // Legacy
-        "jennie-gradient": "linear-gradient(135deg, #7C3AED 0%, #3B82F6 50%, #22D3EE 100%)",
-      },
-      boxShadow: {
-        "neon-purple": "0 0 20px rgba(124, 58, 237, 0.5), 0 0 40px rgba(124, 58, 237, 0.3)",
-        "neon-cyan": "0 0 20px rgba(34, 211, 238, 0.5), 0 0 40px rgba(34, 211, 238, 0.3)",
-        "neon-pink": "0 0 20px rgba(236, 72, 153, 0.5), 0 0 40px rgba(236, 72, 153, 0.3)",
-        "card-glow": "0 4px 30px rgba(0, 0, 0, 0.3), 0 0 1px rgba(124, 58, 237, 0.3)",
+        "fade-in": "fade-in 0.2s ease-out",
+        "slide-up": "slide-up 0.3s ease-out",
       },
     },
   },

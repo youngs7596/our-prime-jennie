@@ -3,20 +3,12 @@ import { cn } from '@/lib/utils'
 
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { glow?: boolean; neon?: 'purple' | 'cyan' | 'pink' }
->(({ className, glow, neon, ...props }, ref) => (
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      // Raydium 스타일: 반투명 다크 카드 + 네온 글로우
-      'rounded-xl border border-white/5 bg-raydium-card/60 backdrop-blur-xl text-foreground',
-      'shadow-card-glow',
-      'transition-all duration-300',
-      glow && 'shadow-neon-purple border-raydium-purple/30',
-      neon === 'purple' && 'border-raydium-purple/40 shadow-neon-purple',
-      neon === 'cyan' && 'border-raydium-cyan/40 shadow-neon-cyan',
-      neon === 'pink' && 'border-raydium-pink/40 shadow-neon-pink',
-      'hover:border-raydium-purple/20 hover:bg-raydium-cardHover/60',
+      'rounded-lg border border-white/5 bg-card text-card-foreground',
       className
     )}
     {...props}
@@ -30,7 +22,7 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex flex-col space-y-1.5 p-6', className)}
+    className={cn('flex flex-col space-y-1.5 p-5', className)}
     {...props}
   />
 ))
@@ -43,7 +35,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      'text-lg font-semibold leading-none tracking-tight text-white',
+      'text-sm font-medium leading-none tracking-tight text-white',
       className
     )}
     {...props}
@@ -67,7 +59,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+  <div ref={ref} className={cn('p-5 pt-0', className)} {...props} />
 ))
 CardContent.displayName = 'CardContent'
 
@@ -77,7 +69,7 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('flex items-center p-6 pt-0', className)}
+    className={cn('flex items-center p-5 pt-0', className)}
     {...props}
   />
 ))
