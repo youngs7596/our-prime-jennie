@@ -164,6 +164,7 @@ my-prime-jennie/
 │   ├── airflow/
 │   └── ...
 ├── shared/             # 공유 모듈
+│   ├── broker/        # 멀티 브로커 추상화 (NEW)
 │   ├── kis/           # 한투 API 클라이언트
 │   ├── macro_insight/ # 매크로 인사이트
 │   ├── database.py    # DB 연결
@@ -258,11 +259,16 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-01-31)
+### 최근 세션 (2026-01-31 오후)
+- **주제**: Multi-Broker Gateway Abstraction 구현
+- **파일**: `.ai/sessions/session-2026-01-31-16-20.md`
+- **완료**: BrokerClient Protocol, BrokerFactory, KISBrokerAdapter
+- **TODO**: 키움증권 REST API 연동 (https://openapi.kiwoom.com)
+
+### 이전 세션 (2026-01-31 오전)
 - **주제**: 무중단 배포(Zero-Downtime Deployment) 구현 및 빌드 최적화
 - **파일**: `.ai/sessions/session-2026-01-31-13-33.md`
 - **완료**: Graceful Shutdown, Rolling Deployment, pytest 병렬화
-- **결과**: 빌드 시간 7분 42초 → 6분 07초 (20% 개선)
 
 ### 이전 세션 (2026-01-30)
 - **주제**: 진입 로직 개선 (Cooldown, GOLDEN_CROSS 거래량, No-Trade Window, DIP_BUY)
