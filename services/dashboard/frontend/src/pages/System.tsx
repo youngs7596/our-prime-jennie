@@ -15,6 +15,7 @@ import {
   Settings,
   Play,
   RotateCw,
+  GitBranch,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -22,8 +23,10 @@ import { systemApi, configApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
+import LogicVisualization from '@/components/LogicVisualization'
+import SuperPrimeVisualization from '@/components/SuperPrimeVisualization'
 
-type Tab = 'infrastructure' | 'workflows' | 'logs' | 'operations'
+type Tab = 'infrastructure' | 'workflows' | 'logs' | 'architecture' | 'operations'
 
 const SERVICES = [
   'scout-job',
@@ -72,7 +75,7 @@ export function SystemPage() {
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-white/5 rounded-lg">
-          {(['infrastructure', 'workflows', 'logs', 'operations'] as Tab[]).map((tab) => (
+          {(['infrastructure', 'workflows', 'logs', 'architecture', 'operations'] as Tab[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -92,6 +95,7 @@ export function SystemPage() {
       {activeTab === 'infrastructure' && <InfrastructureTab />}
       {activeTab === 'workflows' && <WorkflowsTab />}
       {activeTab === 'logs' && <LogsTab />}
+      {activeTab === 'architecture' && <ArchitectureTab />}
       {activeTab === 'operations' && <OperationsTab />}
     </div>
   )
@@ -591,10 +595,10 @@ function LogsTab() {
         <select
           value={selectedService}
           onChange={(e) => setSelectedService(e.target.value)}
-          className="bg-white/5 border border-white/10 text-white text-sm rounded-md px-3 py-2"
+          className="bg-card border border-border text-white text-sm rounded-md px-3 py-2 [&>option]:bg-card [&>option]:text-white"
         >
           {SERVICES.map((s) => (
-            <option key={s} value={s}>
+            <option key={s} value={s} className="bg-card text-white">
               {s}
             </option>
           ))}
@@ -651,6 +655,48 @@ function LogsTab() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function ArchitectureTab() {
+  const [view, setView] = useState<'logic' | 'superprime'>('logic')
+
+  return (
+    <div className="space-y-6">
+      {/* View Toggle */}
+      <div className="flex items-center gap-4">
+        <div className="flex gap-1 p-1 bg-white/5 rounded-lg">
+          <button
+            onClick={() => setView('logic')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+              view === 'logic' ? 'bg-white text-black' : 'text-muted-foreground hover:text-white'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <GitBranch className="w-4 h-4" />
+              Trading Logic
+            </div>
+          </button>
+          <button
+            onClick={() => setView('superprime')}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-md transition-colors',
+              view === 'superprime' ? 'bg-white text-black' : 'text-muted-foreground hover:text-white'
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Super Prime
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Visualization Content */}
+      {view === 'logic' && <LogicVisualization />}
+      {view === 'superprime' && <SuperPrimeVisualization />}
     </div>
   )
 }

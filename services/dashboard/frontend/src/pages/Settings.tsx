@@ -164,12 +164,12 @@ function GeneralTab() {
               className="max-w-sm"
             />
             <select
-              className="border border-white/10 rounded-md px-2 py-2 text-sm bg-white/5 text-white"
+              className="border border-border rounded-md px-2 py-2 text-sm bg-card text-white [&>option]:bg-card [&>option]:text-white"
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
             >
               {categories.map((c) => (
-                <option key={c} value={c}>
+                <option key={c} value={c} className="bg-card text-white">
                   {c}
                 </option>
               ))}
