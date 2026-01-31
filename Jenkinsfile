@@ -116,61 +116,61 @@ pipeline {
                         git clean -fd
 
                         echo "=========================================="
-                        echo "🔄 Rolling Deployment 시작 (무중단 배포)"
+                        echo "🔧 Phase 1: 모든 이미지 병렬 빌드"
+                        echo "=========================================="
+
+                        # [최적화] 모든 이미지를 먼저 병렬로 빌드 (배포 전)
+                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real build --parallel
+
+                        echo ""
+                        echo "=========================================="
+                        echo "🔄 Phase 2: Rolling Deployment (무중단 배포)"
                         echo "=========================================="
 
                         # 핵심 트레이딩 서비스 순서 (의존성 고려)
-                        # kis-gateway → buy-scanner → buy-executor → sell-executor → price-monitor
                         TRADING_SERVICES="kis-gateway buy-scanner buy-executor sell-executor price-monitor"
 
-                        # 2. Rolling Deploy: 서비스별 순차 재시작
+                        # Rolling Deploy: 서비스별 순차 재시작 (빌드 없이 이미지만 교체)
                         for SERVICE in $TRADING_SERVICES; do
                             echo ""
                             echo "🔄 [$SERVICE] 배포 시작..."
 
-                            # 2-1. 새 이미지로 서비스 재시작 (--no-deps: 의존 서비스 재시작 방지)
-                            docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --build --no-deps $SERVICE
+                            # 이미 빌드된 이미지로 서비스 재시작 (--no-build: 빌드 스킵)
+                            docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --no-build --no-deps $SERVICE
 
-                            # 2-2. Health check 대기 (최대 60초)
+                            # Health check 대기 (최대 40초, 2초 간격)
                             CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-${SERVICE}-1"
-                            echo "   ⏳ Health check 대기 중: $CONTAINER_NAME"
+                            echo "   ⏳ Health check 대기 중..."
 
-                            for i in $(seq 1 30); do
-                                # 컨테이너 상태 확인
+                            for i in $(seq 1 20); do
                                 HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unknown")
 
                                 if [ "$HEALTH" = "healthy" ]; then
-                                    echo "   ✅ [$SERVICE] healthy (${i}회차 체크)"
+                                    echo "   ✅ [$SERVICE] healthy (${i}회차)"
                                     break
                                 elif [ "$HEALTH" = "unhealthy" ]; then
-                                    echo "   ❌ [$SERVICE] unhealthy! 로그 확인 필요"
-                                    docker logs --tail 20 $CONTAINER_NAME
+                                    echo "   ❌ [$SERVICE] unhealthy!"
+                                    docker logs --tail 10 $CONTAINER_NAME
                                     break
                                 fi
 
-                                if [ $i -eq 30 ]; then
-                                    echo "   ⚠️ [$SERVICE] Health check 타임아웃 (계속 진행)"
-                                fi
-
+                                [ $i -eq 20 ] && echo "   ⚠️ [$SERVICE] 타임아웃"
                                 sleep 2
                             done
 
-                            # 2-3. 안정화 대기 (5초)
-                            echo "   💤 안정화 대기 (5초)..."
-                            sleep 5
-
+                            # [최적화] 안정화 대기 5초 → 2초
+                            sleep 2
                             echo "   ✅ [$SERVICE] 배포 완료"
                         done
 
                         echo ""
                         echo "=========================================="
-                        echo "🎯 기타 서비스 일괄 업데이트"
+                        echo "🎯 Phase 3: 기타 서비스 일괄 배포"
                         echo "=========================================="
 
-                        # 3. 비핵심 서비스 일괄 업데이트 (scout-job, daily-briefing 등)
-                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --build
+                        # 비핵심 서비스 일괄 업데이트 (이미 빌드됨, --no-build)
+                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --no-build
 
-                        # 4. 최종 상태 확인
                         echo ""
                         echo "=========================================="
                         echo "📊 배포 완료 - 서비스 상태"
