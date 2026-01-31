@@ -243,10 +243,12 @@ services:
       - infrastructure/env-vars-wsl.yaml
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro
+      - /docker_data/kis_tokens:/app/tokens
     environment:
       - PORT=8080
       - SECRETS_FILE=/app/config/secrets.json
       - GUNICORN_CMD_ARGS=--timeout 600
+      - KIS_TOKEN_FILE_PATH=/app/tokens/kis_token.json
     # WSL2 mirrored mode: 127.0.0.1로 MariaDB/Redis 접근
     network_mode: host
     restart: unless-stopped

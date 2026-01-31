@@ -321,7 +321,7 @@ def initialize_kis_client():
             base_url=os.getenv(f"KIS_BASE_URL_{trading_mode}"),
             account_prefix=auth.get_secret(os.getenv(f"{trading_mode}_SECRET_ID_ACCOUNT_PREFIX"), os.getenv("GCP_PROJECT_ID")),
             account_suffix=os.getenv("KIS_ACCOUNT_SUFFIX"),
-            token_file_path="/tmp/kis_token_gateway.json",
+            token_file_path=os.getenv("KIS_TOKEN_FILE_PATH", "/tmp/kis_token_gateway.json"),
             trading_mode=trading_mode
         )
         
