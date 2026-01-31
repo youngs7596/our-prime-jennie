@@ -5,4 +5,7 @@ norecursedirs = [".venv", "venv", "node_modules", ".git", "__pycache__", "*.egg-
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
+    "e2e: End-to-end tests with mock infrastructure",
 ]
+# Exclude e2e tests from default run (they require more setup)
+addopts = "-m 'not e2e'"

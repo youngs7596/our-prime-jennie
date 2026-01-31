@@ -1,0 +1,78 @@
+version: '3.8'
+
+# E2E Test Infrastructure
+# Usage:
+#   docker-compose -f tests/docker/docker-compose.e2e.yml up -d
+#   pytest tests/e2e/ -v -m e2e
+#   docker-compose -f tests/docker/docker-compose.e2e.yml down
+
+services:
+  # RabbitMQ for message queue testing
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: e2e-rabbitmq
+    ports:
+      - "5673:5672"   # AMQP port (non-default to avoid conflicts)
+      - "15673:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: e2e_user
+      RABBITMQ_DEFAULT_PASS: e2e_pass
+      RABBITMQ_DEFAULT_VHOST: e2e_vhost
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_e2e_data:/var/lib/rabbitmq
+    networks:
+      - e2e_network
+
+  # Redis for caching and streams testing
+  redis:
+    image: redis:7-alpine
+    container_name: e2e-redis
+    ports:
+      - "6380:6379"  # Non-default port to avoid conflicts
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_e2e_data:/data
+    networks:
+      - e2e_network
+
+  # MariaDB for database testing (optional - use SQLite for faster tests)
+  mariadb:
+    image: mariadb:10.11
+    container_name: e2e-mariadb
+    ports:
+      - "3307:3306"  # Non-default port
+    environment:
+      MYSQL_ROOT_PASSWORD: e2e_root_pass
+      MYSQL_DATABASE: e2e_trading
+      MYSQL_USER: e2e_user
+      MYSQL_PASSWORD: e2e_pass
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - mariadb_e2e_data:/var/lib/mysql
+    networks:
+      - e2e_network
+    profiles:
+      - full  # Only start with --profile full
+
+networks:
+  e2e_network:
+    driver: bridge
+
+volumes:
+  rabbitmq_e2e_data:
+  redis_e2e_data:
+  mariadb_e2e_data:
