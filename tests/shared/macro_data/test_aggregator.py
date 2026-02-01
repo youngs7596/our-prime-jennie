@@ -120,7 +120,9 @@ class TestEnhancedMacroAggregator:
         """빈 데이터 통합"""
         snapshot = mock_aggregator.aggregate([], [])
 
-        assert snapshot.snapshot_date == date.today()
+        # aggregator는 KST 기준 날짜 사용
+        expected_date = datetime.now(KST).date()
+        assert snapshot.snapshot_date == expected_date
         assert snapshot.get_completeness_score() == 0.0
 
     def test_aggregate_with_data(self, mock_aggregator):
