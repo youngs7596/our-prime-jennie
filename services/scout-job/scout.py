@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: v1.0
+# Version: v1.1 - EnhancedTradingContext 통합 (매크로 섹터 신호, Risk-Off 레벨)
 # 작업 LLM: Claude Sonnet 4.5, Claude Opus 4.5
 """
 Scout Job - 종목 발굴 파이프라인
@@ -588,6 +588,39 @@ def main():
             
             if penalty_count > 0:
                 logger.info(f"   (Penalty) 📉 {penalty_count}개 후보에 섹터 하락 페널티 경고 적용")
+
+            # [v1.1] EnhancedTradingContext 섹터 신호 조기 적용 (scout 단계)
+            # 3현자 Council 분석 결과의 회피/선호 섹터 반영
+            try:
+                from shared.macro_insight import get_enhanced_trading_context
+                scout_trading_ctx = get_enhanced_trading_context()
+                if scout_trading_ctx:
+                    avoid_count = 0
+                    favor_count = 0
+
+                    for code, info in candidate_stocks.items():
+                        if code == '0001':
+                            continue
+                        stock_sector = info.get('sector', '기타')
+
+                        # 회피 섹터: 경고 추가
+                        if stock_sector in scout_trading_ctx.avoid_sectors:
+                            info['reasons'].append(f"⚠️ Council 회피 섹터 ({stock_sector})")
+                            info['is_council_avoid'] = True
+                            avoid_count += 1
+
+                        # 선호 섹터: 보너스 태그 추가
+                        if stock_sector in scout_trading_ctx.favor_sectors:
+                            info['reasons'].append(f"✨ Council 선호 섹터 ({stock_sector})")
+                            info['is_council_favor'] = True
+                            favor_count += 1
+
+                    if avoid_count > 0 or favor_count > 0:
+                        logger.info(f"   (Council) 섹터 신호 적용: 선호 {favor_count}개, 회피 {avoid_count}개")
+            except ImportError:
+                pass
+            except Exception as ctx_e:
+                logger.debug(f"   (Council) 섹터 신호 적용 실패: {ctx_e}")
             
             # [Filter] 제외 종목 필터링 (v1.1)
             excluded_stocks = [s.strip() for s in os.getenv("EXCLUDED_STOCKS", "").split(",") if s.strip()]
@@ -838,6 +871,24 @@ def main():
                     
                     # QuantScorer 초기화
                     quant_scorer = QuantScorer(session, market_regime=current_regime)
+
+                    # [v1.1] EnhancedTradingContext 로드 (매크로 인사이트 통합)
+                    trading_context = None
+                    try:
+                        from shared.macro_insight import get_enhanced_trading_context
+                        trading_context = get_enhanced_trading_context()
+                        if trading_context:
+                            logger.info(f"   (Macro) 📊 Trading Context 로드: VIX={trading_context.vix_regime}, "
+                                       f"Risk-Off L{trading_context.risk_off_level}, "
+                                       f"Position Mult={trading_context.position_multiplier:.2f}")
+                            if trading_context.favor_sectors:
+                                logger.info(f"   (Macro) 📈 선호 섹터: {trading_context.favor_sectors}")
+                            if trading_context.avoid_sectors:
+                                logger.info(f"   (Macro) 📉 회피 섹터: {trading_context.avoid_sectors}")
+                    except ImportError:
+                        logger.debug("   (Macro) EnhancedTradingContext 모듈 없음 - 기본 로직 사용")
+                    except Exception as ctx_e:
+                        logger.warning(f"   (Macro) Trading Context 로드 실패: {ctx_e}")
                     
                     # Step 1: 정량 점수 계산 (LLM 호출 없음, 비용 0원)
                     logger.info(f"\n   [Step 1] 정량 점수 계산 ({len(candidate_stocks)}개 종목) - 비용 0원")
@@ -1006,8 +1057,12 @@ def main():
                     
                     logger.info(f"   ✅ v5 최종 승인: {len([r for r in llm_decision_records.values() if r.get('approved')])}개")
                     
-                    # 쿼터제 적용
+                    # 쿼터제 적용 (Risk-Off 레벨에 따라 동적 조정)
                     MAX_WATCHLIST_SIZE = 15
+                    if trading_context and trading_context.risk_off_level >= 2:
+                        # Risk-Off 경계/위험 시 Watchlist 크기 축소
+                        MAX_WATCHLIST_SIZE = 10
+                        logger.info(f"   (Risk-Off) Watchlist 크기 축소: 15 → {MAX_WATCHLIST_SIZE} (Level {trading_context.risk_off_level})")
                     if len(final_approved_list) > MAX_WATCHLIST_SIZE:
                         final_approved_list_sorted = sorted(
                             final_approved_list,

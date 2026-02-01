@@ -4,6 +4,8 @@ Macro Council DAG - 3현자 매크로 분석
 매일 07:30 KST에 @hedgecat0301 채널의 장 시작 전 브리핑을 분석하여
 일일 매크로 인사이트를 생성합니다.
 
+Enhanced Macro Collection DAG와 연동하여 글로벌 데이터도 통합 분석합니다.
+
 분석 결과:
 - DB: DAILY_MACRO_INSIGHT 테이블에 저장 (백테스트용)
 - Redis: macro:daily_insight 키에 캐싱 (실시간 서비스용)
@@ -13,6 +15,7 @@ Macro Council DAG - 3현자 매크로 분석
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 from datetime import datetime, timedelta
 import sys
 
@@ -52,6 +55,22 @@ with DAG(
     catchup=False,
     tags=['macro', 'council', 'llm', 'analysis'],
 ) as dag:
+
+    # Enhanced Macro Collection 완료 대기 (선택적)
+    # 07:00에 실행되는 enhanced_macro_collection 완료 후 시작
+    wait_for_macro_data = ExternalTaskSensor(
+        task_id='wait_for_macro_data',
+        external_dag_id='enhanced_macro_collection',
+        external_task_id='validate_and_store',
+        execution_delta=timedelta(minutes=30),  # 07:00 → 07:30
+        timeout=600,  # 10분 대기
+        poke_interval=60,  # 1분마다 체크
+        mode='reschedule',  # 대기 중 워커 반환
+        allowed_states=['success'],
+        failed_states=['failed', 'upstream_failed'],
+        soft_fail=True,  # 실패해도 계속 진행 (글로벌 데이터 없이 분석)
+    )
+
     run_macro_council = BashOperator(
         task_id='run_macro_council',
         bash_command='python scripts/run_macro_council.py',
@@ -59,3 +78,5 @@ with DAG(
         env=COMMON_ENV,
         execution_timeout=timedelta(minutes=10),  # Council 분석 ~2분 예상
     )
+
+    wait_for_macro_data >> run_macro_council

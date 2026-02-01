@@ -117,18 +117,65 @@ async def fetch_morning_briefing(hours_ago: int = 24) -> Optional[Dict[str, Any]
 # 3현자 Council 실행
 # ==============================================================================
 
-def run_council_analysis(message_content: str, target_file: str) -> Dict[str, Any]:
+def run_council_analysis(
+    message_content: str,
+    target_file: str,
+    global_snapshot: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     3현자 Council 분석 실행.
 
     Args:
         message_content: 분석할 메시지 내용
         target_file: 임시 파일 경로
+        global_snapshot: 글로벌 매크로 스냅샷 (Enhanced Macro)
 
     Returns:
         Council 분석 결과
     """
     import subprocess
+
+    # 글로벌 매크로 데이터 섹션 생성
+    global_data_section = ""
+    if global_snapshot:
+        global_data_section = f"""
+## 글로벌 매크로 데이터 (Enhanced Macro Insight)
+
+> 아래 데이터는 자동 수집된 글로벌 경제 지표입니다.
+> 텔레그램 브리핑과 함께 종합적으로 분석해주세요.
+
+### US Economy
+- Fed Rate: {global_snapshot.get('fed_rate', 'N/A')}%
+- 10Y Treasury: {global_snapshot.get('treasury_10y', 'N/A')}%
+- US CPI YoY: {global_snapshot.get('us_cpi_yoy', 'N/A')}%
+- Unemployment: {global_snapshot.get('us_unemployment', 'N/A')}%
+
+### Volatility & Risk
+- VIX: {global_snapshot.get('vix', 'N/A')} (regime: {global_snapshot.get('vix_regime', 'N/A')})
+- Risk-Off 환경: {'예' if global_snapshot.get('is_risk_off') else '아니오'}
+
+### Currency
+- DXY Index: {global_snapshot.get('dxy_index', 'N/A')}
+- USD/KRW: {global_snapshot.get('usd_krw', 'N/A')}
+- 원화 압력: {global_snapshot.get('krw_pressure', 'neutral')}
+
+### Korea
+- BOK Rate: {global_snapshot.get('bok_rate', 'N/A')}%
+- 금리차 (Fed-BOK): {global_snapshot.get('rate_differential', 'N/A')}%
+- KOSPI: {global_snapshot.get('kospi_index', 'N/A')} ({global_snapshot.get('kospi_change_pct', 0):+.2f}%)
+- KOSDAQ: {global_snapshot.get('kosdaq_index', 'N/A')} ({global_snapshot.get('kosdaq_change_pct', 0):+.2f}%)
+
+### Sentiment
+- 글로벌 뉴스 센티먼트: {global_snapshot.get('global_news_sentiment', 'N/A')}
+- 한국 뉴스 센티먼트: {global_snapshot.get('korea_news_sentiment', 'N/A')}
+
+### Data Quality
+- 완성도: {global_snapshot.get('completeness_score', 0):.0%}
+- 데이터 소스: {', '.join(global_snapshot.get('data_sources', []))}
+- 누락 지표: {', '.join(global_snapshot.get('missing_indicators', [])) or '없음'}
+
+---
+"""
 
     # 요청 파일 생성
     request_content = f"""# Macro Analysis Request
@@ -136,10 +183,8 @@ def run_council_analysis(message_content: str, target_file: str) -> Dict[str, An
 ## 분석 대상
 - Source: @hedgecat0301 (키움 한지영)
 - Type: 장 시작 전 브리핑
-
----
-
-## 원문 메시지
+{global_data_section}
+## 원문 메시지 (텔레그램 브리핑)
 
 ```
 {message_content}
@@ -310,11 +355,37 @@ def parse_council_output(report_content: str) -> Dict[str, Any]:
 # 저장
 # ==============================================================================
 
+def get_global_macro_snapshot() -> Optional[Dict[str, Any]]:
+    """
+    오늘의 글로벌 매크로 스냅샷 조회.
+
+    Returns:
+        스냅샷 딕셔너리 또는 None
+    """
+    try:
+        from shared.macro_data import get_today_snapshot
+
+        snapshot = get_today_snapshot()
+        if snapshot:
+            logger.info(f"글로벌 스냅샷 로드: 완성도 {snapshot.get_completeness_score():.0%}")
+            return snapshot.to_dict()
+        else:
+            logger.warning("오늘 글로벌 스냅샷 없음")
+            return None
+    except ImportError:
+        logger.warning("shared.macro_data 모듈 없음 (글로벌 데이터 스킵)")
+        return None
+    except Exception as e:
+        logger.warning(f"글로벌 스냅샷 조회 실패: {e}")
+        return None
+
+
 def save_macro_insight(
     insight_date: date,
     briefing: Dict[str, Any],
     council_result: Dict[str, Any],
     parsed_data: Dict[str, Any],
+    global_snapshot: Optional[Dict[str, Any]] = None,
     dry_run: bool = False,
 ) -> bool:
     """
@@ -325,6 +396,7 @@ def save_macro_insight(
         briefing: 원본 브리핑 데이터
         council_result: Council 분석 결과
         parsed_data: 파싱된 데이터
+        global_snapshot: 글로벌 매크로 스냅샷 (미리 조회된 경우)
         dry_run: True면 저장 안함
 
     Returns:
@@ -335,6 +407,20 @@ def save_macro_insight(
         save_insight_to_db,
         save_insight_to_redis,
     )
+
+    # 글로벌 스냅샷이 없으면 조회 시도
+    if global_snapshot is None:
+        global_snapshot = get_global_macro_snapshot()
+
+    # VIX regime 및 금리차 추출
+    vix_regime = ""
+    rate_differential = None
+    data_sources_used = []
+
+    if global_snapshot:
+        vix_regime = global_snapshot.get("vix_regime", "")
+        rate_differential = global_snapshot.get("rate_differential")
+        data_sources_used = global_snapshot.get("data_sources", [])
 
     insight = DailyMacroInsight(
         insight_date=insight_date,
@@ -353,6 +439,11 @@ def save_macro_insight(
             "report_content": council_result.get("report_content", "")[:10000],  # 10KB 제한
         },
         council_cost_usd=council_result.get("cost_usd", 0.0),
+        # Enhanced fields
+        global_snapshot=global_snapshot,
+        data_sources_used=data_sources_used,
+        vix_regime=vix_regime,
+        rate_differential=rate_differential,
     )
 
     if dry_run:
@@ -397,29 +488,44 @@ async def main(args):
 
     logger.info(f"분석 대상 날짜: {target_date}")
 
-    # 1. 브리핑 수집
+    # 1. 글로벌 매크로 스냅샷 수집 (Enhanced Macro)
+    global_snapshot = get_global_macro_snapshot()
+    if global_snapshot:
+        logger.info(f"✅ 글로벌 매크로 스냅샷 로드 완료")
+        logger.info(f"   - VIX: {global_snapshot.get('vix', 'N/A')} ({global_snapshot.get('vix_regime', 'N/A')})")
+        logger.info(f"   - 금리차: {global_snapshot.get('rate_differential', 'N/A')}%")
+        logger.info(f"   - KOSPI: {global_snapshot.get('kospi_index', 'N/A')}")
+    else:
+        logger.warning("⚠️ 글로벌 매크로 스냅샷 없음 (텔레그램 브리핑만 분석)")
+
+    # 2. 텔레그램 브리핑 수집
     briefing = await fetch_morning_briefing(hours_ago=hours_ago)
     if not briefing:
         logger.error("브리핑 수집 실패. 종료합니다.")
         return 1
 
-    # 2. Council 분석
+    # 3. Council 분석 (글로벌 데이터 + 텔레그램 브리핑 통합)
     temp_file = PROJECT_ROOT / ".ai" / "reviews" / f"council_request_macro_{target_date}.md"
-    council_result = run_council_analysis(briefing["content"], str(temp_file))
+    council_result = run_council_analysis(
+        briefing["content"],
+        str(temp_file),
+        global_snapshot=global_snapshot  # 글로벌 데이터 전달
+    )
 
     if "error" in council_result:
         logger.error(f"Council 분석 실패: {council_result['error']}")
         return 1
 
-    # 3. 결과 파싱
+    # 4. 결과 파싱
     parsed_data = parse_council_output(council_result["report_content"])
 
-    # 4. 저장
+    # 5. 저장 (글로벌 스냅샷 포함)
     save_success = save_macro_insight(
         insight_date=target_date,
         briefing=briefing,
         council_result=council_result,
         parsed_data=parsed_data,
+        global_snapshot=global_snapshot,  # 이미 조회한 스냅샷 전달
         dry_run=args.dry_run,
     )
 
@@ -435,6 +541,17 @@ async def main(args):
     print(f"  Risk Factors: {parsed_data['risk_factors'][:2]}")
     print(f"  Key Stocks: {parsed_data['key_stocks'][:5]}")
     print(f"  Council Cost: ${council_result.get('cost_usd', 0):.4f}")
+
+    # Enhanced Macro 정보
+    if global_snapshot:
+        print("\n--- Enhanced Macro Data ---")
+        print(f"  VIX: {global_snapshot.get('vix', 'N/A')} ({global_snapshot.get('vix_regime', 'N/A')})")
+        print(f"  금리차 (Fed-BOK): {global_snapshot.get('rate_differential', 'N/A')}%")
+        print(f"  USD/KRW: {global_snapshot.get('usd_krw', 'N/A')}")
+        print(f"  데이터 소스: {', '.join(global_snapshot.get('data_sources', []))}")
+    else:
+        print("\n⚠️ Enhanced Macro 데이터 없음")
+
     print("=" * 60)
 
     return 0 if save_success else 1

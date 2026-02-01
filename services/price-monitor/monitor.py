@@ -1,4 +1,5 @@
 # monitor.py
+# Version: v1.1 - EnhancedTradingContext 통합 (stop_loss_multiplier)
 # Price Monitor - 실시간 가격 감시 및 매도 신호 발행
 
 import time
@@ -367,16 +368,34 @@ class PriceMonitor:
             # 1-1. ATR Trailing Stop (손절)
             if not potential_signal and atr:
                 mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
-                
+
+                # [v1.1] EnhancedTradingContext의 stop_loss_multiplier 적용
+                # VIX 높을 때 손절폭 확대 (1.0 ~ 1.5x)
+                macro_stop_mult = 1.0
+                try:
+                    from shared.macro_insight import get_enhanced_trading_context
+                    trading_ctx = get_enhanced_trading_context()
+                    if trading_ctx:
+                        macro_stop_mult = trading_ctx.stop_loss_multiplier
+                        if macro_stop_mult != 1.0:
+                            logger.debug(f"   [{stock_name}] Macro Stop Mult: {macro_stop_mult:.2f} (VIX: {trading_ctx.vix_regime})")
+                except ImportError:
+                    pass
+                except Exception:
+                    pass
+
+                # 매크로 배율 적용 (ATR 배수를 늘려서 손절폭 확대)
+                mult = mult * macro_stop_mult
+
                 # MACD bearish divergence 시 더 타이트한 스탑
                 if macd_bearish_warning:
                     mult = mult * 0.75
-                
+
                 # [Prime Council] Stage 3/Exhaustion 시 추가로 타이트하게
                 if chart_phase_warning:
                     mult = mult * 0.8  # 추가 20% 조임
                     logger.debug(f"   [{stock_name}] ATR Mult 조정: Stage {chart_phase_stage}, Exhaustion {chart_phase_exhaustion:.0f}")
-                
+
                 stop_price = buy_price - (mult * atr)
                 logic_snapshot['stop_loss_price'] = stop_price # ATR Stop capture
                 
@@ -387,6 +406,10 @@ class PriceMonitor:
             if not potential_signal:
                 stop_loss = self.config.get_float('SELL_STOP_LOSS_PCT', default=-6.0)
                 if stop_loss > 0: stop_loss = -stop_loss
+
+                # [v1.1] 매크로 배율 적용 (VIX 높으면 손절폭 확대: -6% → -8% 등)
+                if macro_stop_mult > 1.0:
+                    stop_loss = stop_loss * macro_stop_mult  # -6% * 1.3 = -7.8%
 
                 if profit_pct <= stop_loss:
                     # [Gap Down Safety] 갭락 시 5분 대기

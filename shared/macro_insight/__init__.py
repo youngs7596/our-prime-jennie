@@ -49,6 +49,25 @@ from .daily_insight import (
     should_skip_sector,
 )
 
+from .enhanced_analyzer import (
+    EnhancedMacroAnalyzer,
+    EnhancedMacroInsight,
+    DataCitation,
+    RiskOffAssessment,
+    PositionSizeRecommendation,
+    DataQualityNotes,
+)
+
+from .trading_context import (
+    EnhancedTradingContext,
+    get_enhanced_trading_context,
+    build_trading_context,
+    clear_trading_context_cache,
+    calculate_risk_off_level,
+    calculate_position_multiplier,
+    calculate_stop_loss_multiplier,
+)
+
 __all__ = [
     # Analyzer
     "MacroSentimentAnalyzer",
@@ -79,4 +98,19 @@ __all__ = [
     "is_high_volatility_regime",
     "get_stop_loss_multiplier",
     "should_skip_sector",
+    # Enhanced Analyzer
+    "EnhancedMacroAnalyzer",
+    "EnhancedMacroInsight",
+    "DataCitation",
+    "RiskOffAssessment",
+    "PositionSizeRecommendation",
+    "DataQualityNotes",
+    # Trading Context (서비스 통합용)
+    "EnhancedTradingContext",
+    "get_enhanced_trading_context",
+    "build_trading_context",
+    "clear_trading_context_cache",
+    "calculate_risk_off_level",
+    "calculate_position_multiplier",
+    "calculate_stop_loss_multiplier",
 ]

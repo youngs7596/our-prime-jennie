@@ -82,6 +82,7 @@ LLM Tiers:
 | DAG | 스케줄 (KST) | 설명 |
 |-----|-------------|------|
 | scout_job_v1 | 08:30-15:30, 30분 간격 | AI 종목 스캔 |
+| enhanced_macro_collection | 07:00, 12:00, 18:00 | 글로벌 매크로 수집 |
 | macro_council | 07:30 | 3현자 매크로 분석 |
 | collect_intraday | 09:00-15:35, 5분 간격 | 5분봉 수집 |
 | collect_daily_prices | 18:15 | 일봉 수집 |
@@ -259,7 +260,35 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-02-01 저녁)
+### 최근 세션 (2026-02-02 새벽)
+- **주제**: Enhanced Macro → Trading Services 통합 완료
+- **완료**:
+  - **buy-scanner 통합** (v1.2 → v1.3)
+    - `_check_macro_risk_gate()`: Risk-Off Level 2+ 시 신규 진입 차단
+    - `_is_strategy_allowed()`: VIX elevated/crisis 시 공격적 전략 비활성화
+    - `position_multiplier` 신호 출력에 포함
+  - **scout-job 통합** (v1.0 → v1.1)
+    - Council 섹터 신호 (favor/avoid) 후보군에 태깅
+    - Risk-Off Level 2+ 시 Watchlist 크기 축소 (15 → 10)
+  - **price-monitor 통합** (v1.0 → v1.1)
+    - `stop_loss_multiplier` 적용 (VIX elevated 시 1.3x)
+    - ATR Stop, Fixed Stop 모두 매크로 배율 반영
+  - **Airflow DAG 활성화**
+    - `enhanced_macro_collection`: 07:00, 12:00, 18:00 KST
+    - `enhanced_macro_quick`: 09:30-14:30 장중 빠른 업데이트
+    - secrets.json 경로 수정 (Airflow 컨테이너 호환)
+  - **Trading Context 개선**
+    - 오늘 데이터 없으면 최근 3일 폴백
+    - 현재 상태: VIX=27.51 (elevated), pos_mult=0.9, stop_mult=1.3
+
+### 이전 세션 (2026-02-01 밤)
+- **주제**: Enhanced Macro Insight System 구현
+- **완료**:
+  - `shared/macro_data/` 모듈 전체 구현 (~1500줄)
+  - `shared/macro_insight/trading_context.py` 구현 (~400줄)
+  - DAGs 추가, DB 마이그레이션, 테스트 68개 통과
+
+### 이전 세션 (2026-02-01 저녁)
 - **주제**: 분봉 백테스트 & 파라미터 최적화
 - **완료**:
   - `utilities/backtest_minute_realistic.py` 구현 (~800줄)
@@ -316,5 +345,5 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
 
 ---
-*Last Updated: 2026-02-01 (분봉 백테스트 & RSI 최적화)*
+*Last Updated: 2026-02-02 (Enhanced Macro → Trading Services 통합)*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*

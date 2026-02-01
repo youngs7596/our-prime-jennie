@@ -1,8 +1,9 @@
 # services/buy-scanner/opportunity_watcher.py
-# Version: v1.2
+# Version: v1.3
 # Hot Watchlist 실시간 매수 신호 감지 (WebSocket 기반) + Supply/Demand & Legendary Pattern
 # buy-scanner가 매수용 WebSocket을 담당
 # + Logic Observability: Buy Logic Snapshot 저장 (2026-01-27)
+# + Enhanced Macro Trading Context 통합 (2026-02-01)
 
 
 import os
@@ -12,7 +13,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 from threading import Lock, Event
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple
 
 import redis
 import pandas as pd
@@ -20,6 +21,20 @@ from shared.db.connection import session_scope
 from shared.db.factor_repository import FactorRepository
 
 logger = logging.getLogger(__name__)
+
+
+# Macro Trading Context 로드 (선택적)
+def _load_trading_context():
+    """EnhancedTradingContext 로드 (실패 시 None 반환)"""
+    try:
+        from shared.macro_insight import get_enhanced_trading_context
+        return get_enhanced_trading_context()
+    except ImportError:
+        logger.debug("[Macro] macro_insight module not available")
+        return None
+    except Exception as e:
+        logger.warning(f"[Macro] Failed to load trading context: {e}")
+        return None
 
 
 class BarAggregator:
@@ -179,7 +194,13 @@ class BuyOpportunityWatcher:
 
         # Cooldown (중복 시그널 방지) - 설정에서 로드 (기본 600초)
         self.cooldown_seconds = self.config.get_int("SIGNAL_COOLDOWN_SECONDS", default=600)
-        
+
+        # [Enhanced Macro] 트레이딩 컨텍스트
+        self._trading_context = None
+        self._trading_context_loaded_at = None
+        self._trading_context_refresh_interval = 1800  # 30분
+        self._load_trading_context()
+
         # 메트릭
         self.metrics = {
             'tick_count': 0,
@@ -189,8 +210,75 @@ class BuyOpportunityWatcher:
             'watchlist_loads': 0,
             'last_tick_time': None,
             'last_signal_time': None,
+            'macro_risk_blocked': 0,  # [Enhanced Macro] 매크로 리스크로 차단된 횟수
         }
         self.current_version_key = None
+
+    def _load_trading_context(self) -> bool:
+        """Enhanced Trading Context 로드/갱신"""
+        try:
+            ctx = _load_trading_context()
+            if ctx:
+                self._trading_context = ctx
+                self._trading_context_loaded_at = time.time()
+                logger.info(
+                    f"🌍 [Macro] Trading context loaded: "
+                    f"risk_off={ctx.risk_off_level}, vix_regime={ctx.vix_regime}, "
+                    f"pos_mult={ctx.position_multiplier}"
+                )
+                return True
+        except Exception as e:
+            logger.warning(f"[Macro] Failed to load trading context: {e}")
+        return False
+
+    def _get_trading_context(self):
+        """트레이딩 컨텍스트 조회 (필요 시 갱신)"""
+        now = time.time()
+
+        # 주기적 갱신 (30분)
+        if (self._trading_context_loaded_at is None or
+            now - self._trading_context_loaded_at > self._trading_context_refresh_interval):
+            self._load_trading_context()
+
+        return self._trading_context
+
+    def _check_macro_risk_gate(self) -> Tuple[bool, str]:
+        """
+        매크로 Risk Gate 체크.
+
+        Returns:
+            (passed, reason)
+        """
+        ctx = self._get_trading_context()
+
+        if ctx is None:
+            # 컨텍스트 없으면 통과 (기존 동작 유지)
+            return True, "No macro context"
+
+        # Risk-Off Level 2 이상이면 신규 진입 제한
+        if ctx.risk_off_level >= 2:
+            reasons = ", ".join(ctx.risk_off_reasons) if ctx.risk_off_reasons else "unknown"
+            return False, f"Risk-Off Level {ctx.risk_off_level}: {reasons}"
+
+        # VIX Crisis 상태에서도 진입 제한
+        if ctx.vix_regime == "crisis":
+            return False, f"VIX Crisis (VIX={ctx.vix_value})"
+
+        return True, "OK"
+
+    def _get_position_multiplier(self) -> float:
+        """매크로 기반 포지션 배율 조회"""
+        ctx = self._get_trading_context()
+        if ctx:
+            return ctx.position_multiplier
+        return 1.0
+
+    def _get_allowed_strategies(self) -> Optional[List[str]]:
+        """매크로 기반 허용 전략 목록 조회"""
+        ctx = self._get_trading_context()
+        if ctx:
+            return ctx.get_allowed_strategies()
+        return None  # None이면 모든 전략 허용
 
     def _ensure_redis_connection(self):
         """Redis 연결 확인 및 재연결"""
@@ -467,6 +555,23 @@ class BuyOpportunityWatcher:
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
+        # [Enhanced Macro] 매크로 Risk Gate 체크
+        macro_risk_passed, macro_risk_reason = self._check_macro_risk_gate()
+        ctx = self._get_trading_context()
+        risk_gate_checks.append({
+            "name": "Macro Risk",
+            "passed": macro_risk_passed,
+            "value": f"Level {ctx.risk_off_level}" if ctx else "N/A",
+            "threshold": "< 2 (not Risk-Off)"
+        })
+        if not macro_risk_passed:
+            risk_gate_passed = False
+            self.metrics['macro_risk_blocked'] += 1
+            logger.info(f"🚫 [{stock_code}] Macro Risk Gate 차단: {macro_risk_reason}")
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+            return None
+
         # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
         risk_conditions = 0
 
@@ -529,6 +634,17 @@ class BuyOpportunityWatcher:
         signal_reason = ""
         signal_checks = []  # [Logic Observability] 전략별 체크 결과 수집
 
+        # [Enhanced Macro] 매크로 기반 허용 전략 목록
+        allowed_strategies = self._get_allowed_strategies()
+        if allowed_strategies:
+            logger.debug(f"[{stock_code}] Macro allowed strategies: {allowed_strategies}")
+
+        def _is_strategy_allowed(strategy_name: str) -> bool:
+            """매크로 기반 전략 허용 여부 확인"""
+            if allowed_strategies is None:
+                return True  # 컨텍스트 없으면 모두 허용
+            return strategy_name in allowed_strategies
+
         # [NEW] 상승장 전용 전략 먼저 체크 (기존 전략보다 우선 적용)
         if self.market_regime in ['BULL', 'STRONG_BULL']:
             # 1. RECON_BULL_ENTRY: 고점수 RECON 종목 자동 진입
@@ -548,23 +664,27 @@ class BuyOpportunityWatcher:
                 else:
                     signal_checks.append({"strategy": "MOMENTUM_CONTINUATION", "triggered": False, "reason": "MA5 <= MA20 or price change < 2%"})
 
-            # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파)
-            if not signal_type:
+            # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파) - 브레이크아웃 전략, 매크로 필터 적용
+            if not signal_type and _is_strategy_allowed("SHORT_TERM_HIGH_BREAKOUT"):
                 result = self._check_short_term_high_breakout(stock_code, recent_bars)
                 if result:
                     signal_type, signal_reason = result
                     signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": True, "reason": signal_reason})
                 else:
                     signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "No breakout or volume < 2x"})
+            elif not signal_type:
+                signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "Blocked by macro context"})
 
-            # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파)
-            if not signal_type:
+            # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파) - 공격적 전략, 매크로 필터 적용
+            if not signal_type and _is_strategy_allowed("VOLUME_BREAKOUT_1MIN"):
                 result = self._check_volume_breakout_1min(stock_code, recent_bars)
                 if result:
                     signal_type, signal_reason = result
                     signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": True, "reason": signal_reason})
                 else:
                     signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "No resistance break or volume < 3x"})
+            elif not signal_type:
+                signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "Blocked by macro context"})
 
             # ================================================================
             # [NEW] Jennie CSO 지시: 추가 Bull Market 전략 (2026-01-17)
@@ -579,14 +699,16 @@ class BuyOpportunityWatcher:
                 else:
                     signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": False, "reason": "No pullback pattern"})
 
-            # 6. VCP_BREAKOUT: 변동성 축소 후 거래량 동반 돌파
-            if not signal_type:
+            # 6. VCP_BREAKOUT: 변동성 축소 후 거래량 동반 돌파 - 공격적 전략, 매크로 필터 적용
+            if not signal_type and _is_strategy_allowed("VCP_BREAKOUT"):
                 result = self._check_vcp_breakout(recent_bars)
                 if result:
                     signal_type, signal_reason = result
                     signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": True, "reason": signal_reason})
                 else:
                     signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "No VCP pattern"})
+            elif not signal_type:
+                signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "Blocked by macro context"})
 
             # 7. INSTITUTIONAL_ENTRY: 기관/외국인 매수세 캔들 패턴
             if not signal_type:
@@ -705,6 +827,10 @@ class BuyOpportunityWatcher:
         # [Logic Observability] 신호 히스토리 저장
         self._save_signal_history(stock_code, stock_info.get('name', stock_code), 'BUY', signal_type, signal_reason, current_price)
 
+        # [Enhanced Macro] 포지션 배율 및 컨텍스트 정보 추가
+        position_mult = self._get_position_multiplier()
+        ctx = self._get_trading_context()
+
         signal = {
             'stock_code': stock_code,
             'stock_name': stock_info.get('name', stock_code),
@@ -716,8 +842,21 @@ class BuyOpportunityWatcher:
             'source': 'buy_scanner_websocket',
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'trade_tier': stock_info.get('trade_tier', 'TIER1'),
-            'is_super_prime': (signal_type == "GOLDEN_CROSS_SUPER_PRIME")
+            'is_super_prime': (signal_type == "GOLDEN_CROSS_SUPER_PRIME"),
+            # [Enhanced Macro] 추가 필드
+            'position_multiplier': position_mult,
+            'macro_context': {
+                'vix_regime': ctx.vix_regime if ctx else None,
+                'risk_off_level': ctx.risk_off_level if ctx else 0,
+                'stop_loss_multiplier': ctx.stop_loss_multiplier if ctx else 1.0,
+            } if ctx else None,
         }
+
+        if ctx:
+            logger.info(
+                f"📊 [{stock_code}] Macro: pos_mult={position_mult}, "
+                f"vix={ctx.vix_regime}, risk_off={ctx.risk_off_level}"
+            )
 
         return signal
 

@@ -77,6 +77,13 @@ class DailyMacroInsight:
     raw_council_output: Dict[str, Any] = field(default_factory=dict)
     council_cost_usd: float = 0.0
 
+    # Enhanced fields (글로벌 매크로 데이터 통합)
+    global_snapshot: Optional[Dict[str, Any]] = None  # GlobalMacroSnapshot.to_dict()
+    data_sources_used: List[str] = field(default_factory=list)
+    data_citations: List[Dict[str, Any]] = field(default_factory=list)  # 3현자 요구사항
+    vix_regime: str = ""  # low_vol, normal, elevated, crisis
+    rate_differential: Optional[float] = None  # Fed Rate - BOK Rate
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환"""
         return {
@@ -98,6 +105,12 @@ class DailyMacroInsight:
             "opportunity_factors": self.opportunity_factors,
             "key_stocks": self.key_stocks,
             "council_cost_usd": self.council_cost_usd,
+            # Enhanced fields
+            "global_snapshot": self.global_snapshot,
+            "data_sources_used": self.data_sources_used,
+            "data_citations": self.data_citations,
+            "vix_regime": self.vix_regime,
+            "rate_differential": self.rate_differential,
         }
 
     @classmethod
@@ -122,6 +135,12 @@ class DailyMacroInsight:
             raw_message=data.get("raw_message", ""),
             raw_council_output=data.get("raw_council_output", {}),
             council_cost_usd=data.get("council_cost_usd", 0.0),
+            # Enhanced fields
+            global_snapshot=data.get("global_snapshot"),
+            data_sources_used=data.get("data_sources_used", []),
+            data_citations=data.get("data_citations", []),
+            vix_regime=data.get("vix_regime", ""),
+            rate_differential=data.get("rate_differential"),
         )
 
 
