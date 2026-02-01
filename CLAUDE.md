@@ -260,7 +260,22 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-02-02 새벽)
+### 최근 세션 (2026-02-02 오전)
+- **주제**: Jenkins CI 테스트 실패 수정
+- **완료**:
+  - **Finnhub 클라이언트 테스트 수정**
+    - `test_is_available_no_key`: env/secrets.json mock 추가
+    - `test_get_default_indicators`: 무료 티어 지표로 변경 (spy, vxx, ewy)
+    - `test_fetch_data_no_key`: env/secrets.json mock 추가
+  - **Aggregator 테스트 수정**
+    - `test_aggregate_filters_old_data`: vix max_age=72h 반영 (30h→73h)
+  - **Validator 테스트 수정**
+    - `test_filter_expired_data`: vix max_age=72h 반영 (25h→73h)
+  - **price-monitor 테스트 수정**
+    - `test_check_sell_signal_atr_stop`: config side_effect, check_death_cross mock
+  - **전체 테스트 통과**: 1121 passed, 2 skipped
+
+### 이전 세션 (2026-02-02 새벽)
 - **주제**: Enhanced Macro → Trading Services 통합 완료
 - **완료**:
   - **buy-scanner 통합** (v1.2 → v1.3)
