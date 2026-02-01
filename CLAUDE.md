@@ -259,7 +259,24 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-02-01 오후)
+### 최근 세션 (2026-02-01 저녁)
+- **주제**: 분봉 백테스트 & 파라미터 최적화
+- **완료**:
+  - `utilities/backtest_minute_realistic.py` 구현 (~800줄)
+    - 실시간 트레이딩 로직 재현 (8개 Risk Gates, 다양한 전략)
+    - BacktestBarAggregator, EntrySignalChecker, MinuteRealisticBacktester 클래스
+  - `utilities/backtest_minute_grid.py` 구현 (~800줄)
+    - 파라미터 그리드 서치 (MINIMAL/QUICK/FULL_GRID)
+    - Sharpe ratio, Profit factor, Composite score 분석
+  - **RSI 차단 임계값 최적화 발견**: 75 → 70
+    - RSI 70: 수익률 +14.57%, 승률 82.1%
+    - RSI 75: 수익률 +5.63%, 승률 78.5%
+  - 3개 파일 파라미터 적용:
+    - `shared/settings/registry.py` (RISK_GATE_RSI_MAX: 75→70)
+    - `services/buy-scanner/opportunity_watcher.py` (default 75→70)
+    - `tests/e2e/conftest.py` (mock config 75→70)
+
+### 이전 세션 (2026-02-01 오후)
 - **주제**: SQLAlchemy 2.0 전체 마이그레이션
 - **완료**:
   - 레거시 `.query()` API → `select()`, `session.scalars()`, `session.execute()` 변환
@@ -299,5 +316,5 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
 
 ---
-*Last Updated: 2026-02-01 (SQLAlchemy 2.0 Migration)*
+*Last Updated: 2026-02-01 (분봉 백테스트 & RSI 최적화)*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*

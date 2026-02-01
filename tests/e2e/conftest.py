@@ -320,7 +320,7 @@ def mock_config():
         'MAX_SECTOR_PCT': 30.0,
         'MAX_POSITION_VALUE_PCT': 10.0,
         'SIGNAL_COOLDOWN_SECONDS': 600,
-        'RISK_GATE_RSI_MAX': 75,
+        'RISK_GATE_RSI_MAX': 70,
         'RISK_GATE_VOLUME_RATIO': 2.0,
         'RISK_GATE_VWAP_DEVIATION': 0.02,
         'GOLDEN_CROSS_MIN_VOLUME_RATIO': 1.5,

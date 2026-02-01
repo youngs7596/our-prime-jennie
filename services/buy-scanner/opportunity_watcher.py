@@ -453,7 +453,7 @@ class BuyOpportunityWatcher:
             return None
 
         # [NEW] RSI 과열 필터
-        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=75)
+        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=70)
         rsi_guard_passed = self._check_rsi_guard(current_rsi)
         risk_gate_checks.append({
             "name": "RSI Guard",
@@ -1416,7 +1416,7 @@ class BuyOpportunityWatcher:
         if current_rsi is None:
             return True  # RSI 계산 불가 시 Pass
 
-        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=75)
+        rsi_max = self.config.get_int("RISK_GATE_RSI_MAX", default=70)
         if current_rsi > rsi_max:
             return False
         return True

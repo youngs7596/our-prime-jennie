@@ -90,7 +90,7 @@ REGISTRY = {
     # ===== Risk Gate (buy-scanner 진입 필터) =====
     "RISK_GATE_VOLUME_RATIO": {"value": 2.0, "type": "float", "desc": "거래량 급등 경고 기준 (평균 대비 배수)", "category": "RiskGate", "db_priority": True},
     "RISK_GATE_VWAP_DEVIATION": {"value": 0.02, "type": "float", "desc": "VWAP 이격 경고 기준 (2% = 0.02)", "category": "RiskGate", "db_priority": True},
-    "RISK_GATE_RSI_MAX": {"value": 75, "type": "int", "desc": "RSI 과열 진입 금지 기준", "category": "RiskGate", "db_priority": True},
+    "RISK_GATE_RSI_MAX": {"value": 70, "type": "int", "desc": "RSI 과열 진입 금지 기준 (그리드서치 최적값)", "category": "RiskGate", "db_priority": True},
     "GOLDEN_CROSS_MIN_VOLUME_RATIO": {"value": 1.5, "type": "float", "desc": "골든크로스 신호 최소 거래량 배수", "category": "RiskGate", "db_priority": True},
 
     # ===== 시간 기반 필터 =====
