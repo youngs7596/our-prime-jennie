@@ -506,9 +506,11 @@ class CommandHandler:
             
             # 2. 관심종목에서 제거
             from shared.db.models import WatchList
+            from sqlalchemy import delete
             with session_scope() as session: # type: ignore
-                result = session.query(WatchList).filter(WatchList.stock_code == stock_code).delete()
-                deleted = result
+                stmt = delete(WatchList).where(WatchList.stock_code == stock_code)
+                result = session.execute(stmt)
+                deleted = result.rowcount
             
             
             if deleted > 0:
@@ -829,18 +831,21 @@ class CommandHandler:
         try:
             # 6자리 숫자면 코드로 간주
             from shared.db.models import StockMaster
+            from sqlalchemy import select
             if name_or_code.isdigit() and len(name_or_code) == 6:
                 with session_scope(readonly=True) as session:
-                    stock = session.query(StockMaster).filter(StockMaster.stock_code == name_or_code).first()
+                    stmt = select(StockMaster).where(StockMaster.stock_code == name_or_code)
+                    stock = session.scalars(stmt).first()
                     if stock:
                         return (name_or_code, stock.stock_name)
-                    
+
                 # DB에 없어도 코드가 6자리 숫자면 유효한 코드로 간주 (Fallback)
                 return (name_or_code, name_or_code)
             else:
                 # 종목명으로 검색
                 with session_scope(readonly=True) as session:
-                    stock = session.query(StockMaster).filter(StockMaster.stock_name == name_or_code).first()
+                    stmt = select(StockMaster).where(StockMaster.stock_name == name_or_code)
+                    stock = session.scalars(stmt).first()
                     if stock:
                         return (stock.stock_code, stock.stock_name)
                 return (None, None)

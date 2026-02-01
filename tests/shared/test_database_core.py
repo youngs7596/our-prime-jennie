@@ -114,22 +114,23 @@ class TestConfigFunctions:
         """모든 설정값 조회 테스트"""
         mock_session = MagicMock()
         mock_get_session.return_value.__enter__.return_value = mock_session
-        
+
         # Mock Config objects
         config1 = MagicMock()
         config1.config_key = "KEY1"
         config1.config_value = "VAL1"
-        
+
         config2 = MagicMock()
         config2.config_key = "KEY2"
         config2.config_value = "VAL2"
-        
-        mock_session.query.return_value.all.return_value = [config1, config2]
-        
-        # shared.db.models.Config import를 mock 해야 함 (함수 내부 import)
-        with patch.dict('sys.modules', {'shared.db.models': MagicMock()}):
+
+        mock_session.scalars.return_value.all.return_value = [config1, config2]
+
+        # select() 내부 호출을 우회 - select()에 전달되는 인자와 무관하게 scalars 결과 반환
+        with patch('shared.database.core.get_session', mock_get_session):
+            # 실제 Config 모델을 사용하되, session.scalars가 mock 결과 반환
             result = core.get_all_config(None)
-            
+
             assert result == {"KEY1": "VAL1", "KEY2": "VAL2"}
 
     @patch('shared.database.core.get_session')

@@ -76,7 +76,8 @@ def collect_daily_flow():
     with session_scope() as session:
         # Fetch Target Stocks
         # 1. Active Watchlist
-        watchlist = session.query(Watchlist).all()
+        from sqlalchemy import select
+        watchlist = session.scalars(select(Watchlist)).all()
         target_codes = {w.stock_code for w in watchlist}
         
         # 2. Recent Shadow Radar (Optional - for now just Watchlist to save quota)

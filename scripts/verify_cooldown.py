@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from sqlalchemy import delete
 from shared.db.connection import session_scope, ensure_engine_initialized
 from shared.db import repository as repo
 from shared.db.models import TradeLog
@@ -24,7 +25,7 @@ def verify_cooldown_logic():
     
     with session_scope() as session:
         # Cleanup
-        session.query(TradeLog).filter(TradeLog.stock_code == stock_code).delete()
+        session.execute(delete(TradeLog).where(TradeLog.stock_code == stock_code))
         
         # Case 1: Sell 23 hours ago
         logger.info("Test Case 1: Sell 23 hours ago")
@@ -55,7 +56,7 @@ def verify_cooldown_logic():
             logger.error("❌ FAILED: 23 hours ago should NOT trigger 1h cooldown")
 
         # Cleanup
-        session.query(TradeLog).filter(TradeLog.stock_code == stock_code).delete()
+        session.execute(delete(TradeLog).where(TradeLog.stock_code == stock_code))
         
         # Case 2: Sell 25 hours ago
         logger.info("Test Case 2: Sell 25 hours ago")
@@ -79,7 +80,7 @@ def verify_cooldown_logic():
              logger.error("❌ FAILED: 25 hours ago should NOT trigger 24h cooldown")
              
         # Cleanup
-        session.query(TradeLog).filter(TradeLog.stock_code == stock_code).delete()
+        session.execute(delete(TradeLog).where(TradeLog.stock_code == stock_code))
         
         if is_active_24h and not is_active_1h and not is_active_25h:
             logger.info("✅ ALL TESTS PASSED")

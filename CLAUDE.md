@@ -259,7 +259,15 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-02-01 새벽)
+### 최근 세션 (2026-02-01 오후)
+- **주제**: SQLAlchemy 2.0 전체 마이그레이션
+- **완료**:
+  - 레거시 `.query()` API → `select()`, `session.scalars()`, `session.execute()` 변환
+  - 31개 파일 수정 (shared/, services/, scripts/, utilities/, tests/)
+  - 테스트 Mock 패턴 업데이트 (session.scalar, session.scalars)
+  - 전체 테스트 통과 (1053 passed)
+
+### 이전 세션 (2026-02-01 새벽)
 - **주제**: DB 인덱스 & 시스템 최적화
 - **파일**: `.ai/sessions/session-2026-02-01-00-10.md`
 - **완료**:
@@ -291,5 +299,5 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
 
 ---
-*Last Updated: 2026-02-01*
+*Last Updated: 2026-02-01 (SQLAlchemy 2.0 Migration)*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*

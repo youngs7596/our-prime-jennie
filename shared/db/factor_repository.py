@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, date, timedelta
 from typing import Dict, List, Optional, Tuple
 import pandas as pd
-from sqlalchemy import and_, desc, func
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.orm import Session
 
 from .models import (
@@ -93,19 +93,19 @@ class FactorRepository:
             DataFrame with columns: [PRICE_DATE, CLOSE_PRICE, VOLUME, HIGH_PRICE, LOW_PRICE]
         """
         try:
-            results = (
-                self.session.query(
+            stmt = (
+                select(
                     StockDailyPrice.price_date,
                     StockDailyPrice.close_price,
                     StockDailyPrice.volume,
                     StockDailyPrice.high_price,
                     StockDailyPrice.low_price
                 )
-                .filter(StockDailyPrice.stock_code == stock_code)
+                .where(StockDailyPrice.stock_code == stock_code)
                 .order_by(desc(StockDailyPrice.price_date))
                 .limit(days)
-                .all()
             )
+            results = self.session.execute(stmt).all()
             
             if not results:
                 return pd.DataFrame()
@@ -157,11 +157,8 @@ class FactorRepository:
             시가총액 (원) 또는 None
         """
         try:
-            result = (
-                self.session.query(StockMaster.market_cap)
-                .filter(StockMaster.stock_code == stock_code)
-                .first()
-            )
+            stmt = select(StockMaster.market_cap).where(StockMaster.stock_code == stock_code)
+            result = self.session.execute(stmt).first()
             
             if result and result[0]:
                 return int(result[0])
@@ -182,14 +179,11 @@ class FactorRepository:
             (sector_kospi200, industry_code) 튜플
         """
         try:
-            result = (
-                self.session.query(
-                    StockMaster.sector_kospi200,
-                    # StockMaster.industry_code # industry_code는 현재 모델에서 제외됨
-                )
-                .filter(StockMaster.stock_code == stock_code)
-                .first()
-            )
+            stmt = select(
+                StockMaster.sector_kospi200,
+                # StockMaster.industry_code # industry_code는 현재 모델에서 제외됨
+            ).where(StockMaster.stock_code == stock_code)
+            result = self.session.execute(stmt).first()
             
             if result:
                 return result[0], None # industry_code 자리에 None 반환
@@ -217,21 +211,21 @@ class FactorRepository:
             {stock_code: {quarter_date: {per, pbr, roe}}} 딕셔너리
         """
         try:
-            results = (
-                self.session.query(
+            stmt = (
+                select(
                     FinancialMetricsQuarterly.stock_code,
                     FinancialMetricsQuarterly.quarter_date,
                     FinancialMetricsQuarterly.per,
                     FinancialMetricsQuarterly.pbr,
                     FinancialMetricsQuarterly.roe
                 )
-                .filter(FinancialMetricsQuarterly.stock_code.in_(stock_codes))
+                .where(FinancialMetricsQuarterly.stock_code.in_(stock_codes))
                 .order_by(
                     FinancialMetricsQuarterly.stock_code,
                     desc(FinancialMetricsQuarterly.quarter_date)
                 )
-                .all()
             )
+            results = self.session.execute(stmt).all()
             
             financial_data = {}
             for row in results:
@@ -279,17 +273,17 @@ class FactorRepository:
         
         try:
             for code in stock_codes:
-                rows = (
-                    self.session.query(
+                stmt = (
+                    select(
                         StockInvestorTrading.trade_date,
                         StockInvestorTrading.foreign_net_buy,
                         StockInvestorTrading.institution_net_buy
                     )
-                    .filter(StockInvestorTrading.stock_code == code)
+                    .where(StockInvestorTrading.stock_code == code)
                     .order_by(desc(StockInvestorTrading.trade_date))
                     .limit(days)
-                    .all()
                 )
+                rows = self.session.execute(stmt).all()
                 
                 df = self._rows_to_df(rows, ['TRADE_DATE', 'FOREIGN_NET_BUY', 'INSTITUTION_NET_BUY'])
                 if not df.empty:
@@ -326,17 +320,17 @@ class FactorRepository:
         
         try:
             for code in stock_codes:
-                rows = (
-                    self.session.query(
+                stmt = (
+                    select(
                         StockNewsSentiment.news_date,
                         StockNewsSentiment.sentiment_score,
                         StockNewsSentiment.category
                     )
-                    .filter(StockNewsSentiment.stock_code == code)
+                    .where(StockNewsSentiment.stock_code == code)
                     .order_by(desc(StockNewsSentiment.news_date))
                     .limit(days)
-                    .all()
                 )
+                rows = self.session.execute(stmt).all()
                 
                 df = self._rows_to_df(rows, ['NEWS_DATE', 'SENTIMENT_SCORE', 'CATEGORY'])
                 if not df.empty:
@@ -374,21 +368,21 @@ class FactorRepository:
         try:
             cutoff_date = datetime.now().date() - timedelta(days=lookback_days)
             
-            rows = (
-                self.session.query(
+            stmt = (
+                select(
                     StockDisclosures.stock_code,
                     StockDisclosures.disclosure_date,
                     StockDisclosures.category
                 )
-                .filter(
+                .where(
                     and_(
                         StockDisclosures.stock_code.in_(stock_codes),
                         StockDisclosures.disclosure_date >= cutoff_date
                     )
                 )
                 .order_by(desc(StockDisclosures.disclosure_date))
-                .all()
             )
+            rows = self.session.execute(stmt).all()
             
             for row in rows:
                 code = row[0]
@@ -430,16 +424,13 @@ class FactorRepository:
         """
         try:
             # 기존 레코드 조회
-            existing = (
-                self.session.query(FactorMetadata)
-                .filter(
-                    and_(
-                        FactorMetadata.factor_key == factor_key,
-                        FactorMetadata.market_regime == market_regime
-                    )
+            stmt = select(FactorMetadata).where(
+                and_(
+                    FactorMetadata.factor_key == factor_key,
+                    FactorMetadata.market_regime == market_regime
                 )
-                .first()
             )
+            existing = self.session.scalars(stmt).first()
             
             if existing:
                 # UPDATE
@@ -488,16 +479,13 @@ class FactorRepository:
         팩터 메타데이터 조회
         """
         try:
-            return (
-                self.session.query(FactorMetadata)
-                .filter(
-                    and_(
-                        FactorMetadata.factor_key == factor_key,
-                        FactorMetadata.market_regime == market_regime
-                    )
+            stmt = select(FactorMetadata).where(
+                and_(
+                    FactorMetadata.factor_key == factor_key,
+                    FactorMetadata.market_regime == market_regime
                 )
-                .first()
             )
+            return self.session.scalars(stmt).first()
         except Exception as e:
             logger.warning(f"⚠️ [FactorRepo] 팩터 메타데이터 조회 실패: {e}")
             return None
@@ -529,18 +517,15 @@ class FactorRepository:
         """
         try:
             # 기존 레코드 조회
-            existing = (
-                self.session.query(FactorPerformance)
-                .filter(
-                    and_(
-                        FactorPerformance.target_type == target_type,
-                        FactorPerformance.target_code == target_code,
-                        FactorPerformance.condition_key == condition_key,
-                        FactorPerformance.holding_days == holding_days
-                    )
+            stmt = select(FactorPerformance).where(
+                and_(
+                    FactorPerformance.target_type == target_type,
+                    FactorPerformance.target_code == target_code,
+                    FactorPerformance.condition_key == condition_key,
+                    FactorPerformance.holding_days == holding_days
                 )
-                .first()
             )
+            existing = self.session.scalars(stmt).first()
             
             # 신뢰도 계산
             confidence_level = 'HIGH' if sample_count >= 30 else ('MID' if sample_count >= 15 else 'LOW')
@@ -596,18 +581,15 @@ class FactorRepository:
         팩터 성과 조회
         """
         try:
-            return (
-                self.session.query(FactorPerformance)
-                .filter(
-                    and_(
-                        FactorPerformance.target_type == target_type,
-                        FactorPerformance.target_code == target_code,
-                        FactorPerformance.condition_key == condition_key,
-                        FactorPerformance.holding_days == holding_days
-                    )
+            stmt = select(FactorPerformance).where(
+                and_(
+                    FactorPerformance.target_type == target_type,
+                    FactorPerformance.target_code == target_code,
+                    FactorPerformance.condition_key == condition_key,
+                    FactorPerformance.holding_days == holding_days
                 )
-                .first()
             )
+            return self.session.scalars(stmt).first()
         except Exception as e:
             logger.warning(f"⚠️ [FactorRepo] 팩터 성과 조회 실패: {e}")
             return None
@@ -642,18 +624,15 @@ class FactorRepository:
         """
         try:
             # 기존 레코드 조회
-            existing = (
-                self.session.query(NewsFactorStats)
-                .filter(
-                    and_(
-                        NewsFactorStats.target_type == target_type,
-                        NewsFactorStats.target_code == target_code,
-                        NewsFactorStats.news_category == news_category,
-                        NewsFactorStats.sentiment == sentiment
-                    )
+            stmt = select(NewsFactorStats).where(
+                and_(
+                    NewsFactorStats.target_type == target_type,
+                    NewsFactorStats.target_code == target_code,
+                    NewsFactorStats.news_category == news_category,
+                    NewsFactorStats.sentiment == sentiment
                 )
-                .first()
             )
+            existing = self.session.scalars(stmt).first()
             
             confidence_level = 'HIGH' if sample_count >= 30 else ('MID' if sample_count >= 15 else 'LOW')
             

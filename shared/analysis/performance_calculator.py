@@ -21,7 +21,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from collections import defaultdict
 
-from sqlalchemy import func, and_, text
+from sqlalchemy import func, and_, text, select
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -97,10 +97,11 @@ def get_performance_data(
         date_filter.append(TradeLog.trade_timestamp <= datetime.combine(end_date, datetime.max.time()))
     
     # 1. 기간 내 거래 조회
-    query = session.query(TradeLog)
+    stmt = select(TradeLog)
     if date_filter:
-        query = query.filter(and_(*date_filter))
-    trades = query.order_by(TradeLog.trade_timestamp).all()
+        stmt = stmt.where(and_(*date_filter))
+    stmt = stmt.order_by(TradeLog.trade_timestamp)
+    trades = session.scalars(stmt).all()
     
     # 2. 매수/매도 분리
     buys = [t for t in trades if t.trade_type == 'BUY']
@@ -183,7 +184,7 @@ def get_performance_data(
             })
     
     # 4. 현재 보유 종목 평가손익 (Unrealized)
-    holdings = session.query(ActivePortfolio).all()
+    holdings = session.scalars(select(ActivePortfolio)).all()
     unrealized_cost = 0
     unrealized_value = 0
     
@@ -257,10 +258,11 @@ def get_performance_data(
     stock_names = {}
     codes = list(by_stock.keys())
     if codes:
-        name_rows = session.query(WatchList.stock_code, WatchList.stock_name).filter(
+        stmt = select(WatchList.stock_code, WatchList.stock_name).where(
             WatchList.stock_code.in_(codes)
-        ).all()
-        stock_names = {r.stock_code: r.stock_name for r in name_rows}
+        )
+        name_rows = session.execute(stmt).all()
+        stock_names = {r[0]: r[1] for r in name_rows}
     
     by_stock_list = []
     for code, data in sorted(by_stock.items(), key=lambda x: x[1]['net_profit'], reverse=True):

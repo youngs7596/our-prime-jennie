@@ -375,7 +375,8 @@ def get_active_portfolio(session) -> List[Dict]:
     
     try:
         if isinstance(session, Session):
-            rows = session.query(ActivePortfolio).all()
+            from sqlalchemy import select
+            rows = session.scalars(select(ActivePortfolio)).all()
             portfolio = []
             for row in rows:
                 portfolio.append({
@@ -697,18 +698,19 @@ def record_trade(session, stock_code: str, trade_type: str, quantity: int,
 def get_today_trades(session) -> List[Dict]:
     """오늘의 거래 내역 조회"""
     from .models import TradeLog
-    from sqlalchemy import func
-    
+    from sqlalchemy import func, select
+
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    rows = session.query(
+
+    stmt = select(
         TradeLog.stock_code,
         TradeLog.trade_type,
         TradeLog.quantity,
         TradeLog.price,
         func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
         TradeLog.trade_timestamp
-    ).filter(TradeLog.trade_timestamp >= today_start).order_by(TradeLog.trade_timestamp.desc()).all()
+    ).where(TradeLog.trade_timestamp >= today_start).order_by(TradeLog.trade_timestamp.desc())
+    rows = session.execute(stmt).all()
     
     trades = []
     for row in rows:
@@ -850,7 +852,8 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         end_dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
         
         # [Fix] Join 제거 - TradeLog만 조회 (Cartesian Product 방지)
-        rows = session.query(
+        from sqlalchemy import select
+        stmt = select(
             TradeLog.stock_code,
             TradeLog.trade_type,
             TradeLog.quantity,
@@ -859,10 +862,11 @@ def get_trade_logs(session, date: str) -> List[Dict]:
             TradeLog.strategy_signal,
             func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
             TradeLog.trade_timestamp
-        ).filter(
-            TradeLog.trade_timestamp >= start_dt, 
+        ).where(
+            TradeLog.trade_timestamp >= start_dt,
             TradeLog.trade_timestamp <= end_dt
-        ).order_by(TradeLog.trade_timestamp.asc()).all()
+        ).order_by(TradeLog.trade_timestamp.asc())
+        rows = session.execute(stmt).all()
         
         if not rows:
             return []
@@ -872,18 +876,20 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         name_map = {}
         if stock_codes:
             # 1. ActivePortfolio에서 종목명 조회
-            ap_rows = session.query(ActivePortfolio.stock_code, ActivePortfolio.stock_name)\
-                .filter(ActivePortfolio.stock_code.in_(stock_codes))\
-                .all()
+            ap_stmt = select(ActivePortfolio.stock_code, ActivePortfolio.stock_name).where(
+                ActivePortfolio.stock_code.in_(stock_codes)
+            )
+            ap_rows = session.execute(ap_stmt).all()
             name_map = {p[0]: p[1] for p in ap_rows}
-            
+
             # 2. ActivePortfolio에 없는 종목은 WatchList에서 조회 (매도된 종목 등)
             missing_codes = [c for c in stock_codes if c not in name_map]
             if missing_codes:
                 WatchList = db_models.WatchList
-                wl_rows = session.query(WatchList.stock_code, WatchList.stock_name)\
-                    .filter(WatchList.stock_code.in_(missing_codes))\
-                    .all()
+                wl_stmt = select(WatchList.stock_code, WatchList.stock_name).where(
+                    WatchList.stock_code.in_(missing_codes)
+                )
+                wl_rows = session.execute(wl_stmt).all()
                 for w in wl_rows:
                     name_map[w[0]] = w[1]
         

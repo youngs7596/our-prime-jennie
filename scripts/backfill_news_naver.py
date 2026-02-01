@@ -101,10 +101,11 @@ def backfill_stock_news(stock_code, stock_name, classifier, session):
             
             # Save to DB
             from shared.db.models import NewsSentiment
-            from sqlalchemy import text
-            
+            from sqlalchemy import text, select
+
             # Check DB existence
-            existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == link).first()
+            stmt = select(NewsSentiment).where(NewsSentiment.source_url == link)
+            existing = session.scalars(stmt).first()
             if existing:
                 continue
 

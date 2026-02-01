@@ -15,6 +15,7 @@ from pathlib import Path
 # shared 모듈 경로 추가
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sqlalchemy import delete
 from shared.db.connection import get_session
 from shared.db.models import IndustryCompetitors, EventImpactRules, SectorRelationStats
 
@@ -110,7 +111,7 @@ def init_industry_competitors(session):
     ]
     
     # 기존 데이터 삭제 후 새로 삽입
-    session.query(IndustryCompetitors).delete()
+    session.execute(delete(IndustryCompetitors))
     
     for data in competitors_data:
         record = IndustryCompetitors(**data)
@@ -222,7 +223,7 @@ def init_event_impact_rules(session):
     ]
     
     # 기존 데이터 삭제 후 새로 삽입
-    session.query(EventImpactRules).delete()
+    session.execute(delete(EventImpactRules))
     
     for data in event_rules:
         record = EventImpactRules(**data)
@@ -325,7 +326,7 @@ def init_sector_relation_stats(session):
     ]
     
     # 기존 데이터 삭제 후 새로 삽입
-    session.query(SectorRelationStats).delete()
+    session.execute(delete(SectorRelationStats))
     
     for data in relation_stats:
         record = SectorRelationStats(**data)

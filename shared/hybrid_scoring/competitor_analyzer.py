@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 
 from shared.db.connection import get_session
 from shared.db.models import (
@@ -234,12 +234,13 @@ class CompetitorAnalyzer:
         """
         session = get_session()
         try:
-            records = session.query(IndustryCompetitors).filter(
+            stmt = select(IndustryCompetitors).where(
                 and_(
                     IndustryCompetitors.sector_code == sector_code,
                     IndustryCompetitors.is_active == 1
                 )
-            ).order_by(IndustryCompetitors.rank_in_sector).all()
+            ).order_by(IndustryCompetitors.rank_in_sector)
+            records = session.scalars(stmt).all()
             
             return [
                 CompetitorInfo(
@@ -276,16 +277,16 @@ class CompetitorAnalyzer:
         """
         session = get_session()
         try:
-            query = session.query(SectorRelationStats).filter(
+            stmt = select(SectorRelationStats).where(
                 SectorRelationStats.sector_code == sector_code
             )
-            
+
             if leader_code:
-                query = query.filter(SectorRelationStats.leader_stock_code == leader_code)
+                stmt = stmt.where(SectorRelationStats.leader_stock_code == leader_code)
             if follower_code:
-                query = query.filter(SectorRelationStats.follower_stock_code == follower_code)
-            
-            records = query.all()
+                stmt = stmt.where(SectorRelationStats.follower_stock_code == follower_code)
+
+            records = session.scalars(stmt).all()
             
             return [
                 {
@@ -319,9 +320,10 @@ class CompetitorAnalyzer:
         if self._event_rules_cache is None:
             session = get_session()
             try:
-                records = session.query(EventImpactRules).filter(
+                stmt = select(EventImpactRules).where(
                     EventImpactRules.is_active == 1
-                ).all()
+                )
+                records = session.scalars(stmt).all()
                 
                 self._event_rules_cache = {
                     r.event_type: {
@@ -345,9 +347,10 @@ class CompetitorAnalyzer:
     
     def _get_stock_info(self, session, stock_code: str) -> Optional[CompetitorInfo]:
         """종목의 섹터 및 기본 정보 조회"""
-        record = session.query(IndustryCompetitors).filter(
+        stmt = select(IndustryCompetitors).where(
             IndustryCompetitors.stock_code == stock_code
-        ).first()
+        )
+        record = session.scalars(stmt).first()
         
         if not record:
             return None
@@ -364,19 +367,20 @@ class CompetitorAnalyzer:
         )
     
     def _get_competitors(
-        self, 
-        session, 
-        stock_code: str, 
+        self,
+        session,
+        stock_code: str,
         sector_code: str
     ) -> List[CompetitorInfo]:
         """동일 섹터의 경쟁사 목록 조회 (자기 자신 제외)"""
-        records = session.query(IndustryCompetitors).filter(
+        stmt = select(IndustryCompetitors).where(
             and_(
                 IndustryCompetitors.sector_code == sector_code,
                 IndustryCompetitors.stock_code != stock_code,
                 IndustryCompetitors.is_active == 1
             )
-        ).order_by(IndustryCompetitors.rank_in_sector).all()
+        ).order_by(IndustryCompetitors.rank_in_sector)
+        records = session.scalars(stmt).all()
         
         return [
             CompetitorInfo(
@@ -402,13 +406,14 @@ class CompetitorAnalyzer:
         cutoff_date = datetime.now() - timedelta(days=lookback_days)
         
         # NEWS_SENTIMENT 테이블에서 부정적 뉴스 조회
-        records = session.query(NewsSentiment).filter(
+        stmt = select(NewsSentiment).where(
             and_(
                 NewsSentiment.stock_code == stock_code,
                 NewsSentiment.sentiment_score < 40,  # 부정적 뉴스
                 NewsSentiment.created_at >= cutoff_date
             )
-        ).order_by(NewsSentiment.created_at.desc()).all()
+        ).order_by(NewsSentiment.created_at.desc())
+        records = session.scalars(stmt).all()
         
         events = []
         event_rules = self.get_event_impact_rules()
@@ -450,22 +455,24 @@ class CompetitorAnalyzer:
         """수혜 점수 계산"""
         
         # 디커플링 통계 조회
-        stats = session.query(SectorRelationStats).filter(
+        stmt = select(SectorRelationStats).where(
             and_(
                 SectorRelationStats.sector_code == target.sector_code,
                 SectorRelationStats.leader_stock_code == competitor.stock_code,
                 SectorRelationStats.follower_stock_code == target.stock_code
             )
-        ).first()
-        
+        )
+        stats = session.scalars(stmt).first()
+
         # 역방향도 확인 (리더-팔로워 관계가 반대일 수 있음)
         if not stats:
-            stats = session.query(SectorRelationStats).filter(
+            stmt2 = select(SectorRelationStats).where(
                 and_(
                     SectorRelationStats.sector_code == target.sector_code,
                     SectorRelationStats.leader_stock_code == competitor.stock_code
                 )
-            ).first()
+            )
+            stats = session.scalars(stmt2).first()
         
         # 기본 수혜 점수 계산
         base_benefit = get_competitor_benefit(event.event_type)
@@ -592,10 +599,11 @@ def get_all_sectors() -> List[dict]:
     session = get_session()
     try:
         from sqlalchemy import distinct
-        records = session.query(
+        stmt = select(
             distinct(IndustryCompetitors.sector_code),
             IndustryCompetitors.sector_name
-        ).filter(IndustryCompetitors.is_active == 1).all()
+        ).where(IndustryCompetitors.is_active == 1)
+        records = session.execute(stmt).all()
         
         return [
             {'code': r[0], 'name': r[1]}

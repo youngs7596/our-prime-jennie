@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 
 from shared.db.connection import get_session
 from shared.db.models import (
@@ -158,9 +158,10 @@ class PairTradingStrategy:
         session = get_session()
         try:
             # 2. 피해 기업의 섹터 정보 조회
-            affected_stock = session.query(IndustryCompetitors).filter(
+            stmt = select(IndustryCompetitors).where(
                 IndustryCompetitors.stock_code == affected_code
-            ).first()
+            )
+            affected_stock = session.scalars(stmt).first()
             
             if not affected_stock:
                 logger.warning(f"{affected_code}는 경쟁사 매핑에 없음")
@@ -170,15 +171,17 @@ class PairTradingStrategy:
             sector_name = affected_stock.sector_name
             
             # 3. 디커플링 통계 조회
-            stats = session.query(SectorRelationStats).filter(
+            stats_stmt = select(SectorRelationStats).where(
                 SectorRelationStats.leader_stock_code == affected_code
-            ).order_by(SectorRelationStats.decoupling_rate.desc()).first()
-            
+            ).order_by(SectorRelationStats.decoupling_rate.desc())
+            stats = session.scalars(stats_stmt).first()
+
             if not stats:
                 # 리더가 아닌 경우, 같은 섹터의 다른 통계 조회
-                stats = session.query(SectorRelationStats).filter(
+                stats_stmt2 = select(SectorRelationStats).where(
                     SectorRelationStats.sector_code == sector_code
-                ).order_by(SectorRelationStats.decoupling_rate.desc()).first()
+                ).order_by(SectorRelationStats.decoupling_rate.desc())
+                stats = session.scalars(stats_stmt2).first()
             
             if not stats:
                 logger.warning(f"{sector_name} 섹터 디커플링 통계 없음")
@@ -199,9 +202,10 @@ class PairTradingStrategy:
             
             # 5. 수혜 기업 정보 조회
             beneficiary_code = stats.follower_stock_code
-            beneficiary = session.query(IndustryCompetitors).filter(
+            beneficiary_stmt = select(IndustryCompetitors).where(
                 IndustryCompetitors.stock_code == beneficiary_code
-            ).first()
+            )
+            beneficiary = session.scalars(beneficiary_stmt).first()
             
             if not beneficiary:
                 logger.warning(f"수혜 기업 정보 없음: {beneficiary_code}")
@@ -304,12 +308,13 @@ class PairTradingStrategy:
         
         session = get_session()
         try:
-            events = session.query(CompetitorBenefitEvents).filter(
+            stmt = select(CompetitorBenefitEvents).where(
                 and_(
                     CompetitorBenefitEvents.status == 'ACTIVE',
                     CompetitorBenefitEvents.expires_at >= datetime.now(timezone.utc)
                 )
-            ).order_by(CompetitorBenefitEvents.benefit_score.desc()).all()
+            ).order_by(CompetitorBenefitEvents.benefit_score.desc())
+            events = session.scalars(stmt).all()
             
             signals = []
             for event in events:
@@ -418,9 +423,10 @@ def analyze_pair_opportunity(affected_code: str, event_type: str, severity: int)
     # 피해 기업 정보 조회
     session = get_session()
     try:
-        stock = session.query(IndustryCompetitors).filter(
+        stmt = select(IndustryCompetitors).where(
             IndustryCompetitors.stock_code == affected_code
-        ).first()
+        )
+        stock = session.scalars(stmt).first()
         
         if not stock:
             return None

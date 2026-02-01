@@ -42,6 +42,7 @@ if not os.getenv('SECRETS_FILE'):
     os.environ['SECRETS_FILE'] = os.path.join(os.path.dirname(__file__), '..', 'secrets.json')
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select, delete
 
 from shared.db.connection import session_scope, ensure_engine_initialized
 from shared.db.models import ActivePortfolio
@@ -99,7 +100,7 @@ def get_db_portfolio(session: Session) -> List[ActivePortfolio]:
     """DB에서 ActivePortfolio 조회"""
     logger.info("🔍 DB에서 ACTIVE_PORTFOLIO 조회 중...")
     
-    holdings = session.query(ActivePortfolio).all()
+    holdings = session.scalars(select(ActivePortfolio)).all()
     
     logger.info(f"✅ DB 포트폴리오: {len(holdings)}개")
     return holdings
@@ -240,9 +241,11 @@ def apply_sync(session: Session, comparison: Dict, kis_holdings: List[Dict], dry
         if dry_run:
             logger.info(f"[DRY RUN] {item['code']} {item['name']}: 삭제 예정 (청산됨)")
         else:
-            deleted = session.query(ActivePortfolio).filter(
+            stmt = delete(ActivePortfolio).where(
                 ActivePortfolio.stock_code == item['code']
-            ).delete()
+            )
+            result = session.execute(stmt)
+            deleted = result.rowcount
             if deleted:
                 logger.info(f"✅ {item['code']} {item['name']}: 삭제 완료 (청산됨)")
                 changes_made += 1
@@ -252,9 +255,8 @@ def apply_sync(session: Session, comparison: Dict, kis_holdings: List[Dict], dry
         if dry_run:
             logger.info(f"[DRY RUN] {item['code']} {item['name']}: 수량 {item['db_quantity']} → {item['kis_quantity']}")
         else:
-            portfolio = session.query(ActivePortfolio).filter(
-                ActivePortfolio.stock_code == item['code']
-            ).first()
+            stmt = select(ActivePortfolio).where(ActivePortfolio.stock_code == item['code'])
+            portfolio = session.scalars(stmt).first()
             if portfolio:
                 portfolio.quantity = item['kis_quantity']
                 portfolio.average_buy_price = item['kis_avg_price']
@@ -268,9 +270,8 @@ def apply_sync(session: Session, comparison: Dict, kis_holdings: List[Dict], dry
         if dry_run:
             logger.info(f"[DRY RUN] {item['code']} {item['name']}: 평단가 {item['db_avg_price']:,.0f} → {item['kis_avg_price']:,.0f}원")
         else:
-            portfolio = session.query(ActivePortfolio).filter(
-                ActivePortfolio.stock_code == item['code']
-            ).first()
+            stmt = select(ActivePortfolio).where(ActivePortfolio.stock_code == item['code'])
+            portfolio = session.scalars(stmt).first()
             if portfolio:
                 portfolio.average_buy_price = item['kis_avg_price']
                 portfolio.total_buy_amount = portfolio.quantity * item['kis_avg_price']

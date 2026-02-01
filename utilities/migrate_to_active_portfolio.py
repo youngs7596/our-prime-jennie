@@ -5,6 +5,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
+from sqlalchemy import select
 from shared.db.connection import get_session, ensure_engine_initialized, get_engine
 from shared.db.models import Portfolio, ActivePortfolio, Base
 
@@ -49,7 +50,8 @@ def migrate():
     with get_session() as session:
         try:
             # 2. 기존 Portfolio에서 HOLDING 아이템 모두 조회
-            holdings = session.query(Portfolio).filter(Portfolio.status == 'HOLDING').all()
+            stmt = select(Portfolio).where(Portfolio.status == 'HOLDING')
+            holdings = session.scalars(stmt).all()
             
             logger.info(f"📋 기존 PORTFOLIO 테이블에서 'HOLDING' 상태 {len(holdings)}건 발견.")
             
@@ -58,7 +60,7 @@ def migrate():
             # 3. ActivePortfolio로 이관
             for h in holdings:
                 # 중복 방지를 위해 먼저 조회 (혹시라도 스크립트 재실행 시)
-                existing = session.query(ActivePortfolio).filter_by(stock_code=h.stock_code).first()
+                existing = session.scalars(select(ActivePortfolio).where(ActivePortfolio.stock_code == h.stock_code)).first()
                 if existing:
                     logger.info(f"  - [Skip] {h.stock_code} ({h.stock_name}): 이미 ACTIVE_PORTFOLIO에 존재함.")
                     continue

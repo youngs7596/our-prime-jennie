@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.db import connection, models
 from shared.db.connection import ensure_engine_initialized
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 def seed_mock_data():
     ensure_engine_initialized()
@@ -19,7 +20,7 @@ def seed_mock_data():
         stock_code = "005930"
         stock_name = "삼성전자"
         
-        master = session.query(models.StockMaster).filter_by(stock_code=stock_code).first()
+        master = session.scalars(select(models.StockMaster).filter_by(stock_code=stock_code)).first()
         if not master:
             master = models.StockMaster(
                 stock_code=stock_code,
@@ -45,10 +46,10 @@ def seed_mock_data():
         
         while current_date <= end_date:
             # Check existence
-            existing = session.query(models.StockDailyPrice).filter_by(
-                stock_code=stock_code, 
+            existing = session.scalars(select(models.StockDailyPrice).filter_by(
+                stock_code=stock_code,
                 price_date=current_date
-            ).first()
+            )).first()
             
             if not existing:
                 # Random walk with slight upward drift
@@ -79,10 +80,10 @@ def seed_mock_data():
         kospi_added = 0
         
         while current_date <= end_date:
-             existing = session.query(models.StockDailyPrice).filter_by(
-                stock_code=kospi_code, 
+             existing = session.scalars(select(models.StockDailyPrice).filter_by(
+                stock_code=kospi_code,
                 price_date=current_date
-            ).first()
+            )).first()
              
              if not existing:
                 change = random.uniform(-0.005, 0.005)

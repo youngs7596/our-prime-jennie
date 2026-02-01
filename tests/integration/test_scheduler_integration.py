@@ -8,6 +8,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
+from sqlalchemy import select
 
 
 class TestSchedulerIntegration:
@@ -50,9 +51,8 @@ class TestSchedulerIntegration:
         session.commit()
         
         # 2. Query Config
-        retrieved = session.query(models.Config).filter_by(
-            config_key='SCHEDULED_JOB_SCOUT_MORNING'
-        ).first()
+        stmt = select(models.Config).where(models.Config.config_key == 'SCHEDULED_JOB_SCOUT_MORNING')
+        retrieved = session.scalars(stmt).first()
         assert retrieved is not None
         parsed = json.loads(retrieved.config_value)
         assert parsed['job_name'] == 'Scout Job - Morning'
@@ -63,9 +63,8 @@ class TestSchedulerIntegration:
         retrieved.config_value = json.dumps(parsed)
         session.commit()
         
-        updated = session.query(models.Config).filter_by(
-            config_key='SCHEDULED_JOB_SCOUT_MORNING'
-        ).first()
+        stmt = select(models.Config).where(models.Config.config_key == 'SCHEDULED_JOB_SCOUT_MORNING')
+        updated = session.scalars(stmt).first()
         updated_parsed = json.loads(updated.config_value)
         assert updated_parsed['is_active'] is False
         
@@ -73,9 +72,8 @@ class TestSchedulerIntegration:
         session.delete(updated)
         session.commit()
         
-        deleted = session.query(models.Config).filter_by(
-            config_key='SCHEDULED_JOB_SCOUT_MORNING'
-        ).first()
+        stmt = select(models.Config).where(models.Config.config_key == 'SCHEDULED_JOB_SCOUT_MORNING')
+        deleted = session.scalars(stmt).first()
         assert deleted is None
     
     def test_job_trigger_publishes_to_rabbitmq(self, mock_rabbitmq, mocker):
@@ -128,7 +126,8 @@ class TestSchedulerIntegration:
         session.commit()
         
         # Verify
-        found = session.query(models.WatchList).filter_by(stock_code='005930').first()
+        stmt = select(models.WatchList).where(models.WatchList.stock_code == '005930')
+        found = session.scalars(stmt).first()
         assert found is not None
         assert found.llm_score == 85.0
         assert found.trade_tier == 'TIER1'
@@ -159,7 +158,7 @@ class TestSchedulerIntegration:
         session.commit()
         
         # Verify
-        log = session.query(models.OptimizationHistory).first()
+        log = session.scalars(select(models.OptimizationHistory)).first()
         assert log is not None
         assert log.ai_decision == 'APPLY'
         assert log.is_applied == 'Y'

@@ -159,8 +159,9 @@ def get_all_config(connection):
     """
     try:
         from shared.db.models import Config
+        from sqlalchemy import select
         with get_session() as session:
-            configs = session.query(Config).all()
+            configs = session.scalars(select(Config)).all()
             config_dict = {c.config_key: c.config_value for c in configs}
             logger.info(f"✅ DB: CONFIG 테이블에서 {len(config_dict)}개 설정값 조회 완료")
             return config_dict

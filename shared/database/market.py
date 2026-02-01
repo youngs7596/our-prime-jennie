@@ -424,10 +424,11 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
     try:
         from shared.db.models import NewsSentiment
         from datetime import datetime
-        from sqlalchemy import text
-        
+        from sqlalchemy import text, select
+
         # 중복 URL 체크 (이미 저장된 뉴스면 Skip)
-        existing = session.query(NewsSentiment).filter(NewsSentiment.source_url == url).first()
+        stmt = select(NewsSentiment).where(NewsSentiment.source_url == url)
+        existing = session.scalars(stmt).first()
         if existing:
             logger.debug(f"ℹ️ [DB] 이미 존재하는 뉴스입니다. (Skip): {title[:20]}...")
             return

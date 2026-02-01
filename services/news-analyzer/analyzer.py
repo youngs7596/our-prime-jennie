@@ -135,9 +135,11 @@ def _check_if_article_exists_in_db(source_url: str) -> bool:
     try:
         from shared.db.models import NewsSentiment
         from shared.db.connection import session_scope
-        
+        from sqlalchemy import select
+
         with session_scope() as session:
-            existing = session.query(NewsSentiment.id).filter(NewsSentiment.source_url == source_url).first()
+            stmt = select(NewsSentiment.id).where(NewsSentiment.source_url == source_url)
+            existing = session.execute(stmt).first()
             return existing is not None
     except Exception as e:
         logger.error(f"❌ DB 중복 체크 실패: {e}")

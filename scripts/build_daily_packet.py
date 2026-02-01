@@ -113,14 +113,17 @@ def gather_real_data() -> Dict[str, Any]:
     
     try:
         with session_scope(readonly=True) as session:
+            from sqlalchemy import select, func
             # 1. Total Scanned Count (Approximate from Shadow + Decision)
-            veto_count = session.query(ShadowRadarLog).filter(
+            veto_stmt = select(func.count()).select_from(ShadowRadarLog).where(
                 ShadowRadarLog.timestamp >= today_start
-            ).count()
-            
-            decision_count = session.query(LLMDecisionLedger).filter(
+            )
+            veto_count = session.scalar(veto_stmt)
+
+            decision_stmt = select(func.count()).select_from(LLMDecisionLedger).where(
                 LLMDecisionLedger.timestamp >= today_start
-            ).count()
+            )
+            decision_count = session.scalar(decision_stmt)
             
             summary_stats["total_scanned"] = veto_count + decision_count
             summary_stats["selected_candidates"] = decision_count
@@ -130,9 +133,10 @@ def gather_real_data() -> Dict[str, Any]:
                 summary_stats["veto_count"] = veto_count
                 
             # 2. ShadowRadarLog (VETO Cases)
-            veto_logs = session.query(ShadowRadarLog).filter(
+            veto_logs_stmt = select(ShadowRadarLog).where(
                 ShadowRadarLog.timestamp >= today_start
-            ).all()
+            )
+            veto_logs = session.scalars(veto_logs_stmt).all()
 
             for log in veto_logs:
                 cases.append({
@@ -145,9 +149,10 @@ def gather_real_data() -> Dict[str, Any]:
                 })
 
             # 3. LLMDecisionLedger (DECISION Cases)
-            decisions = session.query(LLMDecisionLedger).filter(
+            decisions_stmt = select(LLMDecisionLedger).where(
                 LLMDecisionLedger.timestamp >= today_start
-            ).all()
+            )
+            decisions = session.scalars(decisions_stmt).all()
 
             for dec in decisions:
                 cat = "NORMAL"

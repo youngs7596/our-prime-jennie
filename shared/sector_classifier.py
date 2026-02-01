@@ -58,9 +58,11 @@ class SectorClassifier:
         if self.db_pool_initialized:
             try:
                 from .db.models import StockMaster
+                from sqlalchemy import select
                 # [수정] SECTOR_KOSPI200 컬럼을 우선적으로 조회
                 with session_scope(readonly=True) as session:
-                    result = session.query(StockMaster.sector_kospi200).filter(StockMaster.stock_code == stock_code).scalar()
+                    stmt = select(StockMaster.sector_kospi200).where(StockMaster.stock_code == stock_code)
+                    result = session.scalar(stmt)
                     if result and result not in ('etc', '미분류'):
                         sector = result
                         logger.debug(f"   [Sector] DB에서 '{stock_name}' 섹터 조회 (SECTOR_KOSPI200): {sector}")

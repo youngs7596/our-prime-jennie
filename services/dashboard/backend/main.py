@@ -498,12 +498,14 @@ async def get_news_sentiment_api(
             stock_names_map = {}
             if stock_codes_needed:
                 try:
+                    from sqlalchemy import select
                     with get_session() as session:
-                        w_list = session.query(WatchList.stock_code, WatchList.stock_name).filter(
+                        stmt = select(WatchList.stock_code, WatchList.stock_name).where(
                             WatchList.stock_code.in_(list(stock_codes_needed))
-                        ).all()
+                        )
+                        w_list = session.execute(stmt).all()
                         for w in w_list:
-                            stock_names_map[w.stock_code] = w.stock_name
+                            stock_names_map[w[0]] = w[1]
                 except Exception as e:
                     logger.warning(f"종목명 매핑 조회 실패: {e}")
 

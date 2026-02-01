@@ -2,6 +2,7 @@
 import logging
 import pandas as pd
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import select
 from shared.db.models import LLMDecisionLedger, StockDailyPrice
 
 logger = logging.getLogger(__name__)
@@ -12,13 +13,13 @@ DEFAULT_LOOKBACK_DAYS = 20  # 20 trading days ~ 1 month
 def fetch_ai_decisions(session, lookback_days=DEFAULT_LOOKBACK_DAYS):
     """Fetch BUY/SELL decisions from the ledger within the lookback period."""
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-    
-    query = session.query(LLMDecisionLedger).filter(
+
+    stmt = select(LLMDecisionLedger).where(
         LLMDecisionLedger.final_decision.in_(['BUY', 'SELL']),
         LLMDecisionLedger.timestamp >= cutoff_date
     ).order_by(LLMDecisionLedger.timestamp.desc())
-    
-    decisions = pd.read_sql(query.statement, session.bind)
+
+    decisions = pd.read_sql(stmt, session.bind)
     # Normalize columns to lowercase to handle DB case discrepancies
     decisions.columns = [c.lower() for c in decisions.columns]
     
@@ -27,12 +28,12 @@ def fetch_ai_decisions(session, lookback_days=DEFAULT_LOOKBACK_DAYS):
 
 def fetch_price_history(session, stock_code, start_date, days=30):
     """Fetch daily price history for a stock starting from a specific date."""
-    query = session.query(StockDailyPrice).filter(
+    stmt = select(StockDailyPrice).where(
         StockDailyPrice.stock_code == stock_code,
         StockDailyPrice.price_date >= start_date
     ).order_by(StockDailyPrice.price_date.asc())
-    
-    prices = pd.read_sql(query.statement, session.bind)
+
+    prices = pd.read_sql(stmt, session.bind)
     prices.columns = [c.lower() for c in prices.columns]
     return prices
 
@@ -63,13 +64,13 @@ def extract_reasoning_tags(reason_text):
 
 def fetch_score_history(session, stock_code, limit=5):
     """Fetch recent Hunter scores for a stock."""
-    query = session.query(LLMDecisionLedger.hunter_score).filter(
+    stmt = select(LLMDecisionLedger.hunter_score).where(
         LLMDecisionLedger.stock_code == stock_code,
         LLMDecisionLedger.final_decision.in_(['BUY', 'SELL'])
     ).order_by(LLMDecisionLedger.timestamp.desc()).limit(limit)
-    
+
     # Return list of scores (oldest to newest for sparkline)
-    result = [r[0] for r in query.all()]
+    result = [r[0] for r in session.execute(stmt).all()]
     return result[::-1] if result else []
 
 def analyze_performance(session, lookback_days=DEFAULT_LOOKBACK_DAYS):

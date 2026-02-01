@@ -135,18 +135,21 @@ def fetch_and_build_data(target_date_str: str) -> Dict[str, Any]:
     
     with session_scope(readonly=True) as session:
         # 1.1 Summary Stats (기존 유지)
-        veto_count = session.query(func.count(ShadowRadarLog.log_id)).filter(
+        veto_stmt = select(func.count(ShadowRadarLog.log_id)).where(
             ShadowRadarLog.timestamp >= start_dt, ShadowRadarLog.timestamp <= end_dt
-        ).scalar()
-        
-        total_ledger = session.query(func.count(LLMDecisionLedger.log_id)).filter(
+        )
+        veto_count = session.scalar(veto_stmt)
+
+        total_stmt = select(func.count(LLMDecisionLedger.log_id)).where(
             LLMDecisionLedger.timestamp >= start_dt, LLMDecisionLedger.timestamp <= end_dt
-        ).scalar()
-        
-        buy_count = session.query(func.count(LLMDecisionLedger.log_id)).filter(
+        )
+        total_ledger = session.scalar(total_stmt)
+
+        buy_stmt = select(func.count(LLMDecisionLedger.log_id)).where(
             LLMDecisionLedger.timestamp >= start_dt, LLMDecisionLedger.timestamp <= end_dt,
             LLMDecisionLedger.final_decision == 'BUY'
-        ).scalar()
+        )
+        buy_count = session.scalar(buy_stmt)
         
         no_trade_ratio = 0.0
         if total_ledger > 0:
@@ -161,9 +164,10 @@ def fetch_and_build_data(target_date_str: str) -> Dict[str, Any]:
 
         # 1.2 Fetch Raw Logs (Limit to ~50 recent items to fit context)
         # Fetch Vetos
-        veto_logs = session.query(ShadowRadarLog).filter(
+        veto_stmt = select(ShadowRadarLog).where(
             ShadowRadarLog.timestamp >= start_dt, ShadowRadarLog.timestamp <= end_dt
-        ).order_by(desc(ShadowRadarLog.timestamp)).limit(20).all()
+        ).order_by(desc(ShadowRadarLog.timestamp)).limit(20)
+        veto_logs = session.scalars(veto_stmt).all()
         
         for log in veto_logs:
             raw_candidates.append({
@@ -174,9 +178,10 @@ def fetch_and_build_data(target_date_str: str) -> Dict[str, Any]:
             })
             
         # Fetch Decisions
-        decision_logs = session.query(LLMDecisionLedger).filter(
+        decision_stmt = select(LLMDecisionLedger).where(
             LLMDecisionLedger.timestamp >= start_dt, LLMDecisionLedger.timestamp <= end_dt
-        ).order_by(desc(LLMDecisionLedger.hunter_score)).limit(30).all()
+        ).order_by(desc(LLMDecisionLedger.hunter_score)).limit(30)
+        decision_logs = session.scalars(decision_stmt).all()
         
         for log in decision_logs:
             raw_candidates.append({

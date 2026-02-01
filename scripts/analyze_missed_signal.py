@@ -16,6 +16,7 @@ import pandas as pd
 
 load_dotenv()
 
+from sqlalchemy import select
 from shared.db.connection import session_scope, ensure_engine_initialized
 from shared.db.models import StockMinutePrice, StockInvestorTrading, StockDailyPrice
 
@@ -75,11 +76,12 @@ def analyze_minute_data():
         today_start = datetime.strptime(TODAY, '%Y-%m-%d')
         today_end = today_start + timedelta(days=1)
         
-        minute_data = session.query(StockMinutePrice).filter(
+        stmt = select(StockMinutePrice).where(
             StockMinutePrice.stock_code == STOCK_CODE,
             StockMinutePrice.price_time >= today_start,
             StockMinutePrice.price_time < today_end
-        ).order_by(StockMinutePrice.price_time).all()
+        ).order_by(StockMinutePrice.price_time)
+        minute_data = session.scalars(stmt).all()
         
         print(f"📊 오늘 분봉 데이터: {len(minute_data)}개")
         
@@ -87,9 +89,10 @@ def analyze_minute_data():
             print("❌ 분봉 데이터가 없습니다!")
             
             # 대안: 일봉 데이터 확인
-            daily_data = session.query(StockDailyPrice).filter(
+            daily_stmt = select(StockDailyPrice).where(
                 StockDailyPrice.stock_code == STOCK_CODE
-            ).order_by(StockDailyPrice.price_date.desc()).limit(30).all()
+            ).order_by(StockDailyPrice.price_date.desc()).limit(30)
+            daily_data = session.scalars(daily_stmt).all()
             
             print(f"\n📈 대신 일봉 데이터 확인: 최근 {len(daily_data)}일")
             
@@ -166,9 +169,10 @@ def analyze_minute_data():
         print("💰 수급 데이터 (최근 5일)")
         print(f"{'='*60}\n")
         
-        supply_data = session.query(StockInvestorTrading).filter(
+        supply_stmt = select(StockInvestorTrading).where(
             StockInvestorTrading.stock_code == STOCK_CODE
-        ).order_by(StockInvestorTrading.trade_date.desc()).limit(5).all()
+        ).order_by(StockInvestorTrading.trade_date.desc()).limit(5)
+        supply_data = session.scalars(supply_stmt).all()
         
         if supply_data:
             for s in supply_data:

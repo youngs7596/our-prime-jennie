@@ -187,7 +187,9 @@ def run_snapshot():
         session = get_session()
         
         # ORM 방식 upsert: 기존 레코드 조회 후 업데이트 또는 신규 생성
-        existing = session.query(DailyAssetSnapshot).filter_by(snapshot_date=today).first()
+        from sqlalchemy import select
+        stmt = select(DailyAssetSnapshot).filter_by(snapshot_date=today)
+        existing = session.scalars(stmt).first()
         
         if existing:
             # 기존 레코드 업데이트

@@ -3,7 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from shared.db.models import ShadowRadarLog, StockDailyPrice
 
@@ -34,9 +34,10 @@ def analyze_shadow_performance(session: Session, lookback_days: int = 5, regret_
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=lookback_days)
     
     # 1. Fetch recent rejections
-    rejections = session.query(ShadowRadarLog).filter(
+    stmt = select(ShadowRadarLog).where(
         ShadowRadarLog.timestamp >= cutoff_date
-    ).order_by(ShadowRadarLog.timestamp.desc()).all()
+    ).order_by(ShadowRadarLog.timestamp.desc())
+    rejections = session.scalars(stmt).all()
     
     if not rejections:
         logger.info("   No rejections found in the lookback period.")
@@ -61,10 +62,11 @@ def analyze_shadow_performance(session: Session, lookback_days: int = 5, regret_
         rejection_date = log.timestamp.date()
         
         # Fetch prices from rejection date onwards
-        prices = session.query(StockDailyPrice).filter(
+        price_stmt = select(StockDailyPrice).where(
             StockDailyPrice.stock_code == code,
             StockDailyPrice.price_date >= rejection_date
-        ).order_by(StockDailyPrice.price_date.asc()).all()
+        ).order_by(StockDailyPrice.price_date.asc())
+        prices = session.scalars(price_stmt).all()
         
         if not prices:
             continue

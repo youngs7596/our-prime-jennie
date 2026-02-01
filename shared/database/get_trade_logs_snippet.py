@@ -6,26 +6,27 @@ def get_trade_logs(session, date: str) -> List[Dict]:
         date (str): 'YYYYMMDD' or 'YYYY-MM-DD'
     """
     from .models import TradeLog
-    from sqlalchemy import func
-    
+    from sqlalchemy import func, select
+
     try:
         if len(date) == 8:
             dt = datetime.strptime(date, "%Y%m%d")
         else:
             dt = datetime.strptime(date, "%Y-%m-%d")
-        
+
         start_dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
         end_dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        rows = session.query(
+
+        stmt = select(
             TradeLog.stock_code,
             TradeLog.trade_type,
             TradeLog.quantity,
             TradeLog.price,
             func.json_extract(TradeLog.key_metrics_json, '$.profit_amount').label('profit_amount'),
             TradeLog.trade_timestamp
-        ).filter(TradeLog.trade_timestamp >= start_dt, TradeLog.trade_timestamp <= end_dt)\
-         .order_by(TradeLog.trade_timestamp.asc()).all()
+        ).where(TradeLog.trade_timestamp >= start_dt, TradeLog.trade_timestamp <= end_dt)\
+         .order_by(TradeLog.trade_timestamp.asc())
+        rows = session.execute(stmt).all()
         
         trades = []
         for row in rows:

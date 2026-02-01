@@ -2,7 +2,7 @@ import sys
 import os
 import logging
 from datetime import datetime, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, select
 # from tabulate import tabulate (Removed)
 
 # 프로젝트 루트를 sys.path에 추가 (scripts 폴더 상위)
@@ -34,10 +34,11 @@ def inspect_trades():
     
     with session_scope(readonly=True) as session:
         # 1. 거래 내역 조회
-        trades = session.query(TradeLog).filter(
+        trades_stmt = select(TradeLog).where(
             TradeLog.trade_timestamp >= utc_start,
             TradeLog.trade_timestamp <= utc_end
-        ).order_by(TradeLog.trade_timestamp.asc()).all()
+        ).order_by(TradeLog.trade_timestamp.asc())
+        trades = session.scalars(trades_stmt).all()
         
         print(f"\n[TradeLog] Total Count: {len(trades)}")
         
@@ -87,7 +88,7 @@ def inspect_trades():
 
         # 3. 현재 포트폴리오 상태
         print("\n[Active Portfolio]")
-        portfolios = session.query(ActivePortfolio).all()
+        portfolios = session.scalars(select(ActivePortfolio)).all()
         portfolio_data = []
         for p in portfolios:
             portfolio_data.append([p.stock_code, p.stock_name, p.quantity, p.average_buy_price])
@@ -100,10 +101,11 @@ def inspect_trades():
             
         # 4. Agent Commands 조회 (Telegram 명령 확인)
         print("\n[Agent Commands]")
-        commands = session.query(AgentCommands).filter(
+        commands_stmt = select(AgentCommands).where(
             AgentCommands.created_at >= utc_start,
             AgentCommands.created_at <= utc_end
-        ).order_by(AgentCommands.created_at.asc()).all()
+        ).order_by(AgentCommands.created_at.asc())
+        commands = session.scalars(commands_stmt).all()
         
         print(f"{'ID':<6} {'Type':<12} {'Status':<10} {'Cmd/Msg':<30} {'Time(KST)'}")
         print("-" * 80)

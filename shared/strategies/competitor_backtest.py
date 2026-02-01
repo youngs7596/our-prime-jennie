@@ -31,7 +31,7 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, select
 
 from shared.db.connection import get_session
 from shared.db.models import (
@@ -154,12 +154,13 @@ class CompetitorBacktester:
         session = get_session()
         try:
             # 1. 섹터 내 종목 조회
-            stocks = session.query(IndustryCompetitors).filter(
+            stmt = select(IndustryCompetitors).where(
                 and_(
                     IndustryCompetitors.sector_code == sector_code,
                     IndustryCompetitors.is_active == 1
                 )
-            ).order_by(IndustryCompetitors.rank_in_sector).all()
+            ).order_by(IndustryCompetitors.rank_in_sector)
+            stocks = session.scalars(stmt).all()
             
             if len(stocks) < 2:
                 logger.warning(f"   섹터 {sector_code}에 종목이 2개 미만입니다.")
@@ -207,10 +208,11 @@ class CompetitorBacktester:
         session = get_session()
         try:
             # 모든 섹터 조회
-            sectors = session.query(
+            stmt = select(
                 IndustryCompetitors.sector_code,
                 IndustryCompetitors.sector_name
-            ).distinct().all()
+            ).distinct()
+            sectors = session.execute(stmt).all()
             
             all_results = {}
             for sector_code, sector_name in sectors:
@@ -239,13 +241,14 @@ class CompetitorBacktester:
         try:
             for result in results:
                 # 기존 레코드 조회
-                existing = session.query(SectorRelationStats).filter(
+                stmt = select(SectorRelationStats).where(
                     and_(
                         SectorRelationStats.sector_code == result.sector_code,
                         SectorRelationStats.leader_stock_code == result.leader_code,
                         SectorRelationStats.follower_stock_code == result.follower_code
                     )
-                ).first()
+                )
+                existing = session.scalars(stmt).first()
                 
                 if existing:
                     # 업데이트
@@ -437,13 +440,14 @@ class CompetitorBacktester:
     
     def _get_price_data(self, session, stock_code: str, start_date, end_date) -> pd.DataFrame:
         """가격 데이터 조회"""
-        records = session.query(StockDailyPrice).filter(
+        stmt = select(StockDailyPrice).where(
             and_(
                 StockDailyPrice.stock_code == stock_code,
                 StockDailyPrice.price_date >= start_date,
                 StockDailyPrice.price_date <= end_date
             )
-        ).order_by(StockDailyPrice.price_date).all()
+        ).order_by(StockDailyPrice.price_date)
+        records = session.scalars(stmt).all()
         
         if not records:
             return pd.DataFrame()
