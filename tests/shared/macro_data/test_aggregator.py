@@ -153,12 +153,13 @@ class TestEnhancedMacroAggregator:
         """오래된 데이터 필터링"""
         from datetime import timedelta
 
-        old_timestamp = datetime.now(UTC) - timedelta(hours=30)
+        # VIX의 max_age는 72시간 (주말 고려), 따라서 73시간 이상 오래된 데이터 사용
+        old_timestamp = datetime.now(UTC) - timedelta(hours=73)
         points = [
             MacroDataPoint(
                 indicator="vix",
                 value=18.5,
-                timestamp=old_timestamp,  # 30시간 전 (만료)
+                timestamp=old_timestamp,  # 73시간 전 (만료, vix max_age=72)
                 source="finnhub",
             ),
         ]

@@ -50,8 +50,8 @@ class TestDataValidator:
 
     def test_filter_expired_data(self, validator):
         """만료된 데이터 필터링 (3현자 권고: 24시간)"""
-        # 25시간 전 데이터
-        old_timestamp = datetime.now(UTC) - timedelta(hours=25)
+        # 73시간 전 데이터 (VIX의 max_age는 72시간)
+        old_timestamp = datetime.now(UTC) - timedelta(hours=73)
         point = MacroDataPoint(
             indicator="vix",
             value=18.5,

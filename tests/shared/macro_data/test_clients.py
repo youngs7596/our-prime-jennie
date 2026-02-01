@@ -6,6 +6,7 @@ tests/shared/macro_data/test_clients.py
 API 클라이언트 테스트 (Mock 기반).
 """
 
+import os
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,8 +31,11 @@ class TestFinnhubClient:
     def test_is_available_no_key(self):
         """API 키 없을 때"""
         from shared.macro_data.clients.finnhub_client import FinnhubClient
-        client = FinnhubClient(api_key="")
-        assert client.is_available() is False
+        # Mock env and secrets.json to ensure no API key is loaded
+        with patch.dict(os.environ, {"FINNHUB_API_KEY": ""}, clear=False), \
+             patch("shared.macro_data.clients.finnhub_client._load_api_key_from_secrets", return_value=None):
+            client = FinnhubClient(api_key="")
+            assert client.is_available() is False
 
     def test_get_rate_limit(self, client):
         """Rate limit 조회"""
@@ -43,19 +47,24 @@ class TestFinnhubClient:
         assert client.get_source_name() == "finnhub"
 
     def test_get_default_indicators(self, client):
-        """기본 지표"""
+        """기본 지표 (무료 티어)"""
         indicators = client.get_default_indicators()
-        assert "vix" in indicators
-        assert "usd_krw" in indicators
+        # 무료 티어에서 사용 가능한 지표 (ETFs)
+        assert "spy" in indicators    # S&P 500 ETF
+        assert "vxx" in indicators    # VIX futures ETF
+        assert "ewy" in indicators    # Korea ETF
 
     @pytest.mark.asyncio
     async def test_fetch_data_no_key(self):
         """API 키 없이 fetch"""
         from shared.macro_data.clients.finnhub_client import FinnhubClient
-        client = FinnhubClient(api_key="")
+        # Mock env and secrets.json to ensure no API key is loaded
+        with patch.dict(os.environ, {"FINNHUB_API_KEY": ""}, clear=False), \
+             patch("shared.macro_data.clients.finnhub_client._load_api_key_from_secrets", return_value=None):
+            client = FinnhubClient(api_key="")
 
-        result = await client.fetch_data()
-        assert result == []
+            result = await client.fetch_data()
+            assert result == []
 
     @pytest.mark.asyncio
     async def test_close(self, client):

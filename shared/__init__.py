@@ -21,5 +21,13 @@ logging.basicConfig(
 )
 
 # 3. 패키지 로거 생성 (이름: "shared")
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger(__name__)
 logger.info("--- 📦 'shared' 패키지 로드 완료 ---")
+
+# 4. 서브 모듈 lazy import (테스트에서 shared.macro_insight 접근 허용)
+# Note: 실제 사용 시에는 from shared.macro_insight import ... 권장
+def __getattr__(name):
+    if name == "macro_insight":
+        from shared import macro_insight
+        return macro_insight
+    raise AttributeError(f"module 'shared' has no attribute '{name}'")

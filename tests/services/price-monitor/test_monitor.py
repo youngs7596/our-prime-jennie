@@ -104,22 +104,31 @@ class TestPriceMonitor(unittest.TestCase):
             'high': [105]*20, 'low': [95]*20, 'close': [100]*20,
             'HIGH_PRICE': [105]*20, 'LOW_PRICE': [95]*20, 'CLOSE_PRICE': [100]*20
         })
-        
+
+        def config_side_effect(key, default=None):
+            config_map = {
+                'ATR_MULTIPLIER': 1.0,  # 1.0x ATR
+                'SELL_STOP_LOSS_PCT': -10.0,  # Fixed stop at -10% (wider than ATR stop)
+            }
+            return config_map.get(key, default)
+
+        self.mock_config.get_float.side_effect = config_side_effect
+
         with patch("monitor.database.get_daily_prices", return_value=prices), \
              patch("monitor.strategy.calculate_atr", return_value=5.0), \
+             patch("monitor.strategy.check_death_cross", return_value=False), \
              patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p: # ATR = 5
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
-            
-            self.mock_config.get_float.return_value = 2.0 # Multiplier
-            
-            # Stop Price = Buy(100) - (2.0 * 5) = 90
-            # Current Price = 89 -> Trigger
+
+            # ATR Stop = Buy(100) - (1.0 * macro_mult * 5) = 100 - (1.0 * 1.3 * 5) = 93.5
+            # Fixed Stop = -10% * 1.3 = -13% (wider, won't trigger first)
+            # Current Price = 93 -> ATR Stop Trigger (-7%)
             holding = {'code': '005930', 'name': 'Samsung', 'avg_price': 100, 'quantity': 10, 'id': 1}
             result = self.monitor._check_sell_signal(
-                self.mock_db_session, "005930", "Samsung", 100, 89, holding
+                self.mock_db_session, "005930", "Samsung", 100, 93, holding
             )
-            
+
             self.assertIsNotNone(result)
             self.assertIn("ATR Stop", result['reason'])
 

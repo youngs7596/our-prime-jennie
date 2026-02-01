@@ -22,6 +22,9 @@ uvicorn>=0.23.0
 httpx>=0.24.0
 gunicorn>=21.0.0
 
+# Async HTTP (macro_data clients)
+aiohttp>=3.9.0
+
 # 환경 변수 로딩
 python-dotenv>=1.0.0
 

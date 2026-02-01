@@ -364,25 +364,25 @@ class PriceMonitor:
             # =====================================================================
             # 1. 손절 조건 (Stop Loss)
             # =====================================================================
-            
+
+            # [v1.1] EnhancedTradingContext의 stop_loss_multiplier 적용 (ATR/Fixed 공용)
+            # VIX 높을 때 손절폭 확대 (1.0 ~ 1.5x)
+            macro_stop_mult = 1.0
+            try:
+                from shared.macro_insight import get_enhanced_trading_context
+                trading_ctx = get_enhanced_trading_context()
+                if trading_ctx:
+                    macro_stop_mult = trading_ctx.stop_loss_multiplier
+                    if macro_stop_mult != 1.0:
+                        logger.debug(f"   [{stock_name}] Macro Stop Mult: {macro_stop_mult:.2f} (VIX: {trading_ctx.vix_regime})")
+            except ImportError:
+                pass
+            except Exception:
+                pass
+
             # 1-1. ATR Trailing Stop (손절)
             if not potential_signal and atr:
                 mult = self.config.get_float('ATR_MULTIPLIER', default=2.0)
-
-                # [v1.1] EnhancedTradingContext의 stop_loss_multiplier 적용
-                # VIX 높을 때 손절폭 확대 (1.0 ~ 1.5x)
-                macro_stop_mult = 1.0
-                try:
-                    from shared.macro_insight import get_enhanced_trading_context
-                    trading_ctx = get_enhanced_trading_context()
-                    if trading_ctx:
-                        macro_stop_mult = trading_ctx.stop_loss_multiplier
-                        if macro_stop_mult != 1.0:
-                            logger.debug(f"   [{stock_name}] Macro Stop Mult: {macro_stop_mult:.2f} (VIX: {trading_ctx.vix_regime})")
-                except ImportError:
-                    pass
-                except Exception:
-                    pass
 
                 # 매크로 배율 적용 (ATR 배수를 늘려서 손절폭 확대)
                 mult = mult * macro_stop_mult
