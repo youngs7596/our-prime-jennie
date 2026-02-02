@@ -27,6 +27,7 @@ from .clients.fred_client import FREDClient
 from .clients.bok_ecos_client import BOKECOSClient
 from .clients.pykrx_client import PyKRXClient
 from .clients.rss_news_client import RSSNewsClient
+from .clients.political_news_client import PoliticalNewsClient
 from .validator import DataValidator, ValidationResult
 from .cache import get_macro_cache
 
@@ -45,6 +46,7 @@ class AggregatorConfig:
     enable_bok_ecos: bool = True
     enable_pykrx: bool = True
     enable_rss: bool = True
+    enable_political_news: bool = True  # 정치 뉴스 키워드 모니터링
 
     # 병렬 수집 타임아웃 (초)
     collection_timeout: int = 60
@@ -118,6 +120,9 @@ class EnhancedMacroAggregator:
         # Sentiment (RSS)
         "global_news_sentiment": "global_news_sentiment",
         "korea_news_sentiment": "korea_news_sentiment",
+        # Political Risk (Political News Client)
+        "political_risk_score": "political_risk_score",
+        "political_alert_count": "political_alert_count",
     }
 
     def __init__(self, config: Optional[AggregatorConfig] = None):
@@ -167,6 +172,9 @@ class EnhancedMacroAggregator:
 
         if self.config.enable_rss:
             self._clients["rss"] = RSSNewsClient()
+
+        if self.config.enable_political_news:
+            self._clients["political_news"] = PoliticalNewsClient()
 
         logger.info(
             f"[Aggregator] Initialized {len(self._clients)} clients: "
@@ -328,6 +336,11 @@ class EnhancedMacroAggregator:
                     snapshot_data["kospi_change_pct"] = best_point.metadata["change_pct"]
                 elif indicator == "kosdaq_index" and "change_pct" in best_point.metadata:
                     snapshot_data["kosdaq_change_pct"] = best_point.metadata["change_pct"]
+                # 정치 리스크 메타데이터 추출
+                elif indicator == "political_risk_score" and "risk_level" in best_point.metadata:
+                    snapshot_data["political_risk_level"] = best_point.metadata["risk_level"]
+                    if "alert_count" in best_point.metadata:
+                        snapshot_data["political_alert_count"] = best_point.metadata["alert_count"]
 
             # 오래된 데이터 추적
             if best_point.quality.value in ["stale", "expired"]:

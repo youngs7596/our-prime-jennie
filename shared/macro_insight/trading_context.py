@@ -45,11 +45,15 @@ class EnhancedTradingContext:
     context_date: date
     last_updated: datetime
 
-    # VIX 기반 리스크 레벨
+    # VIX 기반 리스크 레벨 (참고용)
     vix_value: Optional[float] = None
     vix_regime: str = "normal"  # low_vol, normal, elevated, crisis
 
-    # 포지션 사이징
+    # 정치 리스크 (키워드 모니터링 기반)
+    political_risk_score: Optional[float] = None  # 0-100
+    political_risk_level: str = "low"  # low, medium, high, critical
+
+    # 포지션 사이징 (Council 권고 반영)
     position_multiplier: float = 1.0  # 0.5 ~ 1.3
     max_position_count: int = 10      # 동시 보유 종목 수 제한
 
@@ -57,18 +61,22 @@ class EnhancedTradingContext:
     risk_off_level: int = 0           # 0=정상, 1=주의, 2=경계, 3=위험
     risk_off_reasons: List[str] = field(default_factory=list)
 
-    # 섹터 신호
+    # 섹터 신호 (Council 권고)
     sector_signals: Dict[str, float] = field(default_factory=dict)  # -1.0 ~ 1.0
     avoid_sectors: List[str] = field(default_factory=list)
     favor_sectors: List[str] = field(default_factory=list)
 
-    # 전략 힌트
+    # 전략 힌트 (Council 권고)
     strategy_hints: List[str] = field(default_factory=list)
-    # 예: ["momentum_ok", "avoid_breakout", "prefer_pullback"]
+    strategies_to_favor: List[str] = field(default_factory=list)  # Council 유리한 전략
+    strategies_to_avoid: List[str] = field(default_factory=list)  # Council 피해야 할 전략
 
-    # 손절/익절 조정
-    stop_loss_multiplier: float = 1.0   # 1.0 ~ 1.5
+    # 손절/익절 조정 (Council 권고 반영)
+    stop_loss_multiplier: float = 1.0   # 0.8 ~ 1.5
     take_profit_multiplier: float = 1.0 # 0.8 ~ 1.2
+
+    # Council 트레이딩 근거
+    trading_reasoning: str = ""
 
     # 원본 데이터 참조
     sentiment: str = "neutral"
@@ -96,24 +104,45 @@ class EnhancedTradingContext:
         return self.risk_off_level >= 1 or self.vix_regime in ["elevated", "crisis"]
 
     def get_allowed_strategies(self) -> List[str]:
-        """현재 컨텍스트에서 허용되는 전략 목록"""
-        if self.vix_regime == "crisis" or self.risk_off_level >= 3:
-            # 위기 시: 보수적 전략만
+        """
+        현재 컨텍스트에서 허용되는 전략 목록.
+
+        Council의 strategies_to_avoid를 우선 적용하고,
+        없으면 risk-off 레벨 기반 폴백.
+        """
+        all_strategies = [
+            "RECON_BULL_ENTRY", "MOMENTUM_CONTINUATION",
+            "SHORT_TERM_HIGH_BREAKOUT", "VOLUME_BREAKOUT_1MIN",
+            "BULL_PULLBACK", "VCP_BREAKOUT", "INSTITUTIONAL_ENTRY",
+            "GOLDEN_CROSS", "RSI_REBOUND", "MOMENTUM"
+        ]
+
+        # Council이 피해야 할 전략을 명시한 경우 해당 전략 제외
+        if self.strategies_to_avoid:
+            return [s for s in all_strategies if s not in self.strategies_to_avoid]
+
+        # 폴백: Risk-Off 레벨 기반 (하위 호환)
+        if self.risk_off_level >= 3:
             return ["RSI_REBOUND", "BULL_PULLBACK"]
-        elif self.vix_regime == "elevated" or self.risk_off_level >= 2:
-            # 경계 시: 공격적 전략 제외
+        elif self.risk_off_level >= 2:
             return [
                 "GOLDEN_CROSS", "RSI_REBOUND", "MOMENTUM",
                 "BULL_PULLBACK", "INSTITUTIONAL_ENTRY"
             ]
         else:
-            # 정상: 모든 전략
-            return [
-                "RECON_BULL_ENTRY", "MOMENTUM_CONTINUATION",
-                "SHORT_TERM_HIGH_BREAKOUT", "VOLUME_BREAKOUT_1MIN",
-                "BULL_PULLBACK", "VCP_BREAKOUT", "INSTITUTIONAL_ENTRY",
-                "GOLDEN_CROSS", "RSI_REBOUND", "MOMENTUM"
-            ]
+            return all_strategies
+
+    def is_strategy_favored(self, strategy: str) -> bool:
+        """Council이 권고한 유리한 전략인지 확인"""
+        if not self.strategies_to_favor:
+            return False
+        return strategy.upper() in [s.upper() for s in self.strategies_to_favor]
+
+    def should_avoid_strategy(self, strategy: str) -> bool:
+        """Council이 권고한 피해야 할 전략인지 확인"""
+        if not self.strategies_to_avoid:
+            return False
+        return strategy.upper() in [s.upper() for s in self.strategies_to_avoid]
 
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환"""
@@ -122,6 +151,8 @@ class EnhancedTradingContext:
             "last_updated": self.last_updated.isoformat(),
             "vix_value": self.vix_value,
             "vix_regime": self.vix_regime,
+            "political_risk_score": self.political_risk_score,
+            "political_risk_level": self.political_risk_level,
             "position_multiplier": self.position_multiplier,
             "max_position_count": self.max_position_count,
             "risk_off_level": self.risk_off_level,
@@ -130,8 +161,11 @@ class EnhancedTradingContext:
             "avoid_sectors": self.avoid_sectors,
             "favor_sectors": self.favor_sectors,
             "strategy_hints": self.strategy_hints,
+            "strategies_to_favor": self.strategies_to_favor,
+            "strategies_to_avoid": self.strategies_to_avoid,
             "stop_loss_multiplier": self.stop_loss_multiplier,
             "take_profit_multiplier": self.take_profit_multiplier,
+            "trading_reasoning": self.trading_reasoning,
             "sentiment": self.sentiment,
             "sentiment_score": self.sentiment_score,
             "data_completeness": self.data_completeness,
@@ -146,6 +180,7 @@ def calculate_risk_off_level(
     treasury_spread: Optional[float],
     sentiment_score: int,
     news_sentiment: Optional[float],
+    political_risk_level: str = "low",
 ) -> Tuple[int, List[str]]:
     """
     Risk-Off 레벨 계산.
@@ -158,6 +193,7 @@ def calculate_risk_off_level(
         treasury_spread: 10Y-2Y 스프레드
         sentiment_score: Council 감성 점수 (0-100)
         news_sentiment: 뉴스 감성 (-1.0 ~ 1.0)
+        political_risk_level: 정치 리스크 레벨 (low, medium, high, critical)
 
     Returns:
         (level 0-3, reasons)
@@ -188,6 +224,12 @@ def calculate_risk_off_level(
             signals.append(("news_very_negative", 1))
         elif news_sentiment < -0.15:
             signals.append(("news_negative", 1))
+
+    # 5. 정치 리스크 (키워드 모니터링)
+    if political_risk_level == "critical":
+        signals.append(("political_risk_critical", 2))
+    elif political_risk_level == "high":
+        signals.append(("political_risk_high", 1))
 
     # 다중 지표 확인: 2개 이상이어야 RISK_OFF
     total_score = sum(s[1] for s in signals)
@@ -423,6 +465,8 @@ def build_trading_context(
     """
     글로벌 스냅샷 + Council 인사이트로 트레이딩 컨텍스트 생성.
 
+    Council의 트레이딩 권고를 우선 사용하고, 없으면 기존 계산 로직 사용.
+
     Args:
         global_snapshot: GlobalMacroSnapshot.to_dict()
         council_insight: DailyMacroInsight (dict 형태)
@@ -448,7 +492,20 @@ def build_trading_context(
     kospi_index = None
     data_completeness = 0.0
 
-    # 글로벌 스냅샷에서 추출
+    # Council Trading Recommendations (새로운 필드)
+    council_position_pct = None
+    council_stop_loss_pct = None
+    strategies_to_favor = []
+    strategies_to_avoid = []
+    sectors_to_favor = []
+    sectors_to_avoid = []
+    trading_reasoning = ""
+
+    # 정치 리스크 (키워드 모니터링)
+    political_risk_score = None
+    political_risk_level = "low"
+
+    # 글로벌 스냅샷에서 추출 (참고용)
     has_global = False
     if global_snapshot:
         has_global = True
@@ -461,6 +518,9 @@ def build_trading_context(
         kospi_index = global_snapshot.get("kospi_index")
         data_sources = global_snapshot.get("data_sources", [])
         data_completeness = global_snapshot.get("completeness_score", 0.0)
+        # 정치 리스크
+        political_risk_score = global_snapshot.get("political_risk_score")
+        political_risk_level = global_snapshot.get("political_risk_level", "low")
 
     # Council 인사이트에서 추출
     has_council = False
@@ -471,27 +531,49 @@ def build_trading_context(
         sector_signals_raw = council_insight.get("sector_signals", {})
         regime_hint = council_insight.get("regime_hint", "")
 
-    # Risk-Off 계산
+        # Council Trading Recommendations
+        council_position_pct = council_insight.get("position_size_pct")
+        council_stop_loss_pct = council_insight.get("stop_loss_adjust_pct")
+        strategies_to_favor = council_insight.get("strategies_to_favor", [])
+        strategies_to_avoid = council_insight.get("strategies_to_avoid", [])
+        sectors_to_favor = council_insight.get("sectors_to_favor", [])
+        sectors_to_avoid = council_insight.get("sectors_to_avoid", [])
+        trading_reasoning = council_insight.get("trading_reasoning", "")
+
+        # Council의 정치 리스크 평가 (LLM 기반, 우선 사용)
+        council_political_level = council_insight.get("political_risk_level")
+        if council_political_level and council_political_level in ["low", "medium", "high", "critical"]:
+            political_risk_level = council_political_level
+            logger.debug(f"[TradingContext] Using Council political_risk_level: {political_risk_level}")
+
+    # Risk-Off 계산 (다중 지표 기반)
     risk_off_level, risk_off_reasons = calculate_risk_off_level(
         vix=vix,
         vix_regime=vix_regime,
         treasury_spread=treasury_spread,
         sentiment_score=sentiment_score,
         news_sentiment=news_sentiment,
+        political_risk_level=political_risk_level,
     )
 
-    # 포지션 배율 계산
-    position_multiplier = calculate_position_multiplier(
-        vix_regime=vix_regime,
-        risk_off_level=risk_off_level,
-        sentiment_score=sentiment_score,
-    )
+    # 포지션 배율: Council 권고 우선, 없으면 기존 계산
+    if council_position_pct and council_position_pct != 100:
+        position_multiplier = council_position_pct / 100.0
+    else:
+        position_multiplier = calculate_position_multiplier(
+            vix_regime=vix_regime,
+            risk_off_level=risk_off_level,
+            sentiment_score=sentiment_score,
+        )
 
-    # 손절 배율 계산
-    stop_loss_multiplier = calculate_stop_loss_multiplier(
-        vix_regime=vix_regime,
-        risk_off_level=risk_off_level,
-    )
+    # 손절 배율: Council 권고 우선, 없으면 기존 계산
+    if council_stop_loss_pct and council_stop_loss_pct != 100:
+        stop_loss_multiplier = council_stop_loss_pct / 100.0
+    else:
+        stop_loss_multiplier = calculate_stop_loss_multiplier(
+            vix_regime=vix_regime,
+            risk_off_level=risk_off_level,
+        )
 
     # 최대 포지션 수 계산
     max_positions = calculate_max_positions(
@@ -499,10 +581,21 @@ def build_trading_context(
         risk_off_level=risk_off_level,
     )
 
-    # 섹터 신호 추출
-    sector_signals, avoid_sectors, favor_sectors = extract_sector_signals(
+    # 섹터 신호 추출 (기존 로직)
+    sector_signals, avoid_sectors_legacy, favor_sectors_legacy = extract_sector_signals(
         sector_signals_raw
     )
+
+    # Council 섹터 권고 우선 사용
+    if sectors_to_avoid:
+        avoid_sectors = sectors_to_avoid
+    else:
+        avoid_sectors = avoid_sectors_legacy
+
+    if sectors_to_favor:
+        favor_sectors = sectors_to_favor
+    else:
+        favor_sectors = favor_sectors_legacy
 
     # 전략 힌트 생성
     strategy_hints = get_strategy_hints(
@@ -517,6 +610,8 @@ def build_trading_context(
         last_updated=now,
         vix_value=vix,
         vix_regime=vix_regime,
+        political_risk_score=political_risk_score,
+        political_risk_level=political_risk_level,
         position_multiplier=position_multiplier,
         max_position_count=max_positions,
         risk_off_level=risk_off_level,
@@ -525,8 +620,11 @@ def build_trading_context(
         avoid_sectors=avoid_sectors,
         favor_sectors=favor_sectors,
         strategy_hints=strategy_hints,
+        strategies_to_favor=strategies_to_favor,
+        strategies_to_avoid=strategies_to_avoid,
         stop_loss_multiplier=stop_loss_multiplier,
         take_profit_multiplier=1.0,  # 기본값
+        trading_reasoning=trading_reasoning,
         sentiment=sentiment,
         sentiment_score=sentiment_score,
         regime_hint=regime_hint,
@@ -613,8 +711,22 @@ def get_enhanced_trading_context(
                 "sentiment_score": insight.sentiment_score,
                 "sector_signals": insight.sector_signals,
                 "regime_hint": insight.regime_hint,
+                # Council Trading Recommendations
+                "position_size_pct": insight.position_size_pct,
+                "stop_loss_adjust_pct": insight.stop_loss_adjust_pct,
+                "strategies_to_favor": insight.strategies_to_favor,
+                "strategies_to_avoid": insight.strategies_to_avoid,
+                "sectors_to_favor": insight.sectors_to_favor,
+                "sectors_to_avoid": insight.sectors_to_avoid,
+                "trading_reasoning": insight.trading_reasoning,
+                # Political Risk (Council 판단)
+                "political_risk_level": insight.political_risk_level,
+                "political_risk_summary": insight.political_risk_summary,
             }
-            logger.debug(f"[TradingContext] Council insight loaded: {insight.sentiment}")
+            logger.debug(
+                f"[TradingContext] Council insight loaded: {insight.sentiment}, "
+                f"pos={insight.position_size_pct}%, favor={insight.strategies_to_favor}"
+            )
     except ImportError:
         logger.debug("[TradingContext] macro_insight module not available")
     except Exception as e:

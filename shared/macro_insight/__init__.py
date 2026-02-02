@@ -47,6 +47,10 @@ from .daily_insight import (
     is_high_volatility_regime,
     get_stop_loss_multiplier,
     should_skip_sector,
+    # Council Trading Recommendations
+    is_strategy_favored,
+    should_avoid_strategy,
+    get_trading_reasoning,
 )
 
 from .enhanced_analyzer import (
@@ -98,6 +102,10 @@ __all__ = [
     "is_high_volatility_regime",
     "get_stop_loss_multiplier",
     "should_skip_sector",
+    # Council Trading Recommendations
+    "is_strategy_favored",
+    "should_avoid_strategy",
+    "get_trading_reasoning",
     # Enhanced Analyzer
     "EnhancedMacroAnalyzer",
     "EnhancedMacroInsight",

@@ -81,11 +81,13 @@ LLM Tiers:
 ### 주요 스케줄
 | DAG | 스케줄 (KST) | 설명 |
 |-----|-------------|------|
-| scout_job_v1 | 08:30-15:30, 30분 간격 | AI 종목 스캔 |
+| scout_job_v1 | 08:30-15:30, 30분 간격 | AI 종목 스캔 (KOSPI+KOSDAQ) |
 | enhanced_macro_collection | 07:00, 12:00, 18:00 | 글로벌 매크로 수집 |
 | macro_council | 07:30 | 3현자 매크로 분석 |
 | collect_intraday | 09:00-15:35, 5분 간격 | 5분봉 수집 |
-| collect_daily_prices | 18:15 | 일봉 수집 |
+| daily_market_data_collector | 16:00 | KOSPI 일봉 수집 |
+| daily_kosdaq_price_collector | 16:30 | KOSDAQ 일봉 수집 |
+| weekly_kosdaq_stock_master | 일요일 22:00 | KOSDAQ 마스터 업데이트 |
 | collect_investor_trading | 18:30 | 수급 데이터 |
 | collect_dart_filings | 18:45 | DART 공시 |
 | analyst_feedback_update | 18:00 | 분석가 피드백 |
@@ -260,7 +262,86 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 
-### 최근 세션 (2026-02-02 오전)
+### 최근 세션 (2026-02-02 밤 - 정치 뉴스 Council 통합)
+- **주제**: 정치/지정학적 뉴스를 Council LLM 분석에 통합
+- **배경**: 트럼프 연준의장 후보 지명 뉴스가 KOSDAQ 급락을 유발했으나 기존 매크로 시스템에서 감지하지 못함
+- **접근법 변경**: 규칙 기반 점수 → **Council LLM이 정치 리스크 직접 평가**
+  - 사용자 피드백: "어차피 모든 데이터를 LLM에게 보내서 종합 판단 받는데, 프롬프트에 정치 리스크 검토 추가하면 되지 않을까?"
+- **완료**:
+  - **PoliticalNewsClient 구현** (`shared/macro_data/clients/political_news_client.py`)
+    - 글로벌 RSS 피드 모니터링 (Reuters, BBC, NYT, WSJ, 연합뉴스)
+    - 키워드 기반 필터링 (fed, us_politics, trade, geopolitical, crisis)
+    - **용도 변경**: 점수 계산 → 헤드라인 수집 (Council 전달용)
+  - **Council 프롬프트 확장** (`run_macro_council.py`)
+    - `get_political_news_headlines()`: 24시간 내 정치 뉴스 최대 15개 수집
+    - 프롬프트에 정치/지정학적 리스크 분석 요청 추가
+    - Council이 직접 `political_risk_level` (low/medium/high/critical) 판단
+    - Council이 직접 `political_risk_summary` (1-2문장 요약) 작성
+  - **DailyMacroInsight 확장**
+    - `political_risk_level`: Council 판단 리스크 레벨
+    - `political_risk_summary`: Council 판단 리스크 요약
+    - DB 마이그레이션: `add_political_risk_to_macro_insight.sql`
+  - **EnhancedTradingContext 통합**
+    - Council의 `political_risk_level` 우선 사용
+    - GlobalMacroSnapshot 폴백 유지
+    - `calculate_risk_off_level()`: Critical → +2점, High → +1점
+  - **테스트 결과**: 1136 passed, 2 skipped
+- **데이터 흐름**:
+  ```
+  PoliticalNewsClient.fetch_alerts() → 헤드라인 수집
+                ↓
+  run_macro_council.py → Council에 뉴스 전달
+                ↓
+  Council (Gemini/Claude/GPT) → political_risk_level/summary 판단
+                ↓
+  DailyMacroInsight → DB 저장
+                ↓
+  EnhancedTradingContext → 트레이딩 서비스 사용
+  ```
+
+### 이전 세션 (2026-02-02 오후 - KOSDAQ 통합)
+- **주제**: KOSDAQ 종목 Scout 통합 및 데이터 수집 시스템 구축
+- **완료**:
+  - **Scout KOSDAQ 통합 (v1.1)**
+    - `scout_universe.py`: KOSDAQ_150_BLUE_CHIPS, KOSDAQ_SECTOR_MAPPING 추가
+    - `get_kosdaq_blue_chips()`: 시총 1조+ 우량주 선별 (KOSDAQ 150 우선)
+    - `scout.py`: A-2 섹션으로 KOSDAQ 후보 50개 추가
+    - Naver 크롤러 개선: 시가총액, 거래량 파싱 추가
+  - **Council 섹터 필터링 구현**
+    - 회피 섹터(자동차, 배터리, 바이오) 종목 자동 제외
+    - 선호 섹터(반도체, 조선, 방산 등) 종목 태깅
+  - **KOSDAQ 데이터 수집 시스템**
+    - `scripts/populate_kosdaq_stock_master.py`: KOSDAQ 마스터 등록
+    - `scripts/collect_kosdaq_market_data.py`: 일봉 데이터 수집 (FinanceDataReader)
+    - `STOCK_MASTER.IS_KOSDAQ` 컬럼 추가
+    - DAG 추가: `weekly_kosdaq_stock_master` (일 22:00), `daily_kosdaq_price_collector` (16:30)
+  - **테스트 결과**
+    - KOSDAQ 마스터: 100개 종목 등록 (KOSDAQ 150에서 30개 포함)
+    - 일봉 데이터: 246일/종목 수집 완료 (에코프로 기준)
+    - Scout 스캔: KOSDAQ 50개 후보 추가, Council 필터 26개 제외
+
+### 이전 세션 (2026-02-02 오후)
+- **주제**: Council 트레이딩 추천 기능 구현 (VIX 직접 적용 제거)
+- **완료**:
+  - **Trading Recommendations 필드 추가**
+    - `DailyMacroInsight`에 새 필드 추가:
+      - `position_size_pct` (50~130%): 포지션 사이즈 권고
+      - `stop_loss_adjust_pct` (80~150%): 손절폭 조정
+      - `strategies_to_favor/avoid`: 유리/피해야 할 전략
+      - `sectors_to_favor/avoid`: 유망/회피 섹터
+      - `trading_reasoning`: Council 권고 근거
+    - DB 마이그레이션: `add_trading_recommendations_to_macro_insight.sql`
+  - **Council 프롬프트 업데이트** (`run_macro_council.py`)
+    - VIX 기반 하드코딩 → Council이 직접 트레이딩 권고 판단
+    - 한국 시장 컨텍스트 고려하도록 프롬프트 개선
+    - `parse_council_output()`에 새 필드 파싱 추가
+  - **Dashboard 업데이트**
+    - Backend: `_calculate_trading_impact()` Council 추천값 사용
+    - Frontend: Trading Recommendations 섹션 UI 개선
+    - VIX 직접 적용 규칙 제거 (미국 지표는 참고용)
+  - **테스트 통과**: 106 passed (macro_insight + macro_data)
+
+### 이전 세션 (2026-02-02 오전)
 - **주제**: Jenkins CI 테스트 실패 수정
 - **완료**:
   - **Finnhub 클라이언트 테스트 수정**
@@ -360,5 +441,5 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
 
 ---
-*Last Updated: 2026-02-02 (Enhanced Macro → Trading Services 통합)*
+*Last Updated: 2026-02-02 (정치 뉴스 키워드 모니터링 추가)*
 *이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*

@@ -13,6 +13,7 @@ from .fred_client import FREDClient
 from .bok_ecos_client import BOKECOSClient
 from .pykrx_client import PyKRXClient
 from .rss_news_client import RSSNewsClient
+from .political_news_client import PoliticalNewsClient
 
 __all__ = [
     "MacroDataClient",
@@ -21,4 +22,5 @@ __all__ = [
     "BOKECOSClient",
     "PyKRXClient",
     "RSSNewsClient",
+    "PoliticalNewsClient",
 ]

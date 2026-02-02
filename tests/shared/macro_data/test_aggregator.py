@@ -95,6 +95,7 @@ class TestEnhancedMacroAggregator:
             enable_bok_ecos=False,
             enable_pykrx=False,
             enable_rss=False,
+            enable_political_news=False,
         )
         return EnhancedMacroAggregator(config)
 

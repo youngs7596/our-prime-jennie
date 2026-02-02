@@ -195,6 +195,11 @@ class GlobalMacroSnapshot:
     global_news_sentiment: Optional[float] = None  # -1.0 ~ 1.0
     korea_news_sentiment: Optional[float] = None   # -1.0 ~ 1.0
 
+    # Political Risk (정치/지정학적 뉴스 키워드 모니터링)
+    political_risk_score: Optional[float] = None   # 0-100 (높을수록 위험)
+    political_risk_level: str = "low"              # low, medium, high, critical
+    political_alert_count: int = 0                 # 활성 알림 수
+
     # Data Quality
     data_sources: List[str] = field(default_factory=list)
     missing_indicators: List[str] = field(default_factory=list)
@@ -250,6 +255,10 @@ class GlobalMacroSnapshot:
 
         # Strong negative sentiment
         if self.global_news_sentiment is not None and self.global_news_sentiment < -0.5:
+            risk_off_signals += 1
+
+        # High political risk (critical or high level)
+        if self.political_risk_level in ["critical", "high"]:
             risk_off_signals += 1
 
         return risk_off_signals >= 2
@@ -325,6 +334,10 @@ class GlobalMacroSnapshot:
             # Sentiment
             "global_news_sentiment": self.global_news_sentiment,
             "korea_news_sentiment": self.korea_news_sentiment,
+            # Political Risk
+            "political_risk_score": self.political_risk_score,
+            "political_risk_level": self.political_risk_level,
+            "political_alert_count": self.political_alert_count,
             # Quality
             "data_sources": self.data_sources,
             "missing_indicators": self.missing_indicators,
@@ -373,6 +386,9 @@ class GlobalMacroSnapshot:
             rate_differential=data.get("rate_differential"),
             global_news_sentiment=data.get("global_news_sentiment"),
             korea_news_sentiment=data.get("korea_news_sentiment"),
+            political_risk_score=data.get("political_risk_score"),
+            political_risk_level=data.get("political_risk_level", "low"),
+            political_alert_count=data.get("political_alert_count", 0),
             data_sources=data.get("data_sources", []),
             missing_indicators=data.get("missing_indicators", []),
             stale_indicators=data.get("stale_indicators", []),
@@ -444,6 +460,15 @@ class GlobalMacroSnapshot:
             lines.append(f"- Global News: {self.global_news_sentiment:+.2f}")
         if self.korea_news_sentiment is not None:
             lines.append(f"- Korea News: {self.korea_news_sentiment:+.2f}")
+
+        lines.append("")
+        lines.append("# Political Risk (Keyword Monitoring)")
+
+        if self.political_risk_score is not None:
+            lines.append(f"- Risk Score: {self.political_risk_score:.0f}/100 ({self.political_risk_level})")
+            lines.append(f"- Active Alerts: {self.political_alert_count}")
+            if self.political_risk_level in ["high", "critical"]:
+                lines.append("- WARNING: Elevated political/geopolitical risk detected")
 
         lines.append("")
         lines.append("# Data Quality")

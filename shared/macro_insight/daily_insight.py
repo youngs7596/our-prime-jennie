@@ -84,6 +84,19 @@ class DailyMacroInsight:
     vix_regime: str = ""  # low_vol, normal, elevated, crisis
     rate_differential: Optional[float] = None  # Fed Rate - BOK Rate
 
+    # Trading Recommendations (Council이 직접 판단)
+    position_size_pct: int = 100  # 권장 포지션 사이즈 (50~130%)
+    stop_loss_adjust_pct: int = 100  # 손절폭 조정 (80~150%)
+    strategies_to_favor: List[str] = field(default_factory=list)  # 유리한 전략
+    strategies_to_avoid: List[str] = field(default_factory=list)  # 피해야 할 전략
+    sectors_to_favor: List[str] = field(default_factory=list)  # 유망 섹터
+    sectors_to_avoid: List[str] = field(default_factory=list)  # 회피 섹터
+    trading_reasoning: str = ""  # 권고 근거
+
+    # Political Risk (Council이 판단)
+    political_risk_level: str = "low"  # low, medium, high, critical
+    political_risk_summary: str = ""  # 정치 리스크 요약
+
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환"""
         return {
@@ -111,6 +124,17 @@ class DailyMacroInsight:
             "data_citations": self.data_citations,
             "vix_regime": self.vix_regime,
             "rate_differential": self.rate_differential,
+            # Trading Recommendations
+            "position_size_pct": self.position_size_pct,
+            "stop_loss_adjust_pct": self.stop_loss_adjust_pct,
+            "strategies_to_favor": self.strategies_to_favor,
+            "strategies_to_avoid": self.strategies_to_avoid,
+            "sectors_to_favor": self.sectors_to_favor,
+            "sectors_to_avoid": self.sectors_to_avoid,
+            "trading_reasoning": self.trading_reasoning,
+            # Political Risk
+            "political_risk_level": self.political_risk_level,
+            "political_risk_summary": self.political_risk_summary,
         }
 
     @classmethod
@@ -141,6 +165,17 @@ class DailyMacroInsight:
             data_citations=data.get("data_citations", []),
             vix_regime=data.get("vix_regime", ""),
             rate_differential=data.get("rate_differential"),
+            # Trading Recommendations (Council이 직접 판단)
+            position_size_pct=data.get("position_size_pct", 100),
+            stop_loss_adjust_pct=data.get("stop_loss_adjust_pct", 100),
+            strategies_to_favor=data.get("strategies_to_favor", []),
+            strategies_to_avoid=data.get("strategies_to_avoid", []),
+            sectors_to_favor=data.get("sectors_to_favor", []),
+            sectors_to_avoid=data.get("sectors_to_avoid", []),
+            trading_reasoning=data.get("trading_reasoning", ""),
+            # Political Risk
+            political_risk_level=data.get("political_risk_level", "low"),
+            political_risk_summary=data.get("political_risk_summary", ""),
         )
 
 
@@ -171,9 +206,14 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
             OPPORTUNITY_FACTORS, KEY_STOCKS,
-            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD
+            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
+            POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+            STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+            SECTORS_TO_FAVOR, SECTORS_TO_AVOID, TRADING_REASONING,
+            POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) ON DUPLICATE KEY UPDATE
             SOURCE_CHANNEL = VALUES(SOURCE_CHANNEL),
             SOURCE_ANALYST = VALUES(SOURCE_ANALYST),
@@ -188,6 +228,15 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             RAW_MESSAGE = VALUES(RAW_MESSAGE),
             RAW_COUNCIL_OUTPUT = VALUES(RAW_COUNCIL_OUTPUT),
             COUNCIL_COST_USD = VALUES(COUNCIL_COST_USD),
+            POSITION_SIZE_PCT = VALUES(POSITION_SIZE_PCT),
+            STOP_LOSS_ADJUST_PCT = VALUES(STOP_LOSS_ADJUST_PCT),
+            STRATEGIES_TO_FAVOR = VALUES(STRATEGIES_TO_FAVOR),
+            STRATEGIES_TO_AVOID = VALUES(STRATEGIES_TO_AVOID),
+            SECTORS_TO_FAVOR = VALUES(SECTORS_TO_FAVOR),
+            SECTORS_TO_AVOID = VALUES(SECTORS_TO_AVOID),
+            TRADING_REASONING = VALUES(TRADING_REASONING),
+            POLITICAL_RISK_LEVEL = VALUES(POLITICAL_RISK_LEVEL),
+            POLITICAL_RISK_SUMMARY = VALUES(POLITICAL_RISK_SUMMARY),
             UPDATED_AT = CURRENT_TIMESTAMP
         """
 
@@ -205,6 +254,10 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
         opportunity_factors_json = json.dumps(insight.opportunity_factors, ensure_ascii=False)
         key_stocks_json = json.dumps(insight.key_stocks, ensure_ascii=False)
         raw_council_json = json.dumps(insight.raw_council_output, ensure_ascii=False, default=str)
+        strategies_favor_json = json.dumps(insight.strategies_to_favor, ensure_ascii=False)
+        strategies_avoid_json = json.dumps(insight.strategies_to_avoid, ensure_ascii=False)
+        sectors_favor_json = json.dumps(insight.sectors_to_favor, ensure_ascii=False)
+        sectors_avoid_json = json.dumps(insight.sectors_to_avoid, ensure_ascii=False)
 
         params = (
             insight.insight_date,
@@ -221,6 +274,15 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             insight.raw_message,
             raw_council_json,
             insight.council_cost_usd,
+            insight.position_size_pct,
+            insight.stop_loss_adjust_pct,
+            strategies_favor_json,
+            strategies_avoid_json,
+            sectors_favor_json,
+            sectors_avoid_json,
+            insight.trading_reasoning,
+            insight.political_risk_level,
+            insight.political_risk_summary,
         )
 
         with conn.cursor() as cursor:
@@ -264,7 +326,11 @@ def load_insight_from_db(
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
             OPPORTUNITY_FACTORS, KEY_STOCKS,
-            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD
+            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
+            POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+            STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+            SECTORS_TO_FAVOR, SECTORS_TO_AVOID, TRADING_REASONING,
+            POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY
         FROM DAILY_MACRO_INSIGHT
         WHERE INSIGHT_DATE = %s
         """
@@ -291,6 +357,17 @@ def load_insight_from_db(
             raw_message=row[11] or "",
             raw_council_output=json.loads(row[12]) if row[12] else {},
             council_cost_usd=float(row[13]) if row[13] else 0.0,
+            # Trading Recommendations
+            position_size_pct=int(row[14]) if row[14] else 100,
+            stop_loss_adjust_pct=int(row[15]) if row[15] else 100,
+            strategies_to_favor=json.loads(row[16]) if row[16] else [],
+            strategies_to_avoid=json.loads(row[17]) if row[17] else [],
+            sectors_to_favor=json.loads(row[18]) if row[18] else [],
+            sectors_to_avoid=json.loads(row[19]) if row[19] else [],
+            trading_reasoning=row[20] or "",
+            # Political Risk
+            political_risk_level=row[21] or "low",
+            political_risk_summary=row[22] or "",
         )
 
     except Exception as e:
@@ -327,7 +404,11 @@ def load_recent_insights(
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
             OPPORTUNITY_FACTORS, KEY_STOCKS,
-            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD
+            RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
+            POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+            STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+            SECTORS_TO_FAVOR, SECTORS_TO_AVOID, TRADING_REASONING,
+            POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY
         FROM DAILY_MACRO_INSIGHT
         WHERE INSIGHT_DATE >= DATE_SUB(CURDATE(), INTERVAL %s DAY)
         ORDER BY INSIGHT_DATE DESC
@@ -354,6 +435,17 @@ def load_recent_insights(
                 raw_message=row[11] or "",
                 raw_council_output=json.loads(row[12]) if row[12] else {},
                 council_cost_usd=float(row[13]) if row[13] else 0.0,
+                # Trading Recommendations
+                position_size_pct=int(row[14]) if row[14] else 100,
+                stop_loss_adjust_pct=int(row[15]) if row[15] else 100,
+                strategies_to_favor=json.loads(row[16]) if row[16] else [],
+                strategies_to_avoid=json.loads(row[17]) if row[17] else [],
+                sectors_to_favor=json.loads(row[18]) if row[18] else [],
+                sectors_to_avoid=json.loads(row[19]) if row[19] else [],
+                trading_reasoning=row[20] or "",
+                # Political Risk
+                political_risk_level=row[21] or "low",
+                political_risk_summary=row[22] or "",
             ))
 
         return insights
@@ -478,11 +570,14 @@ def get_position_multiplier(insight: Optional[DailyMacroInsight] = None) -> floa
     """
     매크로 인사이트 기반 포지션 사이즈 배율.
 
+    Council이 권고한 position_size_pct를 우선 사용하고,
+    없으면 sentiment_score 기반 폴백 계산.
+
     Args:
         insight: DailyMacroInsight (없으면 오늘 인사이트 조회)
 
     Returns:
-        0.7 ~ 1.3 배율
+        0.5 ~ 1.3 배율
     """
     if insight is None:
         insight = get_today_insight()
@@ -490,6 +585,11 @@ def get_position_multiplier(insight: Optional[DailyMacroInsight] = None) -> floa
     if insight is None:
         return 1.0  # 인사이트 없으면 기본값
 
+    # Council 권고값 우선 사용 (position_size_pct: 50~130)
+    if insight.position_size_pct and insight.position_size_pct != 100:
+        return insight.position_size_pct / 100.0
+
+    # 폴백: sentiment_score 기반 계산
     score = insight.sentiment_score
 
     if score >= 70:
@@ -588,12 +688,26 @@ def get_stop_loss_multiplier(
     """
     손절 폭 조정 배율.
 
+    Council이 권고한 stop_loss_adjust_pct를 우선 사용하고,
+    없으면 regime 기반 폴백 계산.
+
     Args:
         insight: DailyMacroInsight
 
     Returns:
-        1.0 ~ 1.5 배율 (고변동성 시 넓은 손절)
+        0.8 ~ 1.5 배율 (변동성 높을수록 넓은 손절)
     """
+    if insight is None:
+        insight = get_today_insight()
+
+    if insight is None:
+        return 1.0
+
+    # Council 권고값 우선 사용 (stop_loss_adjust_pct: 80~150)
+    if insight.stop_loss_adjust_pct and insight.stop_loss_adjust_pct != 100:
+        return insight.stop_loss_adjust_pct / 100.0
+
+    # 폴백: regime 기반 계산
     if is_high_volatility_regime(insight):
         return 1.5  # 손절 폭 50% 확대
     return 1.0
@@ -606,6 +720,9 @@ def should_skip_sector(
     """
     특정 섹터 진입 스킵 여부.
 
+    Council의 sectors_to_avoid를 우선 확인하고,
+    없으면 sector_signals 기반으로 판단.
+
     Args:
         sector: 섹터명
         insight: DailyMacroInsight
@@ -613,5 +730,88 @@ def should_skip_sector(
     Returns:
         True if sector should be skipped
     """
+    if insight is None:
+        insight = get_today_insight()
+
+    if insight is None:
+        return False
+
+    # Council의 sectors_to_avoid 우선 확인
+    if insight.sectors_to_avoid:
+        sector_lower = sector.lower()
+        for avoid_sector in insight.sectors_to_avoid:
+            if sector_lower in avoid_sector.lower() or avoid_sector.lower() in sector_lower:
+                return True
+
+    # 폴백: sector_signals 기반 판단
     signal = get_sector_signal(sector, insight)
     return signal == "bearish"
+
+
+def is_strategy_favored(
+    strategy: str,
+    insight: Optional[DailyMacroInsight] = None
+) -> bool:
+    """
+    Council이 권고한 유리한 전략인지 확인.
+
+    Args:
+        strategy: 전략명 (예: "MOMENTUM_CONTINUATION")
+        insight: DailyMacroInsight
+
+    Returns:
+        True if strategy is favored by Council
+    """
+    if insight is None:
+        insight = get_today_insight()
+
+    if insight is None or not insight.strategies_to_favor:
+        return False
+
+    strategy_upper = strategy.upper()
+    return strategy_upper in [s.upper() for s in insight.strategies_to_favor]
+
+
+def should_avoid_strategy(
+    strategy: str,
+    insight: Optional[DailyMacroInsight] = None
+) -> bool:
+    """
+    Council이 권고한 피해야 할 전략인지 확인.
+
+    Args:
+        strategy: 전략명 (예: "SHORT_TERM_HIGH_BREAKOUT")
+        insight: DailyMacroInsight
+
+    Returns:
+        True if strategy should be avoided per Council
+    """
+    if insight is None:
+        insight = get_today_insight()
+
+    if insight is None or not insight.strategies_to_avoid:
+        return False
+
+    strategy_upper = strategy.upper()
+    return strategy_upper in [s.upper() for s in insight.strategies_to_avoid]
+
+
+def get_trading_reasoning(
+    insight: Optional[DailyMacroInsight] = None
+) -> str:
+    """
+    Council의 트레이딩 권고 근거 조회.
+
+    Args:
+        insight: DailyMacroInsight
+
+    Returns:
+        권고 근거 문자열 (없으면 빈 문자열)
+    """
+    if insight is None:
+        insight = get_today_insight()
+
+    if insight is None:
+        return ""
+
+    return insight.trading_reasoning or ""
