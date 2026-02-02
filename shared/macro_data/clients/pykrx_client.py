@@ -189,24 +189,43 @@ class PyKRXClient(MacroDataClient):
             return None
 
         try:
-            df = self.stock.get_index_trading_value_by_investor(
+            # pykrx 1.2.x: get_market_trading_value_by_investor 사용
+            # 반환 형식: 인덱스=투자자유형, 컬럼=['매도', '매수', '순매수']
+            df = self.stock.get_market_trading_value_by_investor(
                 date, date, ticker
             )
 
-            if df.empty:
+            if df is None or df.empty:
+                logger.warning(f"[pykrx] No investor trading data for {ticker} on {date}")
                 return None
 
             # 순매수 금액 (억원 단위)
             result = {}
-            for investor in ["금융투자", "보험", "투신", "사모", "은행",
-                             "기타금융", "연기금등", "기타법인", "개인",
-                             "외국인", "기타외국인"]:
-                if investor in df.columns:
-                    # 순매수 = 매수 - 매도
-                    net = float(df[investor].sum())
-                    result[investor] = round(net / 100000000, 2)  # 억원
 
-            return result
+            # 순매수 컬럼에서 투자자별 데이터 추출
+            if '순매수' in df.columns:
+                investor_mapping = {
+                    "금융투자": "금융투자",
+                    "보험": "보험",
+                    "투신": "투신",
+                    "사모": "사모",
+                    "은행": "은행",
+                    "기타금융": "기타금융",
+                    "연기금 등": "연기금등",
+                    "연기금등": "연기금등",
+                    "기관합계": "기관합계",
+                    "기타법인": "기타법인",
+                    "개인": "개인",
+                    "외국인": "외국인",
+                    "기타외국인": "기타외국인",
+                }
+                for idx_name in df.index:
+                    result_key = investor_mapping.get(idx_name)
+                    if result_key:
+                        net = float(df.loc[idx_name, '순매수'])
+                        result[result_key] = round(net / 100000000, 2)  # 억원
+
+            return result if result else None
 
         except Exception as e:
             logger.error(f"[pykrx] Error fetching investor trading: {e}")
@@ -302,15 +321,16 @@ class PyKRXClient(MacroDataClient):
         Returns:
             MacroDataPoint (외국인 순매수)
         """
-        indicator = f"{market}_foreign_net"
+        indicator = f"{market.lower()}_foreign_net"
 
         # 캐시 확인
         cached = self._cache.get_data_point(self.SOURCE_NAME, indicator)
         if cached and cached.is_valid(max_age_hours=2):
             return cached
 
-        ticker = self.INDICATOR_TICKERS.get(f"{market}_index")
-        if not ticker:
+        # get_market_trading_value_by_investor는 "KOSPI", "KOSDAQ" 문자열 필요
+        market_name = market.upper()
+        if market_name not in ["KOSPI", "KOSDAQ"]:
             return None
 
         date = self._get_trading_date()
@@ -319,7 +339,7 @@ class PyKRXClient(MacroDataClient):
         data = await loop.run_in_executor(
             self._executor,
             self._sync_fetch_investor_trading,
-            ticker, date
+            market_name, date  # ticker 대신 market_name 전달
         )
 
         if not data:
