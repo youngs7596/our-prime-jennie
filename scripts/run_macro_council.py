@@ -54,6 +54,7 @@ MACRO_ANALYSIS_QUERY = """아래 '장 시작 전 브리핑' 메시지와 글로�
 - 한국 시장 고유의 수급, 모멘텀, 실적 등을 우선 고려
 - 트레이딩 권고는 **한국 시장 맥락**에서 판단
 - **정치/지정학적 리스크**가 한국 시장에 미치는 영향을 반드시 평가
+- **투자자별 수급 동향**(외국인/기관/개인 순매수)을 시장 방향성 판단에 반영
 
 ## 반드시 포함해야 할 항목 (JSON 형식)
 
@@ -70,6 +71,11 @@ MACRO_ANALYSIS_QUERY = """아래 '장 시작 전 브리핑' 메시지와 글로�
 6. **risk_factors**: 리스크 요인 리스트
 7. **opportunity_factors**: 기회 요인 리스트
 8. **key_stocks**: 주목할 종목명 리스트
+
+### 수급 분석 (Investor Flow)
+- 외국인/기관/개인 순매수 데이터를 해석하여 시장 방향성 판단
+- 외국인 대규모 순매도 시: 원인 분석 (글로벌 리스크오프? 환율? 특정 이벤트?)
+- 수급 불균형이 있다면 반등/추가하락 시나리오 제시
 
 ### 정치/지정학적 리스크 분석
 9. **political_risk_level**: low, medium, high, critical 중 하나
@@ -215,6 +221,12 @@ def run_council_analysis(
 - 금리차 (Fed-BOK): {global_snapshot.get('rate_differential') or 'N/A'}%
 - KOSPI: {global_snapshot.get('kospi_index') or 'N/A'} ({(global_snapshot.get('kospi_change_pct') or 0):+.2f}%)
 - KOSDAQ: {global_snapshot.get('kosdaq_index') or 'N/A'} ({(global_snapshot.get('kosdaq_change_pct') or 0):+.2f}%)
+
+### Investor Trading (투자자별 순매수, 억원)
+- KOSPI 외국인: {'+' if (global_snapshot.get('kospi_foreign_net') or 0) >= 0 else ''}{(global_snapshot.get('kospi_foreign_net') or 0):,.0f}억
+- KOSDAQ 외국인: {'+' if (global_snapshot.get('kosdaq_foreign_net') or 0) >= 0 else ''}{(global_snapshot.get('kosdaq_foreign_net') or 0):,.0f}억
+- KOSPI 기관: {'+' if (global_snapshot.get('kospi_institutional_net') or 0) >= 0 else ''}{(global_snapshot.get('kospi_institutional_net') or 0):,.0f}억
+- KOSPI 개인: {'+' if (global_snapshot.get('kospi_retail_net') or 0) >= 0 else ''}{(global_snapshot.get('kospi_retail_net') or 0):,.0f}억
 
 ### Sentiment
 - 글로벌 뉴스 센티먼트: {global_snapshot.get('global_news_sentiment', 'N/A')}

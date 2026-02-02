@@ -117,6 +117,9 @@ class EnhancedMacroAggregator:
         "kosdaq_index": "kosdaq_index",
         "kospi_change_pct": "kospi_change_pct",
         "kosdaq_change_pct": "kosdaq_change_pct",
+        # Investor Trading (pykrx)
+        "kospi_foreign_net": "kospi_foreign_net",
+        "kosdaq_foreign_net": "kosdaq_foreign_net",
         # Sentiment (RSS)
         "global_news_sentiment": "global_news_sentiment",
         "korea_news_sentiment": "korea_news_sentiment",
@@ -341,6 +344,12 @@ class EnhancedMacroAggregator:
                     snapshot_data["political_risk_level"] = best_point.metadata["risk_level"]
                     if "alert_count" in best_point.metadata:
                         snapshot_data["political_alert_count"] = best_point.metadata["alert_count"]
+                # 투자자 순매수 메타데이터 추출 (기관, 개인)
+                elif indicator == "kospi_foreign_net":
+                    if "institutional" in best_point.metadata:
+                        snapshot_data["kospi_institutional_net"] = best_point.metadata["institutional"]
+                    if "retail" in best_point.metadata:
+                        snapshot_data["kospi_retail_net"] = best_point.metadata["retail"]
 
             # 오래된 데이터 추적
             if best_point.quality.value in ["stale", "expired"]:

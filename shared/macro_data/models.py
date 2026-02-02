@@ -188,6 +188,12 @@ class GlobalMacroSnapshot:
     kospi_change_pct: Optional[float] = None   # KOSPI Daily Change (%)
     kosdaq_change_pct: Optional[float] = None  # KOSDAQ Daily Change (%)
 
+    # Investor Trading (투자자 순매수, 억원)
+    kospi_foreign_net: Optional[float] = None       # KOSPI 외국인 순매수
+    kosdaq_foreign_net: Optional[float] = None      # KOSDAQ 외국인 순매수
+    kospi_institutional_net: Optional[float] = None # KOSPI 기관 순매수
+    kospi_retail_net: Optional[float] = None        # KOSPI 개인 순매수
+
     # Calculated Fields
     rate_differential: Optional[float] = None  # Fed Rate - BOK Rate (%)
 
@@ -329,6 +335,11 @@ class GlobalMacroSnapshot:
             "kosdaq_index": self.kosdaq_index,
             "kospi_change_pct": self.kospi_change_pct,
             "kosdaq_change_pct": self.kosdaq_change_pct,
+            # Investor Trading
+            "kospi_foreign_net": self.kospi_foreign_net,
+            "kosdaq_foreign_net": self.kosdaq_foreign_net,
+            "kospi_institutional_net": self.kospi_institutional_net,
+            "kospi_retail_net": self.kospi_retail_net,
             # Calculated
             "rate_differential": self.rate_differential,
             # Sentiment
@@ -383,6 +394,10 @@ class GlobalMacroSnapshot:
             kosdaq_index=data.get("kosdaq_index"),
             kospi_change_pct=data.get("kospi_change_pct"),
             kosdaq_change_pct=data.get("kosdaq_change_pct"),
+            kospi_foreign_net=data.get("kospi_foreign_net"),
+            kosdaq_foreign_net=data.get("kosdaq_foreign_net"),
+            kospi_institutional_net=data.get("kospi_institutional_net"),
+            kospi_retail_net=data.get("kospi_retail_net"),
             rate_differential=data.get("rate_differential"),
             global_news_sentiment=data.get("global_news_sentiment"),
             korea_news_sentiment=data.get("korea_news_sentiment"),
@@ -452,6 +467,33 @@ class GlobalMacroSnapshot:
         if self.kosdaq_index is not None:
             change = f" ({self.kosdaq_change_pct:+.2f}%)" if self.kosdaq_change_pct else ""
             lines.append(f"- KOSDAQ: {self.kosdaq_index:.2f}{change}")
+
+        # Investor Trading
+        has_investor_data = any([
+            self.kospi_foreign_net, self.kosdaq_foreign_net,
+            self.kospi_institutional_net, self.kospi_retail_net
+        ])
+        if has_investor_data:
+            lines.append("")
+            lines.append("# Investor Trading (억원)")
+            if self.kospi_foreign_net is not None:
+                sign = "+" if self.kospi_foreign_net >= 0 else ""
+                lines.append(f"- KOSPI 외국인: {sign}{self.kospi_foreign_net:,.0f}억")
+            if self.kosdaq_foreign_net is not None:
+                sign = "+" if self.kosdaq_foreign_net >= 0 else ""
+                lines.append(f"- KOSDAQ 외국인: {sign}{self.kosdaq_foreign_net:,.0f}억")
+            if self.kospi_institutional_net is not None:
+                sign = "+" if self.kospi_institutional_net >= 0 else ""
+                lines.append(f"- KOSPI 기관: {sign}{self.kospi_institutional_net:,.0f}억")
+            if self.kospi_retail_net is not None:
+                sign = "+" if self.kospi_retail_net >= 0 else ""
+                lines.append(f"- KOSPI 개인: {sign}{self.kospi_retail_net:,.0f}억")
+
+            # 수급 해석 힌트
+            if self.kospi_foreign_net is not None and self.kospi_foreign_net < -5000:
+                lines.append("- WARNING: 외국인 대규모 순매도 (-5000억 이상)")
+            elif self.kospi_foreign_net is not None and self.kospi_foreign_net > 5000:
+                lines.append("- POSITIVE: 외국인 대규모 순매수 (+5000억 이상)")
 
         lines.append("")
         lines.append("# Sentiment")
