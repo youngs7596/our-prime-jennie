@@ -1,0 +1,29 @@
+#!/bin/bash
+# Pre-push hook: Remind about uncommitted changes
+
+echo "🔍 Checking for uncommitted changes..."
+
+# Check for unstaged changes
+if ! git diff --quiet; then
+    echo "⚠️  WARNING: You have unstaged changes!"
+    git diff --stat
+    echo ""
+fi
+
+# Check for staged but uncommitted changes
+if ! git diff --cached --quiet; then
+    echo "⚠️  WARNING: You have staged but uncommitted changes!"
+    git diff --cached --stat
+    echo ""
+fi
+
+# Check for untracked files in key directories
+UNTRACKED=$(git ls-files --others --exclude-standard services/ shared/ scripts/ dags/ | head -10)
+if [ -n "$UNTRACKED" ]; then
+    echo "⚠️  WARNING: Untracked files in key directories:"
+    echo "$UNTRACKED"
+    echo ""
+fi
+
+echo "✅ Pre-push check complete"
+exit 0
