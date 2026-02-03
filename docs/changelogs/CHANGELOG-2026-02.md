@@ -11,6 +11,13 @@
   - Sentiment Score, Political Risk Level
   - Backend: `/api/macro/insight` 엔드포인트 추가
 
+- **feat(dashboard)**: Macro Council 전용 페이지 추가
+  - 사이드바에 "Macro" 메뉴 추가 (`/macro-council`)
+  - Council 분석 결과 상세 표시
+  - 글로벌 지표, 투자자 수급, 트레이딩 권고
+  - 정치/지정학적 리스크 분석
+  - 3현자 Council 리뷰 섹션
+
 ### Macro Council
 - **fix(macro-council)**: 텔레그램 브리핑 없어도 Council 분석 진행
   - 주말/공휴일에도 글로벌 매크로 데이터만으로 분석 가능
