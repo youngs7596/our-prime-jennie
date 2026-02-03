@@ -41,6 +41,57 @@ logging.basicConfig(
 logger = logging.getLogger("EnhancedMacroCollector")
 
 
+def merge_snapshots(existing, new):
+    """
+    기존 스냅샷과 새 스냅샷을 병합.
+    새 스냅샷의 None이 아닌 값만 기존 스냅샷에 덮어씁니다.
+    """
+    from shared.macro_data import GlobalMacroSnapshot
+    from dataclasses import fields, asdict
+    
+    # 기존 스냅샷을 dict로 변환
+    merged = asdict(existing)
+    
+    # 새 스냅샷의 None이 아닌 값만 병합
+    for field_obj in fields(new):
+        field_name = field_obj.name
+        new_value = getattr(new, field_name)
+        
+        # None이 아니고, 빈 리스트나 빈 dict가 아니면 업데이트
+        if new_value is not None:
+            if isinstance(new_value, (list, dict)) and len(new_value) == 0:
+                continue  # 빈 컬렉션은 건너뜀
+            merged[field_name] = new_value
+    
+    # 데이터 소스 병합 (중복 제거)
+    existing_sources = set(existing.data_sources or [])
+    new_sources = set(new.data_sources or [])
+    merged["data_sources"] = list(existing_sources | new_sources)
+    
+    # 누락 지표 업데이트 (새로 수집된 것 제거)
+    existing_missing = set(existing.missing_indicators or [])
+    new_collected = set(new.INDICATOR_TO_SNAPSHOT.keys() if hasattr(new, 'INDICATOR_TO_SNAPSHOT') else [])
+    # 수집된 지표는 더 이상 누락이 아님
+    for field_obj in fields(new):
+        field_name = field_obj.name
+        new_value = getattr(new, field_name)
+        if new_value is not None and field_name in existing_missing:
+            existing_missing.discard(field_name)
+    merged["missing_indicators"] = list(existing_missing)
+    
+    # 최신 시간으로 업데이트
+    merged["snapshot_time"] = new.snapshot_time
+    
+    # 완성도와 신선도 재계산
+    merged["data_freshness"] = max(
+        existing.data_freshness or 0,
+        new.data_freshness or 0
+    )
+    
+    logger.info(f"병합 완료: 기존 {len(existing.data_sources or [])}개 소스 + 새 {len(new.data_sources or [])}개 소스")
+    
+    return GlobalMacroSnapshot(**merged)
+
 async def collect_macro_data(
     sources: Optional[List[str]] = None,
     quick: bool = False,
@@ -148,6 +199,14 @@ async def collect_macro_data(
 
         # 저장
         if not dry_run:
+            # 부분 수집인 경우 기존 스냅샷과 병합 (NULL로 덮어쓰기 방지)
+            from shared.macro_data import get_today_snapshot
+            
+            existing_snapshot = get_today_snapshot()
+            if existing_snapshot:
+                logger.info("기존 스냅샷 발견 - 병합 모드로 저장")
+                snapshot = merge_snapshots(existing_snapshot, snapshot)
+            
             logger.info("DB에 스냅샷 저장 중...")
             save_success = save_snapshot_to_db(snapshot)
 

@@ -776,9 +776,9 @@ async def main(args):
     briefing = await fetch_morning_briefing(target_date=target_date, hours_ago=hours_ago)
     if not briefing:
         if not global_snapshot:
-            # 브리핑도 없고 글로벌 스냅샷도 없으면 종료
-            logger.error("브리핑 및 글로벌 매크로 스냅샷 모두 없음. 종료합니다.")
-            return 1
+            # 브리핑도 없고 글로벌 스냅샷도 없으면 스킵 (새벽/주말은 정상)
+            logger.warning("⚠️ 브리핑 및 글로벌 매크로 스냅샷 모두 없음. 분석 스킵합니다. (새벽/주말일 수 있음)")
+            return 0  # 성공으로 처리 (불필요한 재시도 방지)
         # 브리핑 없지만 글로벌 스냅샷은 있음 -> 글로벌 데이터만으로 진행
         logger.warning("⚠️ 브리핑 없음 (주말/공휴일). 글로벌 매크로 데이터만으로 Council 분석 진행")
         briefing = {

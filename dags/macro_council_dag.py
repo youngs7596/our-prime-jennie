@@ -15,7 +15,6 @@ Enhanced Macro Collection DAG와 연동하여 글로벌 데이터도 통합 분�
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.sensors.external_task import ExternalTaskSensor
 from datetime import datetime, timedelta
 import sys
 
@@ -39,6 +38,9 @@ COMMON_ENV = {
     'PYTHONPATH': '/opt/airflow',
     'MARIADB_HOST': 'mariadb',
     'MARIADB_PORT': '3306',
+    'MARIADB_USER': 'jennie',
+    'MARIADB_PASSWORD': 'q1w2e3R$',
+    'MARIADB_DBNAME': 'jennie_db',
     'REDIS_HOST': 'redis',
     'REDIS_PORT': '6379',
     'TZ': 'Asia/Seoul',
@@ -56,21 +58,10 @@ with DAG(
     tags=['macro', 'council', 'llm', 'analysis'],
 ) as dag:
 
-    # Enhanced Macro Collection 완료 대기 (선택적)
-    # 07:00에 실행되는 enhanced_macro_collection 완료 후 시작
-    wait_for_macro_data = ExternalTaskSensor(
-        task_id='wait_for_macro_data',
-        external_dag_id='enhanced_macro_collection',
-        external_task_id='validate_and_store',
-        execution_delta=timedelta(minutes=30),  # 07:00 → 07:30
-        timeout=600,  # 10분 대기
-        poke_interval=60,  # 1분마다 체크
-        mode='reschedule',  # 대기 중 워커 반환
-        allowed_states=['success'],
-        failed_states=['failed', 'upstream_failed'],
-        soft_fail=True,  # 실패해도 계속 진행 (글로벌 데이터 없이 분석)
-    )
-
+    # run_macro_council.py 스크립트가 글로벌 스냅샷 유무를 자체 처리
+    # - 글로벌 스냅샷 있으면 함께 분석
+    # - 없으면 텔레그램 브리핑만으로 분석
+    # - 둘 다 없으면 실패
     run_macro_council = BashOperator(
         task_id='run_macro_council',
         bash_command='python scripts/run_macro_council.py',
@@ -78,5 +69,3 @@ with DAG(
         env=COMMON_ENV,
         execution_timeout=timedelta(minutes=10),  # Council 분석 ~2분 예상
     )
-
-    wait_for_macro_data >> run_macro_council

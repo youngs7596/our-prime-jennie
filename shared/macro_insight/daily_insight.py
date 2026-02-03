@@ -210,10 +210,15 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
             STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
             SECTORS_TO_FAVOR, SECTORS_TO_AVOID, TRADING_REASONING,
-            POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY
+            POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
+            VIX_VALUE, VIX_REGIME, USD_KRW, KOSPI_INDEX, KOSDAQ_INDEX,
+            KOSPI_FOREIGN_NET, KOSDAQ_FOREIGN_NET,
+            KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
+            DATA_COMPLETENESS_PCT
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) ON DUPLICATE KEY UPDATE
             SOURCE_CHANNEL = VALUES(SOURCE_CHANNEL),
             SOURCE_ANALYST = VALUES(SOURCE_ANALYST),
@@ -237,6 +242,16 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             TRADING_REASONING = VALUES(TRADING_REASONING),
             POLITICAL_RISK_LEVEL = VALUES(POLITICAL_RISK_LEVEL),
             POLITICAL_RISK_SUMMARY = VALUES(POLITICAL_RISK_SUMMARY),
+            VIX_VALUE = VALUES(VIX_VALUE),
+            VIX_REGIME = VALUES(VIX_REGIME),
+            USD_KRW = VALUES(USD_KRW),
+            KOSPI_INDEX = VALUES(KOSPI_INDEX),
+            KOSDAQ_INDEX = VALUES(KOSDAQ_INDEX),
+            KOSPI_FOREIGN_NET = VALUES(KOSPI_FOREIGN_NET),
+            KOSDAQ_FOREIGN_NET = VALUES(KOSDAQ_FOREIGN_NET),
+            KOSPI_INSTITUTIONAL_NET = VALUES(KOSPI_INSTITUTIONAL_NET),
+            KOSPI_RETAIL_NET = VALUES(KOSPI_RETAIL_NET),
+            DATA_COMPLETENESS_PCT = VALUES(DATA_COMPLETENESS_PCT),
             UPDATED_AT = CURRENT_TIMESTAMP
         """
 
@@ -258,6 +273,19 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
         strategies_avoid_json = json.dumps(insight.strategies_to_avoid, ensure_ascii=False)
         sectors_favor_json = json.dumps(insight.sectors_to_favor, ensure_ascii=False)
         sectors_avoid_json = json.dumps(insight.sectors_to_avoid, ensure_ascii=False)
+
+        # 글로벌 스냅샷에서 데이터 추출
+        gs = insight.global_snapshot or {}
+        vix_value = gs.get("vix")
+        vix_regime = gs.get("vix_regime") or insight.vix_regime
+        usd_krw = gs.get("usd_krw")
+        kospi_index = gs.get("kospi")
+        kosdaq_index = gs.get("kosdaq")
+        kospi_foreign_net = gs.get("kospi_foreign_net")
+        kosdaq_foreign_net = gs.get("kosdaq_foreign_net")
+        kospi_institutional_net = gs.get("kospi_institutional_net")
+        kospi_retail_net = gs.get("kospi_retail_net")
+        data_completeness_pct = gs.get("data_completeness_pct")
 
         params = (
             insight.insight_date,
@@ -283,6 +311,16 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             insight.trading_reasoning,
             insight.political_risk_level,
             insight.political_risk_summary,
+            vix_value,
+            vix_regime,
+            usd_krw,
+            kospi_index,
+            kosdaq_index,
+            kospi_foreign_net,
+            kosdaq_foreign_net,
+            kospi_institutional_net,
+            kospi_retail_net,
+            data_completeness_pct,
         )
 
         with conn.cursor() as cursor:

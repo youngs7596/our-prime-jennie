@@ -28,15 +28,13 @@ COMMON_ENV = {
     'PYTHONPATH': '/opt/airflow',
     'MARIADB_HOST': 'mariadb',
     'MARIADB_PORT': '3306',
-    'MARIADB_USER': 'root', # Using root from Airflow config, or should be specific user? 
-                            # config/secrets.json inside airflow might be used too.
-                            # Scripts usually load from secrets.json if env vars missing.
-                            # But host/port must be correct.
+    'MARIADB_USER': 'jennie',
+    'MARIADB_PASSWORD': 'q1w2e3R$',
+    'MARIADB_DBNAME': 'jennie_db',
     'REDIS_HOST': 'redis',
     'REDIS_PORT': '6379',
     'KIS_GATEWAY_URL': 'http://host.docker.internal:8080',
     'OLLAMA_GATEWAY_URL': 'http://host.docker.internal:11500',
-    # Ensure TZ is set
     'TZ': 'Asia/Seoul',
 }
 
@@ -87,6 +85,7 @@ with DAG(
         bash_command='python scripts/collect_prices_fdr.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        execution_timeout=timedelta(minutes=30),  # 951개 종목 처리에 충분한 시간
     )
 
 # 4. Collect Investor Trading: 18:30 KST

@@ -871,47 +871,76 @@ async def get_three_sages_review_api(payload: dict = Depends(verify_token)):
                 review = json.loads(review_json)
                 return review
         
-        # DB에서 조회 시도
+        # DAILY_MACRO_INSIGHT에서 RAW_COUNCIL_OUTPUT 조회
         try:
             from sqlalchemy import text
             with get_session() as session:
                 result = session.execute(text("""
-                    SELECT review_date, jennie_review, minji_review, junho_review, 
-                           consensus, action_items, created_at
-                    FROM DAILY_COUNCIL_LOG
-                    ORDER BY review_date DESC
+                    SELECT INSIGHT_DATE, RAW_COUNCIL_OUTPUT, TRADING_REASONING,
+                           STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+                           SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
+                           POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
+                           CREATED_AT
+                    FROM DAILY_MACRO_INSIGHT
+                    ORDER BY INSIGHT_DATE DESC
                     LIMIT 1
                 """))
                 row = result.fetchone()
-                if row:
+                if row and row.RAW_COUNCIL_OUTPUT:
+                    council_data = json.loads(row.RAW_COUNCIL_OUTPUT) if isinstance(row.RAW_COUNCIL_OUTPUT, str) else row.RAW_COUNCIL_OUTPUT
+                    report_content = council_data.get("report_content", "")
+                    
+                    # 트레이딩 근거와 전략을 파싱
+                    trading_reasoning = row.TRADING_REASONING or ""
+                    strategies_favor = json.loads(row.STRATEGIES_TO_FAVOR) if row.STRATEGIES_TO_FAVOR else []
+                    strategies_avoid = json.loads(row.STRATEGIES_TO_AVOID) if row.STRATEGIES_TO_AVOID else []
+                    sectors_favor = json.loads(row.SECTORS_TO_FAVOR) if row.SECTORS_TO_FAVOR else []
+                    sectors_avoid = json.loads(row.SECTORS_TO_AVOID) if row.SECTORS_TO_AVOID else []
+                    
+                    # 정치 리스크 정보
+                    pol_level = row.POLITICAL_RISK_LEVEL or "low"
+                    pol_summary = row.POLITICAL_RISK_SUMMARY or ""
+                    
+                    # 3현자 리뷰 생성 (Council 리포트 기반)
+                    sages = [
+                        {
+                            "name": "Jennie",
+                            "role": "수석 심판 (Chief Judge)",
+                            "icon": "👑",
+                            "review": trading_reasoning[:300] + "..." if len(trading_reasoning) > 300 else trading_reasoning or "트레이딩 전략 근거를 분석 중입니다.",
+                        },
+                        {
+                            "name": "Minji",
+                            "role": "리스크 분석가 (Risk Analyst)",
+                            "icon": "🔍",
+                            "review": f"정치적 리스크 수준: {pol_level.upper()}. {pol_summary[:200]}..." if pol_summary else "리스크 분석을 수행 중입니다.",
+                        },
+                        {
+                            "name": "Junho",
+                            "role": "전략가 (Strategist)",
+                            "icon": "📈",
+                            "review": f"유망 전략: {', '.join(strategies_favor[:3]) if strategies_favor else '분석 중'}. 회피 전략: {', '.join(strategies_avoid[:2]) if strategies_avoid else '없음'}. 유망 섹터: {', '.join(sectors_favor[:3]) if sectors_favor else '분석 중'}.",
+                        },
+                    ]
+                    
+                    # 합의 사항 생성
+                    consensus_parts = []
+                    if strategies_favor:
+                        consensus_parts.append(f"유망 전략으로 {', '.join(strategies_favor[:2])}를 권장")
+                    if sectors_favor:
+                        consensus_parts.append(f"{', '.join(sectors_favor[:2])} 섹터에 주목")
+                    if pol_level in ("high", "critical"):
+                        consensus_parts.append(f"정치적 리스크({pol_level}) 주의 필요")
+                    
                     return {
-                        "date": row.review_date.isoformat() if row.review_date else None,
-                        "sages": [
-                            {
-                                "name": "Jennie",
-                                "role": "수석 심판 (Chief Judge)",
-                                "icon": "👑",
-                                "review": row.jennie_review or "리뷰 없음",
-                            },
-                            {
-                                "name": "Minji", 
-                                "role": "리스크 분석가 (Risk Analyst)",
-                                "icon": "🔍",
-                                "review": row.minji_review or "리뷰 없음",
-                            },
-                            {
-                                "name": "Junho",
-                                "role": "전략가 (Strategist)",
-                                "icon": "📈",
-                                "review": row.junho_review or "리뷰 없음",
-                            },
-                        ],
-                        "consensus": row.consensus,
-                        "action_items": json.loads(row.action_items) if row.action_items else [],
-                        "generated_at": row.created_at.isoformat() if row.created_at else None,
+                        "date": row.INSIGHT_DATE.isoformat() if row.INSIGHT_DATE else None,
+                        "sages": sages,
+                        "consensus": ". ".join(consensus_parts) + "." if consensus_parts else None,
+                        "action_items": strategies_favor[:5] if strategies_favor else [],
+                        "generated_at": row.CREATED_AT.isoformat() if row.CREATED_AT else None,
                     }
         except Exception as db_e:
-            logger.warning(f"Daily Council Log 조회 실패: {db_e}")
+            logger.warning(f"DAILY_MACRO_INSIGHT Council 조회 실패: {db_e}")
         
         # 데이터가 없을 경우 기본 응답
         return {

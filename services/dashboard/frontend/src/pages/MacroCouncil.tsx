@@ -314,7 +314,7 @@ export function MacroCouncilPage() {
                         <span className="text-sm text-muted-foreground">Council 분석 비용</span>
                       </div>
                       <span className="text-sm font-medium">
-                        ${macroInsight.council_cost_usd?.toFixed(3)} (~{Math.round((macroInsight.council_cost_usd || 0) * 1450)}원)
+                        ${Number(macroInsight.council_cost_usd)?.toFixed(3)} (~{Math.round(Number(macroInsight.council_cost_usd || 0) * 1450)}원)
                       </span>
                     </div>
                   </CardContent>
@@ -573,8 +573,8 @@ export function MacroCouncilPage() {
                           <span className={cn(
                             'px-2 py-0.5 text-xs rounded font-medium',
                             signal === 'bullish' || signal === 'favor' ? 'bg-green-500/20 text-green-400' :
-                            signal === 'bearish' || signal === 'avoid' ? 'bg-red-500/20 text-red-400' :
-                            'bg-gray-500/20 text-gray-400'
+                              signal === 'bearish' || signal === 'avoid' ? 'bg-red-500/20 text-red-400' :
+                                'bg-gray-500/20 text-gray-400'
                           )}>
                             {typeof signal === 'string' ? signal : JSON.stringify(signal)}
                           </span>

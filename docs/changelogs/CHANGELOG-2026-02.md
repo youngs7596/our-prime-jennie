@@ -1,5 +1,24 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-04
+
+### Macro Council
+- **fix(macro-council)**: Dashboard Macro Council 페이지 데이터 표시 문제 수정
+  - `save_insight_to_db`에 VIX_VALUE, USD_KRW, KOSPI_INDEX 등 글로벌 스냅샷 컬럼 추가
+  - `/api/council/daily-review` API를 `DAILY_MACRO_INSIGHT`에서 리뷰 파싱하도록 수정
+  - `council_cost_usd` Decimal→Number 형변환 추가 (TypeError 수정)
+
+- **fix(enhanced-macro)**: 부분 수집 시 NULL 덮어쓰기 버그 수정
+  - `--sources` 옵션 사용 시 마지막 태스크가 이전 값을 NULL로 덮어쓰는 문제
+  - `collect_enhanced_macro.py`에 `merge_snapshots` 함수 추가
+  - 저장 전 기존 스냅샷과 병합하여 수집된 값만 업데이트
+
+### Airflow DAGs
+- **fix(dags)**: DAG 환경변수 및 타임아웃 설정 개선
+  - `macro_council_dag.py`, `utility_jobs_dag.py`에 DB 환경변수 추가
+  - `collect_daily_prices` 태스크에 `execution_timeout=30분` 설정
+  - 브리핑 없을 때 graceful exit (exit 0) 로직 추가
+
 ## 2026-02-03
 
 ### Dashboard
