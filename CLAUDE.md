@@ -260,186 +260,36 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 ## 13. 세션 Handoff
 
-이전 세션 기록: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
+> **상세 세션 기록**: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
+> **변경 이력**: `docs/changelogs/CHANGELOG-YYYY-MM.md`
 
-### 최근 세션 (2026-02-02 밤 - 정치 뉴스 Council 통합)
-- **주제**: 정치/지정학적 뉴스를 Council LLM 분석에 통합
-- **배경**: 트럼프 연준의장 후보 지명 뉴스가 KOSDAQ 급락을 유발했으나 기존 매크로 시스템에서 감지하지 못함
-- **접근법 변경**: 규칙 기반 점수 → **Council LLM이 정치 리스크 직접 평가**
-  - 사용자 피드백: "어차피 모든 데이터를 LLM에게 보내서 종합 판단 받는데, 프롬프트에 정치 리스크 검토 추가하면 되지 않을까?"
-- **완료**:
-  - **PoliticalNewsClient 구현** (`shared/macro_data/clients/political_news_client.py`)
-    - 글로벌 RSS 피드 모니터링 (Reuters, BBC, NYT, WSJ, 연합뉴스)
-    - 키워드 기반 필터링 (fed, us_politics, trade, geopolitical, crisis)
-    - **용도 변경**: 점수 계산 → 헤드라인 수집 (Council 전달용)
-  - **Council 프롬프트 확장** (`run_macro_council.py`)
-    - `get_political_news_headlines()`: 24시간 내 정치 뉴스 최대 15개 수집
-    - 프롬프트에 정치/지정학적 리스크 분석 요청 추가
-    - Council이 직접 `political_risk_level` (low/medium/high/critical) 판단
-    - Council이 직접 `political_risk_summary` (1-2문장 요약) 작성
-  - **DailyMacroInsight 확장**
-    - `political_risk_level`: Council 판단 리스크 레벨
-    - `political_risk_summary`: Council 판단 리스크 요약
-    - DB 마이그레이션: `add_political_risk_to_macro_insight.sql`
-  - **EnhancedTradingContext 통합**
-    - Council의 `political_risk_level` 우선 사용
-    - GlobalMacroSnapshot 폴백 유지
-    - `calculate_risk_off_level()`: Critical → +2점, High → +1점
-  - **테스트 결과**: 1136 passed, 2 skipped
-- **데이터 흐름**:
-  ```
-  PoliticalNewsClient.fetch_alerts() → 헤드라인 수집
-                ↓
-  run_macro_council.py → Council에 뉴스 전달
-                ↓
-  Council (Gemini/Claude/GPT) → political_risk_level/summary 판단
-                ↓
-  DailyMacroInsight → DB 저장
-                ↓
-  EnhancedTradingContext → 트레이딩 서비스 사용
-  ```
+### 최근 세션 요약
 
-### 이전 세션 (2026-02-02 오후 - KOSDAQ 통합)
-- **주제**: KOSDAQ 종목 Scout 통합 및 데이터 수집 시스템 구축
-- **완료**:
-  - **Scout KOSDAQ 통합 (v1.1)**
-    - `scout_universe.py`: KOSDAQ_150_BLUE_CHIPS, KOSDAQ_SECTOR_MAPPING 추가
-    - `get_kosdaq_blue_chips()`: 시총 1조+ 우량주 선별 (KOSDAQ 150 우선)
-    - `scout.py`: A-2 섹션으로 KOSDAQ 후보 50개 추가
-    - Naver 크롤러 개선: 시가총액, 거래량 파싱 추가
-  - **Council 섹터 필터링 구현**
-    - 회피 섹터(자동차, 배터리, 바이오) 종목 자동 제외
-    - 선호 섹터(반도체, 조선, 방산 등) 종목 태깅
-  - **KOSDAQ 데이터 수집 시스템**
-    - `scripts/populate_kosdaq_stock_master.py`: KOSDAQ 마스터 등록
-    - `scripts/collect_kosdaq_market_data.py`: 일봉 데이터 수집 (FinanceDataReader)
-    - `STOCK_MASTER.IS_KOSDAQ` 컬럼 추가
-    - DAG 추가: `weekly_kosdaq_stock_master` (일 22:00), `daily_kosdaq_price_collector` (16:30)
-  - **테스트 결과**
-    - KOSDAQ 마스터: 100개 종목 등록 (KOSDAQ 150에서 30개 포함)
-    - 일봉 데이터: 246일/종목 수집 완료 (에코프로 기준)
-    - Scout 스캔: KOSDAQ 50개 후보 추가, Council 필터 26개 제외
+| 날짜 | 주제 | 세션 파일 |
+|------|------|----------|
+| 2026-02-03 | Macro Council 수정, Dashboard Macro Insight 카드 | `session-2026-02-03-21-00.md` |
+| 2026-02-02 | 정치 뉴스 Council 통합, 투자자 수급 데이터 | `session-2026-02-02-23-00.md` |
 
-### 이전 세션 (2026-02-02 오후)
-- **주제**: Council 트레이딩 추천 기능 구현 (VIX 직접 적용 제거)
-- **완료**:
-  - **Trading Recommendations 필드 추가**
-    - `DailyMacroInsight`에 새 필드 추가:
-      - `position_size_pct` (50~130%): 포지션 사이즈 권고
-      - `stop_loss_adjust_pct` (80~150%): 손절폭 조정
-      - `strategies_to_favor/avoid`: 유리/피해야 할 전략
-      - `sectors_to_favor/avoid`: 유망/회피 섹터
-      - `trading_reasoning`: Council 권고 근거
-    - DB 마이그레이션: `add_trading_recommendations_to_macro_insight.sql`
-  - **Council 프롬프트 업데이트** (`run_macro_council.py`)
-    - VIX 기반 하드코딩 → Council이 직접 트레이딩 권고 판단
-    - 한국 시장 컨텍스트 고려하도록 프롬프트 개선
-    - `parse_council_output()`에 새 필드 파싱 추가
-  - **Dashboard 업데이트**
-    - Backend: `_calculate_trading_impact()` Council 추천값 사용
-    - Frontend: Trading Recommendations 섹션 UI 개선
-    - VIX 직접 적용 규칙 제거 (미국 지표는 참고용)
-  - **테스트 통과**: 106 passed (macro_insight + macro_data)
+### 현재 시스템 상태 (2026-02-03)
 
-### 이전 세션 (2026-02-02 오전)
-- **주제**: Jenkins CI 테스트 실패 수정
-- **완료**:
-  - **Finnhub 클라이언트 테스트 수정**
-    - `test_is_available_no_key`: env/secrets.json mock 추가
-    - `test_get_default_indicators`: 무료 티어 지표로 변경 (spy, vxx, ewy)
-    - `test_fetch_data_no_key`: env/secrets.json mock 추가
-  - **Aggregator 테스트 수정**
-    - `test_aggregate_filters_old_data`: vix max_age=72h 반영 (30h→73h)
-  - **Validator 테스트 수정**
-    - `test_filter_expired_data`: vix max_age=72h 반영 (25h→73h)
-  - **price-monitor 테스트 수정**
-    - `test_check_sell_signal_atr_stop`: config side_effect, check_death_cross mock
-  - **전체 테스트 통과**: 1121 passed, 2 skipped
+- **Scout**: KOSPI + KOSDAQ 통합 완료 (v1.1)
+- **Council**: 정치 뉴스 + 투자자 수급 + 트레이딩 권고 기능 완료
+- **Dashboard**: Macro Insight 카드 추가 (VIX, 수급, 전략 권고)
+- **트레이딩 서비스**: 매크로 컨텍스트 통합 완료 (buy-scanner, scout-job, price-monitor)
+- **테스트**: 1136 passed, 2 skipped
 
-### 이전 세션 (2026-02-02 새벽)
-- **주제**: Enhanced Macro → Trading Services 통합 완료
-- **완료**:
-  - **buy-scanner 통합** (v1.2 → v1.3)
-    - `_check_macro_risk_gate()`: Risk-Off Level 2+ 시 신규 진입 차단
-    - `_is_strategy_allowed()`: VIX elevated/crisis 시 공격적 전략 비활성화
-    - `position_multiplier` 신호 출력에 포함
-  - **scout-job 통합** (v1.0 → v1.1)
-    - Council 섹터 신호 (favor/avoid) 후보군에 태깅
-    - Risk-Off Level 2+ 시 Watchlist 크기 축소 (15 → 10)
-  - **price-monitor 통합** (v1.0 → v1.1)
-    - `stop_loss_multiplier` 적용 (VIX elevated 시 1.3x)
-    - ATR Stop, Fixed Stop 모두 매크로 배율 반영
-  - **Airflow DAG 활성화**
-    - `enhanced_macro_collection`: 07:00, 12:00, 18:00 KST
-    - `enhanced_macro_quick`: 09:30-14:30 장중 빠른 업데이트
-    - secrets.json 경로 수정 (Airflow 컨테이너 호환)
-  - **Trading Context 개선**
-    - 오늘 데이터 없으면 최근 3일 폴백
-    - 현재 상태: VIX=27.51 (elevated), pos_mult=0.9, stop_mult=1.3
+### 주요 데이터 흐름
 
-### 이전 세션 (2026-02-01 밤)
-- **주제**: Enhanced Macro Insight System 구현
-- **완료**:
-  - `shared/macro_data/` 모듈 전체 구현 (~1500줄)
-  - `shared/macro_insight/trading_context.py` 구현 (~400줄)
-  - DAGs 추가, DB 마이그레이션, 테스트 68개 통과
-
-### 이전 세션 (2026-02-01 저녁)
-- **주제**: 분봉 백테스트 & 파라미터 최적화
-- **완료**:
-  - `utilities/backtest_minute_realistic.py` 구현 (~800줄)
-    - 실시간 트레이딩 로직 재현 (8개 Risk Gates, 다양한 전략)
-    - BacktestBarAggregator, EntrySignalChecker, MinuteRealisticBacktester 클래스
-  - `utilities/backtest_minute_grid.py` 구현 (~800줄)
-    - 파라미터 그리드 서치 (MINIMAL/QUICK/FULL_GRID)
-    - Sharpe ratio, Profit factor, Composite score 분석
-  - **RSI 차단 임계값 최적화 발견**: 75 → 70
-    - RSI 70: 수익률 +14.57%, 승률 82.1%
-    - RSI 75: 수익률 +5.63%, 승률 78.5%
-  - 3개 파일 파라미터 적용:
-    - `shared/settings/registry.py` (RISK_GATE_RSI_MAX: 75→70)
-    - `services/buy-scanner/opportunity_watcher.py` (default 75→70)
-    - `tests/e2e/conftest.py` (mock config 75→70)
-
-### 이전 세션 (2026-02-01 오후)
-- **주제**: SQLAlchemy 2.0 전체 마이그레이션
-- **완료**:
-  - 레거시 `.query()` API → `select()`, `session.scalars()`, `session.execute()` 변환
-  - 31개 파일 수정 (shared/, services/, scripts/, utilities/, tests/)
-  - 테스트 Mock 패턴 업데이트 (session.scalar, session.scalars)
-  - 전체 테스트 통과 (1053 passed)
-
-### 이전 세션 (2026-02-01 새벽)
-- **주제**: DB 인덱스 & 시스템 최적화
-- **파일**: `.ai/sessions/session-2026-02-01-00-10.md`
-- **완료**:
-  - MariaDB 인덱스 54개 생성
-  - Frontend 번들 최적화 (lazy loading, chunk splitting)
-  - Redis KEYS → SCAN 패턴 변경
-  - 데이터 보관 정책 (1년) 및 Cleanup DAG
-  - bare except → 구체적 예외 타입
-  - SQLAlchemy 2.0 API 표준화 (repository.py)
-  - macro-aggregator 의존성 수정
-
-### 이전 세션 (2026-01-31 밤)
-- **주제**: Dashboard Redesign (Vercel/Stripe Style) & Performance Optimization
-- **파일**: `.ai/sessions/session-2026-01-31-22-00.md`
-- **완료**: 15페이지 → 6페이지 통합, GitHub Dark 테마
-
-### 이전 세션 (2026-01-31 오후)
-- **주제**: Multi-Broker Gateway Abstraction 구현
-- **파일**: `.ai/sessions/session-2026-01-31-16-20.md`
-- **완료**: BrokerClient Protocol, BrokerFactory, KISBrokerAdapter
-
-### 이전 세션 (2026-01-31 오전)
-- **주제**: 무중단 배포(Zero-Downtime Deployment) 구현 및 빌드 최적화
-- **파일**: `.ai/sessions/session-2026-01-31-13-33.md`
-- **완료**: Graceful Shutdown, Rolling Deployment, pytest 병렬화
-
-### 이전 세션 (2026-01-30)
-- **주제**: 진입 로직 개선 (Cooldown, GOLDEN_CROSS 거래량, No-Trade Window, DIP_BUY)
-- **파일**: `.ai/sessions/session-2026-01-30-22-30.md`
+```
+[매크로 수집] enhanced_macro_collection (07:00, 12:00, 18:00)
+     ↓
+[Council 분석] macro_council (07:30) → DAILY_MACRO_INSIGHT
+     ↓
+[트레이딩 서비스] EnhancedTradingContext
+     ↓
+[Dashboard] /api/macro/insight
+```
 
 ---
-*Last Updated: 2026-02-02 (정치 뉴스 키워드 모니터링 추가)*
-*이 문서는 Claude Code 세션 간 컨텍스트 공유를 위해 자동 생성됨*
+*Last Updated: 2026-02-03*
+*상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*
