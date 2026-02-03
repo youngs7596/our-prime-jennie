@@ -775,8 +775,17 @@ async def main(args):
     # 2. 텔레그램 브리핑 수집 (날짜 기준)
     briefing = await fetch_morning_briefing(target_date=target_date, hours_ago=hours_ago)
     if not briefing:
-        logger.error("브리핑 수집 실패. 종료합니다.")
-        return 1
+        if not global_snapshot:
+            # 브리핑도 없고 글로벌 스냅샷도 없으면 종료
+            logger.error("브리핑 및 글로벌 매크로 스냅샷 모두 없음. 종료합니다.")
+            return 1
+        # 브리핑 없지만 글로벌 스냅샷은 있음 -> 글로벌 데이터만으로 진행
+        logger.warning("⚠️ 브리핑 없음 (주말/공휴일). 글로벌 매크로 데이터만으로 Council 분석 진행")
+        briefing = {
+            "content": f"[{target_date}] 텔레그램 브리핑 없음 (주말/공휴일). 글로벌 매크로 데이터만 분석.",
+            "published_at": datetime.now(KST),
+            "raw_messages": [],
+        }
 
     # 2-1. 텔레그램 메시지 DB 저장 (대시보드 표시용)
     if not args.dry_run and briefing.get("raw_messages"):
