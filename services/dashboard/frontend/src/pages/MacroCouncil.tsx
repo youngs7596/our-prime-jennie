@@ -282,6 +282,28 @@ export function MacroCouncilPage() {
                 </CardContent>
               </Card>
 
+              {/* Source Info */}
+              {(macroInsight.source_channel || macroInsight.source_analyst) && (
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      {macroInsight.source_channel && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">출처 채널</span>
+                          <span className="text-blue-400">@{macroInsight.source_channel}</span>
+                        </div>
+                      )}
+                      {macroInsight.source_analyst && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">분석가</span>
+                          <span className="text-white">{macroInsight.source_analyst}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Council Cost */}
               {macroInsight.council_cost_usd && (
                 <Card>
@@ -431,12 +453,29 @@ export function MacroCouncilPage() {
                 </CardContent>
               </Card>
 
+              {/* Regime Hint */}
+              {macroInsight.regime_hint && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                      <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                      Market Regime
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-white leading-relaxed">
+                      {macroInsight.regime_hint}
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Risk Factors */}
               {macroInsight.risk_factors?.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
                       리스크 요인
                     </CardTitle>
                   </CardHeader>
@@ -444,7 +483,29 @@ export function MacroCouncilPage() {
                     <ul className="space-y-2">
                       {macroInsight.risk_factors.map((factor: string, i: number) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                          <span className="text-yellow-400 mt-0.5">•</span>
+                          <span className="text-red-400 mt-0.5">•</span>
+                          {factor}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Opportunity Factors */}
+              {macroInsight.opportunity_factors?.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                      <TrendingUp className="w-4 h-4 text-green-400" />
+                      기회 요인
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {macroInsight.opportunity_factors.map((factor: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="text-green-400 mt-0.5">•</span>
                           {factor}
                         </li>
                       ))}
@@ -489,6 +550,35 @@ export function MacroCouncilPage() {
                         >
                           {stock}
                         </span>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Sector Signals */}
+              {macroInsight.sector_signals && Object.keys(macroInsight.sector_signals).length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium">섹터별 신호</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(macroInsight.sector_signals).map(([sector, signal]: [string, any]) => (
+                        <div
+                          key={sector}
+                          className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5"
+                        >
+                          <span className="text-sm">{sector}</span>
+                          <span className={cn(
+                            'px-2 py-0.5 text-xs rounded font-medium',
+                            signal === 'bullish' || signal === 'favor' ? 'bg-green-500/20 text-green-400' :
+                            signal === 'bearish' || signal === 'avoid' ? 'bg-red-500/20 text-red-400' :
+                            'bg-gray-500/20 text-gray-400'
+                          )}>
+                            {typeof signal === 'string' ? signal : JSON.stringify(signal)}
+                          </span>
+                        </div>
                       ))}
                     </div>
                   </CardContent>
