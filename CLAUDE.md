@@ -258,6 +258,62 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 - 원인: `_check_no_trade_window`, `_check_danger_zone` 등이 현재 시간에 따라 False 반환
 - 해결: 테스트에서 해당 메서드 mock 필요
 
+### 12.4 코드 손실 (CRITICAL - 2026-02-03 사건)
+
+#### 사건 개요
+2026-02-02 세션에서 구현한 `Macro.tsx` 프론트엔드 페이지가 완전히 사라짐. 사용자가 분명히 기억하는 기능 (날짜 드롭다운, 자동차 섹터 회피 등)이 존재하지 않았음.
+
+#### 원인 분석
+1. 세션 종료 시 `git add` 명령에 **신규 파일이 누락**됨
+2. 백엔드 파일만 커밋되고, 프론트엔드 `Macro.tsx`는 스테이징 안됨
+3. `git push`는 수행되었으나 해당 파일은 커밋에 포함되지 않음
+4. Docker 이미지 재빌드 시 호스트의 uncommitted 파일은 포함되지 않음
+
+#### 복구 방법
+Claude 세션 히스토리 (.jsonl 파일)에서 원본 코드 발견:
+```bash
+# 세션 히스토리 위치
+~/.claude/projects/-home-youngs75-projects-my-prime-jennie/*.jsonl
+
+# Write tool 사용 내역에서 file_path로 검색
+python3 -c "
+import json
+with open('SESSION_ID.jsonl') as f:
+    for line in f:
+        data = json.loads(line)
+        # tool_use 중 Write tool의 file_path 확인
+"
+```
+
+#### 방지책 (필수 체크리스트)
+
+**세션 종료 전:**
+```bash
+# 1. 모든 변경 확인
+git status
+
+# 2. untracked 파일 확인 (신규 파일!)
+git ls-files --others --exclude-standard
+
+# 3. 변경 내용 확인
+git diff --stat
+
+# 4. 신규 파일 포함하여 스테이징
+git add [변경된_파일들] [신규_파일들]
+
+# 5. 커밋 & 푸시
+git commit -m "..."
+git push
+```
+
+**Pre-push 훅 (이미 설치됨):**
+`.githooks/pre-push`가 uncommitted 변경을 경고함
+
+#### 교훈
+- **신뢰하되 검증하라**: `git add .`보다 명시적 파일 지정이 안전하지만, 반드시 `git status`로 확인
+- **신규 파일은 특히 주의**: 기존 파일 수정은 `git diff`로 보이지만, 신규 파일은 `--others` 옵션 필요
+- **세션 히스토리는 최후의 보루**: Claude 세션 .jsonl 파일에서 Write tool 내역으로 복구 가능
+
 ## 13. 세션 Handoff
 
 > **상세 세션 기록**: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
@@ -267,6 +323,7 @@ docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-03 (밤) | 코드 손실 조사, MacroCouncil 기능 복구 | `session-2026-02-03-23-04.md` |
 | 2026-02-03 | Macro Council 수정, Dashboard Macro Insight 카드 | `session-2026-02-03-21-00.md` |
 | 2026-02-02 | 정치 뉴스 Council 통합, 투자자 수급 데이터 | `session-2026-02-02-23-00.md` |
 
