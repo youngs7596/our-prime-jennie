@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart3,
+  Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -18,6 +19,7 @@ const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Home' },
   { path: '/portfolio', icon: Briefcase, label: 'Portfolio' },
   { path: '/scout', icon: Brain, label: 'Scout' },
+  { path: '/macro-council', icon: Globe, label: 'Macro' },
   { path: '/system', icon: Activity, label: 'System' },
   { path: '/analytics', icon: BarChart3, label: 'Analytics' },
   { path: '/settings', icon: Settings, label: 'Settings' },

@@ -11,6 +11,7 @@ const ScoutPage = lazy(() => import('@/pages/Scout').then(m => ({ default: m.Sco
 const SystemPage = lazy(() => import('@/pages/System').then(m => ({ default: m.SystemPage })))
 const AnalyticsPage = lazy(() => import('@/pages/Analytics').then(m => ({ default: m.AnalyticsPage })))
 const SettingsPage = lazy(() => import('@/pages/Settings').then(m => ({ default: m.SettingsPage })))
+const MacroCouncilPage = lazy(() => import('@/pages/MacroCouncil').then(m => ({ default: m.MacroCouncilPage })))
 
 // Loading fallback component
 function PageLoader() {
@@ -54,6 +55,7 @@ function App() {
             <Route path="scout" element={<ScoutPage />} />
             <Route path="system" element={<SystemPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="macro-council" element={<MacroCouncilPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
