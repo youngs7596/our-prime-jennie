@@ -949,14 +949,37 @@ async def get_three_sages_review_api(payload: dict = Depends(verify_token)):
 # Macro Insight API - DAILY_MACRO_INSIGHT 조회
 # =============================================================================
 
+@app.get("/api/macro/dates")
+async def get_macro_insight_dates(payload: dict = Depends(verify_token)):
+    """매크로 인사이트 날짜 목록 조회 (최근 30일)"""
+    try:
+        from sqlalchemy import text
+        with get_session() as session:
+            result = session.execute(text("""
+                SELECT INSIGHT_DATE
+                FROM DAILY_MACRO_INSIGHT
+                ORDER BY INSIGHT_DATE DESC
+                LIMIT 30
+            """))
+            rows = result.fetchall()
+            dates = [row.INSIGHT_DATE.isoformat() for row in rows if row.INSIGHT_DATE]
+            return {"dates": dates}
+    except Exception as e:
+        logger.error(f"매크로 날짜 목록 조회 실패: {e}")
+        return {"dates": [], "error": str(e)}
+
+
 @app.get("/api/macro/insight")
-async def get_macro_insight_api(payload: dict = Depends(verify_token)):
-    """오늘의 매크로 인사이트 조회 - Council 분석 결과"""
+async def get_macro_insight_api(
+    date: Optional[str] = Query(None, description="조회할 날짜 (YYYY-MM-DD)"),
+    payload: dict = Depends(verify_token)
+):
+    """매크로 인사이트 조회 - Council 분석 결과"""
     r = get_redis()
 
     try:
-        # Redis 캐시 확인
-        if r:
+        # 날짜 지정 없으면 캐시 확인 (최신 데이터)
+        if not date and r:
             cached = r.get("macro:daily_insight")
             if cached:
                 try:
@@ -964,29 +987,53 @@ async def get_macro_insight_api(payload: dict = Depends(verify_token)):
                 except json.JSONDecodeError:
                     pass
 
-        # DB에서 조회 (최신 1건)
+        # DB에서 조회
         from sqlalchemy import text
         with get_session() as session:
-            result = session.execute(text("""
-                SELECT
-                    INSIGHT_DATE, SOURCE_CHANNEL, SOURCE_ANALYST,
-                    SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
-                    SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
-                    OPPORTUNITY_FACTORS, KEY_STOCKS,
-                    POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
-                    STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
-                    SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
-                    TRADING_REASONING,
-                    POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
-                    VIX_VALUE, VIX_REGIME, USD_KRW, KOSPI_INDEX, KOSDAQ_INDEX,
-                    KOSPI_FOREIGN_NET, KOSDAQ_FOREIGN_NET,
-                    KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
-                    DATA_COMPLETENESS_PCT,
-                    COUNCIL_COST_USD, CREATED_AT
-                FROM DAILY_MACRO_INSIGHT
-                ORDER BY INSIGHT_DATE DESC
-                LIMIT 1
-            """))
+            if date:
+                # 특정 날짜 조회
+                result = session.execute(text("""
+                    SELECT
+                        INSIGHT_DATE, SOURCE_CHANNEL, SOURCE_ANALYST,
+                        SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
+                        SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
+                        OPPORTUNITY_FACTORS, KEY_STOCKS,
+                        POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+                        STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+                        SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
+                        TRADING_REASONING,
+                        POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
+                        VIX_VALUE, VIX_REGIME, USD_KRW, KOSPI_INDEX, KOSDAQ_INDEX,
+                        KOSPI_FOREIGN_NET, KOSDAQ_FOREIGN_NET,
+                        KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
+                        DATA_COMPLETENESS_PCT,
+                        COUNCIL_COST_USD, CREATED_AT
+                    FROM DAILY_MACRO_INSIGHT
+                    WHERE INSIGHT_DATE = :target_date
+                    LIMIT 1
+                """), {"target_date": date})
+            else:
+                # 최신 1건
+                result = session.execute(text("""
+                    SELECT
+                        INSIGHT_DATE, SOURCE_CHANNEL, SOURCE_ANALYST,
+                        SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
+                        SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
+                        OPPORTUNITY_FACTORS, KEY_STOCKS,
+                        POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+                        STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+                        SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
+                        TRADING_REASONING,
+                        POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
+                        VIX_VALUE, VIX_REGIME, USD_KRW, KOSPI_INDEX, KOSDAQ_INDEX,
+                        KOSPI_FOREIGN_NET, KOSDAQ_FOREIGN_NET,
+                        KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
+                        DATA_COMPLETENESS_PCT,
+                        COUNCIL_COST_USD, CREATED_AT
+                    FROM DAILY_MACRO_INSIGHT
+                    ORDER BY INSIGHT_DATE DESC
+                    LIMIT 1
+                """))
             row = result.fetchone()
 
             if row:

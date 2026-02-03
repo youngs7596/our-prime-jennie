@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Globe,
@@ -6,13 +7,13 @@ import {
   TrendingDown,
   BarChart3,
   Users,
-  Calendar,
   RefreshCw,
   AlertTriangle,
   CheckCircle,
   XCircle,
   Zap,
   DollarSign,
+  ChevronDown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -20,10 +21,19 @@ import { macroApi, councilApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function MacroCouncilPage() {
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined)
+
+  // 날짜 목록 조회
+  const { data: datesData } = useQuery({
+    queryKey: ['macro-dates'],
+    queryFn: macroApi.getDates,
+    staleTime: 300000,
+  })
+
   const { data: macroInsight, isLoading, refetch } = useQuery({
-    queryKey: ['macro-insight'],
-    queryFn: macroApi.getInsight,
-    refetchInterval: 300000, // 5분
+    queryKey: ['macro-insight', selectedDate],
+    queryFn: () => macroApi.getInsight(selectedDate),
+    refetchInterval: selectedDate ? false : 300000, // 선택된 날짜가 있으면 자동 갱신 안함
     staleTime: 180000,
   })
 
@@ -90,12 +100,22 @@ export function MacroCouncilPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {macroInsight?.insight_date && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="w-4 h-4" />
-              {macroInsight.insight_date}
-            </div>
-          )}
+          {/* 날짜 선택 드롭다운 */}
+          <div className="relative">
+            <select
+              value={selectedDate || ''}
+              onChange={(e) => setSelectedDate(e.target.value || undefined)}
+              className="appearance-none bg-[#1a1a1a] border border-white/10 rounded-md px-3 py-1.5 pr-8 text-sm text-white focus:outline-none focus:ring-2 focus:ring-accent/50 cursor-pointer"
+            >
+              <option value="">최신</option>
+              {datesData?.dates?.map((date: string) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
           <Button
             variant="outline"
             size="sm"

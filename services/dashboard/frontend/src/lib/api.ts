@@ -212,8 +212,13 @@ export const councilApi = {
 
 // NEW: Macro Insight API - Council 분석 결과
 export const macroApi = {
-  getInsight: async () => {
-    const response = await api.get('/macro/insight')
+  getInsight: async (date?: string) => {
+    const params = date ? `?date=${date}` : ''
+    const response = await api.get(`/macro/insight${params}`)
+    return response.data
+  },
+  getDates: async () => {
+    const response = await api.get('/macro/dates')
     return response.data
   },
 }

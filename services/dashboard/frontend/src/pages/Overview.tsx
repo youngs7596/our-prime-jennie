@@ -135,7 +135,7 @@ export function OverviewPage() {
 
   const { data: macroInsight } = useQuery({
     queryKey: ['macro-insight'],
-    queryFn: macroApi.getInsight,
+    queryFn: () => macroApi.getInsight(),
     refetchInterval: 300000, // 5분
     staleTime: 180000,
   })
