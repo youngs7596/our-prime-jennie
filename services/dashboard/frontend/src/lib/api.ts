@@ -203,10 +203,17 @@ export const configApi = {
 }
 
 // NEW: 3 Sages Council API
-
 export const councilApi = {
   getDailyReview: async () => {
     const response = await api.get('/council/daily-review')
+    return response.data
+  },
+}
+
+// NEW: Macro Insight API - Council 분석 결과
+export const macroApi = {
+  getInsight: async () => {
+    const response = await api.get('/macro/insight')
     return response.data
   },
 }

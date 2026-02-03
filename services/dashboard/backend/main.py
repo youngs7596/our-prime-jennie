@@ -946,6 +946,135 @@ async def get_three_sages_review_api(payload: dict = Depends(verify_token)):
         return {"error": str(e), "sages": []}
 
 # =============================================================================
+# Macro Insight API - DAILY_MACRO_INSIGHT 조회
+# =============================================================================
+
+@app.get("/api/macro/insight")
+async def get_macro_insight_api(payload: dict = Depends(verify_token)):
+    """오늘의 매크로 인사이트 조회 - Council 분석 결과"""
+    r = get_redis()
+
+    try:
+        # Redis 캐시 확인
+        if r:
+            cached = r.get("macro:daily_insight")
+            if cached:
+                try:
+                    return json.loads(cached)
+                except json.JSONDecodeError:
+                    pass
+
+        # DB에서 조회 (최신 1건)
+        from sqlalchemy import text
+        with get_session() as session:
+            result = session.execute(text("""
+                SELECT
+                    INSIGHT_DATE, SOURCE_CHANNEL, SOURCE_ANALYST,
+                    SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
+                    SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
+                    OPPORTUNITY_FACTORS, KEY_STOCKS,
+                    POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
+                    STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
+                    SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
+                    TRADING_REASONING,
+                    POLITICAL_RISK_LEVEL, POLITICAL_RISK_SUMMARY,
+                    VIX_VALUE, VIX_REGIME, USD_KRW, KOSPI_INDEX, KOSDAQ_INDEX,
+                    KOSPI_FOREIGN_NET, KOSDAQ_FOREIGN_NET,
+                    KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
+                    DATA_COMPLETENESS_PCT,
+                    COUNCIL_COST_USD, CREATED_AT
+                FROM DAILY_MACRO_INSIGHT
+                ORDER BY INSIGHT_DATE DESC
+                LIMIT 1
+            """))
+            row = result.fetchone()
+
+            if row:
+                # JSON 필드 파싱 헬퍼
+                def parse_json_field(val, default=None):
+                    if val is None:
+                        return default if default is not None else []
+                    if isinstance(val, (list, dict)):
+                        return val
+                    try:
+                        return json.loads(val)
+                    except (json.JSONDecodeError, TypeError):
+                        return default if default is not None else []
+
+                insight = {
+                    "insight_date": row.INSIGHT_DATE.isoformat() if row.INSIGHT_DATE else None,
+                    "source_channel": row.SOURCE_CHANNEL,
+                    "source_analyst": row.SOURCE_ANALYST,
+
+                    # Sentiment & Regime
+                    "sentiment": row.SENTIMENT,
+                    "sentiment_score": row.SENTIMENT_SCORE,
+                    "regime_hint": row.REGIME_HINT,
+
+                    # Trading Recommendations
+                    "position_size_pct": row.POSITION_SIZE_PCT or 100,
+                    "stop_loss_adjust_pct": row.STOP_LOSS_ADJUST_PCT or 100,
+                    "strategies_to_favor": parse_json_field(row.STRATEGIES_TO_FAVOR),
+                    "strategies_to_avoid": parse_json_field(row.STRATEGIES_TO_AVOID),
+                    "sectors_to_favor": parse_json_field(row.SECTORS_TO_FAVOR),
+                    "sectors_to_avoid": parse_json_field(row.SECTORS_TO_AVOID),
+                    "trading_reasoning": row.TRADING_REASONING,
+
+                    # Political Risk
+                    "political_risk_level": row.POLITICAL_RISK_LEVEL or "low",
+                    "political_risk_summary": row.POLITICAL_RISK_SUMMARY,
+
+                    # Market Data
+                    "vix_value": row.VIX_VALUE,
+                    "vix_regime": row.VIX_REGIME,
+                    "usd_krw": row.USD_KRW,
+                    "kospi_index": row.KOSPI_INDEX,
+                    "kosdaq_index": row.KOSDAQ_INDEX,
+
+                    # Investor Trading
+                    "kospi_foreign_net": row.KOSPI_FOREIGN_NET,
+                    "kosdaq_foreign_net": row.KOSDAQ_FOREIGN_NET,
+                    "kospi_institutional_net": row.KOSPI_INSTITUTIONAL_NET,
+                    "kospi_retail_net": row.KOSPI_RETAIL_NET,
+
+                    # Analysis
+                    "sector_signals": parse_json_field(row.SECTOR_SIGNALS, {}),
+                    "key_themes": parse_json_field(row.KEY_THEMES),
+                    "risk_factors": parse_json_field(row.RISK_FACTORS),
+                    "opportunity_factors": parse_json_field(row.OPPORTUNITY_FACTORS),
+                    "key_stocks": parse_json_field(row.KEY_STOCKS),
+
+                    # Meta
+                    "data_completeness_pct": row.DATA_COMPLETENESS_PCT,
+                    "council_cost_usd": row.COUNCIL_COST_USD,
+                    "created_at": row.CREATED_AT.isoformat() if row.CREATED_AT else None,
+                }
+
+                # Redis 캐시 (5분)
+                if r:
+                    try:
+                        r.setex("macro:daily_insight", 300, json.dumps(insight, default=str))
+                    except Exception:
+                        pass
+
+                return insight
+
+        # 데이터 없음
+        return {
+            "insight_date": None,
+            "message": "매크로 인사이트가 아직 생성되지 않았습니다. 매일 07:30 KST에 자동 생성됩니다.",
+            "sentiment": None,
+            "sentiment_score": None,
+            "position_size_pct": 100,
+            "stop_loss_adjust_pct": 100,
+            "political_risk_level": "unknown",
+        }
+
+    except Exception as e:
+        logger.error(f"매크로 인사이트 조회 실패: {e}")
+        return {"error": str(e), "insight_date": None}
+
+# =============================================================================
 # 헬스 체크
 # =============================================================================
 

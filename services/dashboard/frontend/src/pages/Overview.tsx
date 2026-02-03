@@ -11,6 +11,8 @@ import {
   Zap,
   Users,
   BarChart3,
+  Globe,
+  Shield,
 } from 'lucide-react'
 import {
   AreaChart,
@@ -26,7 +28,7 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { portfolioApi, scoutApi, tradesApi, marketApi, councilApi, llmApi } from '@/lib/api'
+import { portfolioApi, scoutApi, tradesApi, marketApi, councilApi, llmApi, macroApi } from '@/lib/api'
 import {
   formatCurrency,
   formatPercent,
@@ -129,6 +131,13 @@ export function OverviewPage() {
     queryFn: councilApi.getDailyReview,
     refetchInterval: 600000, // 10분 유지
     staleTime: 300000,
+  })
+
+  const { data: macroInsight } = useQuery({
+    queryKey: ['macro-insight'],
+    queryFn: macroApi.getInsight,
+    refetchInterval: 300000, // 5분
+    staleTime: 180000,
   })
 
   const { data: llmStats } = useQuery({
@@ -475,6 +484,203 @@ export function OverviewPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Macro Insight - Council 분석 결과 */}
+      {macroInsight && macroInsight.insight_date && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Globe className="w-4 h-4 text-muted-foreground" />
+              매크로 인사이트 (Council 분석)
+              <span className="text-xs text-muted-foreground ml-2">{macroInsight.insight_date}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* 글로벌 데이터 */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">글로벌 지표</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    <p className="text-xs text-muted-foreground">VIX</p>
+                    <p className={cn(
+                      'text-lg font-semibold',
+                      macroInsight.vix_regime === 'crisis' && 'text-red-400',
+                      macroInsight.vix_regime === 'elevated' && 'text-yellow-400',
+                      macroInsight.vix_regime === 'normal' && 'text-blue-400',
+                      macroInsight.vix_regime === 'low_vol' && 'text-green-400',
+                    )}>
+                      {macroInsight.vix_value?.toFixed(1) || '-'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{macroInsight.vix_regime || '-'}</p>
+                  </div>
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    <p className="text-xs text-muted-foreground">USD/KRW</p>
+                    <p className="text-lg font-semibold">{macroInsight.usd_krw?.toFixed(1) || '-'}</p>
+                  </div>
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    <p className="text-xs text-muted-foreground">KOSPI</p>
+                    <p className="text-lg font-semibold">{macroInsight.kospi_index?.toFixed(0) || '-'}</p>
+                  </div>
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    <p className="text-xs text-muted-foreground">KOSDAQ</p>
+                    <p className="text-lg font-semibold">{macroInsight.kosdaq_index?.toFixed(0) || '-'}</p>
+                  </div>
+                </div>
+                {/* 수급 데이터 */}
+                {(macroInsight.kospi_foreign_net !== null || macroInsight.kospi_institutional_net !== null) && (
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    <p className="text-xs text-muted-foreground mb-2">투자자별 순매수 (억원)</p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span>외국인</span>
+                        <span className={macroInsight.kospi_foreign_net >= 0 ? 'text-profit-positive' : 'text-profit-negative'}>
+                          {macroInsight.kospi_foreign_net >= 0 ? '+' : ''}{(macroInsight.kospi_foreign_net || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>기관</span>
+                        <span className={macroInsight.kospi_institutional_net >= 0 ? 'text-profit-positive' : 'text-profit-negative'}>
+                          {macroInsight.kospi_institutional_net >= 0 ? '+' : ''}{(macroInsight.kospi_institutional_net || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>개인</span>
+                        <span className={macroInsight.kospi_retail_net >= 0 ? 'text-profit-positive' : 'text-profit-negative'}>
+                          {macroInsight.kospi_retail_net >= 0 ? '+' : ''}{(macroInsight.kospi_retail_net || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Trading Recommendations */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">트레이딩 권고</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-2 rounded bg-blue-500/5 border border-blue-500/20">
+                    <p className="text-xs text-muted-foreground">포지션 크기</p>
+                    <p className="text-xl font-semibold text-blue-400">{macroInsight.position_size_pct || 100}%</p>
+                  </div>
+                  <div className="p-2 rounded bg-orange-500/5 border border-orange-500/20">
+                    <p className="text-xs text-muted-foreground">손절폭 조정</p>
+                    <p className="text-xl font-semibold text-orange-400">{macroInsight.stop_loss_adjust_pct || 100}%</p>
+                  </div>
+                </div>
+                {/* 유리한 전략 */}
+                {macroInsight.strategies_to_favor?.length > 0 && (
+                  <div className="p-2 rounded bg-green-500/5 border border-green-500/20">
+                    <p className="text-xs text-muted-foreground mb-1">허용 전략</p>
+                    <div className="flex flex-wrap gap-1">
+                      {macroInsight.strategies_to_favor.map((s: string, i: number) => (
+                        <span key={i} className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* 피해야 할 전략 */}
+                {macroInsight.strategies_to_avoid?.length > 0 && (
+                  <div className="p-2 rounded bg-red-500/5 border border-red-500/20">
+                    <p className="text-xs text-muted-foreground mb-1">회피 전략</p>
+                    <div className="flex flex-wrap gap-1">
+                      {macroInsight.strategies_to_avoid.map((s: string, i: number) => (
+                        <span key={i} className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Sentiment & Risk */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-muted-foreground">센티먼트 & 리스크</p>
+                {/* Sentiment */}
+                <div className={cn(
+                  'p-3 rounded border',
+                  macroInsight.sentiment?.includes('bullish') && 'bg-green-500/5 border-green-500/20',
+                  macroInsight.sentiment?.includes('bearish') && 'bg-red-500/5 border-red-500/20',
+                  macroInsight.sentiment?.includes('neutral') && 'bg-yellow-500/5 border-yellow-500/20',
+                )}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Council Sentiment</span>
+                    <span className="text-lg font-semibold">{macroInsight.sentiment_score || '-'}</span>
+                  </div>
+                  <p className={cn(
+                    'text-sm font-medium mt-1',
+                    macroInsight.sentiment?.includes('bullish') && 'text-green-400',
+                    macroInsight.sentiment?.includes('bearish') && 'text-red-400',
+                    macroInsight.sentiment?.includes('neutral') && 'text-yellow-400',
+                  )}>
+                    {macroInsight.sentiment || '-'}
+                  </p>
+                </div>
+                {/* Political Risk */}
+                <div className={cn(
+                  'p-3 rounded border',
+                  macroInsight.political_risk_level === 'critical' && 'bg-red-500/10 border-red-500/30',
+                  macroInsight.political_risk_level === 'high' && 'bg-orange-500/10 border-orange-500/30',
+                  macroInsight.political_risk_level === 'medium' && 'bg-yellow-500/10 border-yellow-500/30',
+                  macroInsight.political_risk_level === 'low' && 'bg-green-500/10 border-green-500/30',
+                )}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Shield className="w-4 h-4" />
+                    <span className="text-xs text-muted-foreground">Political Risk</span>
+                    <span className={cn(
+                      'px-1.5 py-0.5 text-xs rounded font-medium ml-auto',
+                      macroInsight.political_risk_level === 'critical' && 'bg-red-500 text-white',
+                      macroInsight.political_risk_level === 'high' && 'bg-orange-500 text-white',
+                      macroInsight.political_risk_level === 'medium' && 'bg-yellow-500 text-black',
+                      macroInsight.political_risk_level === 'low' && 'bg-green-500 text-white',
+                    )}>
+                      {macroInsight.political_risk_level?.toUpperCase() || 'UNKNOWN'}
+                    </span>
+                  </div>
+                  {macroInsight.political_risk_summary && (
+                    <p className="text-xs text-muted-foreground line-clamp-3">{macroInsight.political_risk_summary}</p>
+                  )}
+                </div>
+                {/* 섹터 */}
+                {(macroInsight.sectors_to_favor?.length > 0 || macroInsight.sectors_to_avoid?.length > 0) && (
+                  <div className="p-2 rounded bg-white/[0.02] border border-white/5">
+                    {macroInsight.sectors_to_favor?.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-xs text-muted-foreground mb-1">유망 섹터</p>
+                        <div className="flex flex-wrap gap-1">
+                          {macroInsight.sectors_to_favor.slice(0, 4).map((s: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {macroInsight.sectors_to_avoid?.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">회피 섹터</p>
+                        <div className="flex flex-wrap gap-1">
+                          {macroInsight.sectors_to_avoid.slice(0, 4).map((s: string, i: number) => (
+                            <span key={i} className="px-1.5 py-0.5 text-xs bg-gray-500/20 text-gray-400 rounded">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Trading Reasoning */}
+            {macroInsight.trading_reasoning && (
+              <div className="mt-4 p-3 rounded bg-white/[0.02] border border-white/5">
+                <p className="text-xs text-muted-foreground mb-1">Council 판단 근거</p>
+                <p className="text-xs text-foreground">{macroInsight.trading_reasoning}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* LLM Stats */}
       {llmStats && (
