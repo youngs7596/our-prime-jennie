@@ -7,8 +7,9 @@
 
 | 연월 (Year-Month) | 파일 바로가기 |
 |---|---|
-| **2026-01** | [🚀 2026년 1월 변경 이력](docs/changelogs/CHANGELOG-2026-01.md) |
+| **2026-02** | [🚀 2026년 2월 변경 이력](docs/changelogs/CHANGELOG-2026-02.md) |
+| **2026-01** | [📋 2026년 1월 변경 이력](docs/changelogs/CHANGELOG-2026-01.md) |
 | **2025-12** | [🗄️ 2025년 12월 및 이전 이력](docs/changelogs/CHANGELOG-2025-12.md) |
 
 ---
-*Last Updated: 2026-01-14*
+*Last Updated: 2026-02-03*
