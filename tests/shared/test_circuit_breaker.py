@@ -3,7 +3,7 @@
 
 import pytest
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from shared.kis.circuit_breaker import (
     CircuitBreaker, 
     CircuitBreakerConfig, 
@@ -45,27 +45,38 @@ class TestCircuitBreaker:
         assert cb.state == CircuitState.OPEN
         assert cb.is_available is False
     
-    def test_open_to_half_open_after_timeout(self, cb):
+    @patch('shared.kis.circuit_breaker.time.time')
+    def test_open_to_half_open_after_timeout(self, mock_time, cb):
         """타임아웃 후 HALF_OPEN 전환"""
+        start_time = 1000.0
+        mock_time.return_value = start_time
+        
         # OPEN 상태로 만들기
         for i in range(3):
             cb.record_failure()
         
         assert cb.state == CircuitState.OPEN
         
-        # 타임아웃 대기 (initial_backoff * multiplier = 0.05 * 2 = 0.1)
-        time.sleep(0.15)
+        # 타임아웃 대기 (initial_backoff * multiplier = 0.05 * 2 = 0.1) -> Code logic uses initial_backoff=0.05 first
+        # Simulate time passing > 0.05
+        mock_time.return_value = start_time + 0.1
         
         # is_available 확인 시 HALF_OPEN 전환
         assert cb.is_available is True
         assert cb.state == CircuitState.HALF_OPEN
     
-    def test_half_open_success_to_closed(self, cb):
+    @patch('shared.kis.circuit_breaker.time.time')
+    def test_half_open_success_to_closed(self, mock_time, cb):
         """HALF_OPEN에서 성공 시 CLOSED 전환"""
+        start_time = 1000.0
+        mock_time.return_value = start_time
+        
         # OPEN → HALF_OPEN
         for i in range(3):
             cb.record_failure()
-        time.sleep(0.15)  # backoff = 0.1
+            
+        # Wait for backoff
+        mock_time.return_value = start_time + 0.1
         _ = cb.is_available  # 트리거
         
         assert cb.state == CircuitState.HALF_OPEN
@@ -76,17 +87,23 @@ class TestCircuitBreaker:
         
         assert cb.state == CircuitState.CLOSED
     
-    def test_half_open_failure_to_open(self, cb):
+    @patch('shared.kis.circuit_breaker.time.time')
+    def test_half_open_failure_to_open(self, mock_time, cb):
         """HALF_OPEN에서 실패 시 즉시 OPEN 전환"""
+        start_time = 1000.0
+        mock_time.return_value = start_time
+        
         # OPEN → HALF_OPEN
         for i in range(3):
             cb.record_failure()
-        time.sleep(0.15)  # backoff = 0.1
+            
+        mock_time.return_value = start_time + 0.1
         _ = cb.is_available
         
         assert cb.state == CircuitState.HALF_OPEN
         
-        # 실패 기록
+        # 실패 기록 (시간 살짝 증가)
+        mock_time.return_value = start_time + 0.2
         cb.record_failure()
         
         assert cb.state == CircuitState.OPEN
@@ -130,8 +147,12 @@ class TestCircuitBreaker:
         
         assert exc_info.value.state == CircuitState.OPEN
     
-    def test_exponential_backoff(self, cb):
+    @patch('shared.kis.circuit_breaker.time.time')
+    def test_exponential_backoff(self, mock_time, cb):
         """Exponential Backoff 검증"""
+        start_time = 1000.0
+        mock_time.return_value = start_time
+        
         # 첫 번째 OPEN (initial_backoff = 0.05)
         for i in range(3):
             cb.record_failure()
@@ -141,7 +162,7 @@ class TestCircuitBreaker:
         assert backoff1 == 0.05  # 첫 OPEN은 initial_backoff
         
         # 복구 → HALF_OPEN → 다시 실패하면 backoff 증가
-        time.sleep(0.1)  # backoff = 0.05초 대기
+        mock_time.return_value = start_time + 0.1  # Wait > 0.05
         _ = cb.is_available  # HALF_OPEN으로 전환
         assert cb.state == CircuitState.HALF_OPEN
         
