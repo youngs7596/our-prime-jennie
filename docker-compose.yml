@@ -939,8 +939,8 @@ services:
     volumes:
       - /docker_data/ollama_data:/root/.ollama
     environment:
-      - OLLAMA_MAX_LOADED_MODELS=2
-      - OLLAMA_NUM_PARALLEL=2 # [Optimization] Batch Processing Optimal (Do not increase)
+      - OLLAMA_MAX_LOADED_MODELS=3
+      - OLLAMA_NUM_PARALLEL=3 # [Optimization] Batch Processing Optimal (Do not increase)
       - OLLAMA_KEEP_ALIVE=5m
     restart: unless-stopped
     networks:

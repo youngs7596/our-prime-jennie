@@ -445,17 +445,21 @@ def main():
                 try:
                     embeddings = None
                     if rag_provider == "local":
-                        # Local Embedding (HuggingFace)
-                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Local Embeddings: jhgan/ko-sroberta-multitask) ...")
+                        # Local Embedding (Ollama)
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Ollama Embeddings: daynice/kure-v1) ...")
                         try:
-                            from langchain_huggingface import HuggingFaceEmbeddings
-                            embeddings = HuggingFaceEmbeddings(
-                                model_name="jhgan/ko-sroberta-multitask",
-                                model_kwargs={"device": "cpu"},
-                                encode_kwargs={"normalize_embeddings": True}
+                            from langchain_ollama import OllamaEmbeddings
+                            # Use OLLAMA_GATEWAY_URL if defined, else fallback to OLLAMA_HOST or localhost
+                            ollama_base_url = os.getenv("OLLAMA_GATEWAY_URL")
+                            if not ollama_base_url:
+                                ollama_base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+                            embeddings = OllamaEmbeddings(
+                                model="daynice/kure-v1",
+                                base_url=ollama_base_url
                             )
                         except ImportError:
-                            logger.error("🚨 langchain_huggingface 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
+                            logger.error("🚨 langchain_ollama 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
                             raise
 
                     else:

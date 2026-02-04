@@ -63,16 +63,16 @@ def get_vectorstore():
     if _vectorstore is None:
         import chromadb
         from langchain_chroma import Chroma
-        from langchain_huggingface import HuggingFaceEmbeddings
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
+        from langchain_ollama import OllamaEmbeddings
         
         logger.info(f"🔌 ChromaDB 연결 중... ({CHROMA_SERVER_HOST}:{CHROMA_SERVER_PORT})")
         
-        # Embeddings
-        embeddings = HuggingFaceEmbeddings(
-            model_name=EMBEDDING_MODEL,
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True}
+        # Embeddings (Ollama via Host/Gateway)
+        # Gateway URL(11500) 또는 Host Ollama(11434)
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        embeddings = OllamaEmbeddings(
+            model="daynice/kure-v1",
+            base_url=ollama_base_url
         )
         
         # Chroma Client

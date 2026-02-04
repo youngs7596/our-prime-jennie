@@ -120,8 +120,9 @@ stats = {
     'queue_depth': 0,  # 현재 대기 중인 요청 수
 }
 
-# 요청 큐 락 (순차 처리 보장)
-request_lock = threading.Lock()
+# 요청 큐 세마포어 (동시 처리 제어)
+max_concurrent = int(os.getenv("OLLAMA_MAX_CONCURRENT_REQUESTS", "3"))
+request_lock = threading.BoundedSemaphore(value=max_concurrent)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

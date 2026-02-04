@@ -17,36 +17,30 @@ sys.path.insert(0, SERVICE_DIR)
 
 # Import module directly (since 'buy-scanner' has a hyphen)
 import opportunity_watcher
-from opportunity_watcher import OpportunityWatcher
+from opportunity_watcher import BuyOpportunityWatcher
 
 class TestRiskInjection(unittest.TestCase):
-    # Patch the function imported inside opportunity_watcher module
-    @patch('opportunity_watcher.get_enhanced_trading_context')
-    def test_publish_signal_injects_risk_setting(self, mock_get_context):
+    def test_publish_signal_injects_risk_setting(self):
         # 1. Setup Mock Context
         mock_ctx = MagicMock()
         mock_ctx.stop_loss_multiplier = 1.5
         mock_ctx.risk_off_level = 2
         mock_ctx.vix_regime = "HIGH_VOLATILITY"
-        mock_ctx.position_size_pct = 50 # Multiplier should be 0.5
+        mock_ctx.position_multiplier = 0.5  # Correct attribute name
         mock_ctx.strategies_to_avoid = []
-         # to avoid issues if attribute access
         
-        # Mock get_enhanced_trading_context to return our mock context
-        mock_get_context.return_value = mock_ctx
-
         # 2. Initialize Watcher with Mock Publisher
         mock_publisher = MagicMock()
         mock_config = MagicMock()
         
-        watcher = OpportunityWatcher(mock_config, mock_publisher)
-        watcher.market_regime = "BEAR"
+        # Mock Redis connection to avoid connection errors during init
+        with patch('opportunity_watcher.redis.from_url') as mock_redis:
+            mock_redis.return_value.ping.return_value = True
+            watcher = BuyOpportunityWatcher(mock_config, mock_publisher)
         
-        # Override _get_position_multiplier logic for test simplicity or rely on it using context
-        # The actual code calls self._get_position_multiplier(). 
-        # Let's inspect _get_position_multiplier implementation or mock it? 
-        # Looking at previous view_file, _get_position_multiplier uses _get_trading_context.
-        # So mocking get_enhanced_trading_context is sufficient.
+        # Inject Mock Context directly
+        watcher._trading_context = mock_ctx
+        watcher.market_regime = "BEAR"
 
         # 3. Simulate Signal
         signal = {
@@ -77,13 +71,10 @@ class TestRiskInjection(unittest.TestCase):
         
         risk_setting = candidate['risk_setting']
         
-        # Position Multiplier Verification: 
-        # If context.position_size_pct is 50, _get_position_multiplier should return 0.5
-        # (Assuming _get_position_multiplier logic works as seen in files)
-        
         self.assertEqual(risk_setting['vix_regime'], "HIGH_VOLATILITY")
         self.assertEqual(risk_setting['risk_off_level'], 2)
         self.assertEqual(risk_setting['stop_loss_multiplier'], 1.5)
+        self.assertEqual(risk_setting['position_size_ratio'], 0.5)
         
         # Stop Loss Pct Check: -0.05 * 1.5 = -0.075
         expected_sl = -0.05 * 1.5

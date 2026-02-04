@@ -2,8 +2,15 @@
 
 ## 2026-02-04
 
+### Optimization
+- **perf(docker)**: Docker Image Optimization & AI Model Switch
+  - Switched embedding model: `sentence-transformers` -> `Ollama (daynice/kure-v1)`
+  - Reduced `scout-job` image size (15.8GB -> ~500MB) via Multi-stage Build
+  - Reduced `news-archiver` image size (13GB -> ~400MB)
+  - Enabled concurrency in `ollama-gateway` (3 models: gpt-oss, exaone, kure-v1)
+
 ### Macro Council
-- **fix(macro)**: `OpportunityWatcher`에서 `BuyExecutor`로의 Macro Context(risk settings) 전달 누락 수정 (진행중)
+- **fix(macro)**: `OpportunityWatcher`에서 `BuyExecutor`로의 Macro Context(risk settings) 전달 누락 수정 (완료)
   - `OpportunityWatcher.publish_signal`에 `risk_setting` 주입 로직 추가
   - `BuyExecutor`가 `position_size_ratio`와 `stop_loss_pct`를 수신하도록 페이로드 구조 개선
 
