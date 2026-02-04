@@ -8,6 +8,10 @@
   - Reduced `scout-job` image size (15.8GB -> ~500MB) via Multi-stage Build
   - Reduced `news-archiver` image size (13GB -> ~400MB)
   - Enabled concurrency in `ollama-gateway` (3 models: gpt-oss, exaone, kure-v1)
+- **refactor(db)**: Migrate Vector DB (ChromaDB -> Qdrant)
+  - Replaced `chromadb` with `qdrant` (Rust-based, lighter, faster)
+  - Updated `news-archiver` & `scout-job` to use `QdrantVectorStore`
+  - Added Qdrant Dashboard (port 6333)
 
 ### Macro Council
 - **fix(macro)**: `OpportunityWatcher`에서 `BuyExecutor`로의 Macro Context(risk settings) 전달 누락 수정 (완료)

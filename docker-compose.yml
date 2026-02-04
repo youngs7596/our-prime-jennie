@@ -29,16 +29,19 @@ services:
   # ============================================================================
   # 0. Infrastructure Dependencies (ChromaDB & Redis)
   # ============================================================================
-  chromadb:
-    image: chromadb/chroma
+  qdrant:
+    image: qdrant/qdrant:latest
     profiles: [ "infra" ]
     ports:
-      - "8000:8000"
+      - "6333:6333"
+      - "6334:6334"
     volumes:
-      - /docker_data/chroma_data:/data
+      - /docker_data/qdrant_data:/qdrant/storage
     restart: always
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
     healthcheck:
-      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8000'" ]
+      test: [ "CMD-SHELL", "bash -c 'cat < /dev/tcp/localhost/6333'" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +49,7 @@ services:
     networks:
       - msa-network
     labels:
-      - app=chromadb
+      - app=qdrant
       - stack=my-prime-jennie
 
   mariadb:
@@ -1143,7 +1146,7 @@ services:
     environment:
       - REDIS_URL=redis://localhost:6379/0
       - MACRO_CONSUMER_NAME=macro_aggregator_1
-      - MACRO_LLM_MODE=auto  # auto: 장외 시간에만 gpt-oss LLM 사용
+      - MACRO_LLM_MODE=auto # auto: 장외 시간에만 gpt-oss LLM 사용
     network_mode: host
     restart: unless-stopped
     labels:

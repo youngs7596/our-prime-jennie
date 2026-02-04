@@ -473,18 +473,26 @@ def main():
                             google_api_key=api_key
                         )
                     
-                    chroma_client = chromadb.HttpClient( # noqa
-                        host=CHROMA_SERVER_HOST, 
-                        port=CHROMA_SERVER_PORT
+                    # Qdrant Connection
+                    QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+                    QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+                    
+                    logger.info(f"   ... Qdrant 클라이언트 연결 시도 ({QDRANT_HOST}:{QDRANT_PORT}) ...")
+                    
+                    from langchain_qdrant import QdrantVectorStore
+                    from qdrant_client import QdrantClient
+
+                    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+                    
+                    vectorstore = QdrantVectorStore(
+                        client=client,
+                        collection_name="rag_stock_data",
+                        embedding=embeddings,
                     )
-                    vectorstore = Chroma(
-                        client=chroma_client, 
-                        collection_name="rag_stock_data", 
-                        embedding_function=embeddings
-                    )
-                    logger.info(f"✅ LLM 및 ChromaDB 클라이언트 초기화 완료 (Provider: {rag_provider}).")
+                    logger.info(f"✅ LLM 및 Qdrant 클라이언트 초기화 완료 (Provider: {rag_provider}).")
+
                 except Exception as e:
-                    logger.warning(f"⚠️ ChromaDB 초기화 실패 (RAG 기능 비활성화): {e}")
+                    logger.warning(f"⚠️ Qdrant 초기화 실패 (RAG 기능 비활성화): {e}")
                     vectorstore = None
 
             # Phase 1: 트리플 소스 후보 발굴 (v3.8: 섹터 분석 추가)

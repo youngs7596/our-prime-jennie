@@ -61,31 +61,31 @@ def get_vectorstore():
     global _vectorstore, _text_splitter
     
     if _vectorstore is None:
-        import chromadb
-        from langchain_chroma import Chroma
+        from langchain_qdrant import QdrantVectorStore
+        from qdrant_client import QdrantClient
         from langchain_ollama import OllamaEmbeddings
         
-        logger.info(f"🔌 ChromaDB 연결 중... ({CHROMA_SERVER_HOST}:{CHROMA_SERVER_PORT})")
+        # Qdrant Connection (Port 6333)
+        QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+        QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+        
+        logger.info(f"🔌 Qdrant 연결 중... ({QDRANT_HOST}:{QDRANT_PORT})")
         
         # Embeddings (Ollama via Host/Gateway)
-        # Gateway URL(11500) 또는 Host Ollama(11434)
         ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         embeddings = OllamaEmbeddings(
             model="daynice/kure-v1",
             base_url=ollama_base_url
         )
         
-        # Chroma Client
-        chroma_client = chromadb.HttpClient(
-            host=CHROMA_SERVER_HOST,
-            port=CHROMA_SERVER_PORT
-        )
+        # Qdrant Client
+        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
         
         # Vectorstore
-        _vectorstore = Chroma(
-            client=chroma_client,
+        _vectorstore = QdrantVectorStore(
+            client=client,
             collection_name=COLLECTION_NAME,
-            embedding_function=embeddings
+            embedding=embeddings,
         )
         
         # Text Splitter
@@ -94,7 +94,7 @@ def get_vectorstore():
             chunk_overlap=50
         )
         
-        logger.info(f"✅ ChromaDB 연결 완료 (collection: {COLLECTION_NAME})")
+        logger.info(f"✅ Qdrant 연결 완료 (collection: {COLLECTION_NAME})")
     
     return _vectorstore, _text_splitter
 
