@@ -817,3 +817,44 @@ class StockMinutePrice(Base):
     
     created_at = Column("CREATED_AT", DateTime, server_default=func.now())
 
+
+class DividendHistory(Base):
+    """
+    배당 이력 테이블 (Dividend Capture Strategy용)
+    - KOSPI 종목의 배당락일, 배당금, 배당수익률 기록
+    - 10년치 히스토리 저장
+    """
+    __tablename__ = "DIVIDEND_HISTORY"
+    __table_args__ = {"extend_existing": True}
+
+    id = Column("ID", Integer, primary_key=True)
+    stock_code = Column("STOCK_CODE", String(20), nullable=False, index=True)
+    stock_name = Column("STOCK_NAME", String(120), nullable=True)
+    
+    # 배당락일 (Ex-Dividend Date)
+    ex_dividend_date = Column("EX_DIVIDEND_DATE", Date, nullable=False)
+    
+    # 배당 정보
+    dividend_per_share = Column("DIVIDEND_PER_SHARE", Float, nullable=True)  # 주당 배당금 (원)
+    dividend_yield = Column("DIVIDEND_YIELD", Float, nullable=True)  # 배당수익률 (%)
+    dividend_type = Column("DIVIDEND_TYPE", String(20), default='YEAR_END')  # YEAR_END, INTERIM, QUARTERLY
+    
+    # 가격 정보 (배당락일 기준)
+    prev_close_price = Column("PREV_CLOSE_PRICE", Float, nullable=True)  # 배당락 전일 종가
+    ex_date_open_price = Column("EX_DATE_OPEN_PRICE", Float, nullable=True)  # 배당락일 시가
+    ex_date_close_price = Column("EX_DATE_CLOSE_PRICE", Float, nullable=True)  # 배당락일 종가
+    
+    # 회복 추적 (D+1, D+3, D+5, D+10, D+20)
+    recovery_d1 = Column("RECOVERY_D1", Float, nullable=True)  # D+1 종가
+    recovery_d3 = Column("RECOVERY_D3", Float, nullable=True)
+    recovery_d5 = Column("RECOVERY_D5", Float, nullable=True)
+    recovery_d10 = Column("RECOVERY_D10", Float, nullable=True)
+    recovery_d20 = Column("RECOVERY_D20", Float, nullable=True)
+    
+    # 거래량
+    ex_date_volume = Column("EX_DATE_VOLUME", Float, nullable=True)
+    prev_avg_volume_20d = Column("PREV_AVG_VOLUME_20D", Float, nullable=True)  # 전 20일 평균 거래량
+    
+    created_at = Column("CREATED_AT", DateTime, server_default=func.now())
+    updated_at = Column("UPDATED_AT", DateTime, onupdate=func.now())
+

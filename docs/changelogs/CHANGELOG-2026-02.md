@@ -18,6 +18,13 @@
   - **fix(jenkins)**: Fix deploy skip on re-run
     - Added fallback to `HEAD~1..HEAD` commit range if `ORIG_HEAD..HEAD` is empty (e.g., during retry)
 
+### Dividend Capture Strategy (Research)
+- **feat(strategy)**: Dividend data collection for backtest
+  - Added `DividendHistory` model to `shared/db/models.py`
+  - Created `scripts/collect_dividend_data.py` (pykrx-based)
+  - Collected 1,545 dividend records (KOSPI top 200, 2015-2025)
+  - Council approved: need backtest before live trading
+
 ### Intraday Integration
 - **feat(scout)**: Smart Scouter (Intraday Momentum)
   - Added Phase 1.9 in `scout.py` to detect real-time volume spikes (>180%) and price trends
