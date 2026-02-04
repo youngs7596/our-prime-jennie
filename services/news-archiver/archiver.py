@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 load_dotenv()
 
-CHROMA_SERVER_HOST = os.getenv("CHROMA_SERVER_HOST", "10.178.0.2")
-CHROMA_SERVER_PORT = int(os.getenv("CHROMA_SERVER_PORT", "8000"))
-COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "rag_stock_data")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "rag_stock_data") # Maintain env var for compat or rename? Let's keep it but comment.
 
 # Embedding Model
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "jhgan/ko-sroberta-multitask")
@@ -166,14 +166,14 @@ def run_archiver_daemon(consumer_name: str = "archiver_1"):
     logger.info(f"   Stream: {STREAM_NEWS_RAW}")
     logger.info(f"   Group: {GROUP_ARCHIVER}")
     logger.info(f"   Consumer: {consumer_name}")
-    logger.info(f"   ChromaDB: {CHROMA_SERVER_HOST}:{CHROMA_SERVER_PORT}")
+    logger.info(f"   Qdrant: {QDRANT_HOST}:{QDRANT_PORT}")
     logger.info("=" * 60)
     
-    # Pre-initialize ChromaDB connection
+    # Pre-initialize VectorDB connection
     try:
         get_vectorstore()
     except Exception as e:
-        logger.error(f"❌ ChromaDB 초기화 실패: {e}")
+        logger.error(f"❌ Qdrant 초기화 실패: {e}")
         return
     
     # Start consuming

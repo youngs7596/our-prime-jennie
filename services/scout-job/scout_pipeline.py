@@ -211,17 +211,17 @@ def process_phase1_hunter_v5_task(stock_info, brain, quant_result, snapshot_cach
             'competitor_bonus': competitor_bonus,
         }
     
-    news_from_chroma = news_cache.get(code, "최근 관련 뉴스 없음") if news_cache else "뉴스 캐시 없음"
+    news_from_vectorstore = news_cache.get(code, "최근 관련 뉴스 없음") if news_cache else "뉴스 캐시 없음"
     
     # 경쟁사 수혜 정보를 뉴스에 추가
     if competitor_bonus > 0:
-        news_from_chroma += f"\n\n⚡ [경쟁사 수혜 기회] {competitor_reason} (+{competitor_bonus}점)"
+        news_from_vectorstore += f"\n\n⚡ [경쟁사 수혜 기회] {competitor_reason} (+{competitor_bonus}점)"
     
     decision_info = {
         'code': code,
         'name': info['name'],
         'technical_reason': 'N/A',
-        'news_reason': news_from_chroma if news_from_chroma not in ["뉴스 DB 미연결", "뉴스 검색 오류"] else ', '.join(info.get('reasons', [])),
+        'news_reason': news_from_vectorstore if news_from_vectorstore not in ["뉴스 DB 미연결", "뉴스 검색 오류"] else ', '.join(info.get('reasons', [])),
         'per': snapshot.get('per'),
         'pbr': snapshot.get('pbr'),
         'market_cap': snapshot.get('market_cap'),

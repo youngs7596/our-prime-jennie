@@ -126,7 +126,7 @@ docker compose ps
 | mariadb | 3307 | 데이터베이스 |
 | redis | 6379 | 캐시 서버 |
 | rabbitmq | 5672/15672 | 메시지 큐 |
-| chromadb | 8000 | 벡터 DB (RAG) |
+| qdrant   | 6333 | 벡터 DB (RAG) |
 | ollama | 11434 | 로컬 LLM (GPU 필요) |
 
 ### 📁 데이터 저장소 (Data Persistence)
@@ -134,7 +134,7 @@ docker compose ps
 
 - **MariaDB**: `/docker_data/mariadb_data` (주요 거래 데이터)
 - **Redis**: `/docker_data/redis_data` (캐시)
-- **ChromaDB**: `/docker_data/chroma_data` (벡터 데이터)
+- **Qdrant**: `/docker_data/qdrant_data` (벡터 데이터)
 - **Loki/Promtail**: `/docker_data/loki_data`, `/docker_data/loki` (로그)
 - **Scheduler**: `/docker_data/scheduler_data` (작업 상태)
 - **Grafana**: `/docker_data/grafana_data` (대시보드 설정)
