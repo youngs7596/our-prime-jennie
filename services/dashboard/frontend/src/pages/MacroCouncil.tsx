@@ -170,7 +170,7 @@ export function MacroCouncilPage() {
                   <VixIcon className={cn('w-5 h-5', vixInfo.color)} />
                 </div>
                 <div className={cn('text-3xl font-bold', vixInfo.color)}>
-                  {macroInsight.vix_value?.toFixed(1) || '-'}
+                  {Number(macroInsight.vix_value || 0).toFixed(1)}
                 </div>
                 <p className={cn('text-sm mt-1 font-medium', vixInfo.color)}>{vixInfo.label}</p>
               </CardContent>
@@ -220,15 +220,15 @@ export function MacroCouncilPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <p className="text-xs text-muted-foreground mb-1">USD/KRW</p>
-                      <p className="text-xl font-semibold">{macroInsight.usd_krw?.toFixed(1) || '-'}</p>
+                      <p className="text-xl font-semibold">{Number(macroInsight.usd_krw || 0).toFixed(1)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <p className="text-xs text-muted-foreground mb-1">KOSPI</p>
-                      <p className="text-xl font-semibold">{macroInsight.kospi_index?.toFixed(0) || '-'}</p>
+                      <p className="text-xl font-semibold">{Number(macroInsight.kospi_index || 0).toFixed(0)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <p className="text-xs text-muted-foreground mb-1">KOSDAQ</p>
-                      <p className="text-xl font-semibold">{macroInsight.kosdaq_index?.toFixed(0) || '-'}</p>
+                      <p className="text-xl font-semibold">{Number(macroInsight.kosdaq_index || 0).toFixed(0)}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <p className="text-xs text-muted-foreground mb-1">데이터 완성도</p>

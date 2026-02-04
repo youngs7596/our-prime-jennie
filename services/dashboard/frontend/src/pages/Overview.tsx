@@ -510,21 +510,21 @@ export function OverviewPage() {
                       macroInsight.vix_regime === 'normal' && 'text-blue-400',
                       macroInsight.vix_regime === 'low_vol' && 'text-green-400',
                     )}>
-                      {macroInsight.vix_value?.toFixed(1) || '-'}
+                      {Number(macroInsight.vix_value || 0).toFixed(1)}
                     </p>
                     <p className="text-xs text-muted-foreground">{macroInsight.vix_regime || '-'}</p>
                   </div>
                   <div className="p-2 rounded bg-white/[0.02] border border-white/5">
                     <p className="text-xs text-muted-foreground">USD/KRW</p>
-                    <p className="text-lg font-semibold">{macroInsight.usd_krw?.toFixed(1) || '-'}</p>
+                    <p className="text-lg font-semibold">{Number(macroInsight.usd_krw || 0).toFixed(1)}</p>
                   </div>
                   <div className="p-2 rounded bg-white/[0.02] border border-white/5">
                     <p className="text-xs text-muted-foreground">KOSPI</p>
-                    <p className="text-lg font-semibold">{macroInsight.kospi_index?.toFixed(0) || '-'}</p>
+                    <p className="text-lg font-semibold">{Number(macroInsight.kospi_index || 0).toFixed(0)}</p>
                   </div>
                   <div className="p-2 rounded bg-white/[0.02] border border-white/5">
                     <p className="text-xs text-muted-foreground">KOSDAQ</p>
-                    <p className="text-lg font-semibold">{macroInsight.kosdaq_index?.toFixed(0) || '-'}</p>
+                    <p className="text-lg font-semibold">{Number(macroInsight.kosdaq_index || 0).toFixed(0)}</p>
                   </div>
                 </div>
                 {/* 수급 데이터 */}
