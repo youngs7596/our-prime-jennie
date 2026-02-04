@@ -64,6 +64,7 @@ def get_vectorstore():
         from langchain_qdrant import QdrantVectorStore
         from qdrant_client import QdrantClient
         from langchain_ollama import OllamaEmbeddings
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
         
         # Qdrant Connection (Port 6333)
         QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
