@@ -145,7 +145,14 @@ pipeline {
                         echo "🧠 Smart Build: 변경된 서비스 감지 및 배포"
                         echo "=========================================="
                         
-                        python3 scripts/smart_build.py --action deploy --commit-range ORIG_HEAD..HEAD
+                        TARGET_RANGE="ORIG_HEAD..HEAD"
+                        if [ -z "$(git diff --name-only ORIG_HEAD..HEAD)" ]; then
+                            echo "⚠️ No changes in ORIG_HEAD..HEAD (Already up-to-date)."
+                            echo "🔄 Fallback to HEAD~1..HEAD to ensure deployment of current state."
+                            TARGET_RANGE="HEAD~1..HEAD"
+                        fi
+
+                        python3 scripts/smart_build.py --action deploy --commit-range $TARGET_RANGE
                         
                         echo ""
                         echo "=========================================="

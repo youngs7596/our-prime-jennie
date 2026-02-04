@@ -15,6 +15,8 @@
   - Modified `Jenkinsfile` to run build/deploy in `docker:dind` container
   - Added runtime installation of `python3` and `git` to fix `python3: not found`
   - Added host volume mount for in-place deployment
+  - **fix(jenkins)**: Fix deploy skip on re-run
+    - Added fallback to `HEAD~1..HEAD` commit range if `ORIG_HEAD..HEAD` is empty (e.g., during retry)
 
 ### Intraday Integration
 - **feat(scout)**: Smart Scouter (Intraday Momentum)
