@@ -92,6 +92,7 @@
 - **cleanup**: Legacy ChromaDB 코드 및 스크립트 제거 (Qdrant 전면 전환)
 - **fix(scout)**: 누락된 의존성 패키지 추가 (`filelock`) - KIS 인증 모듈 필수
 - **test(shared)**: Circuit Breaker 테스트 Flaky 현상 해결 (`time.sleep` -> `mock.patch`)
+- **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
 *Last Updated: 2026-02-03*
