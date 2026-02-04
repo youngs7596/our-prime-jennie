@@ -83,9 +83,20 @@ pipeline {
                     expression { env.GIT_BRANCH?.contains('development') }
                 }
             }
+            agent {
+                docker {
+                    image 'docker:dind'
+                    // Docker Socket Mount for BuildKit, Mount workspace to /app
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/app -w /app'
+                    reuseNode true
+                }
+            }
             steps {
                 echo '🐳 Building Docker images (Smart Build)...'
                 sh '''
+                    # Install Python3 & Git (Required for smart_build.py)
+                    apk add --no-cache python3 git
+
                     # [Fix] 손상된 캐시만 정리 (24시간 이상 된 것)
                     docker builder prune -f --filter "until=24h" || true
                     
@@ -103,14 +114,26 @@ pipeline {
                     expression { env.GIT_BRANCH?.contains('development') }
                 }
             }
+            agent {
+                docker {
+                    image 'docker:dind'
+                    // IMPORTANT: Host Mount required for in-place deployment to /home/youngs75/...
+                    args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/youngs75/projects/my-prime-jennie:/home/youngs75/projects/my-prime-jennie'
+                    reuseNode true
+                }
+            }
             steps {
                 echo '🚀 Rolling Deploy to development environment...'
 
                 withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
-                        git config --global --add safe.directory "*"
+                        # Install dependencies
+                        apk add --no-cache python3 git
 
+                        # Host Path로 이동 (컨테이너 내에 마운트된 경로)
                         cd /home/youngs75/projects/my-prime-jennie
+
+                        git config --global --add safe.directory "*"
 
                         # 1. 최신 코드 강제 동기화 (development 브랜치)
                         git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
@@ -118,7 +141,6 @@ pipeline {
                         git clean -fd
                         
                         # 2. Smart Build & Deploy
-                        # ORIG_HEAD..HEAD: git reset --hard 이전과 현재의 차이 감지
                         echo "=========================================="
                         echo "🧠 Smart Build: 변경된 서비스 감지 및 배포"
                         echo "=========================================="
