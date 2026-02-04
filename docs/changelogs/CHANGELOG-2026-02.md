@@ -86,7 +86,7 @@
 - **fix(tests)**: Jenkins CI 테스트 실패 수정
   - Finnhub 클라이언트 테스트 mock 개선
   - VIX max_age=72h 반영
-  - `scheduler-service` 테스트 충돌 수정 (`table jobs already exists` 에러 해결)
+  - `scheduler-service` 테스트 Race Condition 해결 (Unique DB Path 적용)
   - **fix(db)**: Qdrant 컬렉션(`rag_stock_data`) 자동 생성 로직 추가 (404 에러 해결)
 
 ---

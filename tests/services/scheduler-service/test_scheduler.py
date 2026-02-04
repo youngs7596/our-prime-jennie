@@ -25,7 +25,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Setup mocks before importing main
-os.environ["SCHEDULER_DB_PATH"] = "/tmp/test_scheduler.db"
+# Use unique DB path per process to avoid race conditions in xdist
+os.environ["SCHEDULER_DB_PATH"] = f"/tmp/test_scheduler_{os.getpid()}.db"
 
 with patch('shared.rabbitmq.RabbitMQPublisher'), \
      patch('apscheduler.schedulers.background.BackgroundScheduler'):
