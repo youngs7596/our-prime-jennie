@@ -478,12 +478,24 @@ def main():
                     QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
                     
                     logger.info(f"   ... Qdrant 클라이언트 연결 시도 ({QDRANT_HOST}:{QDRANT_PORT}) ...")
-                    
                     from langchain_qdrant import QdrantVectorStore
                     from qdrant_client import QdrantClient
+                    from qdrant_client.http import models
 
                     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
                     
+                    # Ensure Collection Exists (Scout also needs to ensure it exists for reading)
+                    # Though usually Archiver creates it, better safe than sorry.
+                    if not client.collection_exists("rag_stock_data"):
+                        logger.info(f"🆕 Qdrant Collection 생성 (Scout): rag_stock_data (size=1024)")
+                        client.create_collection(
+                            collection_name="rag_stock_data",
+                            vectors_config=models.VectorParams(
+                                size=1024,
+                                distance=models.Distance.COSINE
+                            )
+                        )
+
                     vectorstore = QdrantVectorStore(
                         client=client,
                         collection_name="rag_stock_data",

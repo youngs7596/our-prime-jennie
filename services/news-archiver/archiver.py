@@ -78,8 +78,21 @@ def get_vectorstore():
             base_url=ollama_base_url
         )
         
+        from qdrant_client.http import models
+        
         # Qdrant Client
         client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+        
+        # Ensure Collection Exists
+        if not client.collection_exists(COLLECTION_NAME):
+            logger.info(f"🆕 Qdrant Collection 생성: {COLLECTION_NAME} (size=1024)")
+            client.create_collection(
+                collection_name=COLLECTION_NAME,
+                vectors_config=models.VectorParams(
+                    size=1024,  # kure-v1 dimension
+                    distance=models.Distance.COSINE
+                )
+            )
         
         # Vectorstore
         _vectorstore = QdrantVectorStore(
