@@ -90,6 +90,7 @@
   - **fix(db)**: Qdrant 컬렉션(`rag_stock_data`) 자동 생성 로직 추가 (404 에러 해결)
   - **fix(archiver)**: 누락된 모듈 임포트 추가 (`RecursiveCharacterTextSplitter`)
 - **cleanup**: Legacy ChromaDB 코드 및 스크립트 제거 (Qdrant 전면 전환)
+- **fix(scout)**: 누락된 의존성 패키지 추가 (`filelock`) - KIS 인증 모듈 필수
 
 ---
 *Last Updated: 2026-02-03*
