@@ -1,8 +1,22 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-04
+### Buy Scanner
+- **fix(buy-scanner)**: Resolved data silence issue
+  - Identified Market Close Auction (15:20 KST) as cause of silence (Normal behavior)
+  - Fixed `inspect_redis.py` to target correct versioned watchlist key (`hot_watchlist:active`)
+  - Confirmed 24-hour Repurchase Restriction logic blocks re-entry after selling
+- **fix(buy-executor)**: Verified Repurchase Restriction
+  - Confirmed `executor.py` logic blocks buying stocks sold within 24h
+  - Verified `TRADELOG` contains 24 sell records blocking re-entry
 
-### Optimization
+### CI/CD
+- **fix(jenkins)**: Add Python3 to Docker Build/Deploy stages
+  - Modified `Jenkinsfile` to run build/deploy in `docker:dind` container
+  - Added runtime installation of `python3` and `git` to fix `python3: not found`
+  - Added host volume mount for in-place deployment
+
+
 - **perf(docker)**: Docker Image Optimization & AI Model Switch
   - Switched embedding model: `sentence-transformers` -> `Ollama (daynice/kure-v1)`
   - Reduced `scout-job` image size (15.8GB -> ~500MB) via Multi-stage Build
