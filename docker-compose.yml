@@ -10,6 +10,7 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
+      - RABBIT_SERVER_ADDITIONAL_ERL_ARGS="-+sbwt none -+sbwtdcpu none -+sbwtdio none"
     ports:
       - "5672:5672"
       - "15672:15672"

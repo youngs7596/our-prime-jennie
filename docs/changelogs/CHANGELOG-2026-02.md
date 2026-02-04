@@ -18,12 +18,15 @@
   - **fix(jenkins)**: Fix deploy skip on re-run
     - Added fallback to `HEAD~1..HEAD` commit range if `ORIG_HEAD..HEAD` is empty (e.g., during retry)
 
-### Dividend Capture Strategy (Research)
+### Research & Optimization
 - **feat(strategy)**: Dividend data collection for backtest
   - Added `DividendHistory` model to `shared/db/models.py`
   - Created `scripts/collect_dividend_data.py` (pykrx-based)
   - Collected 1,545 dividend records (KOSPI top 200, 2015-2025)
   - Council approved: need backtest before live trading
+- **perf(docker)**: RabbitMQ CPU optimization
+  - Added Erlang scheduler flags (`-+sbwt none`) to `docker-compose.yml`
+  - Fixed `beam.smp` 1000% CPU spike issue in WSL2 environment
 
 ### Intraday Integration
 - **feat(scout)**: Smart Scouter (Intraday Momentum)
