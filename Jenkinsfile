@@ -84,14 +84,14 @@ pipeline {
                 }
             }
             steps {
-                echo '🐳 Building Docker images (Cache Optimized + Parallel)...'
+                echo '🐳 Building Docker images (Smart Build)...'
                 sh '''
                     # [Fix] 손상된 캐시만 정리 (24시간 이상 된 것)
                     docker builder prune -f --filter "until=24h" || true
                     
-                    # 캐시 활용 (기존 이미지/레이어 적극 재사용)
-                    # 병렬 빌드 무제한 (COMPOSE_PARALLEL_LIMIT 제거)
-                    docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} build --parallel
+                    # Smart Build Script Execution
+                    # 변경된 서비스만 감지하여 빌드 (HEAD~1..HEAD)
+                    python3 scripts/smart_build.py --action build --commit-range HEAD~1..HEAD
                 '''
             }
         }
@@ -116,63 +116,15 @@ pipeline {
                         git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
                         git reset --hard FETCH_HEAD
                         git clean -fd
-
+                        
+                        # 2. Smart Build & Deploy
+                        # ORIG_HEAD..HEAD: git reset --hard 이전과 현재의 차이 감지
                         echo "=========================================="
-                        echo "🔧 Phase 1: 모든 이미지 병렬 빌드"
+                        echo "🧠 Smart Build: 변경된 서비스 감지 및 배포"
                         echo "=========================================="
-
-                        # [최적화] 모든 이미지를 먼저 병렬로 빌드 (배포 전)
-                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real build --parallel
-
-                        echo ""
-                        echo "=========================================="
-                        echo "🔄 Phase 2: Rolling Deployment (무중단 배포)"
-                        echo "=========================================="
-
-                        # 핵심 트레이딩 서비스 순서 (의존성 고려)
-                        TRADING_SERVICES="kis-gateway buy-scanner buy-executor sell-executor price-monitor"
-
-                        # Rolling Deploy: 서비스별 순차 재시작 (빌드 없이 이미지만 교체)
-                        for SERVICE in $TRADING_SERVICES; do
-                            echo ""
-                            echo "🔄 [$SERVICE] 배포 시작..."
-
-                            # 이미 빌드된 이미지로 서비스 재시작 (--no-build: 빌드 스킵)
-                            docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --no-build --no-deps $SERVICE
-
-                            # Health check 대기 (최대 40초, 2초 간격)
-                            CONTAINER_NAME="${COMPOSE_PROJECT_NAME}-${SERVICE}-1"
-                            echo "   ⏳ Health check 대기 중..."
-
-                            for i in $(seq 1 20); do
-                                HEALTH=$(docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo "unknown")
-
-                                if [ "$HEALTH" = "healthy" ]; then
-                                    echo "   ✅ [$SERVICE] healthy (${i}회차)"
-                                    break
-                                elif [ "$HEALTH" = "unhealthy" ]; then
-                                    echo "   ❌ [$SERVICE] unhealthy!"
-                                    docker logs --tail 10 $CONTAINER_NAME
-                                    break
-                                fi
-
-                                [ $i -eq 20 ] && echo "   ⚠️ [$SERVICE] 타임아웃"
-                                sleep 2
-                            done
-
-                            # [최적화] 안정화 대기 5초 → 2초
-                            sleep 2
-                            echo "   ✅ [$SERVICE] 배포 완료"
-                        done
-
-                        echo ""
-                        echo "=========================================="
-                        echo "🎯 Phase 3: 기타 서비스 일괄 배포"
-                        echo "=========================================="
-
-                        # 비핵심 서비스 일괄 업데이트 (이미 빌드됨, --no-build)
-                        docker compose -p ${COMPOSE_PROJECT_NAME} -f ${DOCKER_COMPOSE_FILE} --profile real up -d --no-build
-
+                        
+                        python3 scripts/smart_build.py --action deploy --commit-range ORIG_HEAD..HEAD
+                        
                         echo ""
                         echo "=========================================="
                         echo "📊 배포 완료 - 서비스 상태"

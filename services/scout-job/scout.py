@@ -55,8 +55,6 @@ from shared.financial_data_collector import batch_update_watchlist_financial_dat
 
 from shared.archivist import Archivist
 
-import chromadb
-from langchain_chroma import Chroma
 
 # langchain_google_genai 내부 google.generativeai FutureWarning 무시
 warnings.filterwarnings("ignore", category=FutureWarning, module="langchain_google_genai")

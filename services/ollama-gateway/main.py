@@ -342,6 +342,80 @@ def chat():
         
     finally:
         stats['queue_depth'] -= 1
+
+
+@app.route("/api/embed", methods=["POST"])
+@app.route("/api/embeddings", methods=["POST"])
+@limiter.limit(RATE_LIMIT)
+def embed():
+    """
+    임베딩 생성 요청 (Ollama /api/embed Proxy)
+    
+    Request Body:
+    {
+        "model": "daynice/kure-v1",
+        "input": "Hello world" or ["Hello", "world"]
+    }
+    """
+    stats['total_requests'] += 1
+    stats['queue_depth'] += 1
+    
+    start_time = time.time()
+    request_id = f"emb_{int(start_time * 1000)}"
+    
+    try:
+        data = request.get_json()
+        model = data.get("model", "unknown")
+        input_data = data.get("input", "")
+        
+        # input 길이 로깅 (문자열 또는 리스트)
+        input_len = len(input_data) if isinstance(input_data, list) else len(str(input_data))
+        logger.info(f"📥 [Request {request_id}] 임베딩 요청 (model={model}, input_len={input_len})")
+        
+        # Endpoint determination based on request path
+        # langchain_ollama uses /api/embed (new), others might use /api/embeddings (old)
+        target_endpoint = request.path
+        
+        with request_lock:  # 순차 처리 보장
+            result = call_ollama_with_breaker(target_endpoint, data)
+        
+        elapsed_ms = (time.time() - start_time) * 1000
+        stats['successful_requests'] += 1
+        _update_avg_response_time(elapsed_ms)
+        
+        logger.info(f"✅ [Request {request_id}] 완료 ({elapsed_ms:.0f}ms)")
+        
+        stats['request_history'].append({
+            "id": request_id,
+            "type": "embed",
+            "model": model,
+            "status": "success",
+            "elapsed_ms": round(elapsed_ms, 0),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        
+        return jsonify(result)
+        
+    except CircuitBreakerError:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ [Request {request_id}] Circuit Breaker OPEN - 요청 거부")
+        return jsonify({
+            "error": "Service temporarily unavailable (Circuit Breaker Open)",
+            "retry_after": ollama_circuit_breaker.reset_timeout,
+        }), 503
+        
+    except requests.exceptions.Timeout:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ [Request {request_id}] Timeout")
+        return jsonify({"error": "Ollama request timeout"}), 504
+        
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ [Request {request_id}] Error: {e}")
+        return jsonify({"error": str(e)}), 500
+        
+    finally:
+        stats['queue_depth'] -= 1
 @limiter.limit(RATE_LIMIT)
 def generate_json():
     """
