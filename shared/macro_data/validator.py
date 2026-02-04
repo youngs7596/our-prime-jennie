@@ -103,7 +103,7 @@ class ValidatorConfig:
         "vix": (5, 100),
         "vxx": (10, 200),  # VXX ETF
         "usd_krw": (900, 1800),
-        "kospi_index": (1500, 4000),
+        "kospi_index": (1500, 6000),  # Updated: KOSPI reached 5000+ level
         "kosdaq_index": (400, 1500),
         "us_cpi_yoy": (-5, 20),
         "korea_cpi_yoy": (-5, 20),

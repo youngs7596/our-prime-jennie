@@ -1578,6 +1578,24 @@ class BuyOpportunityWatcher:
             return False
         
         try:
+            # [Enhanced Macro] 포지션 배율 및 컨텍스트 정보 추가
+            position_mult = self._get_position_multiplier()
+            ctx = self._get_trading_context()
+
+            # [FIX] Executor가 사용할 수 있는 형태의 risk_setting 구성 및 주입
+            # BuyExecutor는 risk_setting['position_size_ratio']와 ['stop_loss_pct']를 참조함
+            base_stop_loss = -0.05  # 기본 -5%
+            adjusted_stop_loss = base_stop_loss * (ctx.stop_loss_multiplier if ctx else 1.0)
+            
+            risk_setting = {
+                'position_size_ratio': position_mult,
+                'stop_loss_multiplier': ctx.stop_loss_multiplier if ctx else 1.0,
+                'risk_off_level': ctx.risk_off_level if ctx else 0,
+                'vix_regime': ctx.vix_regime if ctx else 'NORMAL',
+                'stop_loss_pct': adjusted_stop_loss,
+                'macro_source': 'daily_insight'
+            }
+
             candidate = {
                 'code': signal['stock_code'],
                 'name': signal['stock_name'],
@@ -1595,6 +1613,8 @@ class BuyOpportunityWatcher:
                 'trade_tier': signal.get('trade_tier', 'TIER1'),
                 'is_super_prime': signal.get('is_super_prime', False),
                 'factor_score': 520.0 if signal.get('is_super_prime') else 500.0,
+                # [Important] 리스크 설정 주입
+                'risk_setting': risk_setting,
             }
             
             payload = {
@@ -1602,6 +1622,7 @@ class BuyOpportunityWatcher:
                 'market_regime': signal['market_regime'],
                 'scan_timestamp': signal['timestamp'],
                 'source': 'buy_scanner_websocket',
+                'risk_setting': risk_setting,  # 최상위에도 백업용으로 추가
             }
             
             # 1. RabbitMQ 발행

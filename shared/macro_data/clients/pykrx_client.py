@@ -95,7 +95,12 @@ class PyKRXClient(MacroDataClient):
         return self.SOURCE_NAME
 
     def get_default_indicators(self) -> List[str]:
-        return ["kospi_index", "kosdaq_index"]
+        return [
+            "kospi_index", 
+            "kosdaq_index",
+            "kospi_foreign_net",   # 투자자 순매수 (외국인/기관/개인)
+            "kosdaq_foreign_net",
+        ]
 
     def is_available(self) -> bool:
         """pykrx 사용 가능 여부"""
@@ -323,9 +328,10 @@ class PyKRXClient(MacroDataClient):
         """
         indicator = f"{market.lower()}_foreign_net"
 
-        # 캐시 확인
+        # 캐시 확인 (미래 타임스탬프는 무효화)
+        now = datetime.now(KST)
         cached = self._cache.get_data_point(self.SOURCE_NAME, indicator)
-        if cached and cached.is_valid(max_age_hours=2):
+        if cached and cached.is_valid(max_age_hours=2) and cached.timestamp <= now:
             return cached
 
         # get_market_trading_value_by_investor는 "KOSPI", "KOSDAQ" 문자열 필요
@@ -348,9 +354,11 @@ class PyKRXClient(MacroDataClient):
         # 외국인 순매수 (억원)
         foreign_net = data.get("외국인", 0) + data.get("기타외국인", 0)
 
-        timestamp = datetime.strptime(
-            date, "%Y%m%d"
-        ).replace(hour=15, minute=30, tzinfo=KST)
+        # 타임스탬프: 장 마감 시간(15:30) 또는 현재 시간 중 더 이른 시간
+        data_date = datetime.strptime(date, "%Y%m%d").replace(tzinfo=KST)
+        market_close_time = data_date.replace(hour=15, minute=30)
+        now = datetime.now(KST)
+        timestamp = min(market_close_time, now)  # 미래 시간 방지
 
         point = MacroDataPoint(
             indicator=indicator,

@@ -3,6 +3,10 @@
 ## 2026-02-04
 
 ### Macro Council
+- **fix(macro)**: `OpportunityWatcher`에서 `BuyExecutor`로의 Macro Context(risk settings) 전달 누락 수정 (진행중)
+  - `OpportunityWatcher.publish_signal`에 `risk_setting` 주입 로직 추가
+  - `BuyExecutor`가 `position_size_ratio`와 `stop_loss_pct`를 수신하도록 페이로드 구조 개선
+
 - **fix(macro-council)**: Dashboard Macro Council 페이지 데이터 표시 문제 수정
   - `save_insight_to_db`에 VIX_VALUE, USD_KRW, KOSPI_INDEX 등 글로벌 스냅샷 컬럼 추가
   - `/api/council/daily-review` API를 `DAILY_MACRO_INSIGHT`에서 리뷰 파싱하도록 수정

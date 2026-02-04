@@ -279,13 +279,13 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
         vix_value = gs.get("vix")
         vix_regime = gs.get("vix_regime") or insight.vix_regime
         usd_krw = gs.get("usd_krw")
-        kospi_index = gs.get("kospi")
-        kosdaq_index = gs.get("kosdaq")
+        kospi_index = gs.get("kospi_index")  # Fixed: was "kospi"
+        kosdaq_index = gs.get("kosdaq_index")  # Fixed: was "kosdaq"
         kospi_foreign_net = gs.get("kospi_foreign_net")
         kosdaq_foreign_net = gs.get("kosdaq_foreign_net")
         kospi_institutional_net = gs.get("kospi_institutional_net")
         kospi_retail_net = gs.get("kospi_retail_net")
-        data_completeness_pct = gs.get("data_completeness_pct")
+        data_completeness_pct = gs.get("completeness_score")  # Fixed: was "data_completeness_pct"
 
         params = (
             insight.insight_date,
