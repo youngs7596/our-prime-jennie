@@ -39,18 +39,18 @@ COMMON_ENV = {
 }
 
 # KST Schedules
-# 1. Collect Intraday Prices: 09:00 - 15:35 KST. 5 min interval.
+# 1. Collect Minute Chart Data: 09:00 - 15:35 KST. 5 min interval.
 with DAG(
-    'collect_intraday',
+    'collect_minute_chart',
     default_args=default_args,
     schedule_interval='*/5 9-15 * * 1-5', # KST explicitly
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
-    tags=['data', 'intraday', 'price'],
+    tags=['data', 'intraday', 'chart'],
 ) as dag_intraday:
     run_intraday = BashOperator(
-        task_id='run_collect_intraday',
-        bash_command='python scripts/collect_intraday.py',
+        task_id='run_collect_minute_chart',
+        bash_command='python scripts/collect_minute_chart.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
     )

@@ -16,6 +16,18 @@
   - Added runtime installation of `python3` and `git` to fix `python3: not found`
   - Added host volume mount for in-place deployment
 
+### Intraday Integration
+- **feat(scout)**: Smart Scouter (Intraday Momentum)
+  - Added Phase 1.9 in `scout.py` to detect real-time volume spikes (>180%) and price trends
+  - Utilizes 5-minute OHLCV data for immediate opportunity detection
+- **feat(executor)**: Micro-Timing Buy Execution
+  - Added `_validate_entry_timing` to block entries on Shooting Star / Bearish Engulfing patterns
+  - Prevents buying at local highs (Bull Trap prevention)
+- **feat(risk)**: Dynamic ATR Risk Management
+  - Implemented `calculate_intraday_atr` (100-min window) in `PositionSizer`
+  - Overrides default Stop Loss with Intraday ATR-based dynamic stop
+- **test**: Verified all features with `scripts/verify_intraday_features.py`
+
 
 - **perf(docker)**: Docker Image Optimization & AI Model Switch
   - Switched embedding model: `sentence-transformers` -> `Ollama (daynice/kure-v1)`

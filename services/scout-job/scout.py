@@ -814,6 +814,89 @@ def main():
 
             logger.info(f"   (Flow) ✅ 수급 데이터 {len(investor_flow_cache)}개 종목 분석 및 기록 완료")
 
+            # [NEW] Phase 1.9: Intraday Momentum Analysis (Smart Scouter)
+            # 5분봉 데이터를 분석하여 장중 수급 급등 종목 발굴
+            logger.info("--- [Phase 1.9] Intraday Momentum Analysis (Smart Scouter) ---")
+            try:
+                from sqlalchemy import text
+                
+                # 1. 대상 종목
+                target_codes = list(candidate_stocks.keys())
+                if target_codes:
+                    # 2. 최근 30분 데이터 일괄 조회 (Data Freshness Check 포함)
+                    # DB Timezone: KST assumed or UTC? usually UTC in code but local time in KIS. 
+                    # Let's assume price_time is datetime object.
+                    
+                    # 30분 전
+                    check_start_time = datetime.now() - timedelta(minutes=40) # Buffer for latency
+                    
+                    # Bulk Query
+                    placeholders = ','.join([f"'{c}'" for c in target_codes])
+                    
+                    # 최근 6개 봉 (5분 * 6 = 30분)
+                    # Window function 사용이 좋지만, MariaDB 버전에 따라 다름.
+                    # 간단하게 최근 40분치 가져와서 파이썬에서 그룹핑
+                    
+                    query = text(f"""
+                        SELECT stock_code, price_time, open_price, close_price, volume
+                        FROM STOCK_MINUTE_PRICE
+                        WHERE stock_code IN ({placeholders})
+                        AND price_time >= :start_time
+                        ORDER BY stock_code, price_time ASC
+                    """)
+                    
+                    rows = session.execute(query, {"start_time": check_start_time}).fetchall()
+                    
+                    # Group by code
+                    minute_data_map = {}
+                    for r in rows:
+                        code = r[0]
+                        if code not in minute_data_map: minute_data_map[code] = []
+                        minute_data_map[code].append({
+                            'time': r[1], 'open': r[2], 'close': r[3], 'volume': r[4]
+                        })
+                    
+                    momentum_detected_count = 0
+                    
+                    for code, bars in minute_data_map.items():
+                        if len(bars) < 6: continue # 데이터 부족
+                        
+                        # Data Freshness Check (Latest bar within 15 min)
+                        last_bar_time = bars[-1]['time']
+                        if (datetime.now() - last_bar_time).total_seconds() > 900: # 15분
+                             # logger.debug(f"   (Intraday) ⏳ Stale Data for {code}: {last_bar_time}")
+                             continue
+                             
+                        # Logic: Last 3 bars (15m) vs Prev 3 bars (15m)
+                        recent_bars = bars[-3:]
+                        prev_bars = bars[-6:-3]
+                        
+                        recent_vol = sum(b['volume'] for b in recent_bars) / len(recent_bars)
+                        prev_vol = sum(b['volume'] for b in prev_bars) / len(prev_bars)
+                        
+                        # Volume Spike (180%)
+                        if prev_vol > 0 and recent_vol >= prev_vol * 1.8:
+                            # Price Trend (Close > Open for at least 2 of last 3)
+                            bullish_count = sum(1 for b in recent_bars if b['close'] > b['open'])
+                            
+                            # Additional: Price is up over the last 15m
+                            price_up = recent_bars[-1]['close'] > prev_bars[-1]['close']
+                            
+                            if bullish_count >= 2 and price_up:
+                                candidate_stocks[code]['reasons'].append(f"🔥 장중 수급 급등 (Vol {recent_vol/prev_vol*100:.0f}%)")
+                                candidate_stocks[code]['intraday_momentum'] = True
+                                momentum_detected_count += 1
+                                logger.info(f"      🔥 {candidate_stocks[code]['name']}: Intraday Momentum Detected (Vol Spike {recent_vol/prev_vol:.1f}x)")
+                    
+                    if momentum_detected_count > 0:
+                        logger.info(f"   (Intraday) 🔥 {momentum_detected_count}개 종목 수급 급등 포착")
+                    else:
+                        logger.info("   (Intraday) 특이사항 없음 (수급 급등 종목 0개)")
+                        
+            except Exception as e:
+                logger.warning(f"   ⚠️ Intraday Analysis Failed: {e}")
+
+
             # Phase 2: LLM 최종 선정
             logger.info("--- [Phase 2] LLM 기반 최종 Watchlist 선정 시작 ---")
             update_pipeline_status(

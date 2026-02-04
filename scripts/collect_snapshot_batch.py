@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-collect_intraday.py
+collect_snapshot_batch.py
 -------------------
-Watchlist 및 거래대금 상위 종목의 실시간 시세를 수집하여
+Watchlist 및 거래대금 상위 종목의 실시간 현재가(Snapshot)를 수집하여
 STOCK_MINUTE_PRICE 테이블에 저장하는 스크립트.
+(Note: 실제 분봉 데이터가 아니라, 실행 시점의 현재가를 저장함)
 
 주기: 5분 (Scheduler 또는 Cron에 의해 실행됨)
 대상: WatchList + Top 50 Trading Value

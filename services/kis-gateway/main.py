@@ -691,6 +691,69 @@ def get_snapshot():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/market-data/minute-chart', methods=['POST'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def get_minute_chart():
+    """분봉 차트 데이터 조회 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+    
+    try:
+        # 요청 파라미터
+        data = request.get_json() or {}
+        stock_code = data.get('stock_code')
+        target_date = data.get('target_date') # YYYYMMDD
+        minute_interval = int(data.get('minute_interval', 5))
+        
+        if not stock_code:
+            stats['failed_requests'] += 1
+            return jsonify({"error": "stock_code required"}), 400
+        
+        # 오늘 날짜 기본값
+        if not target_date:
+            target_date = datetime.now().strftime("%Y%m%d")
+        
+        # KIS API 호출
+        logger.info(f"📈 [Gateway] 분봉 조회 요청: {stock_code}, {target_date}, {minute_interval}분")
+        chart_data = call_kis_api_with_breaker(
+            kis_client.market_data.get_stock_minute_prices,
+            stock_code=stock_code,
+            target_date_yyyymmdd=target_date,
+            minute_interval=minute_interval
+        )
+        
+        if chart_data is None:
+             # 빈 리스트일 수 있으므로 None만 에러 처리
+             pass
+
+        stats['successful_requests'] += 1
+        
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/minute-chart',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success',
+            'stock_code': stock_code
+        })
+        
+        return jsonify({
+            "success": True,
+            "data": chart_data,
+            "response_time": response_time
+        }), 200
+            
+    except CircuitBreakerError as e:
+        stats['failed_requests'] += 1
+        logger.error(f"🚨 Circuit Breaker OPEN: {e}")
+        return jsonify({"error": "Circuit Breaker OPEN - KIS API 일시적으로 사용 불가"}), 503
+        
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ 분봉 조회 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/trading/buy', methods=['POST'])
 @limiter.limit(GLOBAL_RATE_LIMIT)
 def place_buy_order():

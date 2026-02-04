@@ -39,7 +39,7 @@ class KISGatewayClient:
         # Rate Limit 방지를 위한 클라이언트 측 딜레이
         # KIS 실전 가이드: 초당 20건 -> 안전하게 0.1s (10req/sec)
         # KIS 모의 가이드: 초당 2건 -> 0.6s
-        trading_mode = os.getenv("TRADING_MODE", "MOCK")
+        trading_mode = os.getenv("TRADING_MODE", "REAL")
         self.API_CALL_DELAY = 0.1 if trading_mode == "REAL" else 0.6
         
         logger.info(f"✅ KIS Gateway Client 초기화: {self.gateway_url}")
@@ -248,6 +248,32 @@ class KISGatewayClient:
                 return data
         else:
             logger.error(f"❌ Daily Prices 조회 실패: {stock_code}")
+            return None
+    
+    def get_stock_minute_chart(self, stock_code: str, target_date: str = None, minute_interval: int = 5) -> Optional[list]:
+        """
+        분봉 차트 데이터 조회 (Gateway를 통해)
+        
+        Args:
+            stock_code: 종목 코드
+            target_date: 조회 날짜 (YYYYMMDD, None이면 오늘)
+            minute_interval: 분봉 주기 (기본 5분)
+            
+        Returns:
+            분봉 데이터 리스트 (dict list) 또는 None
+        """
+        logger.debug(f"📈 [Gateway] Minute Chart 요청: {stock_code} ({minute_interval}분)")
+        
+        response = self._request('POST', '/api/market-data/minute-chart', {
+            'stock_code': stock_code,
+            'target_date': target_date,
+            'minute_interval': minute_interval
+        })
+        
+        if response and response.get('success'):
+            return response.get('data')
+        else:
+            logger.error(f"❌ Minute Chart 조회 실패: {stock_code}")
             return None
     
     def get_account_balance(self) -> Optional[Dict[str, Any]]:

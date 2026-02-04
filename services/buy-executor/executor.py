@@ -11,6 +11,7 @@ from datetime import datetime, timezone, timedelta
 import shared.database as database
 from shared.db.connection import session_scope
 from shared.db import repository as repo
+from shared.db.models import StockMinutePrice
 import shared.auth as auth
 from shared import redis_cache
 from shared.position_sizing import PositionSizer
@@ -145,6 +146,14 @@ class BuyExecutor:
                 if repo.was_traded_recently(session, c_code, hours=24.0, trade_type='SELL'):
                     logger.warning(f"⏳ 쿨타임(24h): {c_name}({c_code})은 최근 24시간 내 매도 이력이 있어 매수 보류")
                     return {"status": "skipped", "reason": f"Cooldown active (Sold within 24h): {c_code}"}
+            
+            # [NEW] 2.6 Micro-Timing Check (5분봉 패턴 분석)
+            # Shooting Star, Bearish Engulfing 등 단기 고점 패턴 감지 시 매수 지연
+            if self.config.get_bool('ENABLE_MICRO_TIMING', default=True):
+                timing_result = self._validate_entry_timing(session, candidates)
+                if not timing_result['allowed']:
+                    logger.warning(f"⏳ [Micro-Timing] 매수 지연: {timing_result['reason']}")
+                    return {"status": "skipped", "reason": f"Micro-Timing: {timing_result['reason']}"}
             
             # 3. [Fast Hands] LLM 점수 기반 즉시 선정 (동기 호출 제거)
             # candidates는 이미 buy-scanner에서 필터링되어 넘어옴 (is_tradable=True인 경우만)
@@ -293,18 +302,30 @@ class BuyExecutor:
             # 기존: calculate_position_size (존재하지 않는 메서드)
             # 변경: calculate_quantity (ATR 등 추가 인자 필요)
             
-            # ATR(14) 실계산 + 캡 적용 (수량 과대 방지)
+            # ATR(14) 실계산 (Intraday Priority -> Daily Fallback)
             atr = None
-            try:
-                import shared.strategy as strategy
-                atr_period = self.config.get_int("ATR_PERIOD", default=14)
-                lookback = max(60, atr_period * 3)
-                daily_df = database.get_daily_prices(session, stock_code, limit=lookback, table_name="STOCK_DAILY_PRICES_3Y")
-                if daily_df is not None and not daily_df.empty:
-                    atr = strategy.calculate_atr(daily_df, period=atr_period)
-            except Exception as e:
-                logger.warning(f"⚠️ ATR 실계산 실패(기본값으로 폴백): {e}")
-                atr = None
+            use_intraday = self.config.get_bool("USE_INTRADAY_ATR", default=True)
+            
+            if use_intraday and self.config.get_bool('ENABLE_INTRADAY_LOGIC', default=True):
+                # [NEW] Intraday ATR
+                atr = self.position_sizer.calculate_intraday_atr(session, stock_code)
+                if atr:
+                    logger.info(f"📐 Intraday ATR 적용: {atr:,.0f}원 (최근 100분 변동성)")
+            
+            if atr is None:
+                # [Fallback] Daily ATR
+                try:
+                    import shared.strategy as strategy
+                    atr_period = self.config.get_int("ATR_PERIOD", default=14)
+                    lookback = max(60, atr_period * 3)
+                    daily_df = database.get_daily_prices(session, stock_code, limit=lookback, table_name="STOCK_DAILY_PRICES_3Y")
+                    if daily_df is not None and not daily_df.empty:
+                        atr = strategy.calculate_atr(daily_df, period=atr_period)
+                        if atr:
+                             logger.info(f"📐 Daily ATR 적용: {atr:,.0f}원 (일간 변동성)")
+                except Exception as e:
+                    logger.warning(f"⚠️ ATR 실계산 실패(기본값으로 폴백): {e}")
+                    atr = None
             
             if atr is None or atr <= 0:
                 atr = current_price * 0.02  # 폴백
@@ -526,6 +547,17 @@ class BuyExecutor:
                 logger.info(f"✅ 매수 주문 체결: 주문번호 {order_no}")
             
             # 8. DB 기록
+            
+            # [NEW] Update Risk Setting with Actual ATR Stop Loss
+            if atr and current_price > 0:
+                atr_mult = self.config.get_float("ATR_MULTIPLIER", 2.0)
+                calc_sl_pct = -(atr * atr_mult) / current_price
+                # 기존 risk_setting 업데이트 (Stop Loss를 ATR 기반으로 덮어씀)
+                if not risk_setting: risk_setting = {}
+                risk_setting['stop_loss_pct'] = round(calc_sl_pct, 4)
+                risk_setting['atr_used'] = round(atr, 0)
+                logger.info(f"🛡️ Dynamic Stop Loss 설정: {calc_sl_pct*100:.2f}% (User Config/LLM 무시, ATR 기반)")
+
             self._record_trade(
                 session=session,
                 stock_code=stock_code,
@@ -702,6 +734,83 @@ class BuyExecutor:
             logger.error(f"분산 검증 오류: {e}", exc_info=True)
             # 에러 시 보수적으로 False 반환
             return False, {'reason': str(e)}
+
+    def _validate_entry_timing(self, session, candidates: list) -> dict:
+        """
+        [Micro-Timing] 매수 진입 타이밍 검증 (5분봉 패턴 분석)
+        대상: 리스트의 첫 번째 후보 (최우선 순위)
+        """
+        try:
+            if not candidates:
+                return {"allowed": True, "reason": "No candidates"}
+                
+            # 최우선 후보만 체크 (어차피 하나만 사니까)
+            # 점수순 정렬은 3번 단계에서 하지만, 여기서 미리 살짝 봄
+            top_candidate = max(candidates, key=lambda x: x.get('llm_score', 0))
+            stock_code = top_candidate.get('stock_code', top_candidate.get('code'))
+            stock_name = top_candidate.get('stock_name', top_candidate.get('name'))
+            
+            from sqlalchemy import select
+            
+            # 최근 2개 5분봉 조회 (완성봉 기준)
+            # 현재 시간 기준 15분 이내 데이터만 유효
+             
+            # 20분 전 ~ 현재
+            check_start_time = datetime.now() - timedelta(minutes=20)
+            
+            query = select(StockMinutePrice).where(
+                StockMinutePrice.stock_code == stock_code,
+                StockMinutePrice.price_time >= check_start_time
+            ).order_by(StockMinutePrice.price_time.desc()).limit(2)
+            
+            rows = session.execute(query).scalars().all()
+            
+            if len(rows) < 2:
+                # 데이터 부족 시 Pass (데이터 수집 지연일 수 있으나, 안전하게 Pass or Fail? Plan says 'Pass if stale')
+                return {"allowed": True, "reason": "Insufficient minute data (passed safety)"}
+            
+            # rows[0]: 최신봉 (직전 5분), rows[1]: 이전봉
+            curr = rows[0]
+            prev = rows[1]
+            
+            # Data Freshness Check (15분 이상 지연되면 무시하고 진행)
+            time_diff = (datetime.now() - curr.price_time).total_seconds()
+            if time_diff > 900: # 15분
+                return {"allowed": True, "reason": "Data stale (>15m), skipping check"}
+
+            # --- Pattern 1: Shooting Star (유성형) ---
+            # 윗꼬리가 몸통의 2배 이상이고, 양봉/음봉 무관하게 고점에서 발생 시 하락 반전 신호
+            body = abs(curr.close_price - curr.open_price)
+            upper_wick = curr.high_price - max(curr.close_price, curr.open_price)
+            
+            # 몸통이 너무 작으면(도지) 노이즈일 수 있으므로 최소 가격의 0.1% 이상일 때만 체크? 
+            # 아니면 도지형 Shooting Star도 강력하므로 그냥 둠.
+            
+            if body > 0 and upper_wick > (body * 2.0):
+                 # 추가조건: 거래량이 평소보다 좀 터졌는지? (선택)
+                 return {"allowed": False, "reason": f"{stock_name}({stock_code}) Shooting Star detected (Wick/Body={upper_wick/body:.1f})"}
+            
+            # --- Pattern 2: Bearish Engulfing (하락 장악형) ---
+            # 1. 이전 봉: 양봉
+            # 2. 현재 봉: 음봉
+            # 3. 현재 시가 >= 이전 종가 AND 현재 종가 <= 이전 시가 (몸통이 이전 몸통을 감쌈)
+            # 4. 거래량: 현재 > 이전 (매도세 압도)
+            
+            is_prev_bull = prev.close_price > prev.open_price
+            is_curr_bear = curr.close_price < curr.open_price
+            
+            if is_prev_bull and is_curr_bear:
+                engulfing = (curr.open_price >= prev.close_price) and (curr.close_price <= prev.open_price)
+                vol_confirm = curr.volume > prev.volume
+                
+                if engulfing and vol_confirm:
+                     return {"allowed": False, "reason": f"{stock_name}({stock_code}) Bearish Engulfing detected"}
+
+            return {"allowed": True, "reason": "OK"}
+            
+        except Exception as e:
+            logger.warning(f"Micro-Timing check failed: {e}")
+            return {"allowed": True, "reason": "Check Error (Fail-Safe)"}
 
     def _record_trade(
         self,

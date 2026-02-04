@@ -62,6 +62,65 @@ class PositionSizer:
             return self.MAX_POSITION_PCT_A_PLUS
         return self.MAX_POSITION_PCT_DEFAULT
     
+    def calculate_intraday_atr(self, session, stock_code: str, window: int = 20) -> Optional[float]:
+        """
+        [NEW] 장중 ATR 계산 (Intraday Scalping Risk)
+        최근 5분봉 데이터를 사용하여 현재의 변동성을 측정함.
+        
+        Args:
+            session: DB Session
+            stock_code: 종목 코드
+            window: ATR 계산 기간 (기본 20개 바 = 100분)
+            
+        Returns:
+            Average True Range (Price Unit) or None
+        """
+        try:
+            from sqlalchemy import text
+            from datetime import datetime, timedelta
+            
+            # 1. 5분봉 데이터 조회 (최근 Window * 2 만큼 여유있게)
+            # 100분 + 여유 = 200분 전
+            check_start_time = datetime.now() - timedelta(minutes=window * 10)
+            
+            query = text("""
+                SELECT open_price, high_price, low_price, close_price
+                FROM STOCK_MINUTE_PRICE
+                WHERE stock_code = :code
+                AND price_time >= :start_time
+                ORDER BY price_time ASC
+            """)
+            
+            rows = session.execute(query, {"code": stock_code, "start_time": check_start_time}).fetchall()
+            
+            if len(rows) < window + 1:
+                return None
+            
+            # 2. Window size만큼 최신 데이터 추출
+            # ATR 계산을 위해 window+1 개 필요 (Previous Close)
+            data = rows[-(window+1):]
+            
+            tr_sum = 0.0
+            for i in range(1, len(data)):
+                curr = data[i]
+                prev = data[i-1]
+                
+                # TR = Max(H-L, |H-Cp|, |L-Cp|)
+                # curr[0]=Open, [1]=High, [2]=Low, [3]=Close
+                high = float(curr[1])
+                low = float(curr[2])
+                prev_close = float(prev[3])
+                
+                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+                tr_sum += tr
+                
+            avg_tr = tr_sum / window
+            return avg_tr
+            
+        except Exception as e:
+            logger.warning(f"Intraday ATR Check Failed: {e}")
+            return None
+    
     def check_portfolio_heat(self, current_portfolio_risk_pct: float, new_risk_pct: float) -> bool:
         """
         [Junho] Portfolio Heat 상한 체크
