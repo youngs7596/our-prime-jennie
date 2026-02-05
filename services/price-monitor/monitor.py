@@ -30,8 +30,6 @@ from shared.redis_cache import (
     get_rsi_overbought_sold,
     set_rsi_overbought_sold,
     delete_rsi_overbought_sold,
-    set_profit_floor,
-    get_profit_floor,
 )
 from shared.db.connection import session_scope
 from shared.db import repository as repo
@@ -253,35 +251,12 @@ class PriceMonitor:
                 "atr": atr,
                 "stop_loss_price": None,
                 "take_profit_price": None, # Fixed Target
-                "profit_floor_price": None,
                 "trailing_stop_price": None,
                 "is_safe": True, # 기본값
                 "active_signal": None
             }
             
             potential_signal = None
-            
-            # =====================================================================
-            # 0. Profit Floor Protection (수익 보호 바닥)
-            # =====================================================================
-            # 수익이 15% 이상 도달하면 바닥을 10%로 설정
-            PROFIT_FLOOR_ACTIVATION = 15.0
-            PROFIT_FLOOR_LEVEL = 10.0
-            
-            if profit_pct >= PROFIT_FLOOR_ACTIVATION:
-                existing_floor = get_profit_floor(stock_code)
-                if not existing_floor:
-                    set_profit_floor(stock_code, PROFIT_FLOOR_LEVEL)
-                    logger.info(f"🛡️ [{stock_name}] Profit Floor 설정: +{PROFIT_FLOOR_LEVEL}% (현재 +{profit_pct:.1f}%)")
-            
-            floor = get_profit_floor(stock_code)
-            if floor:
-                 # Floor %를 가격으로 변환하여 저장
-                 floor_price = buy_price * (1 + floor / 100.0)
-                 logic_snapshot['profit_floor_price'] = floor_price
-
-            if floor and profit_pct < floor:
-                potential_signal = {"signal": True, "reason": f"Profit Floor Hit ({profit_pct:.1f}% < Floor {floor}%)", "quantity_pct": 100.0}
             
             # =====================================================================
             # 0.1 High-Priority Profit Lock (Round Trip 방지) - [NEW]

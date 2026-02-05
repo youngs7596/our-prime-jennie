@@ -62,6 +62,7 @@ with DAG(
         bash_command='python scripts/collect_enhanced_macro.py --sources finnhub,fred',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=5),
     )
 
@@ -71,6 +72,7 @@ with DAG(
         bash_command='python scripts/collect_enhanced_macro.py --sources bok_ecos,pykrx,rss',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=5),
     )
 
@@ -80,6 +82,7 @@ with DAG(
         bash_command='python scripts/collect_enhanced_macro.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=3),
     )
 
@@ -103,5 +106,6 @@ with DAG(
         bash_command='python scripts/collect_enhanced_macro.py --quick',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=2),
     )

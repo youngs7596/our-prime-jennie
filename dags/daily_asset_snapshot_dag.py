@@ -43,6 +43,8 @@ with DAG(
     # {{ ds }} is execution date (YYYY-MM-DD)
     run_snapshot = BashOperator(
         task_id='run_snapshot_script',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/daily_asset_snapshot.py --date {{ ds }}',
+        bash_command='cd /opt/airflow && python3 scripts/daily_asset_snapshot.py --date {{ ds }}',
+        cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )

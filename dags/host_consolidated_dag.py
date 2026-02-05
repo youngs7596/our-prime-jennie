@@ -42,8 +42,10 @@ with DAG(
 ) as dag_weekly:
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
-        bash_command='export MARIADB_HOST=mariadb && export MARIADB_PORT=3306 && export MARIADB_USER=root && cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/weekly_factor_analysis_batch.py',
+        bash_command='cd /opt/airflow && python3 scripts/weekly_factor_analysis_batch.py',
+        cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 2. Daily Price Collector (Weekday 16:00 KST)
@@ -57,8 +59,10 @@ with DAG(
 ) as dag_collector:
     run_collector = BashOperator(
         task_id='collect_full_market_data',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/collect_full_market_data_parallel.py',
+        bash_command='cd /opt/airflow && python3 scripts/collect_full_market_data_parallel.py',
+        cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 3. Daily Briefing (Weekday 17:00 KST)
@@ -88,6 +92,8 @@ with DAG(
 ) as dag_ai_perf:
     run_ai_perf = BashOperator(
         task_id='analyze_ai_performance',
-        bash_command='cd /opt/airflow && PYTHONPATH=/opt/airflow python3 scripts/analyze_ai_performance.py',
+        bash_command='cd /opt/airflow && python3 scripts/analyze_ai_performance.py',
+        cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )

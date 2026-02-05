@@ -53,6 +53,7 @@ with DAG(
         bash_command='python scripts/collect_minute_chart.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 2. Analyst Feedback Update: 18:00 KST
@@ -69,6 +70,7 @@ with DAG(
         bash_command='python scripts/update_analyst_feedback.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 3. Collect Daily Prices (FDR): 18:15 KST
@@ -85,6 +87,7 @@ with DAG(
         bash_command='python scripts/collect_prices_fdr.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=30),  # 951개 종목 처리에 충분한 시간
     )
 
@@ -102,6 +105,7 @@ with DAG(
         bash_command='python scripts/collect_investor_trading.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 5. Collect DART Filings: 18:45 KST
@@ -118,6 +122,7 @@ with DAG(
         bash_command='python scripts/collect_dart_filings.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )
 
 # 6. Data Cleanup (Weekly): 03:00 KST on Sunday
@@ -135,4 +140,5 @@ with DAG(
         bash_command='python scripts/cleanup_old_data.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
     )

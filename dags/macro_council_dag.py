@@ -67,5 +67,6 @@ with DAG(
         bash_command='python scripts/run_macro_council.py',
         cwd='/opt/airflow',
         env=COMMON_ENV,
+        append_env=True,
         execution_timeout=timedelta(minutes=10),  # Council 분석 ~2분 예상
     )

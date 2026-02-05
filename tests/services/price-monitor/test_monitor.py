@@ -53,7 +53,6 @@ class TestPriceMonitor(unittest.TestCase):
     def test_check_sell_signal_stop_loss(self):
         """Test Fixed Stop Loss Trigger"""
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
-             patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p:
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             self.mock_config.get_float.side_effect = lambda k, default: -5.0 if 'STOP_LOSS' in k else default
@@ -117,7 +116,6 @@ class TestPriceMonitor(unittest.TestCase):
         with patch("monitor.database.get_daily_prices", return_value=prices), \
              patch("monitor.strategy.calculate_atr", return_value=5.0), \
              patch("monitor.strategy.check_death_cross", return_value=False), \
-             patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p: # ATR = 5
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
 
@@ -200,7 +198,6 @@ class TestPriceMonitor(unittest.TestCase):
              patch("monitor.get_scale_out_level", return_value=0), \
              patch("monitor.get_rsi_overbought_sold", return_value=False), \
              patch("monitor.set_rsi_overbought_sold", return_value=None), \
-             patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p:
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
@@ -221,7 +218,6 @@ class TestPriceMonitor(unittest.TestCase):
              patch("monitor.strategy.calculate_atr", return_value=None), \
              patch("monitor.strategy.calculate_rsi", return_value=None), \
              patch("monitor.strategy.check_death_cross", return_value=True), \
-             patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p:
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
@@ -245,7 +241,6 @@ class TestPriceMonitor(unittest.TestCase):
         
         with patch("monitor.database.get_daily_prices", return_value=pd.DataFrame()), \
              patch("monitor.strategy.calculate_atr", return_value=None), \
-             patch("monitor.get_profit_floor", return_value=None), \
              patch("monitor.repo.get_active_portfolio") as mock_get_p:
             mock_get_p.return_value = [{'code': '005930', 'avg_price': 100}]
             
