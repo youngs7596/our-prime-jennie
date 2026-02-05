@@ -1,5 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-05
+### DeepSeek PoC & Performance Tuning
+- **feat(scout)**: Deployed **DeepSeek V3.2 Cloud** PoC & Implemented "Strict Gatekeeper" Logic
+  - Updated `docker-compose.yml` to use `deepseek-v3.2:cloud`
+  - Engineered Asymmetric Hunter Prompt (+10/-30) to fix low win rate (18%) and over-trading
+
 ## 2026-02-04
 ### Buy Scanner
 - **fix(buy-scanner)**: Resolved data silence issue

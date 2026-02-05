@@ -120,11 +120,22 @@ class LLMFactory:
                 is_thinking_tier=(tier == LLMTier.THINKING)
             )
         elif provider_type == "openai":
-            # Map tier to OpenAI models if needed, else use default in Provider
-            # implementation or env var. For now, let's assume Provider handles default
-            # or we pass it. Provider currently reads from env (OPENAI_MODEL_NAME_...)?
-            # Existing OpenAILLMProvider might need updates or we rely on its defaults.
-            return OpenAILLMProvider() 
+            # [2026-02-05] Tier-specific Configuration for OpenAI-compatible APIs (DeepSeek, etc.)
+            tier_prefix = f"TIER_{tier.value}"
+            
+            # 1. Tier-specific Key & Base URL
+            tier_api_key = os.getenv(f"{tier_prefix}_API_KEY")
+            tier_base_url = os.getenv(f"{tier_prefix}_API_BASE")
+            
+            # 2. Tier-specific Model Name override
+            # [2026-02-05] Added support for TIER specific model name (e.g. TIER_REASONING_MODEL_NAME=deepseek-chat)
+            tier_model_name = os.getenv(f"{tier_prefix}_MODEL_NAME")
+            
+            return OpenAILLMProvider(
+                api_key=tier_api_key,
+                base_url=tier_base_url,
+                default_model=tier_model_name
+            ) 
         elif provider_type == "claude":
             return ClaudeLLMProvider() 
         elif provider_type == "gemini":

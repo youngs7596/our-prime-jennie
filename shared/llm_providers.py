@@ -663,7 +663,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     
     REASONING_MODELS = {"gpt-5-mini", "gpt-5", "o1", "o1-mini", "o1-preview", "o3", "o3-mini"}
     
-    def __init__(self, project_id: Optional[str] = None, openai_api_key_secret: Optional[str] = None, safety_settings=None):
+    def __init__(self, project_id: Optional[str] = None, openai_api_key_secret: Optional[str] = None, safety_settings=None, base_url: Optional[str] = None, api_key: Optional[str] = None, default_model: Optional[str] = None):
         super().__init__(safety_settings)
         try:
             from openai import OpenAI
@@ -671,26 +671,33 @@ class OpenAILLMProvider(BaseLLMProvider):
         except ImportError:
             raise RuntimeError("openai 패키지가 설치되지 않았습니다. pip install openai 실행이 필요합니다.")
         
-        # If secrets are provided, fetch them. Ideally passed from factory or env.
-        # Fallback to direct env var for simplicity in Factory pattern if secret manager is tricky without project_id
-        api_key = os.getenv("OPENAI_API_KEY")
+        # 1. API Key 우선순위: 인자 -> Secrets -> Env
+        final_api_key = api_key
+        
+        if not final_api_key:
+             # Try env vars first (standard)
+             final_api_key = os.getenv("OPENAI_API_KEY")
 
-        # [Fix] Fallback to secrets.json using environment variable key ID
-        if not api_key:
+        if not final_api_key:
+             # Fallback to secrets
              from . import auth
-             # Try to get key ID from env, default to 'openai-api-key'
-             secret_id = os.getenv("SECRET_ID_OPENAI_API_KEY", "openai-api-key")
-             api_key = auth.get_secret(secret_id)
+             secret_id = openai_api_key_secret or os.getenv("SECRET_ID_OPENAI_API_KEY", "openai-api-key")
+             try:
+                final_api_key = auth.get_secret(secret_id)
+             except Exception:
+                pass
         
-        if not api_key:
-             # Just log warning, might rely on env var that OpenAI client picks up automatically
-             logger.warning("⚠️ OpenAI API Key not found in env or secrets.json") 
+        if not final_api_key:
+             logger.warning("⚠️ OpenAI API Key not found in args, env, or secrets.json") 
         
-        self.client = self._openai_module(api_key=api_key)
+        # 2. Base URL 설정 (DeepSeek 등 호환 API 지원)
+        final_base_url = base_url or os.getenv("OPENAI_API_BASE")
+
+        self.client = self._openai_module(api_key=final_api_key, base_url=final_base_url)
         # [Budget Strategy 2025]
         # Default (Reasoning Tier): gpt-4o-mini (Cost Efficiency)
         # Thinking (Judge Tier): gpt-4o (Balanced Cost/Perf)
-        self.default_model = os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
+        self.default_model = default_model or os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
         self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
     
     def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):
