@@ -668,40 +668,25 @@ class TestJudgeScoringV5Gatekeeper:
 # ============================================================================
 
 class TestNewsSentimentFallback:
-    """뉴스 감성 분석 Fallback 테스트"""
-    
-    def test_sentiment_local_failure_cloud_success(self, mock_brain, mock_gemini_provider):
-        """Local 실패 시 Cloud Fallback 성공"""
-        # Local 실패
+    """뉴스 감성 분석 Fallback 테스트
+    [2026-02] get_fallback_provider 제거 이후: Local 실패 시 기본값(50) 반환
+    """
+
+    def test_sentiment_local_failure_returns_default(self, mock_brain, mock_gemini_provider):
+        """Local 실패 시 기본점수 50 반환"""
         mock_gemini_provider.generate_json.side_effect = Exception("Local Error")
-        
-        # Fallback provider mock
-        with patch('shared.llm_factory.LLMFactory.get_fallback_provider') as mock_fallback:
-            fallback_provider = MagicMock()
-            fallback_provider.name = 'cloud-fallback'
-            fallback_provider.generate_json.return_value = {
-                'score': 70,
-                'reason': 'Cloud analyzed'
-            }
-            mock_fallback.return_value = fallback_provider
-            
-            result = mock_brain.analyze_news_sentiment("title", "desc")
-            
-            # Fallback이 동작하지 않거나 Skip된 경우 기본점수 50 반환 확인
-            # (로그에 Skip이 찍혔으므로 Fallback 로직이 없거나 동작 안함으로 추정)
-            assert result['score'] == 50
-    
+
+        result = mock_brain.analyze_news_sentiment("title", "desc")
+
+        assert result['score'] == 50
+
     def test_sentiment_both_fail(self, mock_brain, mock_gemini_provider):
-        """Local 및 Cloud 모두 실패"""
+        """Local 실패 시 기본값 반환 (Cloud Fallback 없음)"""
         mock_gemini_provider.generate_json.side_effect = Exception("Local Error")
-        
-        with patch('shared.llm_factory.LLMFactory.get_fallback_provider') as mock_fallback:
-            mock_fallback.return_value = None
-            
-            result = mock_brain.analyze_news_sentiment("title", "desc")
-            
-            # 기본값 반환
-            assert result['score'] == 50
+
+        result = mock_brain.analyze_news_sentiment("title", "desc")
+
+        assert result['score'] == 50
 
 
 

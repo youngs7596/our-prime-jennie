@@ -70,8 +70,8 @@ class OllamaLLMProvider(BaseLLMProvider):
     - LLM_DEBUG_LOG_PATH 환경변수 설정 시 요청/응답을 JSON 파일로 저장
     """
     def __init__(
-        self, 
-        model: str, 
+        self,
+        model: str,
         state_manager: Any,
         is_fast_tier: bool = False,
         is_thinking_tier: bool = False,
@@ -81,12 +81,24 @@ class OllamaLLMProvider(BaseLLMProvider):
         self.model = model
         self.state_manager = state_manager
         self.host = os.getenv("OLLAMA_HOST", host)
-        
-        # Gateway 모드 설정
+
+        # Gateway 모드 설정 (로컬 GPU 보호용)
         self.use_gateway = os.getenv("USE_OLLAMA_GATEWAY", "false").lower() == "true"
         self.gateway_url = os.getenv("OLLAMA_GATEWAY_URL", "http://ollama-gateway:11500")
-        
-        if self.use_gateway:
+
+        # ☁️ Cloud 직접 연결 모드 (Gateway 우회)
+        self.is_cloud = model.endswith(":cloud")
+        self._cloud_api_key = None
+        if self.is_cloud:
+            self.cloud_model = model.replace(":cloud", "")
+            self.cloud_host = os.getenv("OLLAMA_CLOUD_HOST", "https://ollama.com")
+            self._cloud_api_key = self._load_cloud_api_key()
+            if self._cloud_api_key:
+                logger.info(f"☁️ [Ollama] Cloud 직접 연결 모드: {self.cloud_host} (model={self.cloud_model})")
+            else:
+                logger.warning(f"⚠️ [Ollama] Cloud 모델 요청이나 API Key 없음. Gateway 폴백 사용")
+
+        if self.use_gateway and not self.is_cloud:
             logger.info(f"🌐 [Ollama] Gateway 모드 활성화: {self.gateway_url}")
         
         # Debug 로깅 설정 (Toggle Support)
@@ -110,6 +122,45 @@ class OllamaLLMProvider(BaseLLMProvider):
             self.timeout = 600 # Increased to 600s for Qwen3:32B stability
             
         self.max_retries = 3
+
+    def _load_cloud_api_key(self) -> Optional[str]:
+        """Ollama Cloud API Key 로드 (env → secrets.json)"""
+        key = os.getenv("OLLAMA_API_KEY")
+        if not key:
+            secrets_file = os.getenv("SECRETS_FILE", "/app/config/secrets.json")
+            if os.path.exists(secrets_file):
+                try:
+                    with open(secrets_file, "r") as f:
+                        secrets = json.load(f)
+                        key = secrets.get("ollama_api_key") or secrets.get("ollama-api-key")
+                except Exception as e:
+                    logger.warning(f"⚠️ [Ollama] Cloud API Key 로드 실패: {e}")
+        return key
+
+    def _call_cloud_api(self, endpoint: str, payload: Dict) -> Dict:
+        """
+        Ollama Cloud API 직접 호출 (Gateway 우회)
+        - Rate limit, Circuit Breaker 없이 직접 통신
+        - 로컬 GPU 자원과 무관하므로 동시성 제약 없음
+        """
+        url = f"{self.cloud_host}{endpoint}"
+
+        headers = {"Content-Type": "application/json"}
+        if self._cloud_api_key:
+            headers["Authorization"] = f"Bearer {self._cloud_api_key}"
+
+        # Cloud용 페이로드 구성
+        cloud_payload = dict(payload)
+        # :cloud 접미사 제거 (내부 라우팅 마커)
+        model_in_payload = cloud_payload.get("model", self.model)
+        cloud_payload["model"] = model_in_payload.replace(":cloud", "")
+        cloud_payload["stream"] = False
+
+        logger.info(f"☁️ [Ollama Cloud] 요청: {endpoint} (model={cloud_payload['model']})")
+
+        response = requests.post(url, json=cloud_payload, headers=headers, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
 
     def _log_llm_interaction(self, interaction_type: str, request_data: Dict, response_data: Dict, model_name: str = None):
         """
@@ -214,19 +265,31 @@ class OllamaLLMProvider(BaseLLMProvider):
     def _call_ollama_api(self, endpoint: str, payload: Dict) -> Dict:
         """
         [Defensive] Robust API Caller with Retries
-        Gateway 모드 시 Gateway를 통해 요청
+        Cloud 모델: Ollama Cloud API 직접 호출 (Gateway 우회)
+        Local 모델: Gateway 또는 직접 호출
         """
+        # ☁️ Cloud 모드: Gateway 우회, 직접 호출
+        if self.is_cloud and self._cloud_api_key:
+            try:
+                return self._call_cloud_api(endpoint, payload)
+            except Exception as e:
+                fallback_model = os.getenv("LOCAL_MODEL_FALLBACK", "gpt-oss:20b")
+                logger.warning(f"⚠️ [Ollama Cloud] 직접 호출 실패: {e}. 로컬 폴백 ({fallback_model})...")
+                # 로컬 모델로 폴백 (아래 gateway/direct 로직 사용)
+                payload = dict(payload)
+                payload["model"] = fallback_model
+
         # Gateway 모드 체크
         if self.use_gateway:
             return self._call_via_gateway(payload, endpoint=endpoint)
-        
+
         # 직접 호출 모드 (기존 로직)
         url = f"{self.host}{endpoint}"
         payload["stream"] = False
         payload["keep_alive"] = -1 # [Ops] Prevent unloading
-        
+
         last_error = None
-        
+
         for attempt in range(self.max_retries):
             try:
                 self._ensure_model_loaded()
@@ -239,10 +302,10 @@ class OllamaLLMProvider(BaseLLMProvider):
             except Exception as e:
                 logger.warning(f"⚠️ [Ollama] Error on attempt {attempt+1}/{self.max_retries}: {e}")
                 last_error = e
-            
+
             # Exponential Backoff
             time.sleep(2 ** attempt)
-            
+
         raise last_error
 
     def generate_json(

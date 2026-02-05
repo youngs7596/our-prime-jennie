@@ -127,7 +127,9 @@ class TestLLMFactoryGetProvider:
             provider = LLMFactory.get_provider(LLMTier.REASONING)
             
             assert provider is mock_instance
-            mock_openai.assert_called_once_with()
+            mock_openai.assert_called_once_with(
+                api_key=None, base_url=None, default_model=None
+            )
     
     @patch('shared.llm_providers.ClaudeLLMProvider')
     def test_get_provider_claude(self, mock_claude):
@@ -168,22 +170,10 @@ class TestLLMFactoryGetProvider:
 
 
 class TestLLMFactoryFallback:
-    """LLMFactory.get_fallback_provider() 테스트"""
-    
-    @patch('shared.llm_providers.GeminiLLMProvider')
-    def test_get_fallback_provider(self, mock_gemini):
-        """Gemini Flash 폴백 provider 생성"""
-        mock_instance = MagicMock()
-        mock_gemini.return_value = mock_instance
-        
-        with patch.dict(os.environ, {
-            "GCP_PROJECT_ID": "fallback-project",
-            "SECRET_ID_GEMINI_API_KEY": "fallback-secret"
-        }):
-            provider = LLMFactory.get_fallback_provider(LLMTier.FAST)
-            
-            assert provider is mock_instance
-            mock_gemini.assert_called_once()
-            call_kwargs = mock_gemini.call_args.kwargs
-            assert call_kwargs['project_id'] == "fallback-project"
-            assert call_kwargs['gemini_api_key_secret'] == "fallback-secret"
+    """LLMFactory Fallback 테스트
+    [2026-02] get_fallback_provider 제거됨 - Cloud Fallback은 Provider 레벨에서 처리
+    """
+
+    def test_no_fallback_provider_method(self):
+        """get_fallback_provider가 제거되었는지 확인"""
+        assert not hasattr(LLMFactory, 'get_fallback_provider')
