@@ -1409,15 +1409,18 @@ def set_stoploss_cooldown(
         return True  # 쿨다운 0일 = 비활성화
 
     key = f"{STOPLOSS_COOLDOWN_PREFIX}{stock_code}"
-    ttl_seconds = cooldown_days * 86400  # 일수 → 초
+    # 5거래일 ≈ 7캘린더일 (주말 포함). 거래일 기준 TTL 보정.
+    calendar_days = int(cooldown_days * 1.4 + 0.5)  # 5→7, 3→4, 10→14
+    ttl_seconds = calendar_days * 86400
 
     try:
         data = {
             "cooldown_days": cooldown_days,
+            "calendar_days": calendar_days,
             "set_at": datetime.now(timezone.utc).isoformat()
         }
         r.setex(key, ttl_seconds, json.dumps(data))
-        logger.info(f"🚫 [Redis] 손절 쿨다운 설정: {stock_code} ({cooldown_days}일)")
+        logger.info(f"🚫 [Redis] 손절 쿨다운 설정: {stock_code} ({cooldown_days}거래일 = {calendar_days}캘린더일)")
         return True
     except Exception as e:
         logger.error(f"❌ [Redis] 손절 쿨다운 설정 실패: {e}")
@@ -1446,8 +1449,10 @@ def get_stoploss_cooldown(
     try:
         ttl = r.ttl(key)
         if ttl and ttl > 0:
-            remaining_days = max(1, ttl // 86400)
-            return remaining_days
+            # 캘린더일 → 거래일 역산 (1.4 보정)
+            remaining_calendar = max(1, ttl // 86400)
+            remaining_trading = max(1, int(remaining_calendar / 1.4 + 0.5))
+            return remaining_trading
         return None
     except Exception as e:
         logger.error(f"❌ [Redis] 손절 쿨다운 조회 실패: {e}")
