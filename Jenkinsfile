@@ -74,9 +74,10 @@ pipeline {
         }
 
         // ====================================================
-        // development 브랜치에서만 실행: Docker Build & Deploy
+        // development 브랜치에서만 실행: Smart Build & Deploy
+        // 핵심: Build(변경 서비스만 이미지 빌드) → Deploy(전체 재시작)
         // ====================================================
-        stage('Docker Build') {
+        stage('Build & Deploy') {
             when {
                 anyOf {
                     branch 'development'
@@ -86,51 +87,19 @@ pipeline {
             agent {
                 docker {
                     image 'docker:dind'
-                    // Docker Socket Mount for BuildKit, Mount workspace to /app
-                    args '-v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/app -w /app'
-                    reuseNode true
-                }
-            }
-            steps {
-                echo '🐳 Building Docker images (Smart Build)...'
-                sh '''
-                    # Install Python3 & Git (Required for smart_build.py)
-                    apk add --no-cache python3 git
-
-                    # [Fix] 손상된 캐시만 정리 (24시간 이상 된 것)
-                    docker builder prune -f --filter "until=24h" || true
-                    
-                    # Smart Build Script Execution
-                    # 변경된 서비스만 감지하여 빌드 (HEAD~1..HEAD)
-                    python3 scripts/smart_build.py --action build --commit-range HEAD~1..HEAD
-                '''
-            }
-        }
-
-        stage('Deploy') {
-            when {
-                anyOf {
-                    branch 'development'
-                    expression { env.GIT_BRANCH?.contains('development') }
-                }
-            }
-            agent {
-                docker {
-                    image 'docker:dind'
-                    // IMPORTANT: Host Mount required for in-place deployment to /home/youngs75/...
                     args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/youngs75/projects/my-prime-jennie:/home/youngs75/projects/my-prime-jennie'
                     reuseNode true
                 }
             }
             steps {
-                echo '🚀 Rolling Deploy to development environment...'
+                echo '🚀 Smart Build & Deploy to development environment...'
 
                 withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
                         # Install dependencies
                         apk add --no-cache python3 git
 
-                        # Host Path로 이동 (컨테이너 내에 마운트된 경로)
+                        # Host Path로 이동 (빌드 + 배포 동일 경로에서 실행)
                         cd /home/youngs75/projects/my-prime-jennie
 
                         git config --global --add safe.directory "*"
@@ -139,21 +108,32 @@ pipeline {
                         git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
                         git reset --hard FETCH_HEAD
                         git clean -fd
-                        
-                        # 2. Smart Build & Deploy
+
+                        # 2. 변경 범위 감지
                         echo "=========================================="
-                        echo "🧠 Smart Build: 변경된 서비스 감지 및 배포"
+                        echo "🧠 Smart Build: 변경된 서비스 감지"
                         echo "=========================================="
-                        
+
                         TARGET_RANGE="ORIG_HEAD..HEAD"
                         if [ -z "$(git diff --name-only ORIG_HEAD..HEAD)" ]; then
                             echo "⚠️ No changes in ORIG_HEAD..HEAD (Already up-to-date)."
-                            echo "🔄 Fallback to HEAD~1..HEAD to ensure deployment of current state."
+                            echo "🔄 Fallback to HEAD~1..HEAD"
                             TARGET_RANGE="HEAD~1..HEAD"
                         fi
 
-                        python3 scripts/smart_build.py --action deploy --commit-range $TARGET_RANGE
-                        
+                        # 3. Build: 변경된 서비스만 이미지 빌드
+                        echo "=========================================="
+                        echo "🏗️ Step 1: 변경 서비스 이미지 빌드"
+                        echo "=========================================="
+                        docker builder prune -f --filter "until=24h" || true
+                        python3 scripts/smart_build.py --action build --commit-range $TARGET_RANGE
+
+                        # 4. Deploy: 전체 서비스 재시작 (이미지 빌드 완료 상태)
+                        echo "=========================================="
+                        echo "🚀 Step 2: 전체 서비스 재시작"
+                        echo "=========================================="
+                        python3 scripts/smart_build.py --action deploy --services ALL
+
                         echo ""
                         echo "=========================================="
                         echo "📊 배포 완료 - 서비스 상태"

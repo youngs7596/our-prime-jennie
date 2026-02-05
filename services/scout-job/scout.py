@@ -521,7 +521,8 @@ def main():
             
             # E: 섹터 모멘텀 분석 (v3.8 신규)
             sector_analysis = analyze_sector_momentum(kis_api, session, watchlist_snapshot)
-            hot_sector_stocks = get_hot_sector_stocks(sector_analysis, top_n=30)
+            momentum_top_n = int(os.getenv("MOMENTUM_TOP_N", "30"))
+            hot_sector_stocks = get_hot_sector_stocks(sector_analysis, top_n=momentum_top_n)
             for stock in hot_sector_stocks:
                 if stock['code'] not in candidate_stocks:
                     candidate_stocks[stock['code']] = {
@@ -563,7 +564,7 @@ def main():
                     kis_api,
                     session,
                 period_months=6,
-                top_n=30,
+                top_n=momentum_top_n,
                 watchlist_snapshot=watchlist_snapshot
             )
             for stock in momentum_stocks:
