@@ -147,20 +147,4 @@ class LLMFactory:
         
         raise ValueError(f"Unknown provider type: {provider_type} for tier {tier}")
 
-    @classmethod
-    def get_fallback_provider(cls, tier: LLMTier):
-        """
-        Fallback Logic Unified
-        All tiers -> Gemini Flash (gemini-2.5-flash)
-        Reason: Cost efficiency (User Request)
-        """
-        from shared.llm_providers import GeminiLLMProvider
-        from shared.llm_constants import SAFETY_SETTINGS
 
-        # Unify all fallbacks to Gemini Flash
-        # GeminiLLMProvider defaults to 'gemini-2.5-flash' via internal logic if not overridden
-        return GeminiLLMProvider(
-            project_id=os.getenv("GCP_PROJECT_ID"),
-            gemini_api_key_secret=os.getenv("SECRET_ID_GEMINI_API_KEY", "gemini-api-key"),
-            safety_settings=SAFETY_SETTINGS
-        )

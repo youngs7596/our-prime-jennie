@@ -1,10 +1,17 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-05
-### DeepSeek PoC & Performance Tuning
+### DeepSeek PoC & Hybrid Gateway Architecture
+- **feat(ollama-gateway)**: Implemented **Hybrid Cloud Proxy** in Ollama Gateway
+  - Intercepts `:cloud` models and proxies to `https://ollama.com` via `OLLAMA_API_KEY`
+  - Automated fallback to local `gpt-oss:20b` if cloud quota/API fails
 - **feat(scout)**: Deployed **DeepSeek V3.2 Cloud** PoC & Implemented "Strict Gatekeeper" Logic
-  - Updated `docker-compose.yml` to use `deepseek-v3.2:cloud`
+  - Updated `docker-compose.yml` to use `deepseek-v3.2:cloud` via Gateway
   - Engineered Asymmetric Hunter Prompt (+10/-30) to fix low win rate (18%) and over-trading
+- **perf(gateway)**: Resolved Rate Limiting & Scalability issues
+  - Increased `OLLAMA_RATE_LIMIT` (60/min -> 1000/min) for parallel embedding/fast-track processing
+  - Resolved persistent Circuit Breaker 503 errors via Redis state reset
+- **refactor(llm)**: Removed Gemini Fallback logic from `shared/llm.py` & `llm_factory.py` (User Request)
 
 ## 2026-02-04
 ### Buy Scanner

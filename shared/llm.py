@@ -438,22 +438,8 @@ class JennieBrain:
             return str(result)
 
         except Exception as e:
-            logger.warning(f"⚠️ [Debate] Local LLM failed: {e}. Attempting Cloud Fallback (Tier-Adaptive)...")
-            try:
-                fallback_provider = LLMFactory.get_fallback_provider(LLMTier.REASONING)
-                if fallback_provider is None:
-                    raise ValueError("No fallback provider for REASONING tier")
-
-                logger.info(f"--- [JennieBrain/Debate] Cloud Fallback via {fallback_provider.name} ---")
-                chat_history = [{"role": "user", "content": prompt}]
-                result = fallback_provider.generate_chat(chat_history, temperature=0.7)
-                
-                if isinstance(result, dict):
-                    return result.get('text') or result.get('content') or str(result)
-                return str(result)
-            except Exception as fb_e:
-                logger.error(f"❌ [Debate] Fallback failed: {fb_e}")
-                return f"Debate Error: {e}"
+            logger.error(f"❌ [Debate] Local LLM failed: {e}")
+            return f"Debate Error: {e}"
 
     # -----------------------------------------------------------------
     # Check if stock exists (Optional)
@@ -512,22 +498,8 @@ class JennieBrain:
             logger.info(f"   ✅ v5 Hunter 완료: {stock_info.get('name')} - {result.get('score')}점")
             return result
         except Exception as e:
-            logger.warning(f"⚠️ [Hunter] Local LLM failed: {e}. Attempting Cloud Fallback (Tier-Adaptive)...")
-            try:
-                fallback_provider = LLMFactory.get_fallback_provider(LLMTier.REASONING)
-                if fallback_provider is None:
-                    raise ValueError("No fallback provider for REASONING tier")
-
-                logger.info(f"--- [JennieBrain/v5-Hunter] Cloud Fallback via {fallback_provider.name} ---")
-                result = fallback_provider.generate_json(
-                    prompt,
-                    ANALYSIS_RESPONSE_SCHEMA,
-                    temperature=0.2
-                )
-                return result
-            except Exception as fb_e:
-                logger.error(f"❌ [Hunter] Fallback failed: {fb_e}")
-                return {'score': 0, 'grade': 'D', 'reason': f"오류(Local+Cloud): {e}"}
+            logger.error(f"❌ [Hunter] Local LLM failed: {e}")
+            return {'score': 0, 'grade': 'D', 'reason': f"오류(Local): {e}"}
 
     def run_judge_scoring_v5(self, stock_info: dict, debate_log: str, quant_context: str = None, feedback_context: str = None) -> dict:
         """

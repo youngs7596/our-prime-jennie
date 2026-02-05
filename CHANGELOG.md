@@ -12,4 +12,4 @@
 | **2025-12** | [🗄️ 2025년 12월 및 이전 이력](docs/changelogs/CHANGELOG-2025-12.md) |
 
 ---
-*Last Updated: 2026-02-03*
+*Last Updated: 2026-02-05*

@@ -1063,7 +1063,9 @@ services:
       - infrastructure/env-vars-wsl.yaml
     environment:
       - REDIS_URL=redis://localhost:6379/0
-      - COLLECTOR_UNIVERSE_SIZE=200
+      # 16. Scout Universe Configuration (LLM Cost Control)
+      - SCOUT_UNIVERSE_SIZE=5
+      - ENABLE_NEWS_ANALYSIS=true
     network_mode: host
     restart: unless-stopped
     labels:

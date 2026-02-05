@@ -54,6 +54,24 @@ app = Flask(__name__)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+# Secret Loading (DeepSeek/Cloud Proxy)
+SECRETS_FILE = os.getenv("SECRETS_FILE", "/app/config/secrets.json")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
+
+if not OLLAMA_API_KEY and os.path.exists(SECRETS_FILE):
+    try:
+        with open(SECRETS_FILE, "r") as f:
+            secrets = json.load(f)
+            # Support both naming conventions
+            OLLAMA_API_KEY = secrets.get("ollama_api_key") or secrets.get("ollama-api-key")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to load secrets from {SECRETS_FILE}: {e}")
+
+if OLLAMA_API_KEY:
+    logger.info("🔐 OLLAMA_API_KEY loaded (Cloud Proxy Enabled)")
+else:
+    logger.info("ℹ️ OLLAMA_API_KEY not found (Local Mode Only)")
+
 # Rate Limit 설정
 # Qwen3:32b 처리 속도 고려 (약 10-30초/요청)
 RATE_LIMIT = os.getenv("OLLAMA_RATE_LIMIT", "60 per minute")
@@ -132,15 +150,25 @@ request_lock = threading.BoundedSemaphore(value=max_concurrent)
 def call_ollama_with_breaker(endpoint: str, payload: Dict[str, Any], timeout: int = 600) -> Dict[str, Any]:
     """
     Circuit Breaker를 적용한 Ollama API 호출 래퍼
-    
-    Args:
-        endpoint: API 엔드포인트 (예: /api/generate)
-        payload: 요청 페이로드
-        timeout: 요청 타임아웃 (초)
-    
-    Returns:
-        Ollama API 응답
+    [Cloud Proxy] Intercepts requests for known cloud models and routes to external API.
     """
+    model_name = payload.get("model", "")
+    
+    # 🌩️ Cloud Proxy Logic (Ollama Cloud)
+    # Triggered for models ending in ':cloud'
+    if model_name.endswith(":cloud"):
+         if OLLAMA_API_KEY:
+             try:
+                return _call_ollama_cloud(endpoint, payload, timeout)
+             except Exception as e:
+                logger.warning(f"⚠️ [Cloud Proxy] Failed (Quota/Error): {e}. Fallback to Local 'gpt-oss:20b'...")
+                # Fallback to local model
+                payload["model"] = "gpt-oss:20b"
+         else:
+             # No API key, fallback immediately
+             logger.warning(f"⚠️ [Cloud Proxy] No API Key for {model_name}. Fallback to Local 'gpt-oss:20b'")
+             payload["model"] = "gpt-oss:20b"
+
     url = f"{OLLAMA_HOST}{endpoint}"
     
     # 스트리밍 비활성화, 모델 유지
@@ -154,6 +182,40 @@ def call_ollama_with_breaker(endpoint: str, payload: Dict[str, Any], timeout: in
         return response.json()
     
     return _call()
+
+def _call_ollama_cloud(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+    """Ollama Cloud API Proxy (Transparent Proxy)"""
+    # https://ollama.com API endpoint
+    # The client library uses https://ollama.com as host, modifying the path.
+    # Typically /api/chat -> https://ollama.com/api/chat
+    cloud_host = "https://ollama.com"
+    url = f"{cloud_host}{endpoint}"
+    
+    headers = {
+        "Authorization": f"Bearer {OLLAMA_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Clean up model name (remove :cloud suffix if present, purely for routing)
+    # If the user intentionally named it deepseek-v3.2:cloud on the platform, keep it.
+    # But usually :cloud is our internal marker.
+    # Let's try stripping it for the upstream call to be safe, acting as an alias.
+    upstream_model = payload["model"].replace(":cloud", "")
+    payload["model"] = upstream_model
+    
+    # Ensure stream is false for our gateway
+    payload["stream"] = False
+    
+    logger.info(f"🌩️ [Cloud Proxy] Routing to Ollama Cloud: {upstream_model}")
+    
+    response = requests.post(url, json=payload, headers=headers, timeout=timeout)
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Cloud API Error: {response.text}")
+        raise e
+        
+    return response.json()
 
 
 def check_ollama_health() -> bool:
