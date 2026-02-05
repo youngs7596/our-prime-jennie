@@ -18,7 +18,8 @@ from shared.redis_cache import (
     delete_scale_out_level,
     delete_profit_floor,
     get_redis_connection,
-    is_trading_stopped
+    is_trading_stopped,
+    set_stoploss_cooldown,
 )
 
 from shared.strategy_presets import (
@@ -293,6 +294,15 @@ class SellExecutor:
                     logger.info(f"🧹 트레이딩 상태 정리 완료: {stock_code}")
                 except Exception as e:
                     logger.warning(f"⚠️ 트레이딩 상태 삭제 실패: {e}")
+
+                # [P0] 손절 시 재진입 방지 쿨다운 설정
+                try:
+                    if "stop_loss" in sell_reason.lower() or "stop loss" in sell_reason.lower():
+                        cooldown_days = int(os.getenv("STOPLOSS_COOLDOWN_DAYS", "5"))
+                        set_stoploss_cooldown(stock_code, cooldown_days=cooldown_days)
+                        logger.info(f"🚫 [{stock_code}] 손절 쿨다운 {cooldown_days}거래일 설정")
+                except Exception as e:
+                    logger.warning(f"⚠️ 손절 쿨다운 설정 실패: {e}")
                 
                 # Redis Lock 명시적 해제 (성공 시 즉시 리소스 반환)
                 if lock_acquired and redis_client:

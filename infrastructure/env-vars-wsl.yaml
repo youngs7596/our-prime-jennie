@@ -110,7 +110,7 @@ OLLAMA_NUM_PARALLEL: "2"                    # [Optimization] Batch Priority
 SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
 # 16. Scout Universe Configuration (LLM Cost Control)
-SCOUT_UNIVERSE_SIZE: "5"
+SCOUT_UNIVERSE_SIZE: "200"
 ENABLE_NEWS_ANALYSIS: "true"
 SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화
 FACT_CHECK_ALERT_ENABLED: "true"  # LLM 환각 탐지 시 Telegram 알림 활성화

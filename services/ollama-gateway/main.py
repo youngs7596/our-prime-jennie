@@ -72,14 +72,23 @@ if OLLAMA_API_KEY:
 else:
     logger.info("ℹ️ OLLAMA_API_KEY not found (Local Mode Only)")
 
-# Rate Limit 설정
-# Qwen3:32b 처리 속도 고려 (약 10-30초/요청)
+# Rate Limit 설정 (엔드포인트별 + 모델별 차등)
+# generate/chat (heavy): LLM 추론 (GPU 부하 높음, 10-30초/요청)
+# generate/chat (fast):  경량 모델 (exaone 등, 1-5초/요청)
+# embed:                 임베딩 생성 (GPU 부하 낮음, 0.15-0.25초/요청)
 RATE_LIMIT = os.getenv("OLLAMA_RATE_LIMIT", "60 per minute")
+RATE_LIMIT_FAST = os.getenv("OLLAMA_RATE_LIMIT_FAST", "120 per minute")
+RATE_LIMIT_EMBED = os.getenv("OLLAMA_RATE_LIMIT_EMBED", "3000 per minute")
+
+# 경량 모델 패턴 (FAST rate limit 적용 대상)
+FAST_MODEL_PREFIXES = os.getenv("OLLAMA_FAST_MODELS", "exaone").split(",")
 
 logger.info(f"🚀 Ollama Gateway 시작")
 logger.info(f"   OLLAMA_HOST: {OLLAMA_HOST}")
 logger.info(f"   REDIS_URL: {REDIS_URL}")
 logger.info(f"   RATE_LIMIT: {RATE_LIMIT}")
+logger.info(f"   RATE_LIMIT_FAST: {RATE_LIMIT_FAST} (models: {FAST_MODEL_PREFIXES})")
+logger.info(f"   RATE_LIMIT_EMBED: {RATE_LIMIT_EMBED}")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -92,6 +101,41 @@ def get_global_key():
     Ollama는 단일 GPU에서 실행되므로 IP 기반이 아닌 전역 키를 사용해야 함.
     """
     return "ollama_global"
+
+
+def _is_fast_model(model_name: str) -> bool:
+    """경량 모델 여부 판별"""
+    if not model_name:
+        return False
+    model_lower = model_name.lower()
+    return any(prefix.strip().lower() in model_lower for prefix in FAST_MODEL_PREFIXES)
+
+
+def get_model_aware_key():
+    """
+    모델 기반 rate limit 키.
+    경량 모델(exaone 등)은 별도 버킷으로 분리하여 heavy 모델과 독립적으로 rate limit 적용.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        model = data.get("model", "")
+        if _is_fast_model(model):
+            return "ollama_fast"
+    except Exception:
+        pass
+    return "ollama_global"
+
+
+def get_dynamic_generate_limit():
+    """generate/chat 요청의 모델별 동적 rate limit 반환"""
+    try:
+        data = request.get_json(silent=True) or {}
+        model = data.get("model", "")
+        if _is_fast_model(model):
+            return RATE_LIMIT_FAST
+    except Exception:
+        pass
+    return RATE_LIMIT
 
 
 limiter = Limiter(
@@ -270,7 +314,7 @@ def get_stats():
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @app.route("/api/generate", methods=["POST"])
-@limiter.limit(RATE_LIMIT)
+@limiter.limit(get_dynamic_generate_limit, key_func=get_model_aware_key)
 def generate():
     """
     텍스트 생성 요청 (Ollama /api/generate Proxy)
@@ -337,7 +381,7 @@ def generate():
         stats['queue_depth'] -= 1
 
 @app.route("/api/chat", methods=["POST"])
-@limiter.limit(RATE_LIMIT)
+@limiter.limit(get_dynamic_generate_limit, key_func=get_model_aware_key)
 def chat():
     """
     채팅 완료 요청 (Ollama /api/chat Proxy)
@@ -408,7 +452,7 @@ def chat():
 
 @app.route("/api/embed", methods=["POST"])
 @app.route("/api/embeddings", methods=["POST"])
-@limiter.limit(RATE_LIMIT)
+@limiter.limit(RATE_LIMIT_EMBED)
 def embed():
     """
     임베딩 생성 요청 (Ollama /api/embed Proxy)
@@ -478,7 +522,7 @@ def embed():
         
     finally:
         stats['queue_depth'] -= 1
-@limiter.limit(RATE_LIMIT)
+@limiter.limit(get_dynamic_generate_limit, key_func=get_model_aware_key)
 def generate_json():
     """
     JSON 생성 요청 (스키마 검증 포함)

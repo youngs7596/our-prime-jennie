@@ -899,6 +899,9 @@ services:
       - OLLAMA_HOST=http://localhost:11434
       - REDIS_URL=redis://localhost:6379/0
       - OLLAMA_RATE_LIMIT=60 per minute
+      - OLLAMA_RATE_LIMIT_FAST=120 per minute
+      - OLLAMA_RATE_LIMIT_EMBED=3000 per minute
+      - OLLAMA_FAST_MODELS=exaone
       - OLLAMA_CIRCUIT_FAIL_MAX=5
       - OLLAMA_CIRCUIT_RESET_TIMEOUT=120
     restart: unless-stopped
@@ -1063,8 +1066,6 @@ services:
       - infrastructure/env-vars-wsl.yaml
     environment:
       - REDIS_URL=redis://localhost:6379/0
-      # 16. Scout Universe Configuration (LLM Cost Control)
-      - SCOUT_UNIVERSE_SIZE=5
       - ENABLE_NEWS_ANALYSIS=true
     network_mode: host
     restart: unless-stopped

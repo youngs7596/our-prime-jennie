@@ -1,5 +1,16 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-06
+### P0 트레이딩 로직 개선 & Ollama Gateway Rate Limit 최적화
+- **feat(buy-scanner)**: P0 트레이딩 로직 3건 구현 (Council 합의)
+  - BEAR/STRONG_BEAR Market Regime Gate (신규 진입 차단)
+  - 손절 종목 5거래일 쿨다운 (Redis TTL 기반)
+  - VOLUME_BREAKOUT_1MIN 기본 비활성화 (수익률 -0.34%)
+- **feat(ollama-gateway)**: 엔드포인트별 + 모델별 차등 Rate Limit 구현
+  - embed: 3000/min, exaone(FAST): 120/min, heavy: 60/min
+  - 동적 `key_func`로 모델별 별도 Redis 버킷 분리
+- **fix(infra)**: `SCOUT_UNIVERSE_SIZE=5` 하드코딩 원복 (200), Redis Stream consumer group 생성
+
 ## 2026-02-05
 ### DeepSeek PoC & Hybrid Gateway Architecture
 - **feat(ollama-gateway)**: Implemented **Hybrid Cloud Proxy** in Ollama Gateway

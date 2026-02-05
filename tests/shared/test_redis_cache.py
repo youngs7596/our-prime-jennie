@@ -1383,6 +1383,93 @@ class TestTradingStateReset:
         assert get_rsi_overbought_sold(stock_code, redis_client=fake_redis) is False
 
 
+class TestStoplossCooldown:
+    """손절 쿨다운 (Stop-Loss Cooldown) 관련 테스트"""
+
+    def test_set_stoploss_cooldown(self, fake_redis):
+        """손절 쿨다운 설정"""
+        from shared.redis_cache import set_stoploss_cooldown, is_stoploss_blacklisted
+
+        # When: 쿨다운 설정
+        result = set_stoploss_cooldown("005930", cooldown_days=5, redis_client=fake_redis)
+
+        # Then: 성공하고 블랙리스트에 등록됨
+        assert result is True
+        assert is_stoploss_blacklisted("005930", redis_client=fake_redis) is True
+
+    def test_is_stoploss_blacklisted_not_set(self, fake_redis):
+        """쿨다운 미설정 시 False"""
+        from shared.redis_cache import is_stoploss_blacklisted
+
+        # When: 쿨다운 없는 종목 조회
+        result = is_stoploss_blacklisted("999999", redis_client=fake_redis)
+
+        # Then: False
+        assert result is False
+
+    def test_get_stoploss_cooldown_remaining(self, fake_redis):
+        """쿨다운 잔여일 조회"""
+        from shared.redis_cache import set_stoploss_cooldown, get_stoploss_cooldown
+
+        # Given: 5일 쿨다운 설정
+        set_stoploss_cooldown("005930", cooldown_days=5, redis_client=fake_redis)
+
+        # When: 잔여일 조회
+        remaining = get_stoploss_cooldown("005930", redis_client=fake_redis)
+
+        # Then: 잔여일 반환 (최소 1일)
+        assert remaining is not None
+        assert remaining >= 1
+
+    def test_get_stoploss_cooldown_not_set(self, fake_redis):
+        """쿨다운 미설정 시 None"""
+        from shared.redis_cache import get_stoploss_cooldown
+
+        # When: 쿨다운 없는 종목 조회
+        remaining = get_stoploss_cooldown("999999", redis_client=fake_redis)
+
+        # Then: None
+        assert remaining is None
+
+    def test_set_stoploss_cooldown_zero_days(self, fake_redis):
+        """쿨다운 0일 = 비활성화"""
+        from shared.redis_cache import set_stoploss_cooldown, is_stoploss_blacklisted
+
+        # When: 0일 쿨다운 설정
+        result = set_stoploss_cooldown("005930", cooldown_days=0, redis_client=fake_redis)
+
+        # Then: True 반환 (성공), 블랙리스트 아님
+        assert result is True
+        assert is_stoploss_blacklisted("005930", redis_client=fake_redis) is False
+
+    def test_set_stoploss_cooldown_redis_not_connected(self, mocker):
+        """Redis 미연결 시 실패"""
+        from shared import redis_cache
+
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+
+        result = redis_cache.set_stoploss_cooldown("005930", cooldown_days=5)
+        assert result is False
+
+    def test_get_stoploss_cooldown_redis_not_connected(self, mocker):
+        """Redis 미연결 시 None"""
+        from shared import redis_cache
+
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+
+        result = redis_cache.get_stoploss_cooldown("005930")
+        assert result is None
+
+    def test_is_stoploss_blacklisted_redis_not_connected(self, mocker):
+        """Redis 미연결 시 False"""
+        from shared import redis_cache
+
+        mocker.patch.object(redis_cache, 'get_redis_connection', return_value=None)
+
+        result = redis_cache.is_stoploss_blacklisted("005930")
+        assert result is False
+
+
 class TestScaleOut:
     """Scale-out (분할 익절) 관련 테스트"""
     

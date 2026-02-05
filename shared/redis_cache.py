@@ -1379,6 +1379,108 @@ def delete_rsi_overbought_sold(stock_code: str, redis_client=None) -> bool:
 
 
 # ============================================================================
+# 손절 쿨다운 (Stop-Loss Cooldown) - 손절 종목 재진입 방지
+# ============================================================================
+
+STOPLOSS_COOLDOWN_PREFIX = "stoploss_cooldown:"
+
+
+def set_stoploss_cooldown(
+    stock_code: str,
+    cooldown_days: int = 5,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 손절 종목의 재진입 방지 쿨다운을 설정합니다.
+
+    Args:
+        stock_code: 종목 코드
+        cooldown_days: 쿨다운 일수 (기본 5거래일)
+        redis_client: 테스트용 Redis 클라이언트 (의존성 주입)
+
+    Returns:
+        성공 여부
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+
+    if cooldown_days <= 0:
+        return True  # 쿨다운 0일 = 비활성화
+
+    key = f"{STOPLOSS_COOLDOWN_PREFIX}{stock_code}"
+    ttl_seconds = cooldown_days * 86400  # 일수 → 초
+
+    try:
+        data = {
+            "cooldown_days": cooldown_days,
+            "set_at": datetime.now(timezone.utc).isoformat()
+        }
+        r.setex(key, ttl_seconds, json.dumps(data))
+        logger.info(f"🚫 [Redis] 손절 쿨다운 설정: {stock_code} ({cooldown_days}일)")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Redis] 손절 쿨다운 설정 실패: {e}")
+        return False
+
+
+def get_stoploss_cooldown(
+    stock_code: str,
+    redis_client=None
+) -> Optional[int]:
+    """
+    [Redis] 손절 쿨다운 잔여일을 조회합니다.
+
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트 (의존성 주입)
+
+    Returns:
+        잔여 쿨다운 일수 또는 None (쿨다운 없음)
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return None
+
+    key = f"{STOPLOSS_COOLDOWN_PREFIX}{stock_code}"
+    try:
+        ttl = r.ttl(key)
+        if ttl and ttl > 0:
+            remaining_days = max(1, ttl // 86400)
+            return remaining_days
+        return None
+    except Exception as e:
+        logger.error(f"❌ [Redis] 손절 쿨다운 조회 실패: {e}")
+        return None
+
+
+def is_stoploss_blacklisted(
+    stock_code: str,
+    redis_client=None
+) -> bool:
+    """
+    [Redis] 손절 쿨다운 중인 종목인지 확인합니다.
+
+    Args:
+        stock_code: 종목 코드
+        redis_client: 테스트용 Redis 클라이언트 (의존성 주입)
+
+    Returns:
+        True면 쿨다운 중 (매수 금지)
+    """
+    r = get_redis_connection(redis_client)
+    if not r:
+        return False
+
+    key = f"{STOPLOSS_COOLDOWN_PREFIX}{stock_code}"
+    try:
+        return r.exists(key) > 0
+    except Exception as e:
+        logger.error(f"❌ [Redis] 손절 블랙리스트 조회 실패: {e}")
+        return False
+
+
+# ============================================================================
 # 통합 거래 허용 체크 (Emergency Stop + Pause + 기타 조건)
 # ============================================================================
 

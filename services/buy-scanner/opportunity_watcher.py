@@ -572,6 +572,23 @@ class BuyOpportunityWatcher:
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
 
+        # [P0] Market Regime Gate: BEAR/STRONG_BEAR 신규 진입 금지
+        if self.config.get_bool("ENABLE_BEAR_ENTRY_BLOCK", default=True):
+            bear_regimes = ['BEAR', 'STRONG_BEAR']
+            regime_gate_passed = self.market_regime not in bear_regimes
+            risk_gate_checks.append({
+                "name": "Regime Gate",
+                "passed": regime_gate_passed,
+                "value": self.market_regime,
+                "threshold": f"Not in {bear_regimes}"
+            })
+            if not regime_gate_passed:
+                risk_gate_passed = False
+                logger.info(f"🐻 [{stock_code}] Regime Gate 차단: {self.market_regime}")
+                self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                              current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+                return None
+
         # [Junho] 조건부 차단 (2개 이상 위험 조건 충족 시)
         risk_conditions = 0
 
@@ -612,6 +629,22 @@ class BuyOpportunityWatcher:
         })
         if not combined_risk_passed:
             risk_gate_passed = False
+            self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                          current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+            return None
+
+        # [P0] 손절 쿨다운 체크 (최근 손절 종목 재진입 방지)
+        from shared.redis_cache import is_stoploss_blacklisted
+        sl_cooldown_passed = not is_stoploss_blacklisted(stock_code)
+        risk_gate_checks.append({
+            "name": "SL Cooldown",
+            "passed": sl_cooldown_passed,
+            "value": "Blacklisted" if not sl_cooldown_passed else "Clear",
+            "threshold": "No recent stop-loss"
+        })
+        if not sl_cooldown_passed:
+            risk_gate_passed = False
+            logger.info(f"🚫 [{stock_code}] 손절 쿨다운 차단: 최근 손절 이력")
             self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
@@ -675,14 +708,17 @@ class BuyOpportunityWatcher:
             elif not signal_type:
                 signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "Blocked by macro context"})
 
-            # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파) - 공격적 전략, 매크로 필터 적용
+            # 4. VOLUME_BREAKOUT_1MIN (거래량 폭발 돌파) - [P0] 기본 비활성화 (성과 -0.34%)
             if not signal_type and _is_strategy_allowed("VOLUME_BREAKOUT_1MIN"):
-                result = self._check_volume_breakout_1min(stock_code, recent_bars)
-                if result:
-                    signal_type, signal_reason = result
-                    signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": True, "reason": signal_reason})
+                if self.config.get_bool("ENABLE_VOLUME_BREAKOUT_1MIN", default=False):
+                    result = self._check_volume_breakout_1min(stock_code, recent_bars)
+                    if result:
+                        signal_type, signal_reason = result
+                        signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": True, "reason": signal_reason})
+                    else:
+                        signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "No resistance break or volume < 3x"})
                 else:
-                    signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "No resistance break or volume < 3x"})
+                    signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "Disabled (negative return: -0.34%)"})
             elif not signal_type:
                 signal_checks.append({"strategy": "VOLUME_BREAKOUT_1MIN", "triggered": False, "reason": "Blocked by macro context"})
 
