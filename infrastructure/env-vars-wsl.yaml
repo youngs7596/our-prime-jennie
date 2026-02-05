@@ -89,6 +89,11 @@ SCHEDULER_QUEUE_SCOUT_JOB: "real.jobs.scout"
 ENABLE_SCOUT_JOB_WORKER: "true"
 SCHEDULER_SCOUT_JOB_ID: "scout-daily"  # jobs 테이블의 job_id와 일치해야 함
 
+# 12-1. P0 트레이딩 로직 (3현자 Council 권고)
+ENABLE_BEAR_ENTRY_BLOCK: "true"           # BEAR/STRONG_BEAR 시장 진입 차단
+ENABLE_VOLUME_BREAKOUT_1MIN: "false"      # VOLUME_BREAKOUT_1MIN 비활성화 (수익률 -0.34%)
+STOPLOSS_COOLDOWN_DAYS: "5"               # 손절 종목 재진입 방지 (5거래일 ≈ 7캘린더일)
+
 # 13. 매수 기준 점수
 # - Tier1(Scout Judge 통과): 60점 이상
 # - Tier2(Scout Judge 미통과): 65점 이상 + 복합 조건(3/4) 통과
