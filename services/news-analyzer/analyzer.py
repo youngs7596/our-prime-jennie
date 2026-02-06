@@ -29,6 +29,25 @@ from shared.messaging.stream_client import (
     GROUP_ANALYZER
 )
 
+
+def _extract_news_title(page_content: str) -> str:
+    """page_content에서 뉴스 제목 추출 (신규/레거시 포맷 모두 지원)
+
+    New format: "[종목명(코드)] 제목 | 출처: ... | 날짜: ..."
+    New format (general): "[시장뉴스] 제목 | 출처: ... | 날짜: ..."
+    Legacy format: "뉴스 제목: ...\n링크: ..."
+    """
+    if not page_content:
+        return "제목 없음"
+    if page_content.startswith("["):
+        bracket_end = page_content.find("] ")
+        pipe_pos = page_content.find(" | 출처:")
+        if bracket_end != -1 and pipe_pos != -1:
+            return page_content[bracket_end + 2:pipe_pos].strip()
+    # Legacy fallback
+    lines = page_content.split('\n')
+    return lines[0].replace("뉴스 제목: ", "").strip() if lines else "제목 없음"
+
 # ==============================================================================
 # Logging
 # ==============================================================================
@@ -176,8 +195,7 @@ def _process_batch_analysis(batch: list) -> int:
     # Prepare items for LLM
     batch_items = []
     for idx, item in enumerate(unique_batch):
-        content_lines = item["page_content"].split('\n')
-        news_title = content_lines[0].replace("뉴스 제목: ", "") if content_lines else "제목 없음"
+        news_title = _extract_news_title(item["page_content"])
         
         batch_items.append({
             "id": idx,
@@ -210,9 +228,8 @@ def _process_batch_analysis(batch: list) -> int:
         score = sentiment.get("score", 50)
         reason = sentiment.get("reason", "N/A")
         
-        content_lines = item["page_content"].split('\n')
-        news_title = content_lines[0].replace("뉴스 제목: ", "") if content_lines else "제목 없음"
-        
+        news_title = _extract_news_title(item["page_content"])
+
         success = _save_sentiment_to_db(
             stock_code=stock_code,
             stock_name=metadata.get("stock_name", ""),
@@ -254,8 +271,7 @@ def handle_analyze_message(page_content: str, metadata: Dict[str, Any]) -> bool:
     brain = get_jennie_brain()
     
     # Prepare single item
-    content_lines = page_content.split('\n')
-    news_title = content_lines[0].replace("뉴스 제목: ", "") if content_lines else "제목 없음"
+    news_title = _extract_news_title(page_content)
     
     # [Fast Track] Emergency Keyword Check
     # Keywords: 속보, 긴급, 전쟁, 관세, Emergency, Breaking, 파병, 계엄

@@ -54,62 +54,74 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "jhgan/ko-sroberta-multitask")
 
 _vectorstore = None
 _text_splitter = None
+_qdrant_client = None
 
 
 def get_vectorstore():
-    """ChromaDB Vectorstore 싱글톤 반환"""
-    global _vectorstore, _text_splitter
-    
+    """Qdrant Vectorstore 싱글톤 반환"""
+    global _vectorstore, _text_splitter, _qdrant_client
+
     if _vectorstore is None:
         from langchain_qdrant import QdrantVectorStore
         from qdrant_client import QdrantClient
         from langchain_ollama import OllamaEmbeddings
         from langchain_text_splitters import RecursiveCharacterTextSplitter
-        
+
         # Qdrant Connection (Port 6333)
         QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
         QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-        
+
         logger.info(f"🔌 Qdrant 연결 중... ({QDRANT_HOST}:{QDRANT_PORT})")
-        
+
         # Embeddings (Ollama via Host/Gateway)
         ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         embeddings = OllamaEmbeddings(
             model="daynice/kure-v1",
             base_url=ollama_base_url
         )
-        
+
         from qdrant_client.http import models
-        
+
         # Qdrant Client
-        client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
-        
-        # Ensure Collection Exists
-        if not client.collection_exists(COLLECTION_NAME):
+        _qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+
+        # Ensure Collection Exists (+ source_url 인덱스)
+        if not _qdrant_client.collection_exists(COLLECTION_NAME):
             logger.info(f"🆕 Qdrant Collection 생성: {COLLECTION_NAME} (size=1024)")
-            client.create_collection(
+            _qdrant_client.create_collection(
                 collection_name=COLLECTION_NAME,
                 vectors_config=models.VectorParams(
                     size=1024,  # kure-v1 dimension
                     distance=models.Distance.COSINE
                 )
             )
-        
+
+        # source_url 페이로드 인덱스 생성 (중복 체크 성능)
+        try:
+            _qdrant_client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name="metadata.source_url",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
+            logger.info("✅ source_url 페이로드 인덱스 생성 완료")
+        except Exception:
+            pass  # 이미 존재하면 무시
+
         # Vectorstore
         _vectorstore = QdrantVectorStore(
-            client=client,
+            client=_qdrant_client,
             collection_name=COLLECTION_NAME,
             embedding=embeddings,
         )
-        
+
         # Text Splitter
         _text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=50
         )
-        
+
         logger.info(f"✅ Qdrant 연결 완료 (collection: {COLLECTION_NAME})")
-    
+
     return _vectorstore, _text_splitter
 
 
@@ -117,36 +129,66 @@ def get_vectorstore():
 # Message Handler
 # ==============================================================================
 
+def _check_duplicate(source_url: str) -> bool:
+    """source_url 기반 Qdrant 중복 체크"""
+    if not source_url or not _qdrant_client:
+        return False
+    try:
+        from qdrant_client.http import models
+        result = _qdrant_client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="metadata.source_url",
+                    match=models.MatchValue(value=source_url),
+                )]
+            ),
+            limit=1,
+            with_payload=False,
+            with_vectors=False,
+        )
+        return len(result[0]) > 0
+    except Exception as e:
+        logger.warning(f"⚠️ [Archive] 중복 체크 실패 (저장 진행): {e}")
+        return False
+
+
 def handle_archive_message(page_content: str, metadata: Dict[str, Any]) -> bool:
     """
-    뉴스 메시지를 ChromaDB에 저장합니다.
-    
+    뉴스 메시지를 Qdrant에 저장합니다. (source_url 중복 체크 포함)
+
     Args:
         page_content: 뉴스 본문
         metadata: 메타데이터
-    
+
     Returns:
         성공 여부
     """
     try:
         from langchain_core.documents import Document
-        
+
         vectorstore, text_splitter = get_vectorstore()
-        
+
+        # source_url 중복 체크
+        source_url = metadata.get("source_url", "")
+        if source_url and _check_duplicate(source_url):
+            logger.debug(f"ℹ️ [Archive] 중복 뉴스 스킵: {metadata.get('stock_name', '?')} - {source_url[:60]}")
+            return True  # ACK (스트림에서 제거)
+
         # Create Document
         doc = Document(page_content=page_content, metadata=metadata)
-        
+
         # Split and embed
         chunks = text_splitter.split_documents([doc])
-        
+
         # Add to vectorstore
         vectorstore.add_documents(chunks)
-        
+
         stock_info = f"{metadata.get('stock_name', 'General')} ({metadata.get('stock_code', 'N/A')})"
         logger.debug(f"✅ [Archive] 저장 완료: {stock_info}")
-        
+
         return True
-    
+
     except Exception as e:
         logger.error(f"❌ [Archive] 저장 실패: {e}")
         return False

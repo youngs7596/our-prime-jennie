@@ -70,11 +70,21 @@ def backfill_stock_news(stock_code, stock_name, classifier, session):
 
     for doc in documents:
         try:
-            content = doc['page_content'] # "뉴스 제목: ...\n링크: ..."
-            # Parse content to recover title/link (redundant but matches flow)
-            lines = content.split('\n')
-            title = lines[0].replace("뉴스 제목: ", "").strip()
-            link = lines[1].replace("링크: ", "").strip()
+            content = doc['page_content']
+            # Parse content: new format "[종목명(코드)] 제목 | 출처: ... | 날짜: ..."
+            # or legacy format "뉴스 제목: ...\n링크: ..."
+            metadata = doc['metadata']
+            if content.startswith("["):
+                # New format: extract title between "] " and " | 출처:"
+                bracket_end = content.find("] ")
+                pipe_pos = content.find(" | 출처:")
+                title = content[bracket_end + 2:pipe_pos].strip() if bracket_end != -1 and pipe_pos != -1 else content
+                link = metadata.get('source_url', '')
+            else:
+                # Legacy format
+                lines = content.split('\n')
+                title = lines[0].replace("뉴스 제목: ", "").strip()
+                link = lines[1].replace("링크: ", "").strip() if len(lines) > 1 else ''
             
             metadata = doc['metadata']
             pub_timestamp = metadata['created_at_utc']

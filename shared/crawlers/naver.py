@@ -173,8 +173,10 @@ def crawl_stock_news(
                 except Exception:
                     pub_timestamp = int(datetime.now(timezone.utc).timestamp())
                 
+                # Phase 1C: 메타데이터 강화 - 종목명/코드/출처/날짜를 page_content에 포함
+                pub_date_str = datetime.fromtimestamp(pub_timestamp, tz=timezone.utc).strftime('%Y-%m-%d')
                 documents.append({
-                    "page_content": f"뉴스 제목: {title}\n링크: {href}",
+                    "page_content": f"[{stock_name}({stock_code})] {title} | 출처: Naver Finance | 날짜: {pub_date_str}",
                     "metadata": {
                         "stock_code": stock_code,
                         "stock_name": stock_name,

@@ -165,16 +165,16 @@ def prefetch_all_data(candidate_stocks: Dict[str, Dict], kis_api, vectorstore) -
         logger.info(f"   (Prefetch) ChromaDB 뉴스 조회 중...")
         news_start = time.time()
         
-        def fetch_news(code_name):
-            code, name = code_name
+        def fetch_news(code_name_sector):
+            code, name, sector = code_name_sector
             try:
-                news = fetch_stock_news_from_chroma(vectorstore, code, name, k=3)
+                news = fetch_stock_news_from_chroma(vectorstore, code, name, k=5, sector=sector)
                 return code, news
             except Exception as e:
                 logger.debug(f"   ⚠️ [{code}] 뉴스 조회 실패: {e}")
                 return code, "뉴스 조회 실패"
-        
-        code_name_pairs = [(code, info.get('name', '')) for code, info in candidate_stocks.items()]
+
+        code_name_pairs = [(code, info.get('name', ''), info.get('sector')) for code, info in candidate_stocks.items()]
         
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = [executor.submit(fetch_news, pair) for pair in code_name_pairs]
@@ -297,66 +297,114 @@ def _get_latest_news_date(vectorstore, stock_code: str, stock_name: str) -> Opti
 
 # ... (skip _record_to_cache_payload, _cache_payload_to_record, etc.)
 
-def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, k: int = 3) -> str:
+def _generate_news_search_queries(stock_name: str, sector: str = None) -> List[str]:
     """
-    ChromaDB에서 종목별 최신 뉴스 검색
-    
+    종목별 다중 검색 쿼리 생성 (Phase 2: 다중 쿼리 전략)
+
     Args:
-        vectorstore: ChromaDB vectorstore 인스턴스
+        stock_name: 종목명
+        sector: 섹터 (선택)
+
+    Returns:
+        검색 쿼리 리스트
+    """
+    queries = [
+        f"{stock_name} 실적 매출 영업이익",
+        f"{stock_name} 신규 수주 계약 사업",
+        f"{stock_name} 리스크 하락 우려 손실",
+    ]
+
+    sector_queries = {
+        "반도체": f"{stock_name} 반도체 AI HBM 수요",
+        "바이오": f"{stock_name} 임상 FDA 신약 승인",
+        "2차전지": f"{stock_name} 배터리 전기차 수주",
+        "금융": f"{stock_name} 배당 이자수익 NIM",
+        "자동차": f"{stock_name} 전기차 수출 판매",
+        "IT": f"{stock_name} 클라우드 AI 플랫폼",
+        "철강": f"{stock_name} 철강 원자재 가격",
+        "화학": f"{stock_name} 석유화학 스프레드",
+        "건설": f"{stock_name} 수주 분양 미착공",
+    }
+    if sector and sector in sector_queries:
+        queries.append(sector_queries[sector])
+
+    return queries
+
+
+def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, k: int = 5, sector: str = None) -> str:
+    """
+    Qdrant에서 종목별 최신 뉴스 검색 (다중 쿼리 전략)
+
+    Args:
+        vectorstore: Qdrant vectorstore 인스턴스
         stock_code: 종목 코드
         stock_name: 종목명
-        k: 가져올 뉴스 개수
-        
+        k: 최종 반환할 뉴스 개수
+        sector: 종목 섹터 (다중 쿼리 생성용)
+
     Returns:
         뉴스 요약 문자열 (없으면 "최근 관련 뉴스 없음")
     """
     if not vectorstore:
         return "뉴스 DB 미연결"
-    
+
     try:
         from datetime import datetime, timedelta, timezone
-        
+
         # 최신 7일 이내 뉴스 필터
         recency_timestamp = int((datetime.now(timezone.utc) - timedelta(days=7)).timestamp())
-        
-        # 종목 코드로 필터링된 뉴스 검색 시도
-        try:
-            # 날짜 필터($gte) 추가하여 오래된 뉴스(2020년 등) 방지
-            docs = vectorstore.similarity_search(
-                query=f"{stock_name} 실적 수주 호재",
-                k=k,
-                filter={
-                    "$and": [
-                        {"stock_code": stock_code},
-                        {"created_at_utc": {"$gte": recency_timestamp}}
-                    ]
-                }
-            )
-            # logger.debug(f"   (D) [{stock_code}] 필터 검색 결과: {len(docs)}건")
-        except Exception:
-            # 필터 실패시 종목명으로 검색
-            docs = vectorstore.similarity_search(
-                query=f"{stock_name} 주식 뉴스",
-                k=k
-            )
-            logger.debug(f"   (D) [{stock_code}] 종목명 검색(Fallback): {len(docs)}건")
-            # 종목 관련 뉴스만 필터링
-            docs = [d for d in docs if stock_name in d.page_content or stock_code in str(d.metadata)]
-        
-        if docs:
+
+        # 다중 쿼리로 검색 후 결과 병합
+        queries = _generate_news_search_queries(stock_name, sector)
+        seen_contents = set()
+        all_docs = []
+
+        for query in queries:
+            try:
+                docs = vectorstore.similarity_search(
+                    query=query,
+                    k=3,
+                    filter={
+                        "$and": [
+                            {"stock_code": stock_code},
+                            {"created_at_utc": {"$gte": recency_timestamp}}
+                        ]
+                    }
+                )
+                for doc in docs:
+                    content_key = doc.page_content[:80]
+                    if content_key not in seen_contents:
+                        seen_contents.add(content_key)
+                        all_docs.append(doc)
+            except Exception:
+                continue
+
+        # Fallback: 다중 쿼리 결과 없으면 종목명 단순 검색
+        if not all_docs:
+            try:
+                all_docs = vectorstore.similarity_search(
+                    query=f"{stock_name} 주식 뉴스",
+                    k=k
+                )
+                all_docs = [d for d in all_docs if stock_name in d.page_content or stock_code in str(d.metadata)]
+                logger.debug(f"   (D) [{stock_code}] 종목명 검색(Fallback): {len(all_docs)}건")
+            except Exception:
+                pass
+
+        if all_docs:
             news_items = []
-            for i, doc in enumerate(docs[:k], 1):
-                content = doc.page_content[:100].strip()
+            for i, doc in enumerate(all_docs[:k], 1):
+                content = doc.page_content[:150].strip()
                 if content:
                     news_items.append(f"[뉴스{i}] {content}")
-            
+
             if news_items:
                 return " | ".join(news_items)
-        
+
         return "최근 관련 뉴스 없음"
-        
+
     except Exception as e:
-        logger.debug(f"   ⚠️ [{stock_code}] ChromaDB 뉴스 검색 오류: {e}")
+        logger.debug(f"   ⚠️ [{stock_code}] Qdrant 뉴스 검색 오류: {e}")
         return "뉴스 검색 오류"
 
 
@@ -540,18 +588,41 @@ def main():
                 if stock['code'] not in candidate_stocks:
                     candidate_stocks[stock['code']] = {'name': stock['name'], 'reasons': ['정적 우량주']}
 
-            # C: RAG
+            # C: RAG (Phase 3: 다중 쿼리 + 날짜 필터 + 중복 제거)
             if vectorstore:
                 try:
-                    logger.info("   (C) RAG 기반 후보 발굴 중...")
-                    rag_results = vectorstore.similarity_search(query="실적 호재 계약 수주", k=50)
-                    for doc in rag_results:
-                        stock_code = doc.metadata.get('stock_code')
-                        stock_name = doc.metadata.get('stock_name')
-                        if stock_code and stock_name:
-                            if stock_code not in candidate_stocks:
-                                candidate_stocks[stock_code] = {'name': stock_name, 'reasons': []}
-                            candidate_stocks[stock_code]['reasons'].append("RAG 기반 호재 검색")
+                    logger.info("   (C) RAG 기반 후보 발굴 중 (다중 쿼리)...")
+                    recency_timestamp = int((datetime.now(timezone.utc) - timedelta(days=7)).timestamp())
+
+                    rag_queries = [
+                        ("실적 개선 매출 성장 영업이익 흑자전환", "실적 개선"),
+                        ("신규 수주 대규모 계약 공급 체결", "수주/계약"),
+                        ("신사업 진출 인수합병 전략적 투자", "신사업/M&A"),
+                        ("배당 증가 자사주 매입 주주환원", "주주환원"),
+                    ]
+
+                    rag_seen_codes = set()
+                    rag_total = 0
+                    for query, reason_tag in rag_queries:
+                        try:
+                            results = vectorstore.similarity_search(
+                                query=query,
+                                k=20,
+                                filter={"created_at_utc": {"$gte": recency_timestamp}}
+                            )
+                            for doc in results:
+                                stock_code_r = doc.metadata.get('stock_code')
+                                stock_name_r = doc.metadata.get('stock_name')
+                                if stock_code_r and stock_name_r and stock_code_r not in rag_seen_codes:
+                                    rag_seen_codes.add(stock_code_r)
+                                    rag_total += 1
+                                    if stock_code_r not in candidate_stocks:
+                                        candidate_stocks[stock_code_r] = {'name': stock_name_r, 'reasons': []}
+                                    candidate_stocks[stock_code_r]['reasons'].append(f"RAG ({reason_tag})")
+                        except Exception:
+                            continue
+
+                    logger.info(f"   (C) RAG 후보 {rag_total}개 발굴 완료 (중복 제거)")
                 except Exception as e:
                     logger.warning(f"   (C) RAG 후보 발굴 실패: {e}")
 

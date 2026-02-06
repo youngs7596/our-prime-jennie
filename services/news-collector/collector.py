@@ -118,8 +118,10 @@ def crawl_general_rss_news() -> list:
                 else:
                     pub_timestamp = int(datetime.now(timezone.utc).timestamp())
                 
+                # Phase 1C: 메타데이터 강화 - 출처/날짜를 page_content에 포함
+                pub_date_str = datetime.fromtimestamp(pub_timestamp, tz=timezone.utc).strftime('%Y-%m-%d')
                 documents.append({
-                    "page_content": f"뉴스 제목: {title}\n링크: {link}",
+                    "page_content": f"[시장뉴스] {title} | 출처: {feed_info['source_name']} | 날짜: {pub_date_str}",
                     "metadata": {
                         "stock_code": None,
                         "stock_name": None,
