@@ -67,9 +67,10 @@ with DAG(
     )
 
     # 한국 데이터 수집 (BOK, pykrx, RSS)
+    # 12:00 실행 시 pykrx 스킵 (11:30 enhanced_macro_quick이 이미 수집)
     collect_korea = BashOperator(
         task_id='collect_korea_data',
-        bash_command='python scripts/collect_enhanced_macro.py --sources bok_ecos,pykrx,rss',
+        bash_command='HOUR=$(date +%H); if [ "$HOUR" = "12" ]; then python scripts/collect_enhanced_macro.py --sources bok_ecos,rss; else python scripts/collect_enhanced_macro.py --sources bok_ecos,pykrx,rss; fi',
         cwd='/opt/airflow',
         env=COMMON_ENV,
         append_env=True,
