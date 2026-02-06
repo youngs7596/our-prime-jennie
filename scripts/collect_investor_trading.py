@@ -117,7 +117,7 @@ def fetch_investor_trading_by_date(kis_api, date_str: str, stock_codes: List[str
     for code in stock_codes:
         res = fetch_investor_trading_by_stock(kis_api, code, date_str, date_str)
         results.extend(res)
-        time.sleep(0.05) # 추가 딜레이
+        # KIS Gateway rate limit(19/sec)이 속도를 제어하므로 별도 sleep 불필요
     return results
 
 
@@ -293,7 +293,7 @@ def main():
                 
                 logger.info(f"   ↳ {len(data_list)}건 조회, {saved}건 저장 (누적: {total_saved})")
                 
-                time.sleep(args.sleep)
+                # KIS Gateway rate limit(19/sec)이 속도를 제어하므로 별도 sleep 불필요
             except Exception as e:
                 logger.error(f"   ❌ {code} 수집 실패: {e}")
     else:

@@ -42,7 +42,7 @@ with DAG(
 ) as dag_weekly:
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
-        bash_command='cd /opt/airflow && python3 scripts/weekly_factor_analysis_batch.py',
+        bash_command='cd /opt/airflow && python3 scripts/weekly_factor_analysis_batch.py --analysis-only',
         cwd='/opt/airflow',
         env=COMMON_ENV,
         append_env=True,

@@ -5,20 +5,24 @@ weekly_factor_analysis_batch.py
 ===============================
 주간 팩터 분석 배치 잡
 
-매주 1회 실행하여 다음 작업을 순차적으로 수행:
-1. 뉴스 데이터 수집 (최근 7일)
-2. 뉴스 감성/카테고리 태깅
-3. DART 공시 수집 (최근 7일)
-4. 외국인/기관 수급 데이터 수집 (최근 7일)
-5. 분기별 재무 데이터 업데이트 (선택적)
-6. 팩터 분석 실행
+매주 1회 실행하여 팩터 분석을 수행.
+
+데이터 수집(뉴스, DART, 수급 등)은 별도 DAG/서비스가 담당하므로,
+기본 실행 시 --analysis-only 모드로 팩터 분석(Step 6)만 수행합니다.
+--full-refresh 시에만 데이터 수집(Step 1~5) + 분석을 모두 실행합니다.
+
+데이터 수집 담당:
+- 뉴스 수집/태깅: news-collector, news-analyzer 서비스 (상시)
+- DART 공시: collect_dart_filings DAG (매일 18:45)
+- 수급 데이터: collect_investor_trading DAG (매일 18:30)
+- 분기 재무: --full-refresh 시에만 이 스크립트에서 수집
 
 결과:
 - FACTOR_METADATA 테이블 업데이트 (IC, IR, 가중치)
 - FACTOR_PERFORMANCE 테이블 업데이트 (조건부 승률)
 - NEWS_FACTOR_STATS 테이블 업데이트 (뉴스 카테고리별 영향도)
 
-Scout-job, buy-scanner, price-monitor 등은 이 테이블에서 
+Scout-job, buy-scanner, price-monitor 등은 이 테이블에서
 최신 가중치와 통계를 로드하여 사용합니다.
 
 사용법:
