@@ -54,7 +54,7 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
     try:
         # 일봉 데이터 조회
         daily_prices_df = database.get_daily_prices(db_conn, code, limit=150)
-        
+
         # 데이터 부족 시 is_valid=False 설정 (묻어가기 방지)
         if daily_prices_df.empty or len(daily_prices_df) < 30:
             data_len = len(daily_prices_df) if not daily_prices_df.empty else 0
@@ -78,7 +78,15 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
                 invalid_reason=f'데이터 부족 ({data_len}일)',
                 details={'note': f'데이터 부족 ({data_len}일)'},
             )
-        
+
+        # 투자자 매매 동향 조회 (smart_money_5d 계산용)
+        investor_trading_df = None
+        try:
+            from shared.database.market import get_investor_trading
+            investor_trading_df = get_investor_trading(db_conn, code, limit=10)
+        except Exception as inv_err:
+            logger.debug(f"   ⚠️ [Quant] {code} 투자자 매매 동향 조회 실패: {inv_err}")
+
         # 정량 점수 계산
         result = quant_scorer.calculate_total_quant_score(
             stock_code=code,
@@ -90,7 +98,9 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
             current_sentiment_score=info.get('sentiment_score', 50),
             foreign_net_buy=snapshot.get('foreign_net_buy'),
             # 섹터 정보 전달 (scout_universe에서 옴)
-            sector=info.get('sector')
+            sector=info.get('sector'),
+            # 투자자 매매 동향 (smart_money_5d 계산용)
+            investor_trading_df=investor_trading_df,
         )
         
         # 역신호 카테고리 체크 로직 제거 (분석 결과 기각됨)

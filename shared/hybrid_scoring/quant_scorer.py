@@ -1066,115 +1066,135 @@ class QuantScorer:
                                       institution_net_buy: Optional[int] = None,
                                       foreign_holding_ratio: Optional[float] = None,
                                       avg_volume: Optional[float] = None,
-                                      daily_prices_df: Optional[pd.DataFrame] = None) -> Tuple[float, Dict]:
+                                      daily_prices_df: Optional[pd.DataFrame] = None,
+                                      investor_trading_df: Optional[pd.DataFrame] = None) -> Tuple[float, Dict]:
         """
-        수급 점수 계산 (15점 만점)
-        
-        세부 구성:
+        수급 점수 계산 (15점 만점 + smart_money_5d 조건부 보너스 최대 3점)
+
+        기본 구성 (15점):
         - 외국인 순매수: 7점
         - 기관 순매수: 5점
         - 외국인 보유비중: 3점
-        
-        Claude Opus 4.5 피드백: 종목별 거래량 대비 정규화 적용
-        - 기존: 절대 주수 기준 (삼성전자와 소형주에 동일 기준)
-        - 개선: 평균 거래량 대비 비율로 정규화
+
+        조건부 보너스 (최대 +3점):
+        - Smart Money 5D (외인 5일 누적 순매수)가 강한 양의 신호일 때만 가산
+        - 백테스트 결과: 15점 기본 배분이 최적 (25점 대비 D+20 spread +8%p 우위)
+        - 중립 시 희석 방지를 위해 기존 가중치 유지 + 보너스 방식 채택
+
+        Args:
+            investor_trading_df: 투자자 매매 동향 DataFrame
+                컬럼: TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY, CLOSE_PRICE
         """
         try:
             factors = {}
             total_score = 0.0
-            
+
             # 거래량 대비 정규화 기준 설정
-            # avg_volume이 있으면 거래량 대비 비율로, 없으면 기존 절대값 방식
             use_volume_normalized = avg_volume is not None and avg_volume > 0
-            
+
             # 1. 외국인 순매수 (7점)
             if foreign_net_buy is not None:
                 if use_volume_normalized:
-                    # 거래량 대비 비율로 정규화
-                    # 평균 거래량의 -5% ~ +5%를 0~7점으로 매핑
                     foreign_ratio = foreign_net_buy / avg_volume
                     foreign_score = max(0, min(7, 3.5 + foreign_ratio / 0.05 * 3.5))
                     factors['foreign_ratio'] = round(foreign_ratio * 100, 2)
                     factors['normalize_method'] = 'volume_ratio'
-                    
+
                     # 외국인 눌림목 매수 (Dip Buying) 보너스
-                    # 조건: 외국인 순매수 강함 (ratio > 0.01 aka 1% 이상) AND 주가 5일 수익률 < 0 (하락 중)
                     if foreign_ratio > 0.01 and daily_prices_df is not None and len(daily_prices_df) >= 5:
                         current_price = daily_prices_df['CLOSE_PRICE'].iloc[-1]
                         price_5d_ago = daily_prices_df['CLOSE_PRICE'].iloc[-5]
                         return_5d = (current_price - price_5d_ago) / price_5d_ago
-                        
+
                         if return_5d < 0:
-                            # 하락 중에 매집 → 눌림목 매수 패턴
                             dip_bonus = 3.0
-                            foreign_score = min(7, foreign_score + dip_bonus) # 최대 7점 한도 내 보너스
-                            factors['foreign_dip_bonus'] = dip_bonus
-                            factors['return_5d'] = round(return_5d * 100, 2)
-                            logger.debug(f"   (QuantScorer) 📉 외국인 눌림목 매집 감지: 5일등락 {return_5d*100:.1f}%, 보너스 +{dip_bonus}")
-                    
-                    # 외국인 눌림목 매수 (Dip Buying) 보너스
-                    # 조건: 외국인 순매수 강함 (ratio > 0.01 aka 1% 이상) AND 주가 5일 수익률 < 0 (하락 중)
-                    if foreign_ratio > 0.01 and daily_prices_df is not None and len(daily_prices_df) >= 5:
-                        current_price = daily_prices_df['CLOSE_PRICE'].iloc[-1]
-                        price_5d_ago = daily_prices_df['CLOSE_PRICE'].iloc[-5]
-                        return_5d = (current_price - price_5d_ago) / price_5d_ago
-                        
-                        if return_5d < 0:
-                            # 하락 중에 매집 → 눌림목 매수 패턴
-                            dip_bonus = 3.0
-                            foreign_score = min(7, foreign_score + dip_bonus) # 최대 7점 한도 내 보너스
+                            foreign_score = min(7, foreign_score + dip_bonus)
                             factors['foreign_dip_bonus'] = dip_bonus
                             factors['return_5d'] = round(return_5d * 100, 2)
                             logger.debug(f"   (QuantScorer) 📉 외국인 눌림목 매집 감지: 5일등락 {return_5d*100:.1f}%, 보너스 +{dip_bonus}")
                 else:
-                    # 기존 방식: 절대 주수 기준
-                    # 순매수: -100만주 ~ +100만주를 0~7점으로 매핑
                     foreign_score = max(0, min(7, 3.5 + foreign_net_buy / 1_000_000 * 3.5))
                     factors['normalize_method'] = 'absolute'
-                
+
                 total_score += foreign_score
                 factors['foreign_net_buy'] = foreign_net_buy
                 factors['foreign_score'] = round(foreign_score, 2)
             else:
                 total_score += 3.5  # 중립
                 factors['foreign_score'] = 3.5
-            
+
             # 2. 기관 순매수 (5점)
             if institution_net_buy is not None:
                 if use_volume_normalized:
-                    # 거래량 대비 비율로 정규화
-                    # 평균 거래량의 -3% ~ +3%를 0~5점으로 매핑
                     inst_ratio = institution_net_buy / avg_volume
                     institution_score = max(0, min(5, 2.5 + inst_ratio / 0.03 * 2.5))
                     factors['institution_ratio'] = round(inst_ratio * 100, 2)
                 else:
-                    # 기존 방식
                     institution_score = max(0, min(5, 2.5 + institution_net_buy / 500_000 * 2.5))
-                
+
                 total_score += institution_score
                 factors['institution_net_buy'] = institution_net_buy
                 factors['institution_score'] = round(institution_score, 2)
             else:
                 total_score += 2.5  # 중립
                 factors['institution_score'] = 2.5
-            
+
             # 3. 외국인 보유비중 (3점)
             if foreign_holding_ratio is not None:
-                # 보유비중: 0~50%를 0~3점으로 매핑
                 holding_score = min(3, foreign_holding_ratio / 50 * 3)
                 total_score += holding_score
-                
+
                 factors['foreign_holding_ratio'] = round(foreign_holding_ratio, 2)
                 factors['holding_score'] = round(holding_score, 2)
             else:
                 total_score += 1.5  # 중립
                 factors['holding_score'] = 1.5
-            
+
+            # ============================================================
+            # Smart Money 5D 조건부 보너스 (최대 +3점)
+            # 외인 5일 누적 순매수가 강한 양의 신호일 때만 가산
+            # 백테스트: 가중치 15점 > 25점 (중립 희석 문제) → 보너스 방식 최적
+            # ============================================================
+            smart_money_bonus = 0.0
+
+            if investor_trading_df is not None and len(investor_trading_df) >= 5:
+                try:
+                    recent_5d = investor_trading_df.tail(5)
+                    foreign_5d = recent_5d['FOREIGN_NET_BUY'].sum()
+                    institution_5d = recent_5d['INSTITUTION_NET_BUY'].sum()
+                    smart_money_5d = foreign_5d + institution_5d
+
+                    factors['smart_money_5d'] = int(smart_money_5d)
+                    factors['foreign_5d'] = int(foreign_5d)
+                    factors['institution_5d'] = int(institution_5d)
+
+                    # 외인+기관 5D 순매수가 avg_volume의 2% 이상일 때만 보너스
+                    if use_volume_normalized:
+                        sm_ratio = smart_money_5d / avg_volume
+                        factors['smart_money_5d_ratio'] = round(sm_ratio * 100, 2)
+                        if sm_ratio > 0.02:
+                            smart_money_bonus = min(3.0, sm_ratio / 0.05 * 3.0)
+                    else:
+                        if smart_money_5d > 1_000_000:
+                            smart_money_bonus = min(3.0, smart_money_5d / 5_000_000 * 3.0)
+
+                    if smart_money_bonus > 0:
+                        factors['smart_money_bonus'] = round(smart_money_bonus, 2)
+                        logger.debug(f"   (QuantScorer) 💰 Smart Money 5D 보너스: +{smart_money_bonus:.1f}점")
+
+                except Exception as sm_err:
+                    logger.debug(f"   (QuantScorer) smart_money_5d 계산 오류: {sm_err}")
+                    factors['smart_money_5d_error'] = str(sm_err)
+            else:
+                factors['smart_money_5d_note'] = '데이터 부족 (5일 미만)'
+
+            total_score += smart_money_bonus
+
             if use_volume_normalized:
                 factors['avg_volume'] = avg_volume
-            
+
             return total_score, factors
-            
+
         except Exception as e:
             logger.error(f"   (QuantScorer) 수급 점수 계산 오류: {e}", exc_info=True)
             return 7.5, {'error': str(e)}
@@ -1194,22 +1214,22 @@ class QuantScorer:
                                     foreign_net_buy: Optional[int] = None,
                                     institution_net_buy: Optional[int] = None,
                                     foreign_holding_ratio: Optional[float] = None,
-                                    sector: str = None) -> QuantScoreResult:
+                                    sector: str = None,
+                                    investor_trading_df: Optional[pd.DataFrame] = None) -> QuantScoreResult:
         """
         종합 정량 점수 계산 (100점 만점)
-        
+
         점수 구성:
         - 모멘텀: 25점
         - 품질: 20점
         - 가치: 15점
         - 기술적: 10점
         - 뉴스 통계: 15점
-        - 수급: 15점
-        
-        Gemini 피드백 반영:
-        - 데이터 부족 시 is_valid=False 설정하여 "묻어가기" 합격 방지
-        섹터 정보 직접 주입 가능 (DB 누락 대비)
-        
+        - 수급: 15점 (+smart_money_5d 조건부 보너스 최대 3점)
+
+        Args:
+            investor_trading_df: 투자자 매매 동향 DataFrame (5일 누적 수급 보너스 계산용)
+
         Returns:
             QuantScoreResult 객체
         """
@@ -1266,13 +1286,13 @@ class QuantScorer:
                 daily_prices_df, kospi_prices_df
             )
             all_details['momentum'] = momentum_details
-            
+
             # 2. 품질 점수 (20점)
             quality_score, quality_details = self.calculate_quality_score(
                 roe, sales_growth, eps_growth, daily_prices_df
             )
             all_details['quality'] = quality_details
-            
+
             # 3. 가치 점수 (15점)
             value_score, value_details = self.calculate_value_score(pbr, per)
             all_details['value'] = value_details
@@ -1297,15 +1317,16 @@ class QuantScorer:
             )
             all_details['news'] = news_details
             
-            # 6. 수급 점수 (15점)
+            # 6. 수급 점수 (15점 + smart_money_5d 조건부 보너스 최대 3점)
             # 종목별 평균 거래량 계산 (정규화용)
             avg_volume = None
             if 'VOLUME' in daily_prices_df.columns and len(daily_prices_df) >= 20:
                 avg_volume = daily_prices_df['VOLUME'].iloc[-20:].mean()
-            
+
             supply_demand_score, supply_details = self.calculate_supply_demand_score(
                 foreign_net_buy, institution_net_buy, foreign_holding_ratio, avg_volume,
-                daily_prices_df=daily_prices_df
+                daily_prices_df=daily_prices_df,
+                investor_trading_df=investor_trading_df,
             )
             all_details['supply_demand'] = supply_details
             

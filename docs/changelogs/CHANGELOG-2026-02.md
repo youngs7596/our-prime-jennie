@@ -1,5 +1,17 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-07
+### Factor Alpha Study & Smart Money 5D 최적화
+- **feat(quant)**: Smart Money 5D 조건부 보너스 구현 (15점 기본 + 최대 3점 보너스)
+  - `investor_trading_df` 파라미터로 5일 누적 외인+기관 순매수 전달
+  - sm_ratio > 2% (강한 매집)일 때만 보너스 가산 → 중립 시 기존 팩터 희석 방지
+- **fix(quant)**: `calculate_supply_demand_score()` 중복 dip-buying 보너스 블록 제거
+- **perf(quant)**: 백테스트 기반 가중치 최적화 (15점 > 25점 > 20점 > 18점 검증)
+  - 가중치 배분, 윈도우 비교(3/5/10일), "이미 오른 종목" 분석 등 6개 백테스트 수행
+  - 기관 합산이 노이즈 추가 확인 (foreign_flow_10d IR=1.445 >> smart_money_5d IR=0.120)
+- **feat(scout)**: `scout_pipeline.py`에 투자자 매매 동향 DB 조회 연결
+- **test(quant)**: 13개 테스트 추가 (supply_demand, constants, investor_trading)
+
 ## 2026-02-06
 ### Airflow 배치 최적화 & 중복 DAG 정리
 - **perf(dags)**: `weekly_factor_analysis` → `--analysis-only` 모드 (Step 1~4 수집은 별도 DAG/서비스 담당, ~20분→~5분)

@@ -8,6 +8,7 @@ shared/hybrid_scoring/quant_scorer.py의 정량 스코어링을 테스트합니�
 import pytest
 from unittest.mock import MagicMock, patch
 import pandas as pd
+import numpy as np
 from datetime import datetime, date, timedelta
 
 
@@ -20,13 +21,28 @@ def mock_stock_data():
     """Mock 주가 데이터"""
     # 120일치 주가 데이터 생성
     dates = pd.date_range(end=datetime.now(), periods=120, freq='D')
-    
+
     return pd.DataFrame({
         'PRICE_DATE': dates,
         'CLOSE_PRICE': [50000 + i * 100 for i in range(120)],
         'HIGH_PRICE': [51000 + i * 100 for i in range(120)],
         'LOW_PRICE': [49000 + i * 100 for i in range(120)],
         'VOLUME': [1000000] * 120
+    })
+
+
+@pytest.fixture
+def mock_investor_trading_df():
+    """Mock 투자자 매매 동향 데이터 (smart_money_5d 계산용)"""
+    dates = pd.date_range(end=datetime.now(), periods=10, freq='B')
+
+    return pd.DataFrame({
+        'TRADE_DATE': dates,
+        'FOREIGN_NET_BUY': [50000, 30000, 20000, -10000, 40000,
+                            60000, 80000, 70000, 90000, 100000],
+        'INSTITUTION_NET_BUY': [20000, 10000, 15000, 5000, 25000,
+                                30000, 40000, 35000, 45000, 50000],
+        'CLOSE_PRICE': [50000 + i * 100 for i in range(10)],
     })
 
 
@@ -386,4 +402,248 @@ class TestEdgeCases:
         )
         
         assert result.sector == '반도체'
+
+
+# ============================================================================
+# Tests: Supply Demand Score (25점 만점, Smart Money 5D 포함)
+# ============================================================================
+
+class TestSupplyDemandScore:
+    """수급 점수 계산 테스트 (15점 만점 + smart_money_5d 보너스 최대 3점)"""
+
+    def test_supply_demand_score_15_base(self, mock_investor_trading_df):
+        """수급 기본 점수 15점 만점 검증 (보너스 제외)"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        # 강한 매수 설정 (보너스 없이)
+        score, details = scorer.calculate_supply_demand_score(
+            foreign_net_buy=100_000,
+            institution_net_buy=50_000,
+            foreign_holding_ratio=50.0,
+            avg_volume=1_000_000,
+        )
+
+        # 기본 15점 만점 (보너스 없음 — investor_trading_df 미제공)
+        assert score <= 15.0
+        assert score > 0
+
+    def test_supply_demand_score_with_bonus(self, mock_investor_trading_df):
+        """smart_money_5d 보너스 포함 시 최대 18점"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        score, details = scorer.calculate_supply_demand_score(
+            foreign_net_buy=100_000,
+            institution_net_buy=50_000,
+            foreign_holding_ratio=50.0,
+            avg_volume=1_000_000,
+            investor_trading_df=mock_investor_trading_df,
+        )
+
+        # 15점 + 보너스 최대 3점 = 18점 이하
+        assert score <= 18.0
+        assert score > 0
+
+    def test_supply_demand_score_neutral_without_data(self):
+        """데이터 없을 때 중립값 (7.5점)"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        score, details = scorer.calculate_supply_demand_score()
+
+        # 모든 중립: 3.5 + 2.5 + 1.5 = 7.5
+        assert score == 7.5
+
+    def test_smart_money_5d_with_investor_df(self, mock_investor_trading_df):
+        """investor_trading_df로 smart_money_5d 계산"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        score, details = scorer.calculate_supply_demand_score(
+            avg_volume=1_000_000,
+            investor_trading_df=mock_investor_trading_df,
+        )
+
+        # smart_money_5d 관련 필드가 details에 존재
+        assert 'smart_money_5d' in details
+        assert 'foreign_5d' in details
+        assert 'institution_5d' in details
+
+        # 최근 5일: foreign=[60000,80000,70000,90000,100000], inst=[30000,40000,35000,45000,50000]
+        expected_foreign_5d = 60000 + 80000 + 70000 + 90000 + 100000
+        expected_inst_5d = 30000 + 40000 + 35000 + 45000 + 50000
+        assert details['foreign_5d'] == expected_foreign_5d
+        assert details['institution_5d'] == expected_inst_5d
+
+    def test_smart_money_5d_without_investor_df(self):
+        """investor_trading_df 없을 때 보너스 0점"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        score, details = scorer.calculate_supply_demand_score(
+            foreign_net_buy=50000,
+            institution_net_buy=20000,
+            avg_volume=1_000_000,
+        )
+
+        # smart_money_5d_note가 존재, 보너스 없음
+        assert 'smart_money_5d_note' in details
+        assert 'smart_money_bonus' not in details
+
+    def test_smart_money_5d_insufficient_data(self):
+        """5일 미만 데이터로 smart_money_5d 보너스 없음"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        # 3일치만 제공
+        short_df = pd.DataFrame({
+            'TRADE_DATE': pd.date_range(end=datetime.now(), periods=3, freq='B'),
+            'FOREIGN_NET_BUY': [100000, 200000, 300000],
+            'INSTITUTION_NET_BUY': [50000, 60000, 70000],
+            'CLOSE_PRICE': [50000, 50100, 50200],
+        })
+
+        score, details = scorer.calculate_supply_demand_score(
+            avg_volume=1_000_000,
+            investor_trading_df=short_df,
+        )
+
+        # 5일 미만이므로 보너스 없음
+        assert details.get('smart_money_5d_note') == '데이터 부족 (5일 미만)'
+
+    def test_supply_demand_score_components(self, mock_investor_trading_df):
+        """개별 구성요소 점수 확인"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        score, details = scorer.calculate_supply_demand_score(
+            foreign_net_buy=50000,
+            institution_net_buy=20000,
+            foreign_holding_ratio=25.0,
+            avg_volume=1_000_000,
+            investor_trading_df=mock_investor_trading_df,
+        )
+
+        # 각 구성요소가 details에 존재
+        assert 'foreign_score' in details
+        assert 'institution_score' in details
+        assert 'holding_score' in details
+
+        # 개별 구성요소 범위 검증 (원래 15점: 7+5+3)
+        assert 0 <= details['foreign_score'] <= 7
+        assert 0 <= details['institution_score'] <= 5
+        assert 0 <= details['holding_score'] <= 3
+
+    def test_dip_bonus_within_foreign_limit(self, mock_stock_data):
+        """dip-buying 보너스가 외인 점수 7점 한도 내"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        declining_df = pd.DataFrame({
+            'CLOSE_PRICE': [55000, 54000, 53000, 52000, 51000,
+                            50000, 49000, 48000, 47000, 46000],
+            'VOLUME': [1000000] * 10,
+        })
+
+        score, details = scorer.calculate_supply_demand_score(
+            foreign_net_buy=50000,
+            avg_volume=1_000_000,
+            daily_prices_df=declining_df,
+        )
+
+        # dip_bonus 적용되더라도 foreign_score는 7점을 넘지 않아야 함
+        assert details.get('foreign_score', 0) <= 7.0
+
+
+# ============================================================================
+# Tests: Quant Constants Weights
+# ============================================================================
+
+class TestQuantConstantsWeights:
+    """가중치 합계 검증"""
+
+    def test_short_term_weights_sum_to_1(self):
+        """SHORT_TERM_WEIGHTS 합계 = 1.0"""
+        from shared.hybrid_scoring.quant_constants import SHORT_TERM_WEIGHTS
+
+        total = sum(SHORT_TERM_WEIGHTS.values())
+        assert abs(total - 1.0) < 0.001, f"SHORT_TERM_WEIGHTS 합계: {total}"
+
+    def test_long_term_weights_sum_to_1(self):
+        """LONG_TERM_WEIGHTS 합계 = 1.0"""
+        from shared.hybrid_scoring.quant_constants import LONG_TERM_WEIGHTS
+
+        total = sum(LONG_TERM_WEIGHTS.values())
+        assert abs(total - 1.0) < 0.001, f"LONG_TERM_WEIGHTS 합계: {total}"
+
+    def test_supply_demand_weight_present(self):
+        """supply_demand 가중치가 존재하고 유효한 범위"""
+        from shared.hybrid_scoring.quant_constants import SHORT_TERM_WEIGHTS, LONG_TERM_WEIGHTS
+
+        assert 'supply_demand' in SHORT_TERM_WEIGHTS
+        assert 'supply_demand' in LONG_TERM_WEIGHTS
+        assert SHORT_TERM_WEIGHTS['supply_demand'] > 0
+        assert LONG_TERM_WEIGHTS['supply_demand'] > 0
+
+
+# ============================================================================
+# Tests: calculate_total_quant_score with investor_trading_df
+# ============================================================================
+
+class TestTotalScoreWithInvestorTrading:
+    """investor_trading_df 파라미터 통합 테스트"""
+
+    def test_total_score_accepts_investor_trading_df(self, mock_stock_data, mock_investor_trading_df):
+        """calculate_total_quant_score가 investor_trading_df를 받는지 확인"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+        import inspect
+
+        scorer = QuantScorer()
+
+        sig = inspect.signature(scorer.calculate_total_quant_score)
+        assert 'investor_trading_df' in sig.parameters
+
+    def test_total_score_with_investor_data(self, mock_stock_data, mock_investor_trading_df):
+        """investor_trading_df 포함 종합 점수 계산"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        result = scorer.calculate_total_quant_score(
+            stock_code='005930',
+            stock_name='삼성전자',
+            daily_prices_df=mock_stock_data,
+            foreign_net_buy=50000,
+            institution_net_buy=20000,
+            investor_trading_df=mock_investor_trading_df,
+        )
+
+        assert result.is_valid
+        assert result.total_score > 0
+        # supply_demand_score는 15점 + 보너스 3점 = 최대 18점
+        assert result.supply_demand_score <= 18.0
+
+    def test_total_score_without_investor_data(self, mock_stock_data):
+        """investor_trading_df 없이도 정상 동작"""
+        from shared.hybrid_scoring.quant_scorer import QuantScorer
+
+        scorer = QuantScorer()
+
+        result = scorer.calculate_total_quant_score(
+            stock_code='005930',
+            stock_name='삼성전자',
+            daily_prices_df=mock_stock_data,
+        )
+
+        assert result.is_valid
+        assert result.total_score > 0
 
