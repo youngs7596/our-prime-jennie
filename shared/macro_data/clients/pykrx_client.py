@@ -276,9 +276,15 @@ class PyKRXClient(MacroDataClient):
         if not data:
             return None
 
-        timestamp = datetime.strptime(
-            data["date"], "%Y%m%d"
-        ).replace(hour=15, minute=30, tzinfo=KST)
+        # 장 중에는 현재 시각 사용 (미래 시간 필터링 방지)
+        data_date = datetime.strptime(data["date"], "%Y%m%d").date()
+        now = datetime.now(KST)
+        if data_date == now.date() and now.hour < 15:
+            timestamp = now
+        else:
+            timestamp = datetime.strptime(
+                data["date"], "%Y%m%d"
+            ).replace(hour=15, minute=30, tzinfo=KST)
 
         point = MacroDataPoint(
             indicator=indicator,
