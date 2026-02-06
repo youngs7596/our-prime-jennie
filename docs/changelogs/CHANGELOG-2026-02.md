@@ -18,6 +18,18 @@
 - **perf(llm)**: Retry/대기시간 축소 (Cloud retry 5→2회, base delay 3→1s, internal retry 3→2)
 - **perf(scout)**: Scout job 스케줄 30분→1시간 변경 (월 비용 $31.7→$16.9)
 
+### RAG 검색 품질 개선 & Qdrant 필터 수정
+- **feat(scout)**: 다중 쿼리 검색 전략 구현 (`_generate_news_search_queries()` - 실적/수주/리스크 + 섹터별 쿼리)
+- **feat(scout)**: RAG 후보 발굴 개선 (4개 테마 쿼리 + 7일 필터 + 중복 제거)
+- **feat(news)**: page_content 메타데이터 강화 (`[종목명(코드)] 제목 | 출처 | 날짜` 신규 포맷)
+- **fix(scout)**: Qdrant 필터를 네이티브 `models.Filter`로 교체 (langchain-qdrant 1.1.0 dict 필터 미지원 → RAG 0건 버그 수정)
+- **결과**: RAG 후보 0개 → 35개, Scout 소요시간 541초 → 417초 (-23%)
+
+### Jenkins 파이프라인 단순화
+- **refactor(jenkins)**: Smart Build(`smart_build.py`) 의존성 제거 → `docker compose up -d --build` 단일 명령
+- **fix(jenkins)**: `docker:dind` → `docker:cli` (ENTRYPOINT 오류 수정)
+- **결과**: Jenkinsfile Build & Deploy 54줄 → 17줄, BuildKit 레이어 캐시가 변경 감지 대체
+
 ### P0 트레이딩 로직 개선 & Ollama Gateway Rate Limit 최적화
 - **feat(buy-scanner)**: P0 트레이딩 로직 3건 구현 (Council 합의)
   - BEAR/STRONG_BEAR Market Regime Gate (신규 진입 차단)
