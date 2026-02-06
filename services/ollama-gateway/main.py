@@ -261,12 +261,11 @@ def call_ollama_with_breaker(endpoint: str, payload: Dict[str, Any], timeout: in
 
 
 def _resolve_vllm_model(ollama_model: str, is_embed: bool = False) -> str:
-    """Ollama 모델명을 vLLM HuggingFace 모델명으로 변환"""
+    """Ollama 모델명을 vLLM HuggingFace 모델명으로 변환. 매핑 없으면 에러 발생."""
     if ollama_model in VLLM_MODEL_MAP:
         return VLLM_MODEL_MAP[ollama_model]
-    # 매핑에 없으면 그대로 전달 (사용자가 직접 HF 이름 사용 가능)
-    logger.warning(f"⚠️ [vLLM] 모델 매핑 없음: {ollama_model}, 원본 사용")
-    return ollama_model
+    # 매핑에 없으면 즉시 에러 (Circuit Breaker 오염 방지)
+    raise ValueError(f"[vLLM] 모델 매핑 없음: '{ollama_model}'. VLLM_MODEL_MAP에 추가 필요.")
 
 
 def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:

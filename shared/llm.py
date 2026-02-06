@@ -333,26 +333,22 @@ class JennieBrain:
 
     def analyze_news_fast_track(self, title: str, summary: str) -> dict:
         """
-        [Fast Track] 긴급 뉴스(전쟁, 관세 등)를 위한 초고속/고성능 분석
-        Model: gpt-5-nano (Cost: $0.05/1M input)
+        [Fast Track] 긴급 뉴스(전쟁, 관세 등)를 위한 초고속 분석
+        Model: FAST tier (로컬 EXAONE 4.0 32B)
         """
-        # 1. Use OpenAI (Reasoning Tier provider)
-        provider = self._get_provider(LLMTier.REASONING)
+        # 1. FAST tier 사용 (로컬 vLLM EXAONE → 최소 지연)
+        provider = self._get_provider(LLMTier.FAST)
         if provider is None:
             return {'id': 0, 'sentiment': {'score': 50, 'reason': 'Provider Init Failed'}, 'competitor_risk': {}}
 
         # 2. Prepare Item (Unified Prompt expects list)
         items = [{'id': 0, 'title': title, 'summary': summary}]
-        
+
         try:
             from shared.llm_prompts import build_unified_analysis_prompt
             prompt = build_unified_analysis_prompt(items)
-            
-            # Explicitly request 'gpt-5-nano' as agreed
-            target_model = "gpt-5-nano"
-            
+
             # Use Unified Schema
-            # (Duplicate from analyze_news_unified for safety)
             UNIFIED_SCHEMA = {
                 "type": "object",
                 "properties": {
@@ -363,7 +359,7 @@ class JennieBrain:
                             "properties": {
                                 "id": {"type": "integer"},
                                 "sentiment": {
-                                    "type": "object", 
+                                    "type": "object",
                                     "properties": {"score": {"type": "integer"}, "reason": {"type": "string"}},
                                     "required": ["score", "reason"]
                                 },
@@ -384,14 +380,13 @@ class JennieBrain:
                 },
                 "required": ["results"]
             }
-            
-            logger.info(f"🚀 [Fast Track] 긴급 뉴스 분석 요청 ({target_model}): {title[:30]}...")
-            
+
+            logger.info(f"🚀 [Fast Track] 긴급 뉴스 분석 요청 (FAST/EXAONE): {title[:30]}...")
+
             result = provider.generate_json(
                 prompt,
                 UNIFIED_SCHEMA,
                 temperature=0.0,
-                model_name=target_model
             )
             
             # Extract single result
