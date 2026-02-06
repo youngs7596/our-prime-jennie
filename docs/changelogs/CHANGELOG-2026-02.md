@@ -1,6 +1,13 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-06
+### Airflow 배치 최적화 & 중복 DAG 정리
+- **perf(dags)**: `weekly_factor_analysis` → `--analysis-only` 모드 (Step 1~4 수집은 별도 DAG/서비스 담당, ~20분→~5분)
+- **perf(scripts)**: `collect_investor_trading` 이중 sleep 제거 (KIS Gateway rate limit이 제어, ~26분→~5분)
+- **fix(scripts)**: `collect_prices_fdr` 개별 종목 타임아웃 추가 (FDR API hang 방지)
+- **cleanup(dags)**: `collect_daily_prices`(FDR) DAG 삭제 (`daily_market_data_collector`와 중복)
+- **perf(dags)**: `enhanced_macro_collection` 12:00 실행 시 pykrx 중복 수집 스킵
+
 ### vLLM max-model-len 확장 & 토큰 초과 통계
 - **fix(ollama-gateway)**: vLLM `max-model-len` 4096→8192 확장, `gpu-memory-utilization` 0.82→0.88
 - **feat(ollama-gateway)**: max_tokens 클램핑 (max_model_len//2 초과 시 자동 축소) + 토큰 초과 통계 (`/stats` → `token_stats`)
