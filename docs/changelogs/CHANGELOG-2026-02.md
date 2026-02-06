@@ -1,6 +1,10 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-06
+### vLLM max-model-len 확장 & 토큰 초과 통계
+- **fix(ollama-gateway)**: vLLM `max-model-len` 4096→8192 확장, `gpu-memory-utilization` 0.82→0.88
+- **feat(ollama-gateway)**: max_tokens 클램핑 (max_model_len//2 초과 시 자동 축소) + 토큰 초과 통계 (`/stats` → `token_stats`)
+
 ### DeepSeek V3.2 Cloud Failover & Scout 비용 최적화
 - **feat(llm)**: `CloudFailoverProvider` 구현 (DeepSeek API → OpenRouter → Ollama Cloud 3-tier failover)
 - **refactor(llm)**: 로컬 `gpt-oss:20b` fallback 제거 (RTX 3090은 vLLM exaone+kure 전용)

@@ -63,6 +63,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 BACKEND_MODE = os.getenv("BACKEND_MODE", "ollama")  # "ollama" | "vllm"
 VLLM_LLM_URL = os.getenv("VLLM_LLM_URL", "http://localhost:8001")  # vLLM LLM 서버
 VLLM_EMBED_URL = os.getenv("VLLM_EMBED_URL", "http://localhost:8002")  # vLLM 임베딩 서버
+VLLM_MAX_MODEL_LEN = int(os.getenv("VLLM_MAX_MODEL_LEN", "8192"))  # vLLM 최대 컨텍스트 길이
 
 # vLLM 모델 이름 매핑 (Ollama 모델명 → HuggingFace 모델명)
 VLLM_MODEL_MAP = {
@@ -106,6 +107,7 @@ logger.info(f"🚀 LLM Gateway 시작 (backend={BACKEND_MODE})")
 if BACKEND_MODE == "vllm":
     logger.info(f"   VLLM_LLM_URL: {VLLM_LLM_URL}")
     logger.info(f"   VLLM_EMBED_URL: {VLLM_EMBED_URL}")
+    logger.info(f"   VLLM_MAX_MODEL_LEN: {VLLM_MAX_MODEL_LEN}")
     logger.info(f"   VLLM_MODEL_MAP: {VLLM_MODEL_MAP}")
 else:
     logger.info(f"   OLLAMA_HOST: {OLLAMA_HOST}")
@@ -204,6 +206,10 @@ stats = {
     'avg_response_time_ms': 0,
     'request_history': deque(maxlen=100),  # 최근 100개 요청 기록
     'queue_depth': 0,  # 현재 대기 중인 요청 수
+    # 토큰 길이 관련 통계
+    'token_clamped_count': 0,       # max_tokens 클램핑 발생 횟수
+    'token_exceeded_count': 0,      # 입력 토큰 초과로 vLLM 거부된 횟수
+    'token_exceeded_history': deque(maxlen=50),  # 거부된 요청 기록 (모델, 프롬프트 길이 등)
 }
 
 # 요청 큐 세마포어 (동시 처리 제어)
@@ -274,8 +280,17 @@ def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict
 
     # Ollama 옵션 → OpenAI 파라미터 변환
     temperature = options.get("temperature", 0.7)
-    max_tokens = options.get("num_predict", 2048)
+    requested_max_tokens = options.get("num_predict", 2048)
     top_p = options.get("top_p", 1.0)
+
+    # vLLM max_model_len 초과 방지: 입력 토큰 수를 모르므로 보수적으로 절반 cap
+    safe_max_tokens = VLLM_MAX_MODEL_LEN // 2
+    if requested_max_tokens > safe_max_tokens:
+        logger.info(f"⚠️ [vLLM] max_tokens 클램핑: {requested_max_tokens} → {safe_max_tokens} (max_model_len={VLLM_MAX_MODEL_LEN})")
+        stats['token_clamped_count'] += 1
+        max_tokens = safe_max_tokens
+    else:
+        max_tokens = requested_max_tokens
 
     # 메시지 구성
     if endpoint == "/api/generate":
@@ -303,11 +318,26 @@ def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict
         vllm_payload["response_format"] = {"type": "json_object"}
 
     url = f"{VLLM_LLM_URL}/v1/chat/completions"
+    prompt_chars = len(payload.get("prompt", ""))
     logger.info(f"🔄 [vLLM] {ollama_model} → {vllm_model} ({endpoint} → /v1/chat/completions)")
 
     @ollama_circuit_breaker
     def _call():
         response = requests.post(url, json=vllm_payload, timeout=timeout)
+        # 토큰 길이 초과 400 에러 감지
+        if response.status_code == 400:
+            error_text = response.text
+            if "max_tokens" in error_text or "max_completion_tokens" in error_text or "context length" in error_text:
+                stats['token_exceeded_count'] += 1
+                stats['token_exceeded_history'].append({
+                    "model": ollama_model,
+                    "prompt_chars": prompt_chars,
+                    "max_tokens_requested": requested_max_tokens,
+                    "max_tokens_sent": max_tokens,
+                    "vllm_error": error_text[:300],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                logger.error(f"🚫 [vLLM] 토큰 길이 초과 거부 (model={ollama_model}, prompt_chars={prompt_chars}, max_tokens={max_tokens}): {error_text[:200]}")
         response.raise_for_status()
         return response.json()
 
@@ -480,6 +510,12 @@ def get_stats():
         "queue_depth": stats['queue_depth'],
         "circuit_breaker_state": str(ollama_circuit_breaker.current_state),
         "recent_requests": list(stats['request_history'])[-10:],  # 최근 10개
+        "token_stats": {
+            "clamped_count": stats['token_clamped_count'],
+            "exceeded_count": stats['token_exceeded_count'],
+            "exceeded_history": list(stats['token_exceeded_history'])[-10:],
+            "max_model_len": VLLM_MAX_MODEL_LEN,
+        },
     })
 
 
