@@ -350,6 +350,7 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
 
     try:
         from datetime import datetime, timedelta, timezone
+        from qdrant_client.http import models as qdrant_models
 
         # 최신 7일 이내 뉴스 필터
         recency_timestamp = int((datetime.now(timezone.utc) - timedelta(days=7)).timestamp())
@@ -359,17 +360,25 @@ def fetch_stock_news_from_chroma(vectorstore, stock_code: str, stock_name: str, 
         seen_contents = set()
         all_docs = []
 
+        qdrant_filter = qdrant_models.Filter(
+            must=[
+                qdrant_models.FieldCondition(
+                    key="metadata.stock_code",
+                    match=qdrant_models.MatchValue(value=stock_code)
+                ),
+                qdrant_models.FieldCondition(
+                    key="metadata.created_at_utc",
+                    range=qdrant_models.Range(gte=recency_timestamp)
+                ),
+            ]
+        )
+
         for query in queries:
             try:
                 docs = vectorstore.similarity_search(
                     query=query,
                     k=3,
-                    filter={
-                        "$and": [
-                            {"stock_code": stock_code},
-                            {"created_at_utc": {"$gte": recency_timestamp}}
-                        ]
-                    }
+                    filter=qdrant_filter,
                 )
                 for doc in docs:
                     content_key = doc.page_content[:80]
@@ -594,12 +603,23 @@ def main():
                     logger.info("   (C) RAG 기반 후보 발굴 중 (다중 쿼리)...")
                     recency_timestamp = int((datetime.now(timezone.utc) - timedelta(days=7)).timestamp())
 
+                    from qdrant_client.http import models as qdrant_models
+
                     rag_queries = [
                         ("실적 개선 매출 성장 영업이익 흑자전환", "실적 개선"),
                         ("신규 수주 대규모 계약 공급 체결", "수주/계약"),
                         ("신사업 진출 인수합병 전략적 투자", "신사업/M&A"),
                         ("배당 증가 자사주 매입 주주환원", "주주환원"),
                     ]
+
+                    rag_recency_filter = qdrant_models.Filter(
+                        must=[
+                            qdrant_models.FieldCondition(
+                                key="metadata.created_at_utc",
+                                range=qdrant_models.Range(gte=recency_timestamp)
+                            )
+                        ]
+                    )
 
                     rag_seen_codes = set()
                     rag_total = 0
@@ -608,7 +628,7 @@ def main():
                             results = vectorstore.similarity_search(
                                 query=query,
                                 k=20,
-                                filter={"created_at_utc": {"$gte": recency_timestamp}}
+                                filter=rag_recency_filter,
                             )
                             for doc in results:
                                 stock_code_r = doc.metadata.get('stock_code')
