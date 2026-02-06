@@ -110,16 +110,33 @@ pipeline {
                         git clean -fd
 
                         # 2. 변경 범위 감지
+                        # 마지막 성공 빌드 커밋 기록 파일 사용 (재시도 시에도 정확한 diff 보장)
                         echo "=========================================="
                         echo "🧠 Smart Build: 변경된 서비스 감지"
                         echo "=========================================="
 
-                        TARGET_RANGE="ORIG_HEAD..HEAD"
-                        if [ -z "$(git diff --name-only ORIG_HEAD..HEAD)" ]; then
-                            echo "⚠️ No changes in ORIG_HEAD..HEAD (Already up-to-date)."
-                            echo "🔄 Fallback to HEAD~1..HEAD"
-                            TARGET_RANGE="HEAD~1..HEAD"
+                        LAST_BUILD_FILE="/home/youngs75/projects/my-prime-jennie/.last_successful_build"
+                        CURRENT_HEAD=$(git rev-parse HEAD)
+
+                        if [ -f "$LAST_BUILD_FILE" ]; then
+                            LAST_BUILD=$(cat "$LAST_BUILD_FILE")
+                            # 마지막 성공 커밋이 현재 히스토리에 존재하는지 확인
+                            if git merge-base --is-ancestor "$LAST_BUILD" HEAD 2>/dev/null; then
+                                TARGET_RANGE="${LAST_BUILD}..HEAD"
+                            else
+                                echo "⚠️ Last build commit not in history. Fallback to HEAD~1..HEAD"
+                                TARGET_RANGE="HEAD~1..HEAD"
+                            fi
+                        else
+                            echo "ℹ️ No last build record. Using ORIG_HEAD..HEAD"
+                            TARGET_RANGE="ORIG_HEAD..HEAD"
+                            if [ -z "$(git diff --name-only ORIG_HEAD..HEAD 2>/dev/null)" ]; then
+                                echo "⚠️ No changes in ORIG_HEAD..HEAD. Fallback to HEAD~1..HEAD"
+                                TARGET_RANGE="HEAD~1..HEAD"
+                            fi
                         fi
+
+                        echo "📏 Commit range: $TARGET_RANGE"
 
                         # 3. Build: 변경된 서비스만 이미지 빌드
                         echo "=========================================="
@@ -133,6 +150,10 @@ pipeline {
                         echo "🚀 Step 2: 전체 서비스 재시작"
                         echo "=========================================="
                         python3 scripts/smart_build.py --action deploy --services ALL
+
+                        # 5. 성공 시 현재 커밋 기록 (다음 빌드에서 정확한 diff 범위 사용)
+                        echo "$CURRENT_HEAD" > "$LAST_BUILD_FILE"
+                        echo "✅ Last successful build recorded: $CURRENT_HEAD"
 
                         echo ""
                         echo "=========================================="

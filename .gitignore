@@ -2,6 +2,9 @@
 # my-ultra-jennie .gitignore
 # ============================================================================
 
+# Jenkins Smart Build
+.last_successful_build
+
 # Python
 __pycache__/
 *.py[cod]
