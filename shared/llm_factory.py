@@ -92,10 +92,11 @@ class LLMFactory:
         Returns an initialized LLM Provider for the requested Tier.
         """
         from shared.llm_providers import (
-            OllamaLLMProvider, 
-            OpenAILLMProvider, 
-            ClaudeLLMProvider, 
-            GeminiLLMProvider
+            OllamaLLMProvider,
+            OpenAILLMProvider,
+            ClaudeLLMProvider,
+            GeminiLLMProvider,
+            CloudFailoverProvider,
         )
 
         provider_type = cls._get_env_provider_type(tier)
@@ -142,9 +143,11 @@ class LLMFactory:
             from shared.llm_constants import SAFETY_SETTINGS
             project_id = os.getenv("GCP_PROJECT_ID")
             # Default secret ID if not in env
-            secret_id = os.getenv("SECRET_ID_GEMINI_API_KEY", "gemini-api-key")  
+            secret_id = os.getenv("SECRET_ID_GEMINI_API_KEY", "gemini-api-key")
             return GeminiLLMProvider(project_id, secret_id, SAFETY_SETTINGS)
-        
+        elif provider_type == "deepseek_cloud":
+            return CloudFailoverProvider(tier_name=tier.value)
+
         raise ValueError(f"Unknown provider type: {provider_type} for tier {tier}")
 
 

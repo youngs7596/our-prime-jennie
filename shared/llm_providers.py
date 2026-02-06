@@ -121,7 +121,7 @@ class OllamaLLMProvider(BaseLLMProvider):
             # Reasoning Tier
             self.timeout = 600 # Increased to 600s for Qwen3:32B stability
             
-        self.max_retries = 3
+        self.max_retries = 2  # CloudFailover 3단계이므로 개별 retry 최소화
 
     def _load_cloud_api_key(self) -> Optional[str]:
         """Ollama Cloud API Key 로드 (env → secrets.json)"""
@@ -182,8 +182,8 @@ class OllamaLLMProvider(BaseLLMProvider):
 
         url = f"{self.cloud_host}{cloud_endpoint}"
 
-        max_retries = int(os.getenv("OLLAMA_CLOUD_MAX_RETRIES", "5"))
-        base_delay = float(os.getenv("OLLAMA_CLOUD_RETRY_DELAY", "3.0"))
+        max_retries = int(os.getenv("OLLAMA_CLOUD_MAX_RETRIES", "2"))
+        base_delay = float(os.getenv("OLLAMA_CLOUD_RETRY_DELAY", "1.0"))
 
         for attempt in range(max_retries):
             logger.info(f"☁️ [Ollama Cloud] 요청: {cloud_endpoint} (model={cloud_payload['model']}, attempt={attempt + 1}/{max_retries})")
@@ -330,14 +330,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         """
         # ☁️ Cloud 모드: Gateway 우회, 직접 호출
         if self.is_cloud and self._cloud_api_key:
-            try:
-                return self._call_cloud_api(endpoint, payload)
-            except Exception as e:
-                fallback_model = os.getenv("LOCAL_MODEL_FALLBACK", "gpt-oss:20b")
-                logger.warning(f"⚠️ [Ollama Cloud] 직접 호출 실패: {e}. 로컬 폴백 ({fallback_model})...")
-                # 로컬 모델로 폴백 (아래 gateway/direct 로직 사용)
-                payload = dict(payload)
-                payload["model"] = fallback_model
+            return self._call_cloud_api(endpoint, payload)
 
         # Gateway 모드 체크
         if self.use_gateway:
@@ -393,7 +386,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         # [Defensive] Internal Retry for Empty/Malformed Content
         # Sometimes Ollama returns empty string or cut-off JSON. 
         # We retry locally before falling back to Cloud.
-        max_internal_retries = 3
+        max_internal_retries = 2
         
         for attempt in range(max_internal_retries):
             try:
@@ -519,7 +512,7 @@ class OllamaLLMProvider(BaseLLMProvider):
         if response_schema:
             pass # payload["format"] = "json" <-- [Fix] Removed
 
-        max_internal_retries = 3
+        max_internal_retries = 2
         
         for attempt in range(max_internal_retries):
             try:
@@ -953,6 +946,136 @@ class OpenAILLMProvider(BaseLLMProvider):
                 logger.warning(f"⚠️ [OpenAIProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
         
         raise RuntimeError(f"OpenAI Chat 호출 실패: {last_error}") from last_error
+
+
+class CloudFailoverProvider(BaseLLMProvider):
+    """
+    Multi-provider failover for DeepSeek V3.2.
+    Chain: OpenRouter → DeepSeek Official API → Ollama Cloud
+    API 키가 없는 프로바이더는 자동 건너뜀.
+    """
+
+    def __init__(self, tier_name: str = "REASONING"):
+        super().__init__()
+        self.tier_name = tier_name
+        self._providers = []
+        self._provider_names = []
+
+        from . import auth
+
+        # 1. DeepSeek Official API (가장 저렴 + 가장 빠름)
+        ds_key = auth.get_secret("deepseek-api-key")
+        if ds_key:
+            self._providers.append(
+                OpenAILLMProvider(
+                    base_url="https://api.deepseek.com",
+                    api_key=ds_key,
+                    default_model="deepseek-chat",
+                )
+            )
+            self._provider_names.append("DeepSeek")
+            logger.info(f"☁️ [CloudFailover:{tier_name}] DeepSeek API 등록")
+
+        # 2. OpenRouter (failover)
+        or_key = auth.get_secret("openrouter-api-key")
+        if or_key:
+            self._providers.append(
+                OpenAILLMProvider(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=or_key,
+                    default_model="deepseek/deepseek-v3.2",
+                )
+            )
+            self._provider_names.append("OpenRouter")
+            logger.info(f"☁️ [CloudFailover:{tier_name}] OpenRouter 등록")
+
+        # 3. Ollama Cloud (최종 fallback)
+        from shared.llm_factory import ModelStateManager
+        ollama_cloud = OllamaLLMProvider(
+            model="deepseek-v3.2:cloud",
+            state_manager=ModelStateManager(),
+            is_thinking_tier=(tier_name == "THINKING"),
+        )
+        if ollama_cloud._cloud_api_key:
+            self._providers.append(ollama_cloud)
+            self._provider_names.append("OllamaCloud")
+            logger.info(f"☁️ [CloudFailover:{tier_name}] Ollama Cloud 등록")
+
+        if not self._providers:
+            raise RuntimeError(
+                f"[CloudFailover:{tier_name}] 사용 가능한 프로바이더가 없습니다. "
+                "openrouter-api-key, deepseek-api-key, 또는 ollama-api-key를 설정하세요."
+            )
+
+        logger.info(
+            f"☁️ [CloudFailover:{tier_name}] 체인: {' → '.join(self._provider_names)}"
+        )
+
+    @property
+    def name(self) -> str:
+        return "cloud_failover"
+
+    def generate_json(
+        self,
+        prompt: str,
+        response_schema: Dict,
+        *,
+        temperature: float = 0.2,
+        model_name: Optional[str] = None,
+        fallback_models: Optional[Sequence[str]] = None,
+    ) -> Dict:
+        return self._failover_call(
+            "generate_json",
+            prompt=prompt,
+            response_schema=response_schema,
+            temperature=temperature,
+        )
+
+    def generate_chat(
+        self,
+        history: List[Dict],
+        response_schema: Optional[Dict] = None,
+        *,
+        temperature: float = 0.2,
+        model_name: Optional[str] = None,
+        fallback_models: Optional[Sequence[str]] = None,
+    ) -> Dict:
+        return self._failover_call(
+            "generate_chat",
+            history=history,
+            response_schema=response_schema,
+            temperature=temperature,
+        )
+
+    def _failover_call(self, method: str, **kwargs) -> Dict:
+        """순차적으로 프로바이더를 시도하며 첫 성공 결과를 반환"""
+        last_error = None
+        for i, (provider, pname) in enumerate(
+            zip(self._providers, self._provider_names)
+        ):
+            try:
+                logger.info(
+                    f"☁️ [CloudFailover:{self.tier_name}] {pname} 시도 ({i+1}/{len(self._providers)})"
+                )
+                result = getattr(provider, method)(**kwargs)
+                if i > 0:
+                    logger.info(
+                        f"✅ [CloudFailover:{self.tier_name}] {pname}에서 성공 (failover)"
+                    )
+                return result
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"⚠️ [CloudFailover:{self.tier_name}] {pname} 실패: {e}"
+                )
+                if i < len(self._providers) - 1:
+                    logger.info(
+                        f"🔄 [CloudFailover:{self.tier_name}] 다음 프로바이더로 전환: {self._provider_names[i+1]}"
+                    )
+
+        raise RuntimeError(
+            f"[CloudFailover:{self.tier_name}] 모든 프로바이더 실패: {last_error}"
+        ) from last_error
 
 
 class ClaudeLLMProvider(BaseLLMProvider):

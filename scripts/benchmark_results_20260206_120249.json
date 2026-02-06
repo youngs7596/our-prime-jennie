@@ -1,0 +1,68 @@
+{
+  "solar-pro": {
+    "status": "OK",
+    "single_news": {
+      "elapsed_sec": 2.6,
+      "tokens": 87,
+      "tok_per_sec": 47.1,
+      "response": {
+        "score": 85,
+        "reason": "삼성전자가 HBM4 양산에 성공하여 독점 시장에서 경쟁을 형성한다는 것은 강력한 호재입니다."
+      }
+    },
+    "batch_news": {
+      "elapsed_sec": 20.92,
+      "tokens": 0,
+      "tok_per_sec": 0,
+      "quality": {
+        "json_valid": false
+      },
+      "response": {
+        "parse_error": true,
+        "raw": "{\n   \"results\": [\n    {\n      \"id\": 1,\n      \"sentiment\": {\n        \"score\": 85,\n        \"reason\": \"삼성전자가 차세대 HBM4 양산 성공은 반도체 부문에서의 경쟁 구조를 확장시킬 수 있는 긍정적인 소식이다.\"\n      },\n      \"competitor_risk\": {\n        \"is_detected\": true,\n        \"type\": \"OTHER\",\n        \"benefit_score\": 15,\n        \"reason\": \"밍\"\n}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+      }
+    }
+  },
+  "qwen3:14b": {
+    "status": "OK",
+    "single_news": {
+      "elapsed_sec": 1.03,
+      "tokens": 2,
+      "tok_per_sec": 121.8,
+      "response": {}
+    },
+    "batch_news": {
+      "elapsed_sec": 11.08,
+      "tokens": 2,
+      "tok_per_sec": 31.1,
+      "quality": {
+        "json_valid": true
+      },
+      "response": {}
+    }
+  },
+  "qwen3:30b-a3b": {
+    "status": "OK",
+    "single_news": {
+      "elapsed_sec": 1.0,
+      "tokens": 73,
+      "tok_per_sec": 126.7,
+      "response": {
+        "parse_error": true,
+        "raw": ""
+      }
+    },
+    "batch_news": {
+      "elapsed_sec": 28.4,
+      "tokens": 1022,
+      "tok_per_sec": 116.4,
+      "quality": {
+        "json_valid": false
+      },
+      "response": {
+        "parse_error": true,
+        "raw": ""
+      }
+    }
+  }
+}

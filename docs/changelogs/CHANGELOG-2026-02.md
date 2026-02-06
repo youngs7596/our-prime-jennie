@@ -1,6 +1,12 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-06
+### DeepSeek V3.2 Cloud Failover & Scout 비용 최적화
+- **feat(llm)**: `CloudFailoverProvider` 구현 (DeepSeek API → OpenRouter → Ollama Cloud 3-tier failover)
+- **refactor(llm)**: 로컬 `gpt-oss:20b` fallback 제거 (RTX 3090은 vLLM exaone+kure 전용)
+- **perf(llm)**: Retry/대기시간 축소 (Cloud retry 5→2회, base delay 3→1s, internal retry 3→2)
+- **perf(scout)**: Scout job 스케줄 30분→1시간 변경 (월 비용 $31.7→$16.9)
+
 ### P0 트레이딩 로직 개선 & Ollama Gateway Rate Limit 최적화
 - **feat(buy-scanner)**: P0 트레이딩 로직 3건 구현 (Council 합의)
   - BEAR/STRONG_BEAR Market Regime Gate (신규 진입 차단)

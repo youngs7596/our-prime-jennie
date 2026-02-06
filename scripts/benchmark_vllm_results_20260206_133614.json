@@ -1,0 +1,116 @@
+{
+  "model": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+  "engine": "vLLM 0.15.1",
+  "quantization": "awq_marlin",
+  "max_model_len": 4096,
+  "gpu": "RTX 3090 24GB",
+  "timestamp": "2026-02-06T13:36:14.489690",
+  "warmup": {
+    "elapsed_sec": 0.8,
+    "prompt_tokens": 23,
+    "completion_tokens": 10,
+    "tok_per_sec": 12.4,
+    "response": {
+      "parse_error": true,
+      "raw": "{\n  \"response\": \"Hello! How"
+    }
+  },
+  "single_news": {
+    "elapsed_sec": 1.46,
+    "prompt_tokens": 284,
+    "completion_tokens": 46,
+    "tok_per_sec": 31.5,
+    "response": {
+      "score": 85,
+      "reason": "삼성전자가 차세대 HBM4 양산에 성공하고 엔비디아 공급망에 합류하며 시장 경쟁 구도를 형성할 전망"
+    }
+  },
+  "batch_news": {
+    "elapsed_sec": 19.58,
+    "prompt_tokens": 1001,
+    "completion_tokens": 702,
+    "tok_per_sec": 35.9,
+    "response": {
+      "results": [
+        {
+          "id": 1,
+          "sentiment": {
+            "score": 85,
+            "reason": "삼성전자가 HBM4 양산에 성공하고 엔비디아 공급망에 합류하며 반도체 부문 실적 개선이 기대된다. 이는 강력한 호재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": true,
+            "type": "OTHER",
+            "benefit_score": 15,
+            "reason": "SK하이닉스가 HBM 시장에서 독점적 지위를 잃을 가능성이 있어 경쟁사 리스크가 발생했다."
+          }
+        },
+        {
+          "id": 2,
+          "sentiment": {
+            "score": 5,
+            "reason": "카카오에서 대규모 개인정보 유출 사고가 발생해 주가가 급락했다. 이는 강력한 악재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": false,
+            "type": "NONE",
+            "benefit_score": 0,
+            "reason": "경쟁사 리스크가 발생하지 않았다."
+          }
+        },
+        {
+          "id": 3,
+          "sentiment": {
+            "score": 75,
+            "reason": "현대자동차가 미국 조지아주에 전기차 공장을 가동하며 IRA 보조금 수혜가 기대된다. 이는 일반 호재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": false,
+            "type": "NONE",
+            "benefit_score": 0,
+            "reason": "경쟁사 리스크가 발생하지 않았다."
+          }
+        },
+        {
+          "id": 4,
+          "sentiment": {
+            "score": 10,
+            "reason": "셀트리온의 신약 임상 3상이 실패로 판정되며 주가가 하한가에 근접했다. 이는 강력한 악재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": true,
+            "type": "OTHER",
+            "benefit_score": 10,
+            "reason": "바이오 업종 내 경쟁사가 반사이익을 얻을 가능성이 있다."
+          }
+        },
+        {
+          "id": 5,
+          "sentiment": {
+            "score": 80,
+            "reason": "한화에어로스페이스가 폴란드와 4조원 규모의 K9 자주포 수출 계약을 체결했다. 이는 강력한 호재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": false,
+            "type": "NONE",
+            "benefit_score": 0,
+            "reason": "경쟁사 리스크가 발생하지 않았다."
+          }
+        }
+      ]
+    },
+    "quality": {
+      "json_valid": true,
+      "count_match": true,
+      "all_korean_reasons": true,
+      "scores": [
+        85,
+        5,
+        75,
+        10,
+        80
+      ],
+      "score_accuracy": "5/5"
+    }
+  }
+}

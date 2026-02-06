@@ -376,7 +376,7 @@ class TestOllamaLLMProvider:
         
         assert provider.model == 'qwen3:32b'
         assert provider.timeout == 600
-        assert provider.max_retries == 3
+        assert provider.max_retries == 2
         assert provider.use_gateway is False
     
     def test_init_fast_tier(self, mock_state_manager, monkeypatch):

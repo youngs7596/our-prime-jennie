@@ -1,0 +1,119 @@
+{
+  "model": "Qwen/Qwen3-32B-AWQ",
+  "engine": "vLLM 0.15.1",
+  "quantization": "awq_marlin",
+  "max_model_len": 4096,
+  "gpu": "RTX 3090 24GB",
+  "timestamp": "2026-02-06T12:58:27.495197",
+  "warmup": {
+    "elapsed_sec": 0.9,
+    "prompt_tokens": 20,
+    "completion_tokens": 10,
+    "tok_per_sec": 11.1,
+    "response": {
+      "parse_error": true,
+      "raw": "{\n  \"response\": \"Hello! How can"
+    }
+  },
+  "single_news": {
+    "elapsed_sec": 1.98,
+    "prompt_tokens": 369,
+    "completion_tokens": 63,
+    "tok_per_sec": 31.8,
+    "response": {
+      "score": 85,
+      "reason": "삼성전자가 차세대 HBM4 양산에 성공하며 엔비디아 공급망에 합류함에 따라 실적 성장과 시장 점유율 확대가 기대된다."
+    }
+  },
+  "batch_news": {
+    "elapsed_sec": 22.17,
+    "prompt_tokens": 1205,
+    "completion_tokens": 803,
+    "tok_per_sec": 36.2,
+    "response": {
+      "results": [
+        {
+          "id": 1,
+          "sentiment": {
+            "score": 85,
+            "reason": "삼성전자가 차세대 HBM4 양산에 성공하며 엔비디아 공급망에 합류했고, 반도체 부문 실적 개선이 기대된다. 이는 강력한 호재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": true,
+            "type": "FIRE",
+            "benefit_score": 15,
+            "reason": "삼성전자가 SK하이닉스가 독점하던 HBM 시장에 진입하면서 경쟁 구도가 형성될 것으로 보인다. 이는 SK하이닉스에 부정적인 영향을 줄 수 있다."
+          }
+        },
+        {
+          "id": 2,
+          "sentiment": {
+            "score": 15,
+            "reason": "카카오에서 대규모 개인정보 유출 사고가 발생했고, 주가는 5% 이상 급락했다. 이는 강력한 악재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": true,
+            "type": "SECURITY",
+            "benefit_score": 18,
+            "reason": "카카오의 보안 사고로 인해 사용자들이 다른 메신저나 플랫폼으로 이탈할 가능성이 있어, 경쟁사가 반사이익을 얻을 수 있다."
+          }
+        },
+        {
+          "id": 3,
+          "sentiment": {
+            "score": 80,
+            "reason": "현대차가 미국 조지아 전기차 공장 가동을 시작하며 IRA 보조금 수혜가 기대되고, 북미 전기차 시장 점유율 확대가 목표로 설정되었다. 이는 강력한 호재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": false,
+            "type": "NONE",
+            "benefit_score": 0,
+            "reason": "현대차의 전기차 공장 가동은 경쟁사에 직접적인 부정적인 영향을 주지 않으며, 경쟁사 리스크는 감지되지 않았다."
+          }
+        },
+        {
+          "id": 4,
+          "sentiment": {
+            "score": 10,
+            "reason": "셀트리온의 신약 임상 3상 실패로 인해 주가는 하한가에 근접했고, 바이오 업종 전반에 투자심리 위축이 발생했다. 이는 강력한 악재로 평가된다."
+          },
+          "competitor_risk": {
+            "is_detected": true,
+            "type": "OTHER",
+            "benefit_score": 5,
+            "reason": "셀트리온의 신약 실패로 인해 경쟁사들이 해당 분야에서의 기회를 얻을 수 있으며, 일부 반사이익이 발생할 수 있다."
+          }
+        },
+        {
+          "id": 5,
+          "sentiment": {
+            "score": 90,
+            "sentiment": {
+              "score": 90,
+              "reason": "한화에어로스페이스가 폴란드 K9 자주포 2차 계약을 체결하며, 4조원 규모의 대규모 수주를 기록했다. 이는 강력한 호재로 평가된다."
+            },
+            "competitor_risk": {
+              "is_detected": true,
+              "type": "FIRE",
+              "benefit_score": 12,
+              "reason": "한화에어로스페이스가 방산 수출 계약을 체결하면서 경쟁사인 K9 자주포 관련 기업들에게는 부정적인 영향을 줄 수 있다."
+            }
+          }
+        }
+      ]
+    },
+    "quality": {
+      "json_valid": true,
+      "count_match": true,
+      "all_korean_reasons": false,
+      "scores": [
+        85,
+        15,
+        80,
+        10,
+        90
+      ],
+      "score_accuracy": "5/5"
+    }
+  }
+}

@@ -104,10 +104,8 @@ MIN_LLM_SCORE_TIER2: "65"
 #  # [Scout] LLM 실행 간격 (분) -> 4시간으로 변경
 SCOUT_MAX_CANDIDATES_PHASE2: "5"        # Phase 2 진입 종목 수 제한
 SCOUT_LLM_MAX_WORKERS: "4"                  # LLM 동시 호출 최대 수 (GPT-OSS:20B 속도 최적화)
-LOCAL_MODEL_REASONING: "gpt-oss:20b"        # [Hunter] Strategy & Deep Logic
-LOCAL_MODEL_THINKING: "gpt-oss:20b"         # [Judge] Strategy & Deep Logic (Unified)
-TIER_REASONING_PROVIDER: "ollama"           # [User Preference] Force Local
-TIER_THINKING_PROVIDER: "ollama"            # [Judge] Cost Saving
+TIER_REASONING_PROVIDER: "deepseek_cloud"   # [CloudFailover] OpenRouter → DeepSeek → Ollama Cloud
+TIER_THINKING_PROVIDER: "deepseek_cloud"    # [CloudFailover] OpenRouter → DeepSeek → Ollama Cloud
 TIER_FAST_PROVIDER: "ollama"                # [Sentiment] Switch to Local for zero cost
 LOCAL_MODEL_FAST: "exaone3.5:7.8b"          # [News] LG Exaone 3.5 (Best for Korean Nuance & Speed)
 OLLAMA_NUM_PARALLEL: "2"                    # [Optimization] Batch Priority
