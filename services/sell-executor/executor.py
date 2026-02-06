@@ -297,7 +297,8 @@ class SellExecutor:
 
                 # [P0] 손절 시 재진입 방지 쿨다운 설정
                 try:
-                    if "stop_loss" in sell_reason.lower() or "stop loss" in sell_reason.lower():
+                    reason_lower = sell_reason.lower()
+                    if any(kw in reason_lower for kw in ("stop_loss", "stop loss", "atr stop")):
                         cooldown_days = int(os.getenv("STOPLOSS_COOLDOWN_DAYS", "5"))
                         set_stoploss_cooldown(stock_code, cooldown_days=cooldown_days)
                         logger.info(f"🚫 [{stock_code}] 손절 쿨다운 {cooldown_days}거래일 설정")

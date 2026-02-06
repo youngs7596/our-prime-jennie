@@ -233,33 +233,45 @@ def _call_ollama_cloud(endpoint: str, payload: Dict[str, Any], timeout: int) -> 
     # The client library uses https://ollama.com as host, modifying the path.
     # Typically /api/chat -> https://ollama.com/api/chat
     cloud_host = "https://ollama.com"
-    url = f"{cloud_host}{endpoint}"
-    
+
     headers = {
         "Authorization": f"Bearer {OLLAMA_API_KEY}",
         "Content-Type": "application/json"
     }
     
-    # Clean up model name (remove :cloud suffix if present, purely for routing)
-    # If the user intentionally named it deepseek-v3.2:cloud on the platform, keep it.
-    # But usually :cloud is our internal marker.
-    # Let's try stripping it for the upstream call to be safe, acting as an alias.
-    upstream_model = payload["model"].replace(":cloud", "")
+    # Ollama Cloud에서 :cloud는 실제 모델 태그 → 유지
+    upstream_model = payload["model"]
+    if not upstream_model.endswith(":cloud"):
+        upstream_model = f"{upstream_model}:cloud"
     payload["model"] = upstream_model
-    
+
     # Ensure stream is false for our gateway
     payload["stream"] = False
-    
-    logger.info(f"🌩️ [Cloud Proxy] Routing to Ollama Cloud: {upstream_model}")
-    
+
+    # Ollama Cloud는 /api/chat만 지원 → /api/generate를 /api/chat으로 변환
+    cloud_endpoint = endpoint
+    if endpoint == "/api/generate":
+        cloud_endpoint = "/api/chat"
+        prompt = payload.pop("prompt", "")
+        payload["messages"] = [{"role": "user", "content": prompt}]
+
+    url = f"{cloud_host}{cloud_endpoint}"
+    logger.info(f"🌩️ [Cloud Proxy] Routing to Ollama Cloud: {upstream_model} ({cloud_endpoint})")
+
     response = requests.post(url, json=payload, headers=headers, timeout=timeout)
     try:
         response.raise_for_status()
     except requests.exceptions.HTTPError as e:
         logger.error(f"Cloud API Error: {response.text}")
         raise e
-        
-    return response.json()
+
+    result = response.json()
+
+    # /api/generate 호환: chat 응답을 generate 형식으로 변환
+    if endpoint == "/api/generate" and "message" in result:
+        result["response"] = result.get("message", {}).get("content", "")
+
+    return result
 
 
 def check_ollama_health() -> bool:

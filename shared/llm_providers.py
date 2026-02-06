@@ -140,27 +140,87 @@ class OllamaLLMProvider(BaseLLMProvider):
     def _call_cloud_api(self, endpoint: str, payload: Dict) -> Dict:
         """
         Ollama Cloud API 직접 호출 (Gateway 우회)
-        - Rate limit, Circuit Breaker 없이 직접 통신
-        - 로컬 GPU 자원과 무관하므로 동시성 제약 없음
+        - Ollama Cloud는 /api/chat만 지원 → /api/generate 요청을 자동 변환
+        - 5xx 에러 시 exponential backoff retry (최대 5회)
+        - 응답 body 로깅으로 에러 원인 추적 가능
         """
-        url = f"{self.cloud_host}{endpoint}"
-
         headers = {"Content-Type": "application/json"}
         if self._cloud_api_key:
             headers["Authorization"] = f"Bearer {self._cloud_api_key}"
 
         # Cloud용 페이로드 구성
         cloud_payload = dict(payload)
-        # :cloud 접미사 제거 (내부 라우팅 마커)
+        # Ollama Cloud에서 :cloud는 실제 모델 태그 → 유지
         model_in_payload = cloud_payload.get("model", self.model)
-        cloud_payload["model"] = model_in_payload.replace(":cloud", "")
+        if not model_in_payload.endswith(":cloud"):
+            model_in_payload = model_in_payload.replace(":cloud", "")
+        cloud_payload["model"] = model_in_payload
         cloud_payload["stream"] = False
 
-        logger.info(f"☁️ [Ollama Cloud] 요청: {endpoint} (model={cloud_payload['model']})")
+        # Cloud 전용: 로컬 Ollama 옵션 제거 (num_ctx, num_predict 등은 Cloud에서 미지원)
+        if "options" in cloud_payload:
+            cloud_opts = {}
+            # temperature만 유지, 나머지 로컬 전용 옵션 제거
+            if "temperature" in cloud_payload["options"]:
+                cloud_opts["temperature"] = cloud_payload["options"]["temperature"]
+            if cloud_opts:
+                cloud_payload["options"] = cloud_opts
+            else:
+                del cloud_payload["options"]
+        # keep_alive도 로컬 전용
+        cloud_payload.pop("keep_alive", None)
 
-        response = requests.post(url, json=cloud_payload, headers=headers, timeout=self.timeout)
-        response.raise_for_status()
-        return response.json()
+        # Ollama Cloud는 /api/chat만 지원 → /api/generate를 /api/chat으로 변환
+        is_generate_compat = False
+        if endpoint == "/api/generate":
+            cloud_endpoint = "/api/chat"
+            prompt = cloud_payload.pop("prompt", "")
+            cloud_payload["messages"] = [{"role": "user", "content": prompt}]
+            is_generate_compat = True
+        else:
+            cloud_endpoint = endpoint
+
+        url = f"{self.cloud_host}{cloud_endpoint}"
+
+        max_retries = int(os.getenv("OLLAMA_CLOUD_MAX_RETRIES", "5"))
+        base_delay = float(os.getenv("OLLAMA_CLOUD_RETRY_DELAY", "3.0"))
+
+        for attempt in range(max_retries):
+            logger.info(f"☁️ [Ollama Cloud] 요청: {cloud_endpoint} (model={cloud_payload['model']}, attempt={attempt + 1}/{max_retries})")
+
+            try:
+                response = requests.post(url, json=cloud_payload, headers=headers, timeout=self.timeout)
+                response.raise_for_status()
+                result = response.json()
+
+                # /api/generate 호환: chat 응답을 generate 형식으로 변환
+                if is_generate_compat:
+                    content = result.get("message", {}).get("content", "")
+                    result["response"] = content
+
+                return result
+            except requests.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response is not None else 0
+                # 응답 body 로깅 (에러 원인 추적용)
+                response_body = ""
+                try:
+                    response_body = e.response.text[:500] if e.response is not None else "No response body"
+                except Exception:
+                    response_body = "Failed to read response body"
+
+                if status_code >= 500 and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)  # 3s, 6s, 12s, 24s
+                    logger.warning(
+                        f"⚠️ [Ollama Cloud] {status_code} 에러 (attempt {attempt + 1}/{max_retries}). "
+                        f"{delay:.1f}s 후 재시도... body={response_body}"
+                    )
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(
+                        f"❌ [Ollama Cloud] 최종 실패: {status_code} {e}. body={response_body}"
+                    )
+                    raise
 
     def _log_llm_interaction(self, interaction_type: str, request_data: Dict, response_data: Dict, model_name: str = None):
         """
