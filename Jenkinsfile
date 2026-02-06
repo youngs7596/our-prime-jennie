@@ -74,8 +74,9 @@ pipeline {
         }
 
         // ====================================================
-        // development 브랜치에서만 실행: Smart Build & Deploy
-        // 핵심: Build(변경 서비스만 이미지 빌드) → Deploy(전체 재시작)
+        // development 브랜치: BuildKit 캐시 기반 빌드 & 배포
+        // BuildKit이 레이어 캐시로 변경 없는 서비스는 즉시 스킵
+        // 변경된 이미지의 컨테이너만 자동 재생성
         // ====================================================
         stage('Build & Deploy') {
             when {
@@ -92,75 +93,37 @@ pipeline {
                 }
             }
             steps {
-                echo '🚀 Smart Build & Deploy to development environment...'
+                echo '🚀 Build & Deploy to development environment...'
 
                 withCredentials([usernamePassword(credentialsId: 'my-prime-jennie-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASS')]) {
                     sh '''
-                        # Install dependencies
-                        apk add --no-cache python3 git
+                        apk add --no-cache git
 
-                        # Host Path로 이동 (빌드 + 배포 동일 경로에서 실행)
                         cd /home/youngs75/projects/my-prime-jennie
-
                         git config --global --add safe.directory "*"
 
-                        # 1. 최신 코드 강제 동기화 (development 브랜치)
+                        # 1. 최신 코드 동기화
                         git fetch https://${GIT_USER}:${GIT_PASS}@github.com/youngs7596/my-prime-jennie.git development
                         git reset --hard FETCH_HEAD
                         git clean -fd
 
-                        # 2. 변경 범위 감지
-                        # 마지막 성공 빌드 커밋 기록 파일 사용 (재시도 시에도 정확한 diff 보장)
                         echo "=========================================="
-                        echo "🧠 Smart Build: 변경된 서비스 감지"
+                        echo "📝 Deploying: $(git log --oneline -1)"
                         echo "=========================================="
 
-                        LAST_BUILD_FILE="/home/youngs75/projects/my-prime-jennie/.last_successful_build"
-                        CURRENT_HEAD=$(git rev-parse HEAD)
-
-                        if [ -f "$LAST_BUILD_FILE" ]; then
-                            LAST_BUILD=$(cat "$LAST_BUILD_FILE")
-                            if [ "$LAST_BUILD" = "$CURRENT_HEAD" ]; then
-                                echo "ℹ️ HEAD == last successful build. No new commits."
-                                TARGET_RANGE=""
-                            elif git merge-base --is-ancestor "$LAST_BUILD" HEAD 2>/dev/null; then
-                                TARGET_RANGE="${LAST_BUILD}..HEAD"
-                            else
-                                echo "⚠️ Last build commit not in history. Triggering FULL BUILD."
-                                TARGET_RANGE=""
-                                FORCE_FULL_BUILD=true
-                            fi
-                        else
-                            echo "🚨 No last build record. Triggering FULL BUILD (bootstrap)."
-                            TARGET_RANGE=""
-                            FORCE_FULL_BUILD=true
-                        fi
-
-                        # 3. Build: 변경된 서비스만 이미지 빌드 (또는 전체 빌드)
-                        echo "=========================================="
-                        echo "🏗️ Step 1: 서비스 이미지 빌드"
-                        echo "=========================================="
+                        # 2. 오래된 빌드 캐시 정리
                         docker builder prune -f --filter "until=24h" || true
 
-                        if [ "${FORCE_FULL_BUILD:-false}" = "true" ]; then
-                            echo "🏗️ FULL BUILD triggered."
-                            python3 scripts/smart_build.py --action build --services ALL
-                        elif [ -n "$TARGET_RANGE" ]; then
-                            echo "📏 Commit range: $TARGET_RANGE"
-                            python3 scripts/smart_build.py --action build --commit-range "$TARGET_RANGE"
-                        else
-                            echo "✨ No new commits to build."
-                        fi
+                        # 3. 빌드 & 배포 (BuildKit 캐시가 알아서 처리)
+                        #    - 변경 없는 서비스: 레이어 캐시 히트 → 이미지 동일 → 컨테이너 유지
+                        #    - 변경된 서비스: 해당 레이어만 재빌드 → 컨테이너 재생성
+                        docker compose -p ${COMPOSE_PROJECT_NAME} \
+                            -f ${DOCKER_COMPOSE_FILE} \
+                            --profile real \
+                            up -d --build
 
-                        # 4. Deploy: 전체 서비스 재시작 (이미지 빌드 완료 상태)
-                        echo "=========================================="
-                        echo "🚀 Step 2: 전체 서비스 재시작"
-                        echo "=========================================="
-                        python3 scripts/smart_build.py --action deploy --services ALL
-
-                        # 5. 성공 시 현재 커밋 기록 (다음 빌드에서 정확한 diff 범위 사용)
-                        echo "$CURRENT_HEAD" > "$LAST_BUILD_FILE"
-                        echo "✅ Last successful build recorded: $CURRENT_HEAD"
+                        # 4. 미사용 이미지 정리
+                        docker image prune -f || true
 
                         echo ""
                         echo "=========================================="
