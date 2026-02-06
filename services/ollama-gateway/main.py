@@ -1,19 +1,24 @@
 """
-services/ollama-gateway/main.py - Ollama Local LLM Gateway
-============================================================
+services/ollama-gateway/main.py - Local LLM Gateway (Ollama / vLLM)
+====================================================================
 
-이 서비스는 Local LLM (Ollama/Qwen3) 요청을 중앙화하여 순차 처리합니다.
+이 서비스는 Local LLM 요청을 중앙화하여 순차 처리합니다.
+Ollama API 형식을 그대로 수신하되, BACKEND_MODE에 따라
+내부적으로 vLLM OpenAI API로 변환하여 전달합니다.
 
 주요 기능:
 ---------
 1. 요청 큐잉: 여러 서비스의 동시 요청을 순차 처리
-2. Rate Limiting: Ollama 과부하 방지
+2. Rate Limiting: 과부하 방지
 3. Circuit Breaker: 장애 전파 차단
 4. 통계/모니터링: 요청 현황 중앙 관리
+5. Backend 추상화: Ollama ↔ vLLM 투명 전환 (BACKEND_MODE)
 
 API Endpoints:
 -------------
 - POST /api/generate      - 텍스트 생성 요청
+- POST /api/chat          - 채팅 요청
+- POST /api/embed         - 임베딩 생성 요청
 - POST /api/generate-json - JSON 생성 요청 (스키마 검증 포함)
 - GET  /health            - 헬스 체크
 - GET  /stats             - 요청 통계
@@ -54,6 +59,20 @@ app = Flask(__name__)
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+# vLLM Backend 설정
+BACKEND_MODE = os.getenv("BACKEND_MODE", "ollama")  # "ollama" | "vllm"
+VLLM_LLM_URL = os.getenv("VLLM_LLM_URL", "http://localhost:8001")  # vLLM LLM 서버
+VLLM_EMBED_URL = os.getenv("VLLM_EMBED_URL", "http://localhost:8002")  # vLLM 임베딩 서버
+
+# vLLM 모델 이름 매핑 (Ollama 모델명 → HuggingFace 모델명)
+VLLM_MODEL_MAP = {
+    "exaone3.5:7.8b": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+    "exaone": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+    "gpt-oss:20b": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+    "daynice/kure-v1": "nlpai-lab/KURE-v1",
+    "kure-v1": "nlpai-lab/KURE-v1",
+}
+
 # Secret Loading (DeepSeek/Cloud Proxy)
 SECRETS_FILE = os.getenv("SECRETS_FILE", "/app/config/secrets.json")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
@@ -83,8 +102,13 @@ RATE_LIMIT_EMBED = os.getenv("OLLAMA_RATE_LIMIT_EMBED", "3000 per minute")
 # 경량 모델 패턴 (FAST rate limit 적용 대상)
 FAST_MODEL_PREFIXES = os.getenv("OLLAMA_FAST_MODELS", "exaone").split(",")
 
-logger.info(f"🚀 Ollama Gateway 시작")
-logger.info(f"   OLLAMA_HOST: {OLLAMA_HOST}")
+logger.info(f"🚀 LLM Gateway 시작 (backend={BACKEND_MODE})")
+if BACKEND_MODE == "vllm":
+    logger.info(f"   VLLM_LLM_URL: {VLLM_LLM_URL}")
+    logger.info(f"   VLLM_EMBED_URL: {VLLM_EMBED_URL}")
+    logger.info(f"   VLLM_MODEL_MAP: {VLLM_MODEL_MAP}")
+else:
+    logger.info(f"   OLLAMA_HOST: {OLLAMA_HOST}")
 logger.info(f"   REDIS_URL: {REDIS_URL}")
 logger.info(f"   RATE_LIMIT: {RATE_LIMIT}")
 logger.info(f"   RATE_LIMIT_FAST: {RATE_LIMIT_FAST} (models: {FAST_MODEL_PREFIXES})")
@@ -193,39 +217,161 @@ request_lock = threading.BoundedSemaphore(value=max_concurrent)
 
 def call_ollama_with_breaker(endpoint: str, payload: Dict[str, Any], timeout: int = 600) -> Dict[str, Any]:
     """
-    Circuit Breaker를 적용한 Ollama API 호출 래퍼
+    Circuit Breaker를 적용한 LLM API 호출 래퍼.
+    BACKEND_MODE에 따라 Ollama 또는 vLLM으로 라우팅.
     [Cloud Proxy] Intercepts requests for known cloud models and routes to external API.
     """
     model_name = payload.get("model", "")
-    
+
     # 🌩️ Cloud Proxy Logic (Ollama Cloud)
     # Triggered for models ending in ':cloud'
     if model_name.endswith(":cloud"):
          if OLLAMA_API_KEY:
-             try:
-                return _call_ollama_cloud(endpoint, payload, timeout)
-             except Exception as e:
-                logger.warning(f"⚠️ [Cloud Proxy] Failed (Quota/Error): {e}. Fallback to Local 'gpt-oss:20b'...")
-                # Fallback to local model
-                payload["model"] = "gpt-oss:20b"
+             return _call_ollama_cloud(endpoint, payload, timeout)
          else:
-             # No API key, fallback immediately
-             logger.warning(f"⚠️ [Cloud Proxy] No API Key for {model_name}. Fallback to Local 'gpt-oss:20b'")
-             payload["model"] = "gpt-oss:20b"
+             raise RuntimeError(f"[Cloud Proxy] No API Key for {model_name}. Cloud 호출 불가.")
 
+    # vLLM 모드: Ollama 형식 → vLLM OpenAI 형식 변환
+    if BACKEND_MODE == "vllm":
+        if endpoint in ("/api/embed", "/api/embeddings"):
+            return _call_vllm_embed(payload, timeout)
+        else:
+            return _call_vllm_llm(endpoint, payload, timeout)
+
+    # Ollama 모드 (기본)
     url = f"{OLLAMA_HOST}{endpoint}"
-    
+
     # 스트리밍 비활성화, 모델 유지
     payload["stream"] = False
     payload["keep_alive"] = -1
-    
+
     @ollama_circuit_breaker
     def _call():
         response = requests.post(url, json=payload, timeout=timeout)
         response.raise_for_status()
         return response.json()
-    
+
     return _call()
+
+
+def _resolve_vllm_model(ollama_model: str, is_embed: bool = False) -> str:
+    """Ollama 모델명을 vLLM HuggingFace 모델명으로 변환"""
+    if ollama_model in VLLM_MODEL_MAP:
+        return VLLM_MODEL_MAP[ollama_model]
+    # 매핑에 없으면 그대로 전달 (사용자가 직접 HF 이름 사용 가능)
+    logger.warning(f"⚠️ [vLLM] 모델 매핑 없음: {ollama_model}, 원본 사용")
+    return ollama_model
+
+
+def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+    """
+    Ollama generate/chat 요청을 vLLM /v1/chat/completions로 변환.
+    응답을 Ollama 형식으로 재변환하여 반환.
+    """
+    ollama_model = payload.get("model", "")
+    vllm_model = _resolve_vllm_model(ollama_model)
+    options = payload.get("options", {})
+
+    # Ollama 옵션 → OpenAI 파라미터 변환
+    temperature = options.get("temperature", 0.7)
+    max_tokens = options.get("num_predict", 2048)
+    top_p = options.get("top_p", 1.0)
+
+    # 메시지 구성
+    if endpoint == "/api/generate":
+        prompt = payload.get("prompt", "")
+        system = payload.get("system", "")
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+    else:
+        # /api/chat - 메시지 그대로 사용
+        messages = payload.get("messages", [])
+
+    vllm_payload = {
+        "model": vllm_model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "top_p": top_p,
+        "stream": False,
+    }
+
+    # JSON 출력 모드 지원
+    if payload.get("format") == "json":
+        vllm_payload["response_format"] = {"type": "json_object"}
+
+    url = f"{VLLM_LLM_URL}/v1/chat/completions"
+    logger.info(f"🔄 [vLLM] {ollama_model} → {vllm_model} ({endpoint} → /v1/chat/completions)")
+
+    @ollama_circuit_breaker
+    def _call():
+        response = requests.post(url, json=vllm_payload, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+
+    vllm_result = _call()
+
+    # vLLM OpenAI 응답 → Ollama 형식 변환
+    choice = vllm_result.get("choices", [{}])[0]
+    content = choice.get("message", {}).get("content", "")
+    usage = vllm_result.get("usage", {})
+
+    if endpoint == "/api/generate":
+        return {
+            "model": ollama_model,
+            "response": content,
+            "done": True,
+            "eval_count": usage.get("completion_tokens", 0),
+            "prompt_eval_count": usage.get("prompt_tokens", 0),
+        }
+    else:
+        # /api/chat
+        return {
+            "model": ollama_model,
+            "message": {
+                "role": "assistant",
+                "content": content,
+            },
+            "done": True,
+            "eval_count": usage.get("completion_tokens", 0),
+            "prompt_eval_count": usage.get("prompt_tokens", 0),
+        }
+
+
+def _call_vllm_embed(payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
+    """
+    Ollama embed 요청을 vLLM /v1/embeddings로 변환.
+    응답을 Ollama 형식으로 재변환하여 반환.
+    """
+    ollama_model = payload.get("model", "")
+    vllm_model = _resolve_vllm_model(ollama_model, is_embed=True)
+    input_data = payload.get("input", "")
+
+    vllm_payload = {
+        "model": vllm_model,
+        "input": input_data,
+    }
+
+    url = f"{VLLM_EMBED_URL}/v1/embeddings"
+    logger.info(f"🔄 [vLLM] Embed: {ollama_model} → {vllm_model}")
+
+    @ollama_circuit_breaker
+    def _call():
+        response = requests.post(url, json=vllm_payload, timeout=timeout)
+        response.raise_for_status()
+        return response.json()
+
+    vllm_result = _call()
+
+    # vLLM OpenAI embeddings 응답 → Ollama 형식 변환
+    embeddings = [item["embedding"] for item in vllm_result.get("data", [])]
+
+    return {
+        "model": ollama_model,
+        "embeddings": embeddings,
+    }
 
 def _call_ollama_cloud(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict[str, Any]:
     """Ollama Cloud API Proxy (Transparent Proxy)"""
@@ -275,12 +421,27 @@ def _call_ollama_cloud(endpoint: str, payload: Dict[str, Any], timeout: int) -> 
 
 
 def check_ollama_health() -> bool:
-    """Ollama 서버 헬스 체크"""
+    """백엔드 서버 헬스 체크 (Ollama 또는 vLLM)"""
+    if BACKEND_MODE == "vllm":
+        return _check_vllm_health()
     try:
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
+
+
+def _check_vllm_health() -> bool:
+    """vLLM 서버 헬스 체크 (LLM + Embed 둘 다 확인)"""
+    try:
+        llm_ok = requests.get(f"{VLLM_LLM_URL}/v1/models", timeout=5).status_code == 200
+    except Exception:
+        llm_ok = False
+    try:
+        embed_ok = requests.get(f"{VLLM_EMBED_URL}/v1/models", timeout=5).status_code == 200
+    except Exception:
+        embed_ok = False
+    return llm_ok and embed_ok
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -290,15 +451,16 @@ def check_ollama_health() -> bool:
 @app.route("/health", methods=["GET"])
 def health():
     """헬스 체크"""
-    ollama_healthy = check_ollama_health()
+    backend_healthy = check_ollama_health()
     circuit_state = ollama_circuit_breaker.current_state
-    
-    status = "healthy" if ollama_healthy and circuit_state != "open" else "degraded"
-    
+
+    status = "healthy" if backend_healthy and circuit_state != "open" else "degraded"
+
     return jsonify({
         "status": status,
         "service": "ollama-gateway",
-        "ollama_status": "connected" if ollama_healthy else "disconnected",
+        "backend_mode": BACKEND_MODE,
+        "backend_status": "connected" if backend_healthy else "disconnected",
         "circuit_breaker": str(circuit_state),
         "queue_depth": stats['queue_depth'],
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -632,11 +794,24 @@ def generate_json():
 
 @app.route("/api/models", methods=["GET"])
 def list_models():
-    """사용 가능한 모델 목록 조회 (Ollama /api/tags Proxy)"""
+    """사용 가능한 모델 목록 조회"""
     try:
-        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
-        response.raise_for_status()
-        return jsonify(response.json())
+        if BACKEND_MODE == "vllm":
+            # vLLM: /v1/models에서 조회 후 Ollama 형식으로 변환
+            models = []
+            for url in [VLLM_LLM_URL, VLLM_EMBED_URL]:
+                try:
+                    resp = requests.get(f"{url}/v1/models", timeout=10)
+                    resp.raise_for_status()
+                    for m in resp.json().get("data", []):
+                        models.append({"name": m["id"], "backend": "vllm"})
+                except Exception:
+                    pass
+            return jsonify({"models": models})
+        else:
+            response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+            response.raise_for_status()
+            return jsonify(response.json())
     except Exception as e:
         logger.error(f"❌ 모델 목록 조회 실패: {e}")
         return jsonify({"error": str(e)}), 500

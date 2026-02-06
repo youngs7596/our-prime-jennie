@@ -696,10 +696,8 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - USE_OLLAMA_GATEWAY=true
       - OLLAMA_GATEWAY_URL=http://localhost:11500
-      - TIER_REASONING_PROVIDER=ollama
-      - LOCAL_MODEL_REASONING=deepseek-v3.2:cloud
-      - TIER_THINKING_PROVIDER=ollama
-      - LOCAL_MODEL_THINKING=deepseek-v3.2:cloud
+      - TIER_REASONING_PROVIDER=deepseek_cloud
+      - TIER_THINKING_PROVIDER=deepseek_cloud
       - DISABLE_MARKET_OPEN_CHECK=true
       - ENABLE_RAG=true
       - RAG_EMBEDDING_PROVIDER=local
@@ -736,10 +734,8 @@ services:
       - SECRETS_FILE=/app/config/secrets.json
       - USE_OLLAMA_GATEWAY=true
       - OLLAMA_GATEWAY_URL=http://localhost:11500
-      - TIER_REASONING_PROVIDER=ollama
-      - LOCAL_MODEL_REASONING=deepseek-v3.2:cloud
-      - TIER_THINKING_PROVIDER=ollama
-      - LOCAL_MODEL_THINKING=deepseek-v3.2:cloud
+      - TIER_REASONING_PROVIDER=deepseek_cloud
+      - TIER_THINKING_PROVIDER=deepseek_cloud
       - DISABLE_MARKET_OPEN_CHECK=true
       - ENABLE_RAG=true
       - LLM_DEBUG_ENABLED=true
@@ -892,7 +888,7 @@ services:
   # 11. AI/LLM Services
   # ============================================================================
 
-  # Ollama Gateway - 중앙화된 Local LLM 요청 처리 (순차 처리 보장)
+  # LLM Gateway - 중앙화된 Local LLM 요청 처리 (Ollama/vLLM 투명 전환)
   ollama-gateway:
     build:
       context: .
@@ -900,14 +896,21 @@ services:
     profiles: [ "real" ]
     network_mode: host
     environment:
+      - BACKEND_MODE=vllm
+      - VLLM_LLM_URL=http://localhost:8001
+      - VLLM_EMBED_URL=http://localhost:8002
       - OLLAMA_HOST=http://localhost:11434
       - REDIS_URL=redis://localhost:6379/0
-      - OLLAMA_RATE_LIMIT=60 per minute
-      - OLLAMA_RATE_LIMIT_FAST=120 per minute
-      - OLLAMA_RATE_LIMIT_EMBED=3000 per minute
+      # vLLM continuous batching → Ollama 대비 rate limit 대폭 완화
+      - OLLAMA_RATE_LIMIT=300 per minute
+      - OLLAMA_RATE_LIMIT_FAST=600 per minute
+      - OLLAMA_RATE_LIMIT_EMBED=6000 per minute
       - OLLAMA_FAST_MODELS=exaone
       - OLLAMA_CIRCUIT_FAIL_MAX=5
       - OLLAMA_CIRCUIT_RESET_TIMEOUT=120
+      - OLLAMA_MAX_CONCURRENT_REQUESTS=10
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
     restart: unless-stopped
     labels:
       - app=ollama-gateway
@@ -941,9 +944,78 @@ services:
       retries: 3
       start_period: 30s
 
+  # vLLM LLM Server (EXAONE 4.0 32B AWQ) - 메인 추론 엔진
+  vllm-llm:
+    image: vllm/vllm-openai:latest
+    profiles: [ "gpu" ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    volumes:
+      - /docker_data/huggingface_cache:/root/.cache/huggingface
+    ports:
+      - "8001:8000"
+    ipc: host
+    command: >
+      --model LGAI-EXAONE/EXAONE-4.0-32B-AWQ
+      --quantization awq_marlin
+      --dtype half
+      --max-model-len 4096
+      --gpu-memory-utilization 0.82
+      --trust-remote-code
+    restart: unless-stopped
+    labels:
+      - app=vllm-llm
+      - stack=my-prime-jennie
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/models')\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # vLLM Embedding Server (KURE-v1) - 임베딩 전용
+  vllm-embed:
+    image: vllm/vllm-openai:latest
+    profiles: [ "gpu" ]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    volumes:
+      - /docker_data/huggingface_cache:/root/.cache/huggingface
+    ports:
+      - "8002:8000"
+    ipc: host
+    command: >
+      --model nlpai-lab/KURE-v1
+      --dtype half
+      --max-model-len 256
+      --gpu-memory-utilization 0.10
+      --trust-remote-code
+      --enforce-eager
+    restart: unless-stopped
+    labels:
+      - app=vllm-embed
+      - stack=my-prime-jennie
+    healthcheck:
+      test: [ "CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/v1/models')\"" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # Ollama (Legacy) - BACKEND_MODE=ollama 시에만 사용
   ollama:
     image: ollama/ollama:latest
-    profiles: [ "gpu", "infra" ] # GPU 환경 및 인프라 프로파일 추가
+    profiles: [ "gpu-legacy" ]
     deploy:
       resources:
         reservations:
@@ -957,7 +1029,7 @@ services:
       - /docker_data/ollama_data:/root/.ollama
     environment:
       - OLLAMA_MAX_LOADED_MODELS=3
-      - OLLAMA_NUM_PARALLEL=3 # [Optimization] Batch Processing Optimal (Do not increase)
+      - OLLAMA_NUM_PARALLEL=3
       - OLLAMA_KEEP_ALIVE=5m
     restart: unless-stopped
     networks:
