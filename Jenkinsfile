@@ -120,30 +120,37 @@ pipeline {
 
                         if [ -f "$LAST_BUILD_FILE" ]; then
                             LAST_BUILD=$(cat "$LAST_BUILD_FILE")
-                            # 마지막 성공 커밋이 현재 히스토리에 존재하는지 확인
-                            if git merge-base --is-ancestor "$LAST_BUILD" HEAD 2>/dev/null; then
+                            if [ "$LAST_BUILD" = "$CURRENT_HEAD" ]; then
+                                echo "ℹ️ HEAD == last successful build. No new commits."
+                                TARGET_RANGE=""
+                            elif git merge-base --is-ancestor "$LAST_BUILD" HEAD 2>/dev/null; then
                                 TARGET_RANGE="${LAST_BUILD}..HEAD"
                             else
-                                echo "⚠️ Last build commit not in history. Fallback to HEAD~1..HEAD"
-                                TARGET_RANGE="HEAD~1..HEAD"
+                                echo "⚠️ Last build commit not in history. Triggering FULL BUILD."
+                                TARGET_RANGE=""
+                                FORCE_FULL_BUILD=true
                             fi
                         else
-                            echo "ℹ️ No last build record. Using ORIG_HEAD..HEAD"
-                            TARGET_RANGE="ORIG_HEAD..HEAD"
-                            if [ -z "$(git diff --name-only ORIG_HEAD..HEAD 2>/dev/null)" ]; then
-                                echo "⚠️ No changes in ORIG_HEAD..HEAD. Fallback to HEAD~1..HEAD"
-                                TARGET_RANGE="HEAD~1..HEAD"
-                            fi
+                            echo "🚨 No last build record. Triggering FULL BUILD (bootstrap)."
+                            TARGET_RANGE=""
+                            FORCE_FULL_BUILD=true
                         fi
 
-                        echo "📏 Commit range: $TARGET_RANGE"
-
-                        # 3. Build: 변경된 서비스만 이미지 빌드
+                        # 3. Build: 변경된 서비스만 이미지 빌드 (또는 전체 빌드)
                         echo "=========================================="
-                        echo "🏗️ Step 1: 변경 서비스 이미지 빌드"
+                        echo "🏗️ Step 1: 서비스 이미지 빌드"
                         echo "=========================================="
                         docker builder prune -f --filter "until=24h" || true
-                        python3 scripts/smart_build.py --action build --commit-range $TARGET_RANGE
+
+                        if [ "${FORCE_FULL_BUILD:-false}" = "true" ]; then
+                            echo "🏗️ FULL BUILD triggered."
+                            python3 scripts/smart_build.py --action build --services ALL
+                        elif [ -n "$TARGET_RANGE" ]; then
+                            echo "📏 Commit range: $TARGET_RANGE"
+                            python3 scripts/smart_build.py --action build --commit-range "$TARGET_RANGE"
+                        else
+                            echo "✨ No new commits to build."
+                        fi
 
                         # 4. Deploy: 전체 서비스 재시작 (이미지 빌드 완료 상태)
                         echo "=========================================="
