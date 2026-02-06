@@ -73,23 +73,7 @@ with DAG(
         append_env=True,
     )
 
-# 3. Collect Daily Prices (FDR): 18:15 KST
-with DAG(
-    'collect_daily_prices',
-    default_args=default_args,
-    schedule_interval='15 18 * * 1-5', # 18:15 KST
-    start_date=datetime(2025, 1, 1, tzinfo=kst),
-    catchup=False,
-    tags=['data', 'daily', 'price'],
-) as dag_daily_price:
-    run_daily_price = BashOperator(
-        task_id='run_collect_prices_fdr',
-        bash_command='python scripts/collect_prices_fdr.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
-        execution_timeout=timedelta(minutes=30),  # 951개 종목 처리에 충분한 시간
-    )
+# 3. (삭제됨) collect_daily_prices - daily_market_data_collector(KIS API, 16:00)와 중복으로 제거
 
 # 4. Collect Investor Trading: 18:30 KST
 with DAG(
