@@ -10,7 +10,7 @@ import os
 import sys
 import logging
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 import FinanceDataReader as fdr
 import mysql.connector
 
@@ -120,14 +120,17 @@ def main():
         for i, future in enumerate(as_completed(future_to_code)):
             code = future_to_code[future]
             try:
-                if future.result():
+                if future.result(timeout=60):
                     success_count += 1
                 else:
                     fail_count += 1
-                    
+
                 if (i + 1) % 50 == 0:
                     logger.info(f"[{i+1}/{len(codes)}] 진행 중... 성공: {success_count}, 실패: {fail_count}")
-                    
+
+            except TimeoutError:
+                logger.warning(f"⏳ [{code}] 60초 타임아웃 - 건너뜀")
+                fail_count += 1
             except Exception as e:
                 logger.error(f"❌ [{code}] 예외: {e}")
                 fail_count += 1
