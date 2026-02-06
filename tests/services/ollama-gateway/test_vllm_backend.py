@@ -25,10 +25,8 @@ if _gateway_path not in sys.path:
 os.environ.setdefault("BACKEND_MODE", "vllm")
 os.environ.setdefault("VLLM_LLM_URL", "http://localhost:8001")
 os.environ.setdefault("VLLM_EMBED_URL", "http://localhost:8002")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-
 # Redis 없이 Limiter가 작동하도록 in-memory storage 사용
-os.environ["RATELIMIT_STORAGE_URI"] = "memory://"
+os.environ["REDIS_URL"] = "memory://"
 
 # 모듈 임포트 (다른 main.py와 충돌 방지)
 if "main" in sys.modules:
@@ -58,9 +56,10 @@ class TestVLLMModelMapping:
     def test_kure_short_mapping(self):
         assert gw._resolve_vllm_model("kure-v1") == "nlpai-lab/KURE-v1"
 
-    def test_unknown_model_passthrough(self):
-        """매핑에 없는 모델은 원본 이름 그대로 반환"""
-        assert gw._resolve_vllm_model("some-custom-model") == "some-custom-model"
+    def test_unknown_model_raises_error(self):
+        """매핑에 없는 모델은 ValueError 발생 (CB 오염 방지)"""
+        with pytest.raises(ValueError, match="모델 매핑 없음"):
+            gw._resolve_vllm_model("some-custom-model")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
