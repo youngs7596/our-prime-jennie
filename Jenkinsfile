@@ -86,7 +86,7 @@ pipeline {
             }
             agent {
                 docker {
-                    image 'docker:dind'
+                    image 'docker:cli'
                     args '-v /var/run/docker.sock:/var/run/docker.sock -v /home/youngs75/projects/my-prime-jennie:/home/youngs75/projects/my-prime-jennie'
                     reuseNode true
                 }
