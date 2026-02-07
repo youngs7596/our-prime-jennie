@@ -689,8 +689,69 @@ class TestNewsSentimentFallback:
         assert result['score'] == 50
 
 
+# ============================================================================
+# run_analyst_scoring 테스트
+# ============================================================================
 
+class TestRunAnalystScoring:
+    """JennieBrain.run_analyst_scoring() 통합 Analyst 테스트"""
 
+    def test_returns_score_grade_reason(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """정상 응답 시 score, grade, reason 반환"""
+        mock_claude_provider.generate_json.return_value = {
+            'score': 72, 'grade': 'A', 'reason': '정량 70점 기반 수주 확인'
+        }
+        result = mock_brain.run_analyst_scoring(
+            sample_stock_info, quant_context="정량 점수: 70점"
+        )
+        assert result['score'] == 72
+        assert result['grade'] == 'A'  # 70-79 → A (코드 오버라이드)
+        assert '수주' in result['reason']
+
+    def test_grade_override(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """LLM이 잘못된 grade 반환 시 코드에서 교정"""
+        mock_claude_provider.generate_json.return_value = {
+            'score': 85, 'grade': 'A', 'reason': 'test'
+        }
+        result = mock_brain.run_analyst_scoring(
+            sample_stock_info, quant_context="정량 점수: 80점"
+        )
+        assert result['score'] == 85
+        assert result['grade'] == 'S'  # 80+ → S (코드 교정)
+
+    def test_provider_error_fallback(self, mock_brain, sample_stock_info):
+        """Provider 없으면 안전한 기본값 반환"""
+        mock_brain._get_provider = MagicMock(return_value=None)
+        result = mock_brain.run_analyst_scoring(sample_stock_info)
+        assert result['score'] == 0
+        assert result['grade'] == 'D'
+
+    def test_exception_handling(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """LLM 호출 예외 시 안전한 기본값"""
+        mock_claude_provider.generate_json.side_effect = Exception("timeout")
+        result = mock_brain.run_analyst_scoring(
+            sample_stock_info, quant_context="정량 점수: 70점"
+        )
+        assert result['score'] == 0
+        assert '오류' in result['reason']
+
+    def test_no_risk_tag_in_schema(self):
+        """Analyst 스키마에는 risk_tag가 없음"""
+        from shared.llm_constants import ANALYST_RESPONSE_SCHEMA
+        assert 'risk_tag' not in ANALYST_RESPONSE_SCHEMA['properties']
+        assert 'risk_tag' not in ANALYST_RESPONSE_SCHEMA['required']
+
+    def test_with_feedback_context(self, mock_brain, mock_claude_provider, sample_stock_info):
+        """피드백 컨텍스트가 전달되어도 동작"""
+        mock_claude_provider.generate_json.return_value = {
+            'score': 65, 'grade': 'B', 'reason': '피드백 반영'
+        }
+        result = mock_brain.run_analyst_scoring(
+            sample_stock_info,
+            quant_context="정량 점수: 65점",
+            feedback_context="바이오 추격매수 금지"
+        )
+        assert result['score'] == 65
 
     
 

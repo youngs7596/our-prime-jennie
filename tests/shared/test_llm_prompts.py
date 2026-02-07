@@ -25,6 +25,7 @@ from shared.llm_prompts import (
     build_analysis_prompt,
     build_parameter_verification_prompt,
     build_hunter_prompt_v5,
+    build_analyst_prompt,
 )
 
 
@@ -740,11 +741,85 @@ class TestCompetitorBenefitPrompt:
     def test_build_competitor_benefit_prompt(self):
         """경쟁사 수혜 분석 프롬프트 생성"""
         from shared.llm_prompts import build_competitor_benefit_prompt
-        
+
         news_title = "현대차 공장 화재 발생, 생산 차질 우려"
-        
+
         prompt = build_competitor_benefit_prompt(news_title)
-        
+
         assert '현대차' in prompt
         assert '화재' in prompt
         assert 'is_risk' in prompt or 'risk' in prompt.lower()
+
+
+# ============================================================================
+# Unified Analyst 프롬프트 테스트
+# ============================================================================
+
+class TestBuildAnalystPrompt:
+    """build_analyst_prompt() 통합 Analyst 프롬프트 테스트"""
+
+    @pytest.fixture
+    def stock_info(self):
+        return {
+            'code': '005930',
+            'name': '삼성전자',
+            'news_reason': '반도체 수주 확대 뉴스',
+            'per': 12.5,
+            'pbr': 1.1,
+            'market_cap': 400000000,
+        }
+
+    def test_returns_string(self, stock_info):
+        """프롬프트 문자열 반환"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert isinstance(result, str)
+        assert len(result) > 100
+
+    def test_contains_stock_info(self, stock_info):
+        """종목 정보 포함"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert '삼성전자' in result
+        assert '005930' in result
+
+    def test_contains_quant_context(self, stock_info):
+        """정량 컨텍스트 포함"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 73.5점 | RSI: 55")
+        assert '73.5' in result
+        assert 'RSI' in result
+
+    def test_contains_guardrail(self, stock_info):
+        """±15pt 가드레일 명시"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert '±15' in result or '15점' in result
+
+    def test_no_risk_tag_instruction(self, stock_info):
+        """risk_tag 출력하지 않도록 명시"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert 'risk_tag는 출력하지 마세요' in result or 'risk_tag' in result
+
+    def test_feedback_context_included(self, stock_info):
+        """피드백 컨텍스트 포함"""
+        result = build_analyst_prompt(
+            stock_info, "정량 점수: 70점",
+            feedback_context="바이오 섹터 추격매수 금지"
+        )
+        assert '바이오 섹터 추격매수 금지' in result
+
+    def test_fallback_without_quant_context(self, stock_info):
+        """정량 컨텍스트 없으면 기존 분석 프롬프트로 폴백"""
+        result = build_analyst_prompt(stock_info, quant_context=None)
+        assert '삼성전자' in result
+        # 기본 분석 프롬프트에는 '기본 50점' 문구가 있음
+        assert '50점' in result
+
+    def test_news_included(self, stock_info):
+        """뉴스 정보 포함"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert '반도체 수주 확대 뉴스' in result
+
+    def test_output_format_instruction(self, stock_info):
+        """JSON 출력 형식 명시"""
+        result = build_analyst_prompt(stock_info, "정량 점수: 70점")
+        assert '"score"' in result
+        assert '"grade"' in result
+        assert '"reason"' in result

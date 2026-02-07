@@ -67,6 +67,27 @@ ANALYSIS_RESPONSE_SCHEMA = {
     "required": ["score", "grade", "risk_tag", "reason"],
 }
 
+# 통합 Analyst 응답 스키마 (risk_tag 없음 — 코드에서 결정)
+ANALYST_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "score": {
+            "type": "integer",
+            "description": "매수 적합도 점수 (0~100점). 정량 점수 ±15점 범위 내.",
+        },
+        "grade": {
+            "type": "string",
+            "enum": ["S", "A", "B", "C", "D"],
+            "description": "종합 등급 (S:80+, A:70+, B:60+, C:50+, D:50미만)",
+        },
+        "reason": {
+            "type": "string",
+            "description": "점수 산정 근거 (정량 보정 이유, 뉴스 해석 등)",
+        },
+    },
+    "required": ["score", "grade", "reason"],
+}
+
 # 실시간 뉴스 감성 분석용 스키마
 SENTIMENT_RESPONSE_SCHEMA = {
     "type": "object",

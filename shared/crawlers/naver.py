@@ -548,3 +548,147 @@ def scrape_pbr_per_roe(
     
     logger.warning(f"[Naver PBR/PER] {stock_code} 최종 실패 ({max_retries}회 시도)")
     return None, None, None, [], None
+
+
+# ==============================================================================
+# 업종(섹터) 크롤링 (sise_group.naver) - EUC-KR 인코딩
+# ==============================================================================
+
+def get_naver_sector_list() -> List[Dict[str, Any]]:
+    """
+    네이버 금융 업종 목록 조회
+
+    URL: https://finance.naver.com/sise/sise_group.naver?type=upjong
+
+    Returns:
+        업종 리스트:
+        [{"sector_no": "261", "sector_name": "반도체", "change_pct": 1.2}, ...]
+    """
+    url = "https://finance.naver.com/sise/sise_group.naver?type=upjong"
+    sectors = []
+
+    try:
+        resp = requests.get(url, headers=NAVER_HEADERS, timeout=10)
+        resp.encoding = 'euc-kr'
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        rows = soup.select('table.type_1 tr')
+
+        for row in rows:
+            link = row.select_one('td a')
+            if not link:
+                continue
+
+            href = link.get('href', '')
+            name = link.text.strip()
+
+            if not name or 'no=' not in href:
+                continue
+
+            # URL에서 업종 번호 추출
+            sector_no = href.split('no=')[-1].split('&')[0]
+
+            # 등락률 (3번째 td)
+            cells = row.select('td')
+            change_pct = 0.0
+            if len(cells) >= 3:
+                pct_text = cells[2].text.strip().replace('%', '').replace(',', '')
+                try:
+                    change_pct = float(pct_text) if pct_text else 0.0
+                except ValueError:
+                    change_pct = 0.0
+
+            sectors.append({
+                'sector_no': sector_no,
+                'sector_name': name,
+                'change_pct': change_pct,
+            })
+
+        logger.info(f"[Naver Sector] {len(sectors)}개 업종 목록 로드 완료")
+
+    except Exception as e:
+        logger.warning(f"[Naver Sector] 업종 목록 크롤링 실패: {e}")
+
+    return sectors
+
+
+def get_naver_sector_stocks(sector_no: str) -> List[Dict[str, str]]:
+    """
+    특정 업종의 소속 종목 목록 조회
+
+    URL: https://finance.naver.com/sise/sise_group_detail.naver?type=upjong&no={sector_no}
+
+    Args:
+        sector_no: 업종 번호 (예: "261")
+
+    Returns:
+        종목 리스트:
+        [{"code": "005930", "name": "삼성전자"}, ...]
+    """
+    url = f"https://finance.naver.com/sise/sise_group_detail.naver?type=upjong&no={sector_no}"
+    stocks = []
+
+    try:
+        resp = requests.get(url, headers=NAVER_HEADERS, timeout=10)
+        resp.encoding = 'euc-kr'
+
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        rows = soup.select('table.type_5 tr')
+
+        for row in rows:
+            link = row.select_one('td a')
+            if not link:
+                continue
+
+            href = link.get('href', '')
+            name = link.text.strip()
+
+            if not name or 'code=' not in href:
+                continue
+
+            code = href.split('code=')[-1].split('&')[0]
+            if code and len(code) == 6 and code.isdigit():
+                stocks.append({'code': code, 'name': name})
+
+    except Exception as e:
+        logger.warning(f"[Naver Sector] 업종 {sector_no} 종목 크롤링 실패: {e}")
+
+    return stocks
+
+
+def build_naver_sector_mapping(request_delay: float = 0.3) -> Dict[str, str]:
+    """
+    전체 종목→업종 매핑 구축 (모든 업종 순회)
+
+    Args:
+        request_delay: 업종별 요청 간 지연(초). 기본 0.3초.
+
+    Returns:
+        종목코드→업종명 매핑:
+        {"005930": "반도체", "000660": "반도체", "005380": "자동차", ...}
+        약 40회 요청, delay 0.3초 기준 ~12초 소요
+    """
+    mapping: Dict[str, str] = {}
+
+    sectors = get_naver_sector_list()
+    if not sectors:
+        logger.warning("[Naver Sector] 업종 목록이 비어 있어 매핑 구축 불가")
+        return mapping
+
+    logger.info(f"[Naver Sector] {len(sectors)}개 업종 순회하여 종목 매핑 구축 시작...")
+
+    for i, sector in enumerate(sectors):
+        sector_no = sector['sector_no']
+        sector_name = sector['sector_name']
+
+        stocks = get_naver_sector_stocks(sector_no)
+        for stock in stocks:
+            # 첫 등장 업종을 사용 (중복 종목은 무시)
+            if stock['code'] not in mapping:
+                mapping[stock['code']] = sector_name
+
+        if i < len(sectors) - 1:
+            time.sleep(request_delay)
+
+    logger.info(f"[Naver Sector] 매핑 구축 완료: {len(mapping)}개 종목")
+    return mapping

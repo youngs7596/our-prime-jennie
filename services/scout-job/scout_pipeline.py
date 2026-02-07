@@ -595,6 +595,242 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     }
 
 
+def process_unified_analyst_task(stock_info, brain, quant_result, snapshot_cache=None,
+                                 news_cache=None, archivist=None, feedback_context=None,
+                                 market_regime="UNKNOWN"):
+    """
+    통합 Analyst 1-pass 파이프라인 — Hunter+Debate+Judge를 1회 LLM 호출로 통합
+
+    기존 process_phase1_hunter_v5_task() + process_phase23_judge_v5_task() 통합.
+    비용 1/3, 토큰 1/3, risk_tag는 코드 기반.
+
+    Args:
+        stock_info: {'code': str, 'info': dict}
+        brain: JennieBrain 인스턴스
+        quant_result: QuantScoreResult
+        snapshot_cache: 스냅샷 캐시 dict
+        news_cache: 뉴스 캐시 dict
+        archivist: Archivist 인스턴스 (선택)
+        feedback_context: 전략 피드백 (선택)
+        market_regime: 시장 국면 문자열
+
+    Returns:
+        dict with keys: code, name, is_tradable, llm_score, llm_reason, approved,
+                        llm_metadata, trade_tier, per, pbr, roe, market_cap, ...
+    """
+    from shared.hybrid_scoring import format_quant_score_for_prompt, classify_risk_tag
+
+    code = stock_info['code']
+    info = stock_info['info']
+
+    # --- 1. 데이터 준비 (기존 Phase 1 로직) ---
+    quant_context = format_quant_score_for_prompt(quant_result)
+
+    # 경쟁사 수혜 점수 조회
+    competitor_benefit = database.get_competitor_benefit_score(code)
+    competitor_bonus = competitor_benefit.get('score', 0)
+    competitor_reason = competitor_benefit.get('reason', '')
+
+    snapshot = snapshot_cache.get(code) if snapshot_cache else None
+    if not snapshot:
+        return {
+            'code': code, 'name': info['name'], 'is_tradable': False,
+            'llm_score': 0, 'llm_reason': '스냅샷 조회 실패', 'approved': False,
+            'llm_metadata': {'source': 'unified_analyst_error'}, 'trade_tier': 'BLOCKED',
+        }
+
+    news_from_vectorstore = news_cache.get(code, "최근 관련 뉴스 없음") if news_cache else "뉴스 캐시 없음"
+
+    if competitor_bonus > 0:
+        news_from_vectorstore += f"\n\n⚡ [경쟁사 수혜 기회] {competitor_reason} (+{competitor_bonus}점)"
+
+    decision_info = {
+        'code': code,
+        'name': info['name'],
+        'technical_reason': 'N/A',
+        'news_reason': news_from_vectorstore if news_from_vectorstore not in [
+            "뉴스 DB 미연결", "뉴스 검색 오류"] else ', '.join(info.get('reasons', [])),
+        'per': snapshot.get('per'),
+        'pbr': snapshot.get('pbr'),
+        'market_cap': snapshot.get('market_cap'),
+    }
+
+    # --- 2. 통합 Analyst 1회 호출 ---
+    analyst_result = brain.run_analyst_scoring(decision_info, quant_context, feedback_context)
+    raw_llm_score = analyst_result.get('score', 0)
+    reason = analyst_result.get('reason', '분석 실패')
+
+    # --- 3. ±15pt 가드레일 ---
+    quant_score = quant_result.total_score
+    llm_score = max(quant_score - 15, min(quant_score + 15, raw_llm_score))
+
+    # 경쟁사 수혜 가산점 적용 (가드레일 이후)
+    if competitor_bonus > 0:
+        llm_score = min(100, llm_score + competitor_bonus)
+
+    # --- 4. 코드 기반 risk_tag ---
+    risk_tag = classify_risk_tag(quant_result)
+
+    # --- 5. 하이브리드 점수 (기존 Safety Lock / Veto 동일) ---
+    score_diff = abs(quant_score - llm_score)
+    if score_diff >= 30:
+        if quant_score < llm_score:
+            hybrid_score = quant_score * 0.75 + llm_score * 0.25
+            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정량({quant_score:.0f}) << 정성({llm_score}) → 과잉낙관 억제")
+        else:
+            hybrid_score = quant_score * 0.40 + llm_score * 0.60
+            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정성({llm_score}) << 정량({quant_score:.0f}) → LLM 경고 존중")
+    elif llm_score < 40:
+        hybrid_score = quant_score * 0.45 + llm_score * 0.55
+        logger.info(f"   ⚠️ [LLM Warning] {info['name']} - LLM({llm_score})<40 → LLM 경고 가중")
+    else:
+        hybrid_score = quant_score * 0.60 + llm_score * 0.40
+
+    is_tradable = hybrid_score >= 75
+    approved = hybrid_score >= 50
+
+    # [Veto Power] DISTRIBUTION_RISK → 거래 차단
+    veto_applied = False
+    if risk_tag == 'DISTRIBUTION_RISK':
+        veto_applied = True
+        is_tradable = False
+        approved = False
+        logger.warning(
+            f"   🚫 [VETO] {info['name']}({code}) - DISTRIBUTION_RISK 감지 → 거래 차단 "
+            f"(hybrid={hybrid_score:.1f}, LLM={llm_score})"
+        )
+
+    # --- 6. Trade Tier 산정 (기존 로직 동일) ---
+    recon_signals: list = []
+    try:
+        details = getattr(quant_result, "details", {}) or {}
+        tech_details = details.get("technical", {}) or {}
+
+        volume_ratio = tech_details.get("volume_ratio")
+        ma20_slope_5d = tech_details.get("ma20_slope_5d")
+
+        if tech_details.get("golden_cross_5_20"):
+            recon_signals.append("GOLDEN_CROSS_5_20")
+        recon_volume_min = _cfg.get_float("RECON_VOLUME_RATIO_MIN", default=1.5)
+        if isinstance(volume_ratio, (int, float)) and volume_ratio >= recon_volume_min:
+            recon_signals.append(f"VOLUME_TREND_{float(volume_ratio):.2f}x")
+        if isinstance(ma20_slope_5d, (int, float)) and float(ma20_slope_5d) > 0:
+            recon_signals.append("MA20_SLOPE_UP")
+
+        mom = getattr(quant_result, "momentum_score", None)
+        recon_mom_min = _cfg.get_float("RECON_MOMENTUM_MIN", default=20)
+        if mom is not None and float(mom) >= recon_mom_min:
+            recon_signals.append(f"MOMENTUM_{float(mom):.1f}/25")
+    except Exception:
+        recon_signals = []
+
+    is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)
+
+    if is_recon and not veto_applied:
+        is_tradable = True
+
+    if veto_applied:
+        trade_tier = "BLOCKED"
+    else:
+        trade_tier = "TIER1" if (hybrid_score >= 75) else ("RECON" if is_recon else "BLOCKED")
+
+    # 등급
+    if hybrid_score >= 80:
+        final_grade = 'S'
+    elif hybrid_score >= 70:
+        final_grade = 'A'
+    elif hybrid_score >= 60:
+        final_grade = 'B'
+    elif hybrid_score >= 50:
+        final_grade = 'C'
+    else:
+        final_grade = 'D'
+
+    # 로그
+    tag_emoji = {"BULLISH": "🟢", "NEUTRAL": "⚪", "CAUTION": "🟡", "DISTRIBUTION_RISK": "🔴"}.get(risk_tag, "⚪")
+    veto_str = " → VETO 발동!" if veto_applied else ""
+    if approved:
+        logger.info(f"   ✅ [Analyst 승인] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급) | {tag_emoji}{risk_tag}{veto_str}")
+    else:
+        logger.info(f"   ❌ [Analyst 거절] {info['name']}({code}) - 최종: {hybrid_score:.1f}점 ({final_grade}등급) | {tag_emoji}{risk_tag}{veto_str}")
+
+    # Shadow Radar Logging
+    if archivist and not approved:
+        try:
+            shadow_data = {
+                'stock_code': code,
+                'stock_name': info['name'],
+                'rejection_stage': 'UNIFIED_ANALYST',
+                'rejection_reason': f"Hybrid Score 미달 ({hybrid_score:.1f}) - {reason}",
+                'hunter_score_at_time': llm_score,
+                'trigger_type': 'ANALYST_REJECT',
+                'trigger_value': float(hybrid_score)
+            }
+            archivist.log_shadow_radar(shadow_data)
+        except Exception as e:
+            logger.warning(f"Failed to log shadow radar for {code}: {e}")
+
+    metadata = {
+        'llm_grade': final_grade,
+        'llm_updated_at': _utcnow().isoformat(),
+        'source': 'unified_analyst',
+        'quant_score': quant_score,
+        'llm_raw_score': raw_llm_score,
+        'llm_clamped_score': llm_score,
+        'hybrid_score': hybrid_score,
+        'hunter_score': llm_score,  # 하위호환: hunter_score = clamped llm_score
+        'condition_win_rate': quant_result.condition_win_rate,
+        'trade_tier': trade_tier,
+        'recon_signals': recon_signals,
+        'risk_tag': risk_tag,
+        'veto_applied': veto_applied,
+    }
+
+    # Decision Ledger
+    if archivist:
+        try:
+            reasons = info.get('reasons', [])
+            keywords = []
+            for r in reasons:
+                keywords.extend([w for w in r.split() if len(w) > 1][:3])
+
+            ledger_data = {
+                'stock_code': code,
+                'stock_name': info['name'],
+                'hunter_score': llm_score,
+                'market_regime': market_regime,
+                'dominant_keywords': keywords,
+                'debate_log': None,  # Debate 없음
+                'counter_position_logic': None,
+                'thinking_called': 0,
+                'thinking_reason': "Unified_Analyst",
+                'cost_estimate': 0.0,
+                'gate_result': 'PASS' if approved else 'REJECT',
+                'final_decision': 'BUY' if approved else 'HOLD',
+                'final_reason': reason
+            }
+            archivist.log_decision_ledger(ledger_data)
+        except Exception as e:
+            logger.error(f"   ⚠️ [Archivist] Failed to log decision: {e}")
+
+    return {
+        'code': code,
+        'name': info['name'],
+        'is_tradable': is_tradable,
+        'llm_score': hybrid_score,
+        'llm_reason': reason,
+        'approved': approved,
+        'llm_metadata': metadata,
+        'trade_tier': trade_tier,
+        'per': snapshot.get('per'),
+        'pbr': snapshot.get('pbr'),
+        'roe': snapshot.get('roe'),
+        'market_cap': snapshot.get('market_cap'),
+        'sales_growth': snapshot.get('sales_growth'),
+        'eps_growth': snapshot.get('eps_growth'),
+    }
+
+
 def fetch_kis_data_task(stock, kis_api):
     """KIS API로부터 종목 데이터 조회"""
     try:

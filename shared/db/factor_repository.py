@@ -168,27 +168,46 @@ class FactorRepository:
             logger.warning(f"⚠️ [FactorRepo] 시가총액 조회 실패 ({stock_code}): {e}")
             return None
     
+    def get_stock_sector_naver(self, stock_code: str) -> Optional[str]:
+        """
+        네이버 업종 세분류 조회
+
+        Args:
+            stock_code: 종목 코드
+
+        Returns:
+            네이버 업종명 또는 None
+        """
+        try:
+            stmt = select(StockMaster.sector_naver).where(
+                StockMaster.stock_code == stock_code
+            )
+            result = self.session.scalar(stmt)
+            return result if result else None
+        except Exception as e:
+            logger.warning(f"⚠️ [FactorRepo] 네이버 섹터 조회 실패 ({stock_code}): {e}")
+            return None
+
     def get_stock_sector(self, stock_code: str) -> Tuple[Optional[str], Optional[str]]:
         """
         종목 섹터 정보 조회
-        
+
         Args:
             stock_code: 종목 코드
-        
+
         Returns:
             (sector_kospi200, industry_code) 튜플
         """
         try:
             stmt = select(
                 StockMaster.sector_kospi200,
-                # StockMaster.industry_code # industry_code는 현재 모델에서 제외됨
             ).where(StockMaster.stock_code == stock_code)
             result = self.session.execute(stmt).first()
-            
+
             if result:
-                return result[0], None # industry_code 자리에 None 반환
+                return result[0], None
             return None, None
-            
+
         except Exception as e:
             logger.warning(f"⚠️ [FactorRepo] 섹터 조회 실패 ({stock_code}): {e}")
             return None, None

@@ -99,7 +99,7 @@ from scout_cache import (
 
 # 종목 유니버스 관리 (scout_universe.py)
 from scout_universe import (
-    SECTOR_MAPPING, BLUE_CHIP_STOCKS,
+    BLUE_CHIP_STOCKS, _resolve_sector,
 
     analyze_sector_momentum, get_hot_sector_stocks,
     get_dynamic_blue_chips, get_momentum_stocks,
@@ -112,6 +112,7 @@ from scout_pipeline import (
     is_hybrid_scoring_enabled,
     process_quant_scoring_task,
     process_phase1_hunter_v5_task, process_phase23_judge_v5_task,
+    process_unified_analyst_task,
     fetch_kis_data_task,
 )
 
@@ -672,17 +673,14 @@ def main():
             logger.info("--- [Phase 1.5] 섹터 모멘텀 페널티 적용 ---")
             penalty_count = 0
             
-            # 섹터 매핑 로드 (scout_universe에서 import 필요하지만 간단히 SECTOR_MAPPING 사용)
-            from scout_universe import SECTOR_MAPPING
-            
             for code, info in candidate_stocks.items():
                 if code == '0001': continue
-                
-                # 1. 섹터 식별
+
+                # 1. 섹터 식별 (DB 기반)
                 stock_sector = info.get('sector')
                 if not stock_sector:
-                    stock_sector = SECTOR_MAPPING.get(code, '기타')
-                    info['sector'] = stock_sector # 정보 보강
+                    stock_sector = _resolve_sector(code, info.get('name', ''))
+                    info['sector'] = stock_sector  # 정보 보강
                 
                 # 2. 페널티 확인
                 if stock_sector in sector_analysis:
@@ -717,17 +715,24 @@ def main():
                             continue
                         stock_sector = info.get('sector', '기타')
 
-                        # 회피 섹터: 경고 추가
-                        if stock_sector in scout_trading_ctx.avoid_sectors:
-                            info['reasons'].append(f"⚠️ Council 회피 섹터 ({stock_sector})")
-                            info['is_council_avoid'] = True
-                            avoid_count += 1
+                        # 회피 섹터: 부분 문자열 매칭 (Council "반도체" ↔ 네이버 "반도체와반도체장비")
+                        sector_lower = stock_sector.lower()
+                        for avoid in scout_trading_ctx.avoid_sectors:
+                            avoid_lower = avoid.lower()
+                            if sector_lower in avoid_lower or avoid_lower in sector_lower:
+                                info['reasons'].append(f"⚠️ Council 회피 섹터 ({stock_sector})")
+                                info['is_council_avoid'] = True
+                                avoid_count += 1
+                                break
 
-                        # 선호 섹터: 보너스 태그 추가
-                        if stock_sector in scout_trading_ctx.favor_sectors:
-                            info['reasons'].append(f"✨ Council 선호 섹터 ({stock_sector})")
-                            info['is_council_favor'] = True
-                            favor_count += 1
+                        # 선호 섹터: 부분 문자열 매칭
+                        for favor in scout_trading_ctx.favor_sectors:
+                            favor_lower = favor.lower()
+                            if sector_lower in favor_lower or favor_lower in sector_lower:
+                                info['reasons'].append(f"✨ Council 선호 섹터 ({stock_sector})")
+                                info['is_council_favor'] = True
+                                favor_count += 1
+                                break
 
                     if avoid_count > 0 or favor_count > 0:
                         logger.info(f"   (Council) 섹터 신호 적용: 선호 {favor_count}개, 회피 {avoid_count}개")
@@ -1139,45 +1144,43 @@ def main():
                         judge_max_workers = _parse_int_env(os.getenv("SCOUT_JUDGE_MAX_WORKERS"), 8)
                         logger.info(f"   (Config) ☁️ Cloud Mode - Hunter: {hunter_max_workers}, Judge: {judge_max_workers}")
                     
-                    # Phase 1: Hunter (통계 컨텍스트 포함)
-                    phase1_results = []
                     # Archivist 초기화 (Phase 1/2 공용)
                     archivist = Archivist(session_scope)
 
                     # Smart Skip Filter - LLM 호출 전 사전 필터링
                     from scout_pipeline import should_skip_hunter
-                    
+
                     llm_candidates = []
                     smart_skipped = []
                     skip_reasons_count = {}
-                    
+
                     # LLM 캐시 로드 (이전 Hunter 점수 참조용)
                     try:
                         db_conn = session.connection().connection
                     except Exception:
                         db_conn = None
                     llm_cache = _load_llm_cache_from_db(db_conn) if db_conn else {}
-                    
+
                     for code in filtered_codes:
                         info = candidate_stocks[code]
                         quant_result = quant_results[code]
-                        
+
                         # 경쟁사 수혜 점수 조회
                         competitor_benefit = database.get_competitor_benefit_score(code)
                         competitor_bonus = competitor_benefit.get('score', 0)
-                        
+
                         # 이전 캐시에서 Hunter 점수 조회
                         cached = llm_cache.get(code)
                         cached_hunter = cached.get('hunter_score') if cached else None
-                        
+
                         # 뉴스 감성 점수 (info에서 가져오기)
                         news_sentiment = info.get('sentiment_score')
-                        
+
                         # Smart Skip 체크
                         should_skip, reason = should_skip_hunter(
                             quant_result, cached_hunter, news_sentiment, competitor_bonus
                         )
-                        
+
                         if should_skip:
                             smart_skipped.append((code, info['name'], reason))
                             # Skip 사유별 카운트
@@ -1185,73 +1188,115 @@ def main():
                             skip_reasons_count[reason_key] = skip_reasons_count.get(reason_key, 0) + 1
                         else:
                             llm_candidates.append(code)
-                    
-                    logger.info(f"   🚀 [Smart Skip] {len(smart_skipped)}개 스킵 → LLM Hunter 대상: {len(llm_candidates)}/{len(filtered_codes)}개")
+
+                    logger.info(f"   🚀 [Smart Skip] {len(smart_skipped)}개 스킵 → LLM 대상: {len(llm_candidates)}/{len(filtered_codes)}개")
                     if skip_reasons_count:
                         logger.info(f"      Skip 사유: {skip_reasons_count}")
-                    
-                    # =============================================================
-                    # Phase 1: Hunter LLM 호출 (Smart Skip 통과 종목만)
-                    # =============================================================
-                    with ThreadPoolExecutor(max_workers=hunter_max_workers) as executor:
-                        future_to_code = {}
-                        for code in llm_candidates:
-                            info = candidate_stocks[code]
-                            quant_result = quant_results[code]
-                            payload = {'code': code, 'info': info}
-                            future = executor.submit(
-                                process_phase1_hunter_v5_task, 
-                                payload, brain, quant_result, snapshot_cache, news_cache, archivist, feedback_context
-                            )
-                            future_to_code[future] = code
-                        
-                        for future in as_completed(future_to_code):
-                            result = future.result()
-                            if result:
-                                phase1_results.append(result)
-                                if not result['passed']:
-                                    llm_decision_records[result['code']] = {
-                                        'code': result['code'],
-                                        'name': result['name'],
-                                        'llm_score': result['hunter_score'],
-                                        'llm_reason': result['hunter_reason'],
-                                        'is_tradable': False,
-                                        'approved': False,
-                                        'hunter_score': result['hunter_score'],
-                                        'llm_metadata': {'llm_grade': 'D', 'source': 'v5_hunter_reject'}
-                                    }
-                    
-                    phase1_passed = [r for r in phase1_results if r['passed']]
-                    logger.info(f"   ✅ v5 Hunter 통과: {len(phase1_passed)}/{len(llm_candidates)}개 (전체 대비 {len(phase1_passed)}/{len(filtered_codes)})")
-                    
-                    # Phase 2-3: Debate + Judge (상위 종목만)
-                    PHASE2_MAX = int(os.getenv("SCOUT_PHASE2_MAX_ENTRIES", "50"))
-                    if len(phase1_passed) > PHASE2_MAX:
-                        phase1_passed_sorted = sorted(phase1_passed, key=lambda x: x['hunter_score'], reverse=True)
-                        phase1_passed = phase1_passed_sorted[:PHASE2_MAX]
-                    
-                    if phase1_passed:
-                        logger.info(f"\n   [Step 4] Debate + Judge (하이브리드 점수 결합)")
-                        
-                        with ThreadPoolExecutor(max_workers=judge_max_workers) as executor:
-                            future_to_code = {}
-                            
-                            # Archivist 사용 (위에서 초기화됨)
 
-                            for p1_result in phase1_passed:
+                    # =============================================================
+                    # Unified Analyst (1-pass) vs Legacy (2-pass) 분기
+                    # =============================================================
+                    use_unified_analyst = os.getenv("SCOUT_USE_UNIFIED_ANALYST", "true").lower() in {"1", "true", "yes", "on"}
+
+                    if use_unified_analyst:
+                        # =====================================================
+                        # Unified Analyst: 1회 LLM 호출 (비용 1/3, risk_tag 코드 기반)
+                        # =====================================================
+                        logger.info("=" * 60)
+                        logger.info("   🚀 Unified Analyst Mode (1-pass)")
+                        logger.info("=" * 60)
+
+                        max_workers = _parse_int_env(os.getenv("SCOUT_HUNTER_MAX_WORKERS"),
+                                                     4 if is_ollama_active else 8)
+
+                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            future_to_code = {}
+                            for code in llm_candidates:
+                                info = candidate_stocks[code]
+                                quant_result = quant_results[code]
+                                payload = {'code': code, 'info': info}
                                 future = executor.submit(
-                                    process_phase23_judge_v5_task, 
-                                    p1_result, brain, archivist, current_regime, feedback_context
+                                    process_unified_analyst_task,
+                                    payload, brain, quant_result, snapshot_cache, news_cache,
+                                    archivist, feedback_context, current_regime
                                 )
-                                future_to_code[future] = p1_result['code']
-                            
+                                future_to_code[future] = code
+
                             for future in as_completed(future_to_code):
                                 record = future.result()
                                 if record:
                                     llm_decision_records[record['code']] = record
                                     if record.get('approved'):
                                         final_approved_list.append(_record_to_watchlist_entry(record))
-                    
+
+                        phase1_passed = [r for r in llm_decision_records.values() if r.get('approved')]
+                    else:
+                        # =====================================================
+                        # Legacy: 2-pass (Hunter → Debate+Judge)
+                        # =====================================================
+                        logger.info("=" * 60)
+                        logger.info("   🔄 Legacy Mode (Hunter → Debate+Judge, 2-pass)")
+                        logger.info("=" * 60)
+
+                        phase1_results = []
+
+                        with ThreadPoolExecutor(max_workers=hunter_max_workers) as executor:
+                            future_to_code = {}
+                            for code in llm_candidates:
+                                info = candidate_stocks[code]
+                                quant_result = quant_results[code]
+                                payload = {'code': code, 'info': info}
+                                future = executor.submit(
+                                    process_phase1_hunter_v5_task,
+                                    payload, brain, quant_result, snapshot_cache, news_cache, archivist, feedback_context
+                                )
+                                future_to_code[future] = code
+
+                            for future in as_completed(future_to_code):
+                                result = future.result()
+                                if result:
+                                    phase1_results.append(result)
+                                    if not result['passed']:
+                                        llm_decision_records[result['code']] = {
+                                            'code': result['code'],
+                                            'name': result['name'],
+                                            'llm_score': result['hunter_score'],
+                                            'llm_reason': result['hunter_reason'],
+                                            'is_tradable': False,
+                                            'approved': False,
+                                            'hunter_score': result['hunter_score'],
+                                            'llm_metadata': {'llm_grade': 'D', 'source': 'v5_hunter_reject'}
+                                        }
+
+                        phase1_passed = [r for r in phase1_results if r['passed']]
+                        logger.info(f"   ✅ v5 Hunter 통과: {len(phase1_passed)}/{len(llm_candidates)}개 (전체 대비 {len(phase1_passed)}/{len(filtered_codes)})")
+
+                        # Phase 2-3: Debate + Judge (상위 종목만)
+                        PHASE2_MAX = int(os.getenv("SCOUT_PHASE2_MAX_ENTRIES", "50"))
+                        if len(phase1_passed) > PHASE2_MAX:
+                            phase1_passed_sorted = sorted(phase1_passed, key=lambda x: x['hunter_score'], reverse=True)
+                            phase1_passed = phase1_passed_sorted[:PHASE2_MAX]
+
+                        if phase1_passed:
+                            logger.info(f"\n   [Step 4] Debate + Judge (하이브리드 점수 결합)")
+
+                            with ThreadPoolExecutor(max_workers=judge_max_workers) as executor:
+                                future_to_code = {}
+
+                                for p1_result in phase1_passed:
+                                    future = executor.submit(
+                                        process_phase23_judge_v5_task,
+                                        p1_result, brain, archivist, current_regime, feedback_context
+                                    )
+                                    future_to_code[future] = p1_result['code']
+
+                                for future in as_completed(future_to_code):
+                                    record = future.result()
+                                    if record:
+                                        llm_decision_records[record['code']] = record
+                                        if record.get('approved'):
+                                            final_approved_list.append(_record_to_watchlist_entry(record))
+
                     logger.info(f"   ✅ v5 최종 승인: {len([r for r in llm_decision_records.values() if r.get('approved')])}개")
                     
                     # 쿼터제 적용 (Risk-Off 레벨에 따라 동적 조정)

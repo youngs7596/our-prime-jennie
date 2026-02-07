@@ -453,6 +453,8 @@ class StockMaster(Base):
     stock_name = Column("STOCK_NAME", String(120), nullable=True)
     market_cap = Column("MARKET_CAP", Numeric(20, 0), nullable=True)
     sector_kospi200 = Column("SECTOR_KOSPI200", String(50), nullable=True)
+    sector_naver = Column("SECTOR_NAVER", String(64), nullable=True)            # 네이버 업종 세분류
+    sector_naver_group = Column("SECTOR_NAVER_GROUP", String(64), nullable=True)  # 네이버 업종 대분류
     # industry_code = Column("INDUSTRY_CODE", String(20), nullable=True)
     # industry_name = Column("INDUSTRY_NAME", String(100), nullable=True)
     # is_kospi200 = Column("IS_KOSPI200", Integer, default=0)

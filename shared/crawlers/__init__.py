@@ -7,17 +7,22 @@ from .naver import (
     # 공통 상수
     NAVER_HEADERS,
     NOISE_KEYWORDS,
-    
+
     # 뉴스 크롤링
     crawl_stock_news,
-    
+
     # 시총 상위 종목
     get_kospi_top_stocks,
     get_kosdaq_top_stocks,
-    
+
     # 재무제표
     scrape_financial_data,
     scrape_pbr_per_roe,
+
+    # 업종(섹터) 크롤링
+    get_naver_sector_list,
+    get_naver_sector_stocks,
+    build_naver_sector_mapping,
 )
 
 __all__ = [
@@ -28,4 +33,7 @@ __all__ = [
     'get_kosdaq_top_stocks',
     'scrape_financial_data',
     'scrape_pbr_per_roe',
+    'get_naver_sector_list',
+    'get_naver_sector_stocks',
+    'build_naver_sector_mapping',
 ]

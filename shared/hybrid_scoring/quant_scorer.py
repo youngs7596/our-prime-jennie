@@ -1828,6 +1828,51 @@ class QuantScorer:
 
 
 # =============================================================================
+# 코드 기반 risk_tag 분류기
+# =============================================================================
+
+def classify_risk_tag(quant_result: QuantScoreResult) -> str:
+    """
+    QuantScoreResult 데이터를 기반으로 risk_tag를 코드로 결정합니다.
+
+    LLM이 risk_tag를 판단하면 100% CAUTION 편향이 발생하므로,
+    정량 지표 기반으로 코드가 직접 분류합니다.
+
+    Returns:
+        'DISTRIBUTION_RISK' | 'CAUTION' | 'BULLISH' | 'NEUTRAL'
+    """
+    details = quant_result.details or {}
+    tech = details.get('technical', {})
+    supply = details.get('supply_demand', {})
+
+    rsi = tech.get('rsi')
+    flow_reversal = tech.get('flow_reversal')  # 'SELL_TURN' / 'BUY_TURN' / None
+    volume_ratio = tech.get('volume_ratio')
+    drawdown = tech.get('drawdown_from_high')  # DD% (음수)
+
+    # DISTRIBUTION_RISK: 고점 + 과열 + 외인 매도 전환
+    if (rsi is not None and rsi > 70
+            and drawdown is not None and drawdown > -3
+            and flow_reversal == 'SELL_TURN'):
+        return 'DISTRIBUTION_RISK'
+
+    # CAUTION: 과열 OR 매도 전환 (단독)
+    if rsi is not None and rsi > 75:
+        return 'CAUTION'
+    if flow_reversal == 'SELL_TURN' and rsi is not None and rsi > 65:
+        return 'CAUTION'
+
+    # BULLISH: 수급 양호 + 과열 없음 + 모멘텀 강세
+    if (flow_reversal == 'BUY_TURN'
+            and quant_result.supply_demand_score >= 10
+            and (rsi is None or rsi < 70)
+            and quant_result.momentum_score >= 15):
+        return 'BULLISH'
+
+    return 'NEUTRAL'
+
+
+# =============================================================================
 # 유틸리티 함수
 # =============================================================================
 

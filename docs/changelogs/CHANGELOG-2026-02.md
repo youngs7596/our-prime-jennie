@@ -12,6 +12,16 @@
 - **fix(ollama-gateway)**: `VLLM_MAX_MODEL_LEN=4096` 명시 (기본값 8192와 실제 불일치 해소)
 - **fix(systemd)**: `ExecStop`에 `--profile infra` 추가 (vLLM 포함 전체 종료)
 
+### 네이버 업종 분류 기반 섹터 통합 & Unified Analyst Pipeline
+- **feat(sector)**: 네이버 금융 79개 업종 세분류를 Single Source of Truth로 통합 (3종 분산 섹터 분류 제거)
+  - 크롤러 3개, sector_taxonomy 대분류 매핑, 배치 스크립트, DB 컬럼 추가 (SECTOR_NAVER, SECTOR_NAVER_GROUP)
+  - SectorClassifier v4.0: SECTOR_NAVER 우선 조회, scout_universe/factor_analyzer SECTOR_MAPPING 삭제
+  - Council 섹터 매칭 양방향 부분문자열 매칭으로 수정 (exact match 버그 수정)
+- **feat(scout)**: Unified Analyst Pipeline — 3→1 LLM 호출 통합 (Hunter+Debate+Judge → run_analyst_scoring)
+  - 코드 기반 classify_risk_tag() (LLM 100% CAUTION 편향 해소)
+  - ±15pt 가드레일, SCOUT_USE_UNIFIED_ANALYST=true 환경변수 토글
+- **test**: 1049 shared + 18 scout-job 테스트 전체 통과
+
 ### Factor Alpha P0+P1+P2 구현 & 백테스트 검증
 - **feat(quant)**: P1 Quant Scorer 패치 3건 구현
   - P1-2 Recon Protection 강화: RSI 보호 해제 50-70→50-59, 1M 모멘텀>0 필수
@@ -229,4 +239,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-07*
+*Last Updated: 2026-02-07 16:43 KST*

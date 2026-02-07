@@ -259,62 +259,48 @@ class FactorAnalyzer:
             logger.debug(f"   종목 그룹 분류 실패 ({stock_code}): {e}")
             return 'SMALL'
     
-    # 섹터 분류
-    SECTOR_MAPPING = {
-        # KOSPI200 섹터 코드 매핑
-        '반도체': ['005930', '000660', '034730', '042700'],  # 삼성전자, SK하이닉스 등
-        '바이오': ['068270', '207940', '091990', '145020'],  # 셀트리온, 삼바 등
-        '금융': ['105560', '055550', '086790', '316140'],    # KB, 신한 등
-        '자동차': ['005380', '000270', '012330', '011210'],  # 현대차, 기아 등
-        '화학': ['051910', '011170', '009830', '010140'],    # LG화학 등
-        '건설': ['000720', '006360', '047050', '034310'],    # 현대건설 등
-        '철강': ['005490', '004020', '000880', '001450'],    # POSCO 등
-        '유통': ['035420', '035720', '034220', '030200'],    # 네이버, 카카오 등
-    }
-    
     def get_stock_sector(self, stock_code: str) -> str:
         """
         종목의 섹터 분류
         Repository 모드 지원
-        
-        STOCK_MASTER의 SECTOR_KOSPI200 또는 INDUSTRY_CODE 기반
+
+        우선순위: 캐시 → SECTOR_NAVER → SECTOR_KOSPI200 → INDUSTRY_CODE
         """
         # 캐시 확인
         cache_key = f"sector_{stock_code}"
         if hasattr(self, '_sector_cache') and cache_key in self._sector_cache:
             return self._sector_cache[cache_key]
-        
+
         if not hasattr(self, '_sector_cache'):
             self._sector_cache = {}
-        
-        # 하드코딩된 매핑 먼저 확인
-        for sector, codes in self.SECTOR_MAPPING.items():
-            if stock_code in codes:
-                self._sector_cache[cache_key] = sector
-                return sector
-        
-        # DB에서 조회
+
+        # DB에서 조회 (SECTOR_NAVER 우선)
         try:
-            # Repository 모드 우선
             if self.repository is not None:
+                # Repository 모드: SECTOR_NAVER 우선, 없으면 SECTOR_KOSPI200
+                sector_naver = self.repository.get_stock_sector_naver(stock_code)
+                if sector_naver:
+                    self._sector_cache[cache_key] = sector_naver
+                    return sector_naver
                 sector_kospi, industry_code = self.repository.get_stock_sector(stock_code)
                 sector = sector_kospi or industry_code
             else:
                 # 레거시 모드 - SQLAlchemy
                 from sqlalchemy import text
                 result = self.db_conn.execute(text("""
-                    SELECT SECTOR_KOSPI200, INDUSTRY_CODE 
-                    FROM STOCK_MASTER 
+                    SELECT SECTOR_NAVER, SECTOR_KOSPI200, INDUSTRY_CODE
+                    FROM STOCK_MASTER
                     WHERE STOCK_CODE = :stock_code
                 """), {"stock_code": stock_code})
-                
+
                 row = result.fetchone()
-                
+
                 if row:
-                    sector = row[0]
+                    # SECTOR_NAVER 우선
+                    sector = row[0] or row[1] or row[2]
                 else:
                     sector = None
-            
+
             if sector:
                 self._sector_cache[cache_key] = sector
                 return sector

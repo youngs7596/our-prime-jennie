@@ -804,7 +804,101 @@ PER: {per}, PBR: {pbr}
     return prompt.strip()
 
 
-def build_context_analysis_prompt(stock_code: str, stock_name: str, quant_context: str, 
+def build_analyst_prompt(stock_info: dict, quant_context: str = None, feedback_context: str = None) -> str:
+    """
+    통합 Analyst 프롬프트 (1회 호출) - Hunter+Debate+Judge 통합
+
+    기존 3단계(Hunter→Debate→Judge) 파이프라인을 1회 호출로 통합.
+    risk_tag는 코드에서 결정하므로 LLM에게 요청하지 않음.
+    ±15pt 가드레일을 명시하여 정량 점수 대비 과도한 편차 방지.
+
+    Args:
+        stock_info: 종목 정보 dict (code, name, news_reason, per, pbr, market_cap)
+        quant_context: 정량 분석 요약 텍스트
+        feedback_context: Analyst 전략 피드백 (선택)
+
+    Returns:
+        프롬프트 문자열
+    """
+    name = stock_info.get('name', 'N/A')
+    code = stock_info.get('code', 'N/A')
+    news = stock_info.get('news_reason', '특별한 뉴스 없음')
+
+    # 정량 컨텍스트가 없으면 기존 분석 프롬프트로 폴백
+    if not quant_context:
+        return build_analysis_prompt(stock_info)
+
+    feedback_section = ""
+    if feedback_context:
+        feedback_section = f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+## [참고 가이드라인 - 점수 산정 방식에는 영향 없음]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AI Analyst가 과거 성과를 분석하여 도출한 가이드라인입니다.
+⚠️ 주의: 이 가이드라인은 점수를 0점으로 만들라는 의미가 아닙니다.
+반드시 정량 점수 ±15점 범위 내에서 정상적으로 점수를 산정하세요.
+
+{feedback_context}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+    prompt = f"""당신은 데이터 기반 주식 분석 AI입니다. **정량 분석 결과**를 참고하여 최종 점수를 매기세요.
+객관적이고 균형 잡힌 투자 관점에서 정확하게 평가해야 합니다.
+
+{feedback_section}
+
+## 종목 정보
+종목: {name} ({code})
+
+{quant_context}
+
+## 최신 뉴스 (정성적 판단 영역)
+{news}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## [중요] 당신의 역할: 정확한 보정자 (Calibrator)
+
+**정량 분석은 이미 완료되었습니다.** 당신은 다음 **정성적 요소만** 평가하여 점수를 보정하세요.
+정량 점수를 기반으로, 뉴스와 리스크를 객관적으로 반영하세요.
+
+1. **뉴스 맥락 해석**: 단순 기대감이나 찌라시는 배제하고, 실체가 있는 호재만 인정.
+2. **리스크 체크**: 공시 위반, 경영진 이슈, 유상증자 우려 등 치명적 리스크는 즉시 대폭 감점.
+3. **밸류에이션 부담**: 주가가 단기 급등했거나 뉴스가 이미 반영된 것으로 보이면 감점.
+
+## 점수 계산 방식
+
+**기준: 정량 점수를 기반으로 '최대 ±15점' 범위 내에서 조정**
+
+위 정량 점수가 70점이라면:
+- **[Strong Positive]** 실적 서프라이즈, 대규모 수주 확정 등 확실한 팩트: +10~15점
+- **[Moderate Positive]** 섹터 호재, 신규 사업 진출 등 중간 수준 호재: +3~10점
+- **[Neutral]** 일반적인 뉴스, 기대감, 중립적 분석: **±0점 (정량 점수 유지)**
+- **[Negative]** 악재성 이슈, 단기 급등 피로감: -5~10점
+- **[Critical]** 경영진 리스크, 재무 건전성 훼손: **-10~15점**
+
+## 등급 가이드
+- S(80+): 강력추천 - 정량 상위권이며 정성적 결점 없음
+- A(70-79): 추천 - 정량 우수하고 리스크 없음
+- B(60-69): 관망 - 추가 확인 필요 (통과 보장 아님)
+- C(50-59): 중립 - 매력 부족
+- D(40-49): 주의 - 리스크 보유
+- F(<40): 회피 - 매수 금지
+
+## 출력 형식 (반드시 준수)
+{{"score": 72, "grade": "A", "reason": "정량 70점 기반, 대규모 수주 팩트 확인으로 +2점 보정 (줄바꿈 금지)"}}
+
+⚠️ **[CRITICAL]**
+1. 생각(<think>...</think>) 후 반드시 **한 줄 JSON**으로 최종 답안을 작성하세요.
+2. reason 안에 줄바꿈(\\n)을 넣지 마세요. 쉼표로 이어서 작성하세요.
+3. JSON은 마크다운 코드블록(```json) 안에 넣거나 순수 텍스트로 출력하세요.
+4. **근거 없이 가점/감점하지 마세요. 뉴스가 없으면 정량 점수를 그대로 유지하세요.**
+5. **risk_tag는 출력하지 마세요.** 리스크 분류는 코드에서 자동 결정합니다."""
+
+    return prompt.strip()
+
+
+def build_context_analysis_prompt(stock_code: str, stock_name: str, quant_context: str,
                                    news_summary: str = "", fundamentals: dict = None) -> str:
     """HybridScorer용 정량 컨텍스트 포함 분석 프롬프트"""
     fundamentals_str = ""

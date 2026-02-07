@@ -28,10 +28,11 @@ from shared.llm_prompts import (
     build_debate_prompt,
     build_judge_prompt, # V4 Judge
     build_hunter_prompt_v5,
-    build_judge_prompt_v5
+    build_judge_prompt_v5,
+    build_analyst_prompt,
 )
 
-from shared.llm_constants import ANALYSIS_RESPONSE_SCHEMA
+from shared.llm_constants import ANALYSIS_RESPONSE_SCHEMA, ANALYST_RESPONSE_SCHEMA
 # Alias for compatibility if needed, or just use ANALYSIS_RESPONSE_SCHEMA
 JUDGE_RESPONSE_SCHEMA = ANALYSIS_RESPONSE_SCHEMA
 
@@ -495,6 +496,47 @@ class JennieBrain:
         except Exception as e:
             logger.error(f"❌ [Hunter] Local LLM failed: {e}")
             return {'score': 0, 'grade': 'D', 'reason': f"오류(Local): {e}"}
+
+    def run_analyst_scoring(self, stock_info: dict, quant_context: str = None, feedback_context: str = None) -> dict:
+        """
+        통합 Analyst 1회 호출 — Hunter+Debate+Judge 통합
+        REASONING tier 사용 (비용 1/3 절감)
+
+        Args:
+            stock_info: 종목 정보 dict
+            quant_context: 정량 분석 요약 텍스트
+            feedback_context: Analyst 전략 피드백
+
+        Returns:
+            {'score': int, 'grade': str, 'reason': str}
+        """
+        provider = self._get_provider(LLMTier.REASONING)
+        if provider is None:
+            return {'score': 0, 'grade': 'D', 'reason': 'Provider Error'}
+
+        try:
+            prompt = build_analyst_prompt(stock_info, quant_context, feedback_context)
+            logger.info(f"--- [JennieBrain/Analyst] 통합 분석 via {provider.name} ---")
+
+            result = provider.generate_json(
+                prompt,
+                ANALYST_RESPONSE_SCHEMA,
+                temperature=0.2
+            )
+
+            # 등급 강제 산정 (LLM 출력 오버라이드)
+            raw_score = result.get('score', 0)
+            calculated_grade = self._calculate_grade(raw_score)
+            llm_grade = result.get('grade', 'N/A')
+            if llm_grade != calculated_grade and llm_grade != 'N/A':
+                logger.warning(f"⚠️ [Analyst] Grade Mismatch Corrected: LLM({llm_grade}) -> Code({calculated_grade}) for Score {raw_score}")
+            result['grade'] = calculated_grade
+
+            logger.info(f"   ✅ Analyst 완료: {stock_info.get('name')} - {raw_score}점 ({calculated_grade})")
+            return result
+        except Exception as e:
+            logger.error(f"❌ [Analyst] 분석 실패: {e}")
+            return {'score': 0, 'grade': 'D', 'reason': f"오류: {e}"}
 
     def run_judge_scoring_v5(self, stock_info: dict, debate_log: str, quant_context: str = None, feedback_context: str = None) -> dict:
         """

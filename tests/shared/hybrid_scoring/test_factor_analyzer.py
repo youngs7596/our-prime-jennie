@@ -196,11 +196,11 @@ class TestGetStockSector:
         assert sector == '반도체'
     
     def test_from_mapping(self, analyzer):
-        """하드코딩 매핑에서 조회"""
-        # SECTOR_MAPPING에 정의된 종목
+        """DB 기반 섹터 조회"""
+        # DB SECTOR_NAVER 또는 SECTOR_KOSPI200에서 조회
         sector = analyzer.get_stock_sector('005930')  # 삼성전자
-        
-        assert sector in ['반도체', '기타']
+
+        assert sector in ['반도체', '반도체와반도체장비', '기타']
     
     def test_not_found(self, analyzer):
         """없는 종목 → 기타"""

@@ -43,7 +43,7 @@ shared/hybrid_scoring - my-prime-jennie 하이브리드 스코어링 시스템
 >>> final = hybrid.calculate_hybrid_score(result, llm_score=75)
 """
 
-from .quant_scorer import QuantScorer, QuantScoreResult, format_quant_score_for_prompt
+from .quant_scorer import QuantScorer, QuantScoreResult, format_quant_score_for_prompt, classify_risk_tag
 from .hybrid_scorer import HybridScorer, HybridScoreResult, run_hybrid_scoring_pipeline
 from .factor_analyzer import FactorAnalyzer, run_weekly_factor_analysis
 from .competitor_analyzer import (
@@ -80,6 +80,7 @@ __all__ = [
     
     # 유틸리티 함수
     'format_quant_score_for_prompt',
+    'classify_risk_tag',
     'create_hybrid_scoring_tables',
     'get_default_factor_weights',
     'get_confidence_level',

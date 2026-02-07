@@ -647,3 +647,112 @@ class TestTotalScoreWithInvestorTrading:
         assert result.is_valid
         assert result.total_score > 0
 
+
+# ============================================================================
+# classify_risk_tag 테스트
+# ============================================================================
+
+class TestClassifyRiskTag:
+    """코드 기반 risk_tag 분류기 테스트"""
+
+    def _make_quant_result(self, rsi=None, flow_reversal=None, drawdown=None,
+                           volume_ratio=None, supply_demand_score=0.0,
+                           momentum_score=0.0):
+        """테스트용 QuantScoreResult 생성 헬퍼"""
+        from shared.hybrid_scoring.quant_scorer import QuantScoreResult
+        details = {
+            'technical': {},
+            'supply_demand': {},
+        }
+        if rsi is not None:
+            details['technical']['rsi'] = rsi
+        if flow_reversal is not None:
+            details['technical']['flow_reversal'] = flow_reversal
+        if drawdown is not None:
+            details['technical']['drawdown_from_high'] = drawdown
+        if volume_ratio is not None:
+            details['technical']['volume_ratio'] = volume_ratio
+
+        return QuantScoreResult(
+            stock_code='005930', stock_name='삼성전자',
+            total_score=50.0,
+            momentum_score=momentum_score, quality_score=10.0,
+            value_score=10.0, technical_score=10.0,
+            news_stat_score=0.0, supply_demand_score=supply_demand_score,
+            matched_conditions=[], condition_win_rate=None,
+            condition_sample_count=0, condition_confidence='LOW',
+            details=details,
+        )
+
+    def test_distribution_risk(self):
+        """고점 + 과열 + 매도 전환 → DISTRIBUTION_RISK"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(rsi=75, drawdown=-1, flow_reversal='SELL_TURN')
+        assert classify_risk_tag(result) == 'DISTRIBUTION_RISK'
+
+    def test_distribution_risk_requires_all_three(self):
+        """3개 조건 중 하나라도 미충족이면 DISTRIBUTION_RISK 아님"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        # RSI 높지만 매도전환 없음
+        result = self._make_quant_result(rsi=75, drawdown=-1, flow_reversal=None)
+        assert classify_risk_tag(result) != 'DISTRIBUTION_RISK'
+        # RSI 높고 매도전환이지만 DD 큼 (-5%)
+        result2 = self._make_quant_result(rsi=75, drawdown=-5, flow_reversal='SELL_TURN')
+        assert classify_risk_tag(result2) != 'DISTRIBUTION_RISK'
+
+    def test_caution_rsi_over_75(self):
+        """RSI > 75 → CAUTION"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(rsi=78)
+        assert classify_risk_tag(result) == 'CAUTION'
+
+    def test_caution_sell_turn_rsi_over_65(self):
+        """SELL_TURN + RSI > 65 → CAUTION"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(rsi=67, flow_reversal='SELL_TURN')
+        assert classify_risk_tag(result) == 'CAUTION'
+
+    def test_bullish(self):
+        """BUY_TURN + 수급 양호 + RSI 적정 + 모멘텀 강세 → BULLISH"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(
+            rsi=55, flow_reversal='BUY_TURN',
+            supply_demand_score=12.0, momentum_score=18.0
+        )
+        assert classify_risk_tag(result) == 'BULLISH'
+
+    def test_bullish_requires_momentum(self):
+        """모멘텀 낮으면 BULLISH 아님"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(
+            rsi=55, flow_reversal='BUY_TURN',
+            supply_demand_score=12.0, momentum_score=10.0
+        )
+        assert classify_risk_tag(result) != 'BULLISH'
+
+    def test_neutral_default(self):
+        """어느 조건에도 해당 안 되면 NEUTRAL"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result(rsi=50)
+        assert classify_risk_tag(result) == 'NEUTRAL'
+
+    def test_neutral_no_data(self):
+        """데이터 없어도 NEUTRAL"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag
+        result = self._make_quant_result()
+        assert classify_risk_tag(result) == 'NEUTRAL'
+
+    def test_neutral_empty_details(self):
+        """details가 비어있어도 에러 없이 NEUTRAL"""
+        from shared.hybrid_scoring.quant_scorer import classify_risk_tag, QuantScoreResult
+        result = QuantScoreResult(
+            stock_code='005930', stock_name='삼성전자',
+            total_score=50.0, momentum_score=10.0, quality_score=10.0,
+            value_score=10.0, technical_score=10.0,
+            news_stat_score=0.0, supply_demand_score=0.0,
+            matched_conditions=[], condition_win_rate=None,
+            condition_sample_count=0, condition_confidence='LOW',
+            details={},
+        )
+        assert classify_risk_tag(result) == 'NEUTRAL'
+
