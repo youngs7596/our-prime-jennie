@@ -59,6 +59,9 @@ from .quant_constants import (
     GRADE_THRESHOLDS as QC_GRADE_THRESHOLDS,
     RANK_CUTOFF as QC_RANK_CUTOFF,
     NEWS_TIME_EFFECT as QC_NEWS_TIME_EFFECT,
+    QUANT_SCORER_VERSION,
+    V2_MOMENTUM, V2_QUALITY, V2_VALUE, V2_TECHNICAL, V2_NEWS, V2_SUPPLY_DEMAND,
+    V2_NEUTRAL_DEFAULTS,
 )
 
 # [Prime Council] Chart Phase Analysis for Trend-Aware Scoring
@@ -885,7 +888,595 @@ class QuantScorer:
     
     # 뉴스 역신호 카테고리 (분석 결과 기각으로 미사용)
     # NEWS_REVERSE_SIGNAL_CATEGORIES = {'수주', '배당', '자사주', '주주환원'}
-    
+
+    # ======================================================================
+    # v2: 잠재력 기반 팩터 메서드 (2026-02-07)
+    # ======================================================================
+
+    def calculate_momentum_score_v2(
+        self,
+        daily_prices_df: pd.DataFrame,
+        kospi_prices_df: Optional[pd.DataFrame] = None,
+    ) -> Tuple[float, Dict]:
+        """
+        v2 잠재력 모멘텀 점수 (20점 만점)
+
+        서브팩터:
+        - 6M 상대 모멘텀: 5점 (v1: 15 → 대폭 축소)
+        - 1M 단기 모멘텀: 5점 (유지)
+        - 바닥 반등 감지: 5점 (신규)
+        - 베이스 탈출: 5점 (신규)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+
+            # 1. 6M 상대 모멘텀 (5점) — 이미 오른 종목 보상 줄임
+            if len(daily_prices_df) >= 120:
+                stock_start = float(daily_prices_df['CLOSE_PRICE'].iloc[-120])
+                stock_end = float(daily_prices_df['CLOSE_PRICE'].iloc[-1])
+                stock_return = (stock_end / stock_start - 1) * 100
+
+                if kospi_prices_df is not None and len(kospi_prices_df) >= 120:
+                    kospi_start = float(kospi_prices_df['CLOSE_PRICE'].iloc[-120])
+                    kospi_end = float(kospi_prices_df['CLOSE_PRICE'].iloc[-1])
+                    relative_momentum = stock_return - (kospi_end / kospi_start - 1) * 100
+                    factors['relative_momentum_6m'] = round(relative_momentum, 2)
+                    factors['momentum_type'] = 'relative'
+                else:
+                    relative_momentum = stock_return
+                    factors['absolute_momentum_6m'] = round(stock_return, 2)
+                    factors['momentum_type'] = 'absolute'
+
+                # -30%~+30% → 0~5점 (v1은 15점이었음)
+                mom_6m_score = max(0, min(5, 2.5 + relative_momentum * 0.083))
+                total_score += mom_6m_score
+                factors['momentum_6m_score'] = round(mom_6m_score, 2)
+            else:
+                total_score += 2.5
+                factors['momentum_6m_score'] = 2.5
+                factors['momentum_6m_note'] = '데이터 부족'
+
+            # 2. 1M 단기 모멘텀 (5점)
+            if len(daily_prices_df) >= 20:
+                stock_return_1m = (
+                    daily_prices_df['CLOSE_PRICE'].iloc[-1]
+                    / daily_prices_df['CLOSE_PRICE'].iloc[-20] - 1
+                ) * 100
+
+                if kospi_prices_df is not None and len(kospi_prices_df) >= 20:
+                    kospi_return_1m = (
+                        kospi_prices_df['CLOSE_PRICE'].iloc[-1]
+                        / kospi_prices_df['CLOSE_PRICE'].iloc[-20] - 1
+                    ) * 100
+                    rel_1m = stock_return_1m - kospi_return_1m
+                    factors['relative_momentum_1m'] = round(rel_1m, 2)
+                else:
+                    rel_1m = stock_return_1m
+                    factors['absolute_momentum_1m'] = round(stock_return_1m, 2)
+
+                mom_1m_score = max(0, min(5, 2.5 + rel_1m * 0.25))
+                total_score += mom_1m_score
+                factors['momentum_1m_score'] = round(mom_1m_score, 2)
+            else:
+                total_score += 2.5
+                factors['momentum_1m_score'] = 2.5
+
+            # 3. 바닥 반등 감지 (5점)
+            # 20일 저점 대비 현재가 반등률. 10~30% 반등 시 최고점
+            if len(daily_prices_df) >= 20:
+                low_20d = float(daily_prices_df['LOW_PRICE'].iloc[-20:].min())
+                current = float(daily_prices_df['CLOSE_PRICE'].iloc[-1])
+                bounce_pct = (current / low_20d - 1) * 100 if low_20d > 0 else 0
+
+                if 10 <= bounce_pct <= 30:
+                    bounce_score = 5.0
+                elif 5 <= bounce_pct < 10:
+                    bounce_score = bounce_pct - 5  # 0~5 linear
+                elif 30 < bounce_pct <= 50:
+                    bounce_score = max(0, 5 - (bounce_pct - 30) * 0.25)  # 감소
+                else:
+                    bounce_score = 0.0
+
+                total_score += bounce_score
+                factors['bounce_from_20d_low'] = round(bounce_pct, 2)
+                factors['bounce_score'] = round(bounce_score, 2)
+            else:
+                factors['bounce_score'] = 0.0
+
+            # 4. 베이스 탈출 (5점)
+            # 40일 횡보(변동성<3%) 후 볼린저 상단 돌파 시 만점
+            if len(daily_prices_df) >= 40:
+                close_40d = daily_prices_df['CLOSE_PRICE'].iloc[-40:]
+                returns_40d = close_40d.pct_change().dropna()
+                volatility_40d = returns_40d.std() * 100
+
+                # 볼린저 상단 돌파 체크
+                ma20 = daily_prices_df['CLOSE_PRICE'].rolling(window=20).mean().iloc[-1]
+                std20 = daily_prices_df['CLOSE_PRICE'].rolling(window=20).std().iloc[-1]
+                bb_upper = ma20 + 2 * std20
+                current = float(daily_prices_df['CLOSE_PRICE'].iloc[-1])
+
+                is_low_vol = volatility_40d < 3.0
+                is_bb_breakout = current > bb_upper if pd.notna(bb_upper) else False
+
+                if is_low_vol and is_bb_breakout:
+                    base_score = 5.0
+                elif is_low_vol and current > ma20:
+                    base_score = 2.5
+                elif is_bb_breakout:
+                    base_score = 1.5
+                else:
+                    base_score = 0.0
+
+                total_score += base_score
+                factors['volatility_40d'] = round(volatility_40d, 2)
+                factors['bb_breakout'] = is_bb_breakout
+                factors['base_breakout_score'] = round(base_score, 2)
+            else:
+                factors['base_breakout_score'] = 0.0
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 모멘텀 점수 계산 오류: {e}", exc_info=True)
+            return 10.0, {'error': str(e)}
+
+    def calculate_quality_score_v2(
+        self,
+        roe: Optional[float],
+        eps_growth: Optional[float],
+        daily_prices_df: pd.DataFrame,
+        financial_trend: Optional[Dict] = None,
+    ) -> Tuple[float, Dict]:
+        """
+        v2 개선 품질 점수 (20점 만점)
+
+        서브팩터:
+        - ROE 절대 수준: 4점 (v1: 10 → 축소)
+        - ROE 개선 트렌드: 8점 (신규)
+        - EPS 성장률: 5점 (v1: 3.5 → 확대)
+        - 이익 안정성: 3점 (유지)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+
+            # 1. ROE 절대 수준 (4점)
+            if roe is not None:
+                roe_score = max(0, min(4, 2 + roe * 0.067))
+                total_score += roe_score
+                factors['roe'] = round(roe, 2)
+                factors['roe_level_score'] = round(roe_score, 2)
+            else:
+                total_score += 2.0
+                factors['roe_level_score'] = 2.0
+                factors['roe_note'] = '데이터 없음'
+
+            # 2. ROE 개선 트렌드 (8점)
+            trend_score = V2_NEUTRAL_DEFAULTS['roe_trend']  # 4.0 중립
+
+            if financial_trend and 'roe_trend' in financial_trend:
+                roe_trend = [v for v in financial_trend['roe_trend'] if v is not None]
+
+                if len(roe_trend) >= 3:
+                    roe_delta_1 = roe_trend[-2] - roe_trend[-3]  # 직전 개선폭
+                    roe_delta_2 = roe_trend[-1] - roe_trend[-2]  # 최근 개선폭
+
+                    if roe_delta_2 > 0 and roe_delta_1 > 0:
+                        # 연속 개선
+                        trend_score = min(8, 4 + roe_delta_2 * 0.8)
+                    elif roe_delta_2 > 0:
+                        # 최근 개선
+                        trend_score = min(5, 2 + roe_delta_2 * 0.6)
+                    elif roe_delta_2 < 0:
+                        # 악화
+                        trend_score = max(0, 2 + roe_delta_2 * 0.4)
+                    else:
+                        trend_score = 3.0  # 변동 없음
+
+                    factors['roe_delta_recent'] = round(roe_delta_2, 2)
+                    factors['roe_delta_prev'] = round(roe_delta_1, 2)
+                elif len(roe_trend) >= 2:
+                    roe_delta = roe_trend[-1] - roe_trend[-2]
+                    if roe_delta > 0:
+                        trend_score = min(6, 3 + roe_delta * 0.6)
+                    elif roe_delta < 0:
+                        trend_score = max(0, 2 + roe_delta * 0.4)
+                    factors['roe_delta_recent'] = round(roe_delta, 2)
+
+                factors['roe_trend_values'] = roe_trend
+
+            total_score += trend_score
+            factors['roe_trend_score'] = round(trend_score, 2)
+
+            # 3. EPS 성장률 (5점)
+            if eps_growth is not None:
+                eps_score = max(0, min(5, 2.5 + eps_growth * 0.083))
+                total_score += eps_score
+                factors['eps_growth'] = round(eps_growth, 2)
+                factors['eps_score'] = round(eps_score, 2)
+            else:
+                total_score += 2.5
+                factors['eps_score'] = 2.5
+
+            # 4. 이익 안정성 (3점)
+            if len(daily_prices_df) >= 60:
+                returns = daily_prices_df['CLOSE_PRICE'].pct_change().dropna()
+                volatility = returns.std() * 100
+                stability_score = max(0, 3 - volatility * 0.6)
+                total_score += stability_score
+                factors['volatility'] = round(volatility, 2)
+                factors['stability_score'] = round(stability_score, 2)
+            else:
+                total_score += 1.5
+                factors['stability_score'] = 1.5
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 품질 점수 계산 오류: {e}", exc_info=True)
+            return 10.0, {'error': str(e)}
+
+    def calculate_value_score_v2(
+        self,
+        pbr: Optional[float],
+        per: Optional[float],
+        financial_trend: Optional[Dict] = None,
+        eps_growth: Optional[float] = None,
+    ) -> Tuple[float, Dict]:
+        """
+        v2 상대 가치 점수 (20점 만점)
+
+        서브팩터:
+        - PBR 절대값: 5점
+        - PER 절대값: 5점
+        - PER 역사적 할인: 5점 (신규)
+        - EPS 대비 PER (PEG 유사): 5점 (신규)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+
+            # 1. PBR (5점)
+            if pbr is not None and pbr > 0:
+                pbr_score = max(0, min(5, 5 - (pbr - 0.5) * 2))
+                total_score += pbr_score
+                factors['pbr'] = round(pbr, 2)
+                factors['pbr_score'] = round(pbr_score, 2)
+            else:
+                total_score += 2.5
+                factors['pbr_score'] = 2.5
+
+            # 2. PER (5점)
+            if per is not None and per > 0:
+                per_score = max(0, min(5, 5 - (per - 5) * 0.2))
+                total_score += per_score
+                factors['per'] = round(per, 2)
+                factors['per_score'] = round(per_score, 2)
+            else:
+                total_score += 0
+                factors['per_score'] = 0
+                factors['per_note'] = '적자 또는 데이터 없음'
+
+            # 3. PER 역사적 할인 (5점)
+            per_discount_score = V2_NEUTRAL_DEFAULTS['per_historical']
+
+            if financial_trend and 'per_trend' in financial_trend:
+                per_trend = [v for v in financial_trend['per_trend'] if v is not None and v > 0]
+
+                if len(per_trend) >= 3:
+                    hist_avg_per = sum(per_trend[:-1]) / len(per_trend[:-1])
+                    current_per = per_trend[-1]
+
+                    if hist_avg_per > 0:
+                        discount_ratio = (hist_avg_per - current_per) / hist_avg_per
+                        per_discount_score = max(0, min(5, discount_ratio * 16.7))
+                        factors['per_hist_avg'] = round(hist_avg_per, 2)
+                        factors['per_discount_ratio'] = round(discount_ratio, 3)
+
+                factors['per_trend_values'] = per_trend
+
+            total_score += per_discount_score
+            factors['per_discount_score'] = round(per_discount_score, 2)
+
+            # 4. EPS 대비 PER — PEG 유사 (5점)
+            peg_score = V2_NEUTRAL_DEFAULTS['peg_like']
+
+            if per is not None and per > 0 and eps_growth is not None:
+                effective_growth = max(eps_growth, 1.0)  # 최소 1%
+                peg = per / effective_growth
+
+                if peg < 0.5:
+                    peg_score = 5.0
+                elif peg < 1.0:
+                    peg_score = 5.0 - (peg - 0.5) * 4
+                elif peg < 2.0:
+                    peg_score = 3.0 - (peg - 1.0) * 2
+                else:
+                    peg_score = max(0, 1.0 - (peg - 2.0) * 0.5)
+
+                factors['peg_ratio'] = round(peg, 2)
+
+            total_score += peg_score
+            factors['peg_score'] = round(peg_score, 2)
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 가치 점수 계산 오류: {e}", exc_info=True)
+            return 10.0, {'error': str(e)}
+
+    def calculate_technical_score_v2(
+        self,
+        daily_prices_df: pd.DataFrame,
+        sector: str = "미분류",
+    ) -> Tuple[float, Dict]:
+        """
+        v2 축적 신호 점수 (10점 만점)
+
+        서브팩터:
+        - 거래량 추세: 3점
+        - RSI: 3점
+        - 거래량 축적 패턴: 4점 (신규)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+
+            # 1. 거래량 추세 (3점)
+            if 'VOLUME' in daily_prices_df.columns and len(daily_prices_df) >= 25:
+                recent_vol = daily_prices_df['VOLUME'].tail(5).mean()
+                past_vol = daily_prices_df['VOLUME'].iloc[-25:-5].mean()
+
+                if past_vol > 0:
+                    vol_ratio = recent_vol / past_vol
+                    vol_score = max(0, min(3, (vol_ratio - 0.5) * 1.2))
+                    total_score += vol_score
+                    factors['volume_ratio'] = round(vol_ratio, 2)
+                    factors['volume_score'] = round(vol_score, 2)
+                else:
+                    total_score += 1.5
+                    factors['volume_score'] = 1.5
+            else:
+                total_score += 1.5
+                factors['volume_score'] = 1.5
+
+            # 2. RSI (3점)
+            rsi = self._calculate_rsi(daily_prices_df, period=14)
+            if rsi is not None:
+                rsi_oversold = self.config.get_float("BUY_RSI_OVERSOLD_THRESHOLD", 30.0)
+                if rsi <= rsi_oversold:
+                    rsi_score = 3.0
+                elif rsi <= 50:
+                    rsi_score = 3 - (rsi - rsi_oversold) * (1.5 / (50 - rsi_oversold))
+                elif rsi <= 70:
+                    rsi_score = 1.5 - (rsi - 50) * 0.05
+                else:
+                    rsi_score = max(0, 0.5 - (rsi - 70) * 0.025)
+
+                sector_mult = self.SECTOR_RSI_MULTIPLIER.get(sector, 1.0)
+                rsi_score = min(3.0, rsi_score * sector_mult)
+                total_score += rsi_score
+
+                factors['rsi'] = round(rsi, 2)
+                factors['rsi_score'] = round(rsi_score, 2)
+                factors['sector'] = sector
+            else:
+                total_score += 1.5
+                factors['rsi_score'] = 1.5
+
+            # 3. 거래량 축적 패턴 (4점) — 가격↓ + 거래량↑ = smart money accumulation
+            accumulation_score = 0.0
+            if 'VOLUME' in daily_prices_df.columns and len(daily_prices_df) >= 40:
+                price_change_20d = (
+                    float(daily_prices_df['CLOSE_PRICE'].iloc[-1])
+                    / float(daily_prices_df['CLOSE_PRICE'].iloc[-20]) - 1
+                ) * 100
+
+                recent_vol_avg = daily_prices_df['VOLUME'].iloc[-20:].mean()
+                past_vol_avg = daily_prices_df['VOLUME'].iloc[-40:-20].mean()
+                vol_ratio_20d = recent_vol_avg / past_vol_avg if past_vol_avg > 0 else 1.0
+
+                if price_change_20d < -5 and vol_ratio_20d > 1.2:
+                    accumulation_score = 4.0
+                elif price_change_20d < -3 and vol_ratio_20d > 1.1:
+                    accumulation_score = 3.0
+                elif price_change_20d < 0 and vol_ratio_20d > 1.0:
+                    accumulation_score = 2.0
+                elif price_change_20d < -5 and vol_ratio_20d > 0.8:
+                    accumulation_score = 1.0
+
+                factors['price_change_20d'] = round(price_change_20d, 2)
+                factors['vol_ratio_20d'] = round(vol_ratio_20d, 2)
+
+            total_score += accumulation_score
+            factors['accumulation_score'] = round(accumulation_score, 2)
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 기술적 점수 계산 오류: {e}", exc_info=True)
+            return 5.0, {'error': str(e)}
+
+    def calculate_news_score_v2(
+        self,
+        current_sentiment_score: float = 50,
+        sentiment_momentum: Optional[float] = None,
+    ) -> Tuple[float, Dict]:
+        """
+        v2 센티먼트 전환 점수 (10점 만점)
+
+        서브팩터:
+        - 센티먼트 절대값: 4점 (v1: 8 → 축소)
+        - 센티먼트 모멘텀: 6점 (신규)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+
+            # 1. 센티먼트 절대값 (4점)
+            if current_sentiment_score > 0:
+                sent_score = current_sentiment_score / 100 * 4.0
+            else:
+                sent_score = 2.0
+            total_score += sent_score
+            factors['current_sentiment'] = current_sentiment_score
+            factors['sentiment_level_score'] = round(sent_score, 2)
+
+            # 2. 센티먼트 모멘텀 (6점)
+            sent_momentum_score = V2_NEUTRAL_DEFAULTS['sentiment_momentum']  # 3.0 중립
+
+            if sentiment_momentum is not None:
+                if sentiment_momentum > 30:
+                    sent_momentum_score = 6.0
+                elif sentiment_momentum > 10:
+                    sent_momentum_score = min(6, sentiment_momentum * 0.3)
+                elif sentiment_momentum > 0:
+                    sent_momentum_score = 2.0 + sentiment_momentum * 0.1
+                elif sentiment_momentum > -20:
+                    sent_momentum_score = max(1.0, 2.0 + sentiment_momentum * 0.05)
+                else:
+                    sent_momentum_score = 0.0
+
+                factors['sentiment_momentum'] = round(sentiment_momentum, 2)
+
+            total_score += sent_momentum_score
+            factors['sentiment_momentum_score'] = round(sent_momentum_score, 2)
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 뉴스 점수 계산 오류: {e}", exc_info=True)
+            return 5.0, {'error': str(e)}
+
+    def calculate_supply_demand_score_v2(
+        self,
+        foreign_net_buy: Optional[int] = None,
+        institution_net_buy: Optional[int] = None,
+        avg_volume: Optional[float] = None,
+        investor_trading_df: Optional[pd.DataFrame] = None,
+        foreign_ratio_trend: Optional[float] = None,
+    ) -> Tuple[float, Dict]:
+        """
+        v2 스마트머니 신호 점수 (20점 만점)
+
+        서브팩터:
+        - 외인 순매수: 5점 (v1: 7)
+        - 기관 순매수: 3점 (v1: 5)
+        - 수급 반전 감지: ±3점 (v1: ±2)
+        - 외인 보유비율 추세: 5점 (신규)
+        - 기관+외인 동시매수: 4점 (신규)
+        """
+        try:
+            factors = {}
+            total_score = 0.0
+            use_vol = avg_volume is not None and avg_volume > 0
+
+            # 1. 외인 순매수 (5점)
+            if foreign_net_buy is not None:
+                if use_vol:
+                    f_ratio = foreign_net_buy / avg_volume
+                    f_score = max(0, min(5, 2.5 + f_ratio / 0.05 * 2.5))
+                    factors['foreign_ratio'] = round(f_ratio * 100, 2)
+                else:
+                    f_score = max(0, min(5, 2.5 + foreign_net_buy / 1_000_000 * 2.5))
+                total_score += f_score
+                factors['foreign_net_buy'] = foreign_net_buy
+                factors['foreign_score'] = round(f_score, 2)
+            else:
+                total_score += 2.5
+                factors['foreign_score'] = 2.5
+
+            # 2. 기관 순매수 (3점)
+            if institution_net_buy is not None:
+                if use_vol:
+                    i_ratio = institution_net_buy / avg_volume
+                    i_score = max(0, min(3, 1.5 + i_ratio / 0.03 * 1.5))
+                else:
+                    i_score = max(0, min(3, 1.5 + institution_net_buy / 500_000 * 1.5))
+                total_score += i_score
+                factors['institution_net_buy'] = institution_net_buy
+                factors['institution_score'] = round(i_score, 2)
+            else:
+                total_score += 1.5
+                factors['institution_score'] = 1.5
+
+            # 3. 수급 반전 감지 (±3점)
+            flow_reversal_adj = 0.0
+            if investor_trading_df is not None and len(investor_trading_df) >= 10:
+                try:
+                    prev_5d = investor_trading_df.iloc[-10:-5]['FOREIGN_NET_BUY'].sum()
+                    recent_5d = investor_trading_df.tail(5)['FOREIGN_NET_BUY'].sum()
+
+                    if prev_5d > 0 and recent_5d < 0:
+                        flow_reversal_adj = -3.0
+                        factors['flow_reversal'] = 'SELL_TURN'
+                    elif prev_5d < 0 and recent_5d > 0:
+                        flow_reversal_adj = 3.0
+                        factors['flow_reversal'] = 'BUY_TURN'
+
+                    factors['flow_reversal_adj'] = flow_reversal_adj
+                    if flow_reversal_adj != 0:
+                        factors['flow_prev_5d'] = int(prev_5d)
+                        factors['flow_recent_5d'] = int(recent_5d)
+                except Exception:
+                    pass
+
+            total_score += flow_reversal_adj
+
+            # 4. 외인 보유비율 추세 (5점)
+            ratio_trend_score = V2_NEUTRAL_DEFAULTS['foreign_ratio_trend']  # 1.0
+
+            if foreign_ratio_trend is not None:
+                if foreign_ratio_trend > 1.0:
+                    ratio_trend_score = 5.0
+                elif foreign_ratio_trend > 0.3:
+                    ratio_trend_score = foreign_ratio_trend * 3.3
+                elif foreign_ratio_trend < -1.0:
+                    ratio_trend_score = 0.0
+                else:
+                    ratio_trend_score = 1.0
+                factors['foreign_ratio_trend'] = round(foreign_ratio_trend, 3)
+
+            total_score += ratio_trend_score
+            factors['ratio_trend_score'] = round(ratio_trend_score, 2)
+
+            # 5. 기관+외인 동시매수 (4점)
+            sync_score = 0.0
+            if investor_trading_df is not None and len(investor_trading_df) >= 5:
+                try:
+                    recent = investor_trading_df.tail(5)
+                    f_sum = recent['FOREIGN_NET_BUY'].sum()
+                    i_sum = recent['INSTITUTION_NET_BUY'].sum()
+
+                    has_individual = 'INDIVIDUAL_NET_BUY' in recent.columns
+                    ind_sum = recent['INDIVIDUAL_NET_BUY'].sum() if has_individual else 0
+
+                    if f_sum > 0 and i_sum > 0:
+                        sync_score = 3.0
+                        if has_individual and ind_sum < 0:
+                            sync_score = 4.0  # 개인 순매도 + 기관/외인 순매수 = 전형적 스마트머니
+                        factors['smart_money_sync'] = True
+                        factors['sync_foreign_5d'] = int(f_sum)
+                        factors['sync_institution_5d'] = int(i_sum)
+                        if has_individual:
+                            factors['sync_individual_5d'] = int(ind_sum)
+                except Exception:
+                    pass
+
+            total_score += sync_score
+            factors['sync_score'] = round(sync_score, 2)
+
+            # 최소 0점 보장
+            total_score = max(0, total_score)
+
+            return total_score, factors
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer) v2 수급 점수 계산 오류: {e}", exc_info=True)
+            return 10.0, {'error': str(e)}
+
     def calculate_news_timing_signal(self,
                                       news_category: str,
                                       current_sentiment_score: float) -> Tuple[str, str, int]:
@@ -1284,20 +1875,26 @@ class QuantScorer:
                                     institution_net_buy: Optional[int] = None,
                                     foreign_holding_ratio: Optional[float] = None,
                                     sector: str = None,
-                                    investor_trading_df: Optional[pd.DataFrame] = None) -> QuantScoreResult:
+                                    investor_trading_df: Optional[pd.DataFrame] = None,
+                                    # v2 신규 파라미터 (Optional, v1에서는 무시)
+                                    financial_trend: Optional[Dict] = None,
+                                    sentiment_momentum: Optional[float] = None,
+                                    foreign_ratio_trend: Optional[float] = None,
+                                    ) -> QuantScoreResult:
         """
         종합 정량 점수 계산 (100점 만점)
 
-        점수 구성:
-        - 모멘텀: 25점
-        - 품질: 20점
-        - 가치: 15점
-        - 기술적: 10점
-        - 뉴스 통계: 15점
-        - 수급: 15점 (+smart_money_5d 조건부 보너스 최대 3점)
+        v1 점수 구성:
+        - 모멘텀: 25점, 품질: 20점, 가치: 15점, 기술적: 10점, 뉴스: 15점, 수급: 15점
+
+        v2 잠재력 기반 점수 구성 (QUANT_SCORER_VERSION=v2):
+        - 모멘텀: 20점, 품질: 20점, 가치: 20점, 기술적: 10점, 뉴스: 10점, 수급: 20점
 
         Args:
             investor_trading_df: 투자자 매매 동향 DataFrame (5일 누적 수급 보너스 계산용)
+            financial_trend: v2용 분기별 재무 트렌드 {roe_trend, per_trend, eps_trend}
+            sentiment_momentum: v2용 센티먼트 변화량 (recent_7d - past_30d)
+            foreign_ratio_trend: v2용 외인 보유비율 변화 (20일간)
 
         Returns:
             QuantScoreResult 객체
@@ -1346,10 +1943,34 @@ class QuantScorer:
                 invalid_reason=f'데이터 부족 ({len(daily_prices_df)}일)',
                 details={'error': f'데이터 부족 ({len(daily_prices_df)}일 < {MIN_PRICE_DATA_DAYS}일)'},
             )
-        
+
+        # ============================================================
+        # v2 잠재력 기반 스코어링 분기
+        # ============================================================
+        if QUANT_SCORER_VERSION == "v2":
+            return self._calculate_total_quant_score_v2(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                daily_prices_df=daily_prices_df,
+                kospi_prices_df=kospi_prices_df,
+                roe=roe,
+                eps_growth=eps_growth,
+                pbr=pbr,
+                per=per,
+                current_sentiment_score=current_sentiment_score,
+                news_category=news_category,
+                foreign_net_buy=foreign_net_buy,
+                institution_net_buy=institution_net_buy,
+                sector=sector,
+                investor_trading_df=investor_trading_df,
+                financial_trend=financial_trend,
+                sentiment_momentum=sentiment_momentum,
+                foreign_ratio_trend=foreign_ratio_trend,
+            )
+
         try:
             all_details = {}
-            
+
             # 1. 모멘텀 점수 (25점)
             momentum_score, momentum_details = self.calculate_momentum_score(
                 daily_prices_df, kospi_prices_df
@@ -1643,7 +2264,163 @@ class QuantScorer:
                 details={'error': str(e)},
             )
     
-    def filter_candidates(self, 
+    def _calculate_total_quant_score_v2(
+        self,
+        stock_code: str,
+        stock_name: str,
+        daily_prices_df: pd.DataFrame,
+        kospi_prices_df: Optional[pd.DataFrame] = None,
+        roe: Optional[float] = None,
+        eps_growth: Optional[float] = None,
+        pbr: Optional[float] = None,
+        per: Optional[float] = None,
+        current_sentiment_score: float = 50,
+        news_category: str = None,
+        foreign_net_buy: Optional[int] = None,
+        institution_net_buy: Optional[int] = None,
+        sector: str = None,
+        investor_trading_df: Optional[pd.DataFrame] = None,
+        financial_trend: Optional[Dict] = None,
+        sentiment_momentum: Optional[float] = None,
+        foreign_ratio_trend: Optional[float] = None,
+    ) -> QuantScoreResult:
+        """
+        v2 잠재력 기반 종합 정량 점수 계산 (100점 만점)
+
+        배점: 모멘텀 20 + 품질 20 + 가치 20 + 기술적 10 + 뉴스 10 + 수급 20
+        """
+        try:
+            all_details = {'scorer_version': 'v2'}
+
+            # 섹터 정보 조회
+            if not sector or sector == '미분류':
+                sector = self._get_stock_sector(stock_code)
+
+            # 거래량 평균 계산
+            avg_volume = None
+            if 'VOLUME' in daily_prices_df.columns and len(daily_prices_df) >= 20:
+                avg_volume = daily_prices_df['VOLUME'].iloc[-20:].mean()
+
+            # 1. 잠재력 모멘텀 (20점)
+            momentum_score, momentum_details = self.calculate_momentum_score_v2(
+                daily_prices_df, kospi_prices_df,
+            )
+            all_details['momentum'] = momentum_details
+
+            # 2. 개선 품질 (20점)
+            quality_score, quality_details = self.calculate_quality_score_v2(
+                roe, eps_growth, daily_prices_df, financial_trend,
+            )
+            all_details['quality'] = quality_details
+
+            # 3. 상대 가치 (20점)
+            value_score, value_details = self.calculate_value_score_v2(
+                pbr, per, financial_trend, eps_growth,
+            )
+            all_details['value'] = value_details
+
+            # 4. 축적 신호 (10점)
+            technical_score, technical_details = self.calculate_technical_score_v2(
+                daily_prices_df, sector,
+            )
+            all_details['technical'] = technical_details
+
+            # 5. 센티먼트 전환 (10점)
+            news_stat_score, news_details = self.calculate_news_score_v2(
+                current_sentiment_score, sentiment_momentum,
+            )
+            all_details['news'] = news_details
+
+            # 6. 스마트머니 신호 (20점)
+            supply_demand_score, supply_details = self.calculate_supply_demand_score_v2(
+                foreign_net_buy, institution_net_buy, avg_volume,
+                investor_trading_df, foreign_ratio_trend,
+            )
+            all_details['supply_demand'] = supply_details
+
+            # Chart Phase Analysis (v1과 공유)
+            chart_phase_result = ChartPhaseResult()
+            phase_multiplier = 1.0
+            is_phase_blocked = False
+
+            try:
+                phase_analyzer = ChartPhaseAnalyzer()
+                chart_phase_result = phase_analyzer.analyze(daily_prices_df)
+                phase_multiplier = chart_phase_result.score_multiplier
+                is_phase_blocked = chart_phase_result.is_blocked
+
+                all_details['chart_phase'] = {
+                    'stage': chart_phase_result.stage,
+                    'stage_name': chart_phase_result.stage_name,
+                    'trend_direction': chart_phase_result.trend_direction,
+                    'trend_strength': round(chart_phase_result.trend_strength, 1),
+                    'exhaustion_score': round(chart_phase_result.exhaustion_score, 1),
+                    'multiplier': phase_multiplier,
+                    'is_blocked': is_phase_blocked,
+                    'notes': chart_phase_result.notes[:3],
+                }
+            except Exception as phase_err:
+                logger.warning(f"   (ChartPhase v2) {stock_code} 분석 오류: {phase_err}")
+                all_details['chart_phase'] = {'error': str(phase_err)}
+
+            # 총점 계산
+            base_total_score = (
+                momentum_score + quality_score + value_score
+                + technical_score + news_stat_score + supply_demand_score
+            )
+
+            total_score = base_total_score * phase_multiplier
+
+            if is_phase_blocked:
+                total_score = 0.0
+                all_details['phase_block_reason'] = "Stage 4 (Downtrend) - 매수 금지"
+
+            all_details['sector'] = sector
+
+            # 조건부 승률 정보 로드
+            factor_perf = self._load_factor_performance(stock_code)
+            matched_conditions = [c['key'] for c in factor_perf['conditions']]
+
+            return QuantScoreResult(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                total_score=round(total_score, 2),
+                momentum_score=round(momentum_score, 2),
+                quality_score=round(quality_score, 2),
+                value_score=round(value_score, 2),
+                technical_score=round(technical_score, 2),
+                news_stat_score=round(news_stat_score, 2),
+                supply_demand_score=round(supply_demand_score, 2),
+                matched_conditions=matched_conditions,
+                condition_win_rate=factor_perf['best_win_rate'],
+                condition_sample_count=factor_perf['sample_count'],
+                condition_confidence=factor_perf['confidence'],
+                sector=sector,
+                details=all_details,
+            )
+
+        except Exception as e:
+            logger.error(f"   (QuantScorer v2) {stock_code} 종합 점수 계산 오류: {e}", exc_info=True)
+            return QuantScoreResult(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                total_score=0.0,
+                momentum_score=0.0,
+                quality_score=0.0,
+                value_score=0.0,
+                technical_score=0.0,
+                news_stat_score=0.0,
+                supply_demand_score=0.0,
+                matched_conditions=[],
+                condition_win_rate=None,
+                condition_sample_count=0,
+                condition_confidence='LOW',
+                is_valid=False,
+                invalid_reason=f'v2 계산 오류: {str(e)[:50]}',
+                details={'error': str(e), 'scorer_version': 'v2'},
+            )
+
+    def filter_candidates(self,
                           results: List[QuantScoreResult],
                           cutoff_ratio: float = None) -> List[QuantScoreResult]:
         """

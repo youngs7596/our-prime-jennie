@@ -1094,8 +1094,31 @@ def main():
                     
                     # Step 1: 정량 점수 계산 (LLM 호출 없음, 비용 0원)
                     logger.info(f"\n   [Step 1] 정량 점수 계산 ({len(candidate_stocks)}개 종목) - 비용 0원")
+
+                    # v2 사전 조회 데이터 (QUANT_SCORER_VERSION=v2일 때만 실행)
+                    v2_caches = {}
+                    from shared.hybrid_scoring.quant_constants import QUANT_SCORER_VERSION
+                    if QUANT_SCORER_VERSION == "v2":
+                        logger.info("   [Step 1] v2 잠재력 스코어링 모드 — 추가 데이터 조회 중...")
+                        try:
+                            from shared.db.factor_repository import FactorRepository
+                            factor_repo = FactorRepository(session)
+                            stock_codes = [c for c in candidate_stocks.keys() if c != '0001']
+
+                            v2_caches['financial_trend'] = factor_repo.get_financial_trend(stock_codes)
+                            v2_caches['sentiment_momentum'] = factor_repo.get_sentiment_momentum_bulk(stock_codes)
+                            v2_caches['investor_trading_ext'] = factor_repo.get_investor_trading_with_ratio(stock_codes, days=25)
+
+                            logger.info(
+                                f"   [Step 1] v2 데이터: 재무트렌드 {len(v2_caches['financial_trend'])}개, "
+                                f"센티먼트모멘텀 {len(v2_caches['sentiment_momentum'])}개, "
+                                f"수급확장 {len(v2_caches['investor_trading_ext'])}개"
+                            )
+                        except Exception as v2_err:
+                            logger.warning(f"   [Step 1] v2 데이터 조회 실패 (v1 폴백 없음): {v2_err}")
+
                     quant_results = {}
-                    
+
                     for code, info in candidate_stocks.items():
                         if code == '0001':
                             continue
@@ -1105,7 +1128,8 @@ def main():
                             'snapshot': snapshot_cache.get(code),
                         }
                         quant_results[code] = process_quant_scoring_task(
-                            stock_info, quant_scorer, session, kospi_prices
+                            stock_info, quant_scorer, session, kospi_prices,
+                            v2_caches=v2_caches,
                         )
                     
                     # Step 2: 정량 기반 1차 필터링 (하위 60% 탈락 → 상위 40% 통과)

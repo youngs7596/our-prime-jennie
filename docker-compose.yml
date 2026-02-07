@@ -688,6 +688,7 @@ services:
       - ENABLE_SCOUT_JOB_WORKER=false # API 서버에서는 워커 비활성화
       - ENABLE_STARTUP_ONESHOT=true
       - SCOUT_USE_UNIFIED_ANALYST=true # 1-pass Unified Analyst (비용 1/3)
+      - QUANT_SCORER_VERSION=v2 # v1: 현재 수준 기반, v2: 잠재력 기반
     network_mode: host
     restart: unless-stopped
     labels:
@@ -726,6 +727,7 @@ services:
       - ENABLE_SCOUT_JOB_WORKER=true # 전용 워커 프로세스
       - ENABLE_STARTUP_ONESHOT=false
       - SCOUT_USE_UNIFIED_ANALYST=true # 1-pass Unified Analyst (비용 1/3)
+      - QUANT_SCORER_VERSION=v2 # v1: 현재 수준 기반, v2: 잠재력 기반
     network_mode: host
     restart: unless-stopped
     command: [ "python", "main.py" ] # Gunicorn 없이 직접 실행 (포트 바인딩 필요 없음)

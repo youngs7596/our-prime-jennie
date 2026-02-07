@@ -29,27 +29,33 @@ def is_hybrid_scoring_enabled() -> bool:
     return _cfg.get_bool("SCOUT_V5_ENABLED", default=False)
 
 
-def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_df=None):
+def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_df=None,
+                               v2_caches=None):
     """
     Step 1: 정량 점수 계산 (LLM 호출 없음, 비용 0원)
-    
+
     세 설계의 핵심 아이디어 구현:
     - Claude: 정량 점수를 LLM과 독립적으로 계산
     - Gemini: 비용 0원으로 1차 필터링
     - GPT: 조건부 승률 기반 점수 산출
-    
+
     Args:
         stock_info: {'code': str, 'info': dict, 'snapshot': dict}
         quant_scorer: QuantScorer 인스턴스
         db_conn: DB 연결 (일봉 데이터 조회용)
         kospi_prices_df: KOSPI 일봉 데이터
-    
+        v2_caches: v2 사전 조회 데이터 (Optional)
+            {'financial_trend': {code: {...}},
+             'sentiment_momentum': {code: float},
+             'investor_trading_ext': {code: DataFrame}}
+
     Returns:
         QuantScoreResult 객체
     """
     code = stock_info['code']
     info = stock_info['info']
     snapshot = stock_info.get('snapshot', {}) or {}
+    v2_caches = v2_caches or {}
     
     try:
         # 일봉 데이터 조회
@@ -87,6 +93,19 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
         except Exception as inv_err:
             logger.debug(f"   ⚠️ [Quant] {code} 투자자 매매 동향 조회 실패: {inv_err}")
 
+        # v2 캐시에서 데이터 추출
+        financial_trend = v2_caches.get('financial_trend', {}).get(code)
+        sentiment_momentum = v2_caches.get('sentiment_momentum', {}).get(code)
+
+        # 외인 보유비율 추세 계산 (v2용)
+        foreign_ratio_trend = None
+        ext_trading_df = v2_caches.get('investor_trading_ext', {}).get(code)
+        if ext_trading_df is not None and not ext_trading_df.empty:
+            if 'FOREIGN_HOLDING_RATIO' in ext_trading_df.columns and len(ext_trading_df) >= 20:
+                ratios = ext_trading_df['FOREIGN_HOLDING_RATIO'].dropna()
+                if len(ratios) >= 20:
+                    foreign_ratio_trend = float(ratios.iloc[-1] - ratios.iloc[-20])
+
         # 정량 점수 계산
         result = quant_scorer.calculate_total_quant_score(
             stock_code=code,
@@ -101,6 +120,10 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
             sector=info.get('sector'),
             # 투자자 매매 동향 (smart_money_5d 계산용)
             investor_trading_df=investor_trading_df,
+            # v2 신규 파라미터
+            financial_trend=financial_trend,
+            sentiment_momentum=sentiment_momentum,
+            foreign_ratio_trend=foreign_ratio_trend,
         )
         
         # 역신호 카테고리 체크 로직 제거 (분석 결과 기각됨)

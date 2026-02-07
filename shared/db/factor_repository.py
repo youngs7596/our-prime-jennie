@@ -695,9 +695,195 @@ class FactorRepository:
             self.session.commit()
             logger.debug(f"✅ [FactorRepo] 뉴스 팩터 통계 저장: {target_code}/{news_category}")
             return True
-            
+
         except Exception as e:
             self.session.rollback()
             logger.error(f"❌ [FactorRepo] 뉴스 팩터 통계 저장 실패: {e}")
             return False
+
+    # =========================================================================
+    # v2: 분기별 재무 트렌드 조회
+    # =========================================================================
+
+    def get_financial_trend(
+        self,
+        stock_codes: List[str],
+    ) -> Dict[str, Dict]:
+        """
+        최근 4분기 재무 지표 트렌드 조회 (Quant Scorer v2용)
+
+        Args:
+            stock_codes: 종목 코드 리스트
+
+        Returns:
+            {stock_code: {
+                'roe_trend': [Q-3, Q-2, Q-1, Q0],
+                'per_trend': [Q-3, Q-2, Q-1, Q0],
+                'eps_trend': [Q-3, Q-2, Q-1, Q0],
+                'net_income_trend': [Q-3, Q-2, Q-1, Q0],
+            }}
+            데이터 미보유 종목은 빈 딕셔너리
+        """
+        result: Dict[str, Dict] = {}
+
+        if not stock_codes:
+            return result
+
+        try:
+            stmt = (
+                select(
+                    FinancialMetricsQuarterly.stock_code,
+                    FinancialMetricsQuarterly.quarter_date,
+                    FinancialMetricsQuarterly.roe,
+                    FinancialMetricsQuarterly.per,
+                    FinancialMetricsQuarterly.eps,
+                )
+                .where(FinancialMetricsQuarterly.stock_code.in_(stock_codes))
+                .order_by(
+                    FinancialMetricsQuarterly.stock_code,
+                    FinancialMetricsQuarterly.quarter_date,
+                )
+            )
+            rows = self.session.execute(stmt).all()
+
+            # 종목별로 그룹핑
+            from collections import defaultdict
+            grouped: Dict[str, list] = defaultdict(list)
+            for row in rows:
+                grouped[row[0]].append(row)
+
+            for code, quarters in grouped.items():
+                # 최근 4분기만 (시간순 정렬된 상태)
+                recent = quarters[-4:] if len(quarters) >= 4 else quarters
+
+                trend: Dict[str, list] = {
+                    'roe_trend': [],
+                    'per_trend': [],
+                    'eps_trend': [],
+                }
+
+                for q in recent:
+                    trend['roe_trend'].append(float(q[2]) if q[2] is not None else None)
+                    trend['per_trend'].append(float(q[3]) if q[3] is not None else None)
+                    trend['eps_trend'].append(float(q[4]) if q[4] is not None else None)
+
+                result[code] = trend
+
+            logger.debug(f"[FactorRepo] 재무 트렌드 조회: {len(result)}/{len(stock_codes)}개 종목")
+            return result
+
+        except Exception as e:
+            logger.error(f"[FactorRepo] 재무 트렌드 조회 실패: {e}")
+            return result
+
+    def get_investor_trading_with_ratio(
+        self,
+        stock_codes: List[str],
+        days: int = 25,
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        여러 종목의 투자자별 매매 동향 + 외인보유비율 조회 (v2용)
+
+        Args:
+            stock_codes: 종목 코드 리스트
+            days: 조회할 일수
+
+        Returns:
+            {stock_code: DataFrame} with columns:
+                TRADE_DATE, FOREIGN_NET_BUY, INSTITUTION_NET_BUY,
+                INDIVIDUAL_NET_BUY, FOREIGN_HOLDING_RATIO
+        """
+        result = {}
+        try:
+            for code in stock_codes:
+                stmt = (
+                    select(
+                        StockInvestorTrading.trade_date,
+                        StockInvestorTrading.foreign_net_buy,
+                        StockInvestorTrading.institution_net_buy,
+                        StockInvestorTrading.individual_net_buy,
+                        StockInvestorTrading.foreign_holding_ratio,
+                    )
+                    .where(StockInvestorTrading.stock_code == code)
+                    .order_by(desc(StockInvestorTrading.trade_date))
+                    .limit(days)
+                )
+                rows = self.session.execute(stmt).all()
+
+                df = self._rows_to_df(rows, [
+                    'TRADE_DATE', 'FOREIGN_NET_BUY', 'INSTITUTION_NET_BUY',
+                    'INDIVIDUAL_NET_BUY', 'FOREIGN_HOLDING_RATIO',
+                ])
+                if not df.empty:
+                    df['TRADE_DATE'] = pd.to_datetime(df['TRADE_DATE'])
+                    df = df.sort_values('TRADE_DATE').reset_index(drop=True)
+                result[code] = df
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[FactorRepo] 수급+보유비율 조회 실패: {e}")
+            return {code: pd.DataFrame() for code in stock_codes}
+
+    def get_sentiment_momentum_bulk(
+        self,
+        stock_codes: List[str],
+    ) -> Dict[str, float]:
+        """
+        종목별 센티먼트 모멘텀 계산 (v2용)
+        최근 7일 평균 vs 8~37일전 평균 차이
+
+        Args:
+            stock_codes: 종목 코드 리스트
+
+        Returns:
+            {stock_code: sentiment_momentum} 딕셔너리
+            데이터 미보유 종목은 포함되지 않음
+        """
+        result: Dict[str, float] = {}
+
+        if not stock_codes:
+            return result
+
+        try:
+            cutoff_37d = datetime.now().date() - timedelta(days=37)
+
+            stmt = (
+                select(
+                    StockNewsSentiment.stock_code,
+                    StockNewsSentiment.news_date,
+                    StockNewsSentiment.sentiment_score,
+                )
+                .where(
+                    and_(
+                        StockNewsSentiment.stock_code.in_(stock_codes),
+                        StockNewsSentiment.news_date >= cutoff_37d,
+                    )
+                )
+                .order_by(StockNewsSentiment.stock_code, StockNewsSentiment.news_date)
+            )
+            rows = self.session.execute(stmt).all()
+
+            from collections import defaultdict
+            grouped: Dict[str, list] = defaultdict(list)
+            for row in rows:
+                grouped[row[0]].append((row[1], float(row[2]) if row[2] is not None else None))
+
+            cutoff_7d = datetime.now().date() - timedelta(days=7)
+
+            for code, entries in grouped.items():
+                recent_scores = [s for d, s in entries if d >= cutoff_7d and s is not None]
+                past_scores = [s for d, s in entries if d < cutoff_7d and s is not None]
+
+                if recent_scores and past_scores:
+                    recent_avg = sum(recent_scores) / len(recent_scores)
+                    past_avg = sum(past_scores) / len(past_scores)
+                    result[code] = recent_avg - past_avg
+
+            logger.debug(f"[FactorRepo] 센티먼트 모멘텀 계산: {len(result)}/{len(stock_codes)}개 종목")
+            return result
+
+        except Exception as e:
+            logger.error(f"[FactorRepo] 센티먼트 모멘텀 계산 실패: {e}")
+            return result
 

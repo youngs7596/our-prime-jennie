@@ -22,6 +22,12 @@
   - ±15pt 가드레일, SCOUT_USE_UNIFIED_ANALYST=true 환경변수 토글
 - **test**: 1049 shared + 18 scout-job 테스트 전체 통과
 
+### FOREIGN_HOLDING_RATIO 수집 & Quant Scorer v2 프로덕션 전환
+- **feat(data)**: `collect_foreign_holding_ratio.py` 신규 — pykrx 기반 외인보유비율 수집/백필 (DDL 자동 실행)
+- **feat(dags)**: `collect_foreign_holding_ratio` DAG 추가 (18:35 KST, collect_investor_trading 이후)
+- **feat(quant)**: `QUANT_SCORER_VERSION=v2` 프로덕션 전환 (D+5 IC: v1=-0.071 → v2=+0.106)
+- **fix(scripts)**: `backtest_v2_historical.py`, `dryrun_v1_v2_comparison.py` — FOREIGN_HOLDING_RATIO 실제 DB 데이터 활용
+
 ### Factor Alpha P0+P1+P2 구현 & 백테스트 검증
 - **feat(quant)**: P1 Quant Scorer 패치 3건 구현
   - P1-2 Recon Protection 강화: RSI 보호 해제 50-70→50-59, 1M 모멘텀>0 필수
@@ -239,4 +245,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-07 16:43 KST*
+*Last Updated: 2026-02-07 23:54 KST*

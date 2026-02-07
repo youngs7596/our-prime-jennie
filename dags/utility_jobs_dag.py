@@ -126,3 +126,43 @@ with DAG(
         env=COMMON_ENV,
         append_env=True,
     )
+
+# 7. Collect Foreign Holding Ratio: 18:35 KST (investor trading 수집 이후)
+# pykrx로 외국인 보유비율(지분율) 수집 → STOCK_INVESTOR_TRADING.FOREIGN_HOLDING_RATIO UPDATE
+with DAG(
+    'collect_foreign_holding_ratio',
+    default_args=default_args,
+    schedule_interval='35 18 * * 1-5',  # 18:35 KST (collect_investor_trading 18:30 이후)
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
+    catchup=False,
+    tags=['data', 'investor', 'foreign', 'holding'],
+) as dag_foreign:
+    run_foreign = BashOperator(
+        task_id='run_collect_foreign_holding_ratio',
+        bash_command='python scripts/collect_foreign_holding_ratio.py --days 1',
+        cwd='/opt/airflow',
+        env=COMMON_ENV,
+        append_env=True,
+    )
+
+# 8. Naver Sector Update (Weekly): 20:00 KST on Sunday
+# 네이버 업종 분류(79개 세분류) 크롤링 → STOCK_MASTER.SECTOR_NAVER 업데이트
+with DAG(
+    'update_naver_sectors_weekly',
+    default_args={
+        **default_args,
+        'retries': 2,
+        'execution_timeout': timedelta(minutes=15),
+    },
+    schedule_interval='0 20 * * 0',  # 매주 일요일 20:00 KST
+    start_date=datetime(2025, 1, 1, tzinfo=kst),
+    catchup=False,
+    tags=['data', 'sector', 'naver', 'weekly'],
+) as dag_naver_sector:
+    run_naver_sector = BashOperator(
+        task_id='run_update_naver_sectors',
+        bash_command='python utilities/update_naver_sectors.py',
+        cwd='/opt/airflow',
+        env=COMMON_ENV,
+        append_env=True,
+    )
