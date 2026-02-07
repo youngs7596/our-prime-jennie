@@ -25,13 +25,13 @@ echo "[systemd-autostart] Starting infra profile first..."
 echo "[systemd-autostart] Waiting for infra services to be healthy..."
 sleep 30  # Give infra services time to initialize
 
-# Check key services are healthy
-for service in rabbitmq redis chromadb; do
+# Check key infra services are healthy
+for service in rabbitmq redis; do
   echo "[systemd-autostart] Checking $service health..."
   timeout 120 bash -c "until docker compose ps $service | grep -q 'healthy'; do sleep 5; done" || true
 done
 
-echo "[systemd-autostart] Starting real profile..."
+echo "[systemd-autostart] Starting real profile (ollama-gateway will wait for vLLM healthy via depends_on)..."
 /usr/bin/docker compose --profile real up -d
 
 echo "[systemd-autostart] All profiles started successfully!"

@@ -282,16 +282,7 @@ def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict
     requested_max_tokens = options.get("num_predict", 2048)
     top_p = options.get("top_p", 1.0)
 
-    # vLLM max_model_len 초과 방지: 입력 토큰 수를 모르므로 보수적으로 절반 cap
-    safe_max_tokens = VLLM_MAX_MODEL_LEN // 2
-    if requested_max_tokens > safe_max_tokens:
-        logger.info(f"⚠️ [vLLM] max_tokens 클램핑: {requested_max_tokens} → {safe_max_tokens} (max_model_len={VLLM_MAX_MODEL_LEN})")
-        stats['token_clamped_count'] += 1
-        max_tokens = safe_max_tokens
-    else:
-        max_tokens = requested_max_tokens
-
-    # 메시지 구성
+    # 메시지 구성 (max_tokens 계산 전에 먼저 구성)
     if endpoint == "/api/generate":
         prompt = payload.get("prompt", "")
         system = payload.get("system", "")
@@ -302,6 +293,18 @@ def _call_vllm_llm(endpoint: str, payload: Dict[str, Any], timeout: int) -> Dict
     else:
         # /api/chat - 메시지 그대로 사용
         messages = payload.get("messages", [])
+
+    # vLLM max_model_len 초과 방지: 프롬프트 길이 추정 후 동적 클램핑
+    total_chars = sum(len(m.get("content", "")) for m in messages)
+    estimated_input_tokens = max(total_chars // 2, 100)  # 보수적 추정 (한국어 ~2 char/token)
+    available_tokens = VLLM_MAX_MODEL_LEN - estimated_input_tokens - 64  # 64 토큰 여유
+    safe_max_tokens = max(available_tokens, 256)  # 최소 256 토큰 보장
+    if requested_max_tokens > safe_max_tokens:
+        logger.info(f"⚠️ [vLLM] max_tokens 클램핑: {requested_max_tokens} → {safe_max_tokens} (input≈{estimated_input_tokens}, max_model_len={VLLM_MAX_MODEL_LEN})")
+        stats['token_clamped_count'] += 1
+        max_tokens = safe_max_tokens
+    else:
+        max_tokens = requested_max_tokens
 
     vllm_payload = {
         "model": vllm_model,

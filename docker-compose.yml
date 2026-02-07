@@ -202,9 +202,6 @@ services:
       redis:
         condition: service_healthy
         required: false
-      chromadb:
-        condition: service_healthy
-        required: false
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9095/health')" ]
       interval: 30s
@@ -366,9 +363,6 @@ services:
       redis:
         condition: service_healthy
         required: false
-      chromadb:
-        condition: service_healthy
-        required: false
 
   # ============================================================================
   # 4. Buy Executor (매수 실행)
@@ -427,9 +421,6 @@ services:
       redis:
         condition: service_healthy
         required: false
-      chromadb:
-        condition: service_healthy
-        required: false
 
   # ============================================================================
   # 5. Sell Executor (매도 실행)
@@ -486,9 +477,6 @@ services:
         condition: service_healthy
         required: false
       redis:
-        condition: service_healthy
-        required: false
-      chromadb:
         condition: service_healthy
         required: false
 
@@ -614,9 +602,6 @@ services:
       redis:
         condition: service_healthy
         required: false
-      chromadb:
-        condition: service_healthy
-        required: false
 
   # ============================================================================
   # 7. Daily Briefing (일일 브리핑)
@@ -670,9 +655,6 @@ services:
         condition: service_healthy
         required: false
       redis:
-        condition: service_healthy
-        required: false
-      chromadb:
         condition: service_healthy
         required: false
 
@@ -778,9 +760,6 @@ services:
         condition: service_healthy
         required: false
       redis:
-        condition: service_healthy
-        required: false
-      chromadb:
         condition: service_healthy
         required: false
 
@@ -895,10 +874,18 @@ services:
       dockerfile: services/ollama-gateway/Dockerfile
     profiles: [ "real" ]
     network_mode: host
+    depends_on:
+      vllm-llm:
+        condition: service_healthy
+        required: false
+      vllm-embed:
+        condition: service_healthy
+        required: false
     environment:
       - BACKEND_MODE=vllm
       - VLLM_LLM_URL=http://localhost:8001
       - VLLM_EMBED_URL=http://localhost:8002
+      - VLLM_MAX_MODEL_LEN=4096
       - OLLAMA_HOST=http://localhost:11434
       - REDIS_URL=redis://localhost:6379/0
       # vLLM continuous batching → Ollama 대비 rate limit 대폭 완화
@@ -947,7 +934,7 @@ services:
   # vLLM LLM Server (EXAONE 4.0 32B AWQ) - 메인 추론 엔진
   vllm-llm:
     image: vllm/vllm-openai:latest
-    profiles: [ "gpu" ]
+    profiles: [ "infra" ]
     deploy:
       resources:
         reservations:
@@ -961,11 +948,11 @@ services:
       - "8001:8000"
     ipc: host
     command: >
-      --model LGAI-EXAONE/EXAONE-4.0-32B-AWQ
+      LGAI-EXAONE/EXAONE-4.0-32B-AWQ
       --quantization awq_marlin
       --dtype half
       --max-model-len 4096
-      --gpu-memory-utilization 0.82
+      --gpu-memory-utilization 0.90
       --trust-remote-code
     restart: unless-stopped
     labels:
@@ -981,7 +968,7 @@ services:
   # vLLM Embedding Server (KURE-v1) - 임베딩 전용
   vllm-embed:
     image: vllm/vllm-openai:latest
-    profiles: [ "gpu" ]
+    profiles: [ "infra" ]
     deploy:
       resources:
         reservations:
@@ -995,10 +982,10 @@ services:
       - "8002:8000"
     ipc: host
     command: >
-      --model nlpai-lab/KURE-v1
+      nlpai-lab/KURE-v1
       --dtype half
       --max-model-len 256
-      --gpu-memory-utilization 0.10
+      --gpu-memory-utilization 0.05
       --trust-remote-code
       --enforce-eager
     restart: unless-stopped

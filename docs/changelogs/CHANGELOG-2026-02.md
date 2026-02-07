@@ -1,6 +1,17 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-07
+### vLLM 부팅 안정화 & 인프라 정리
+- **fix(docker)**: vLLM `--model` → positional argument (v0.13 deprecation 대응)
+- **refactor(docker)**: vLLM 프로파일 `gpu` → `infra` 통합 (부팅 3단계→2단계)
+- **feat(docker)**: `ollama-gateway` → vLLM `depends_on` (service_healthy) 자동 대기
+- **fix(autostart)**: `systemd_autostart.sh` gpu 프로파일 누락 수정, chromadb 참조 제거
+- **fix(docker)**: chromadb orphan 컨테이너 정리 (서비스 정의 없이 depends_on만 남아있던 상태)
+- **perf(vllm)**: VRAM 최적화 — llm 0.82→0.90, embed 0.10→0.05 (KV cache 1,840→9,792 토큰)
+- **fix(ollama-gateway)**: 동적 max_tokens 클램핑 (프롬프트 길이 추정 기반, 고정 절반 cap 대체)
+- **fix(ollama-gateway)**: `VLLM_MAX_MODEL_LEN=4096` 명시 (기본값 8192와 실제 불일치 해소)
+- **fix(systemd)**: `ExecStop`에 `--profile infra` 추가 (vLLM 포함 전체 종료)
+
 ### Factor Alpha Study & Smart Money 5D 최적화
 - **feat(quant)**: Smart Money 5D 조건부 보너스 구현 (15점 기본 + 최대 3점 보너스)
   - `investor_trading_df` 파라미터로 5일 누적 외인+기관 순매수 전달

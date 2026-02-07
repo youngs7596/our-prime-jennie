@@ -9,7 +9,7 @@ Type=oneshot
 Environment=AUTOSTART_COMPOSE_PROFILES=infra real
 WorkingDirectory=/home/youngs75/projects/my-prime-jennie
 ExecStart=/home/youngs75/projects/my-prime-jennie/scripts/systemd_autostart.sh
-ExecStop=/usr/bin/docker compose --profile real down
+ExecStop=/usr/bin/docker compose --profile infra --profile real down
 RemainAfterExit=yes
 TimeoutStartSec=0
 
