@@ -54,12 +54,17 @@ ANALYSIS_RESPONSE_SCHEMA = {
             "enum": ["S", "A", "B", "C", "D"],
             "description": "종합 등급 (S:90+, A:80+, B:70+, C:60+, D:60미만)",
         },
+        "risk_tag": {
+            "type": "string",
+            "enum": ["BULLISH", "NEUTRAL", "CAUTION", "DISTRIBUTION_RISK"],
+            "description": "리스크 태그 - 점수와 독립적으로 판단. DISTRIBUTION_RISK: 세력 물량 분배 의심, 고점 매물대 형성",
+        },
         "reason": {
             "type": "string",
             "description": "점수 산정 근거 (RAG 뉴스, 펀더멘털, 기술적 지표 종합)",
         },
     },
-    "required": ["score", "grade", "reason"],
+    "required": ["score", "grade", "risk_tag", "reason"],
 }
 
 # 실시간 뉴스 감성 분석용 스키마

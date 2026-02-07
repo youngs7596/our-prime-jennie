@@ -12,6 +12,26 @@
 - **fix(ollama-gateway)**: `VLLM_MAX_MODEL_LEN=4096` 명시 (기본값 8192와 실제 불일치 해소)
 - **fix(systemd)**: `ExecStop`에 `--profile infra` 추가 (vLLM 포함 전체 종료)
 
+### Factor Alpha P0+P1+P2 구현 & 백테스트 검증
+- **feat(quant)**: P1 Quant Scorer 패치 3건 구현
+  - P1-2 Recon Protection 강화: RSI 보호 해제 50-70→50-59, 1M 모멘텀>0 필수
+  - P1-3 고점+과열 감점: DD>-3% & RSI>70 → -1.5점 (단순 DD 감점 대체)
+  - P1-4 수급 추세 반전: 외인 매도전환 -2점, 매수전환 +1.5점
+- **feat(llm)**: P2 LLM 스코어링 구조 개선
+  - Hunter/Judge 점수 조정 범위 ±15/20 → ±30 (LLM Calibrator 확장)
+  - `risk_tag` 출력 추가 (BULLISH/NEUTRAL/CAUTION/DISTRIBUTION_RISK)
+  - DISTRIBUTION_RISK → Veto Power (is_tradable=False, trade_tier=BLOCKED)
+  - Safety Lock 비대칭: LLM 경고 존중 (40:60), LLM<40 가중 (45:55)
+- **fix(data)**: P0 주말/공휴일 가격 데이터 필터링 (DB 삽입 전)
+- **fix(database)**: `save_to_watchlist_history`에 LLM 메타데이터 저장 활성화
+  - `[LLM_METADATA]{json}` 마커 임베딩 (기존 현재 테이블과 동일하게)
+- **feat(scripts)**: 백테스트 스크립트 4종 추가
+  - `backtest_grid.py`: 216조합 그리드 탐색
+  - `backtest_p1p2_validation.py`: P1+P2 패치 효과 검증 (4주)
+  - `dryrun_p1_patches.py`: P1 패치 드라이런
+  - `recollect_prices_fdr.py`: FDR 가격 재수집
+- **docs**: 백테스트 분석 문서 (`docs/backtest-analysis-2026-02-07.md`)
+
 ### Factor Alpha Study & Smart Money 5D 최적화
 - **feat(quant)**: Smart Money 5D 조건부 보너스 구현 (15점 기본 + 최대 3점 보너스)
   - `investor_trading_df` 파라미터로 5일 누적 외인+기관 순매수 전달
@@ -209,4 +229,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-03*
+*Last Updated: 2026-02-07*

@@ -681,6 +681,7 @@ class QuantScorer:
         sector: str = "미분류",
         *,
         momentum_score: float | None = None,
+        momentum_details: dict | None = None,
     ) -> Tuple[float, Dict]:
         """
         기술적 점수 계산 (10점 만점)
@@ -741,25 +742,37 @@ class QuantScorer:
                     rsi_score = max(0, 0.5 - (rsi - 70) * 0.025)
 
                 # -----------------------------------------------------------------
-                # [Project Recon] 추세 초입 보호(감점 면제)
-                # - 모멘텀이 충분히 강한 종목은 RSI 50~70 구간을 "과열"이 아니라 "상승 탄력"으로 해석
-                # - 가산점이 아니라 감점 면제(최소 점수 보장) 방식으로 보수적으로 적용
+                # [Project Recon] 추세 초입 보호(감점 면제) — 2026-02-07 강화
+                # 백테스트 검증: RSI>60 hit rate=47% (baseline 49%) → 보호 불필요
+                # 변경: RSI 50~59 구간만 보호, 60 이상은 보호 해제
+                # 추가 조건: 1M 모멘텀이 양수여야 보호 (최근 하락 중이면 보호 불가)
                 # -----------------------------------------------------------------
                 recon_momentum_threshold = float(self.config.get_float("RECON_MOMENTUM_MIN", 20.0))
+                momentum_1m_positive = momentum_details.get('relative_momentum_1m',
+                    momentum_details.get('absolute_momentum_1m', 0)) > 0 if momentum_details else False
                 if (
                     momentum_score is not None
                     and momentum_score >= recon_momentum_threshold
-                    and 50 <= rsi <= 70
-                    and rsi <= 75  # 과열 구간(>75)은 예외 없이 감점 유지
+                    and 50 <= rsi < 60  # 60 이상은 보호 해제 (기존 70)
+                    and momentum_1m_positive  # 1M 모멘텀 양수 필수 (신규)
                 ):
-                    # 기존 로직에서 RSI 60~70은 점수가 지나치게 깎일 수 있으므로 최소 1.5점 보장
                     before = rsi_score
                     rsi_score = max(rsi_score, 1.5)
                     factors["rsi_penalty_exempted"] = True
                     factors["rsi_penalty_exempted_reason"] = (
-                        f"모멘텀({momentum_score:.1f}>= {recon_momentum_threshold}) + RSI({rsi:.1f}) → 추세 초입 감점 면제"
+                        f"모멘텀({momentum_score:.1f}>= {recon_momentum_threshold}) + RSI({rsi:.1f}<60) + 1M↑ → 추세 초입 감점 면제"
                     )
                     factors["rsi_score_before_exempt"] = round(before, 2)
+                elif (
+                    momentum_score is not None
+                    and momentum_score >= recon_momentum_threshold
+                    and 50 <= rsi <= 70
+                ):
+                    factors["rsi_penalty_exempted"] = False
+                    if rsi >= 60:
+                        factors["rsi_recon_blocked_reason"] = f"RSI({rsi:.1f})>=60: 보호 해제 (hit rate 47%)"
+                    elif not momentum_1m_positive:
+                        factors["rsi_recon_blocked_reason"] = "1M 모멘텀 음수: 보호 해제"
                 
                 # 섹터별 RSI 가중치 적용
                 sector_multiplier = self.SECTOR_RSI_MULTIPLIER.get(sector, 1.0)
@@ -823,9 +836,35 @@ class QuantScorer:
             else:
                 total_score += 1.5
                 factors['bb_score'] = 1.5
-            
+
+            # -----------------------------------------------------------------
+            # 4. 고점 근접 + 과열 조합 감점 (2026-02-07 신규)
+            # 백테스트 검증: DD>-2% & RSI>65 → hit rate 50% (baseline 49%)
+            # DD>-3% & RSI>70 → hit rate 49%
+            # 극단적이지는 않지만, 과열 구간에서 고점 근접 시 소폭 감점
+            # 단순 drawdown 감점은 mean reversion 효과로 역효과 → 조합만 감점
+            # -----------------------------------------------------------------
+            if rsi is not None and len(daily_prices_df) >= 20:
+                peak_20d = daily_prices_df['HIGH_PRICE'].astype(float).iloc[-20:].max()
+                current_price = float(daily_prices_df['CLOSE_PRICE'].iloc[-1])
+                drawdown_from_peak = (current_price - peak_20d) / peak_20d * 100
+
+                peak_penalty = 0.0
+                if drawdown_from_peak > -3 and rsi > 70:
+                    peak_penalty = -1.5
+                elif drawdown_from_peak > -2 and rsi > 65:
+                    peak_penalty = -1.0
+
+                if peak_penalty < 0:
+                    total_score = max(0, total_score + peak_penalty)
+                    factors['peak_proximity_penalty'] = peak_penalty
+                    factors['drawdown_from_20d_peak'] = round(drawdown_from_peak, 2)
+                    factors['peak_penalty_reason'] = (
+                        f"고점근접(DD={drawdown_from_peak:.1f}%) + RSI과열({rsi:.0f}) → {peak_penalty}점"
+                    )
+
             return total_score, factors
-            
+
         except Exception as e:
             logger.error(f"   (QuantScorer) 기술적 점수 계산 오류: {e}", exc_info=True)
             return 5.0, {'error': str(e)}
@@ -1151,6 +1190,36 @@ class QuantScorer:
                 factors['holding_score'] = 1.5
 
             # ============================================================
+            # 수급 추세 반전 감지 (2026-02-07 신규)
+            # 백테스트 검증: 양→음(매도전환) hit=47%, 음→양(매수전환) hit=54%
+            # Baseline hit=51% → 매도전환 시 -2점, 매수전환 시 +1.5점
+            # ============================================================
+            flow_reversal_adj = 0.0
+            if investor_trading_df is not None and len(investor_trading_df) >= 10:
+                try:
+                    prev_5d_foreign = investor_trading_df.iloc[-10:-5]['FOREIGN_NET_BUY'].sum()
+                    recent_5d_foreign = investor_trading_df.tail(5)['FOREIGN_NET_BUY'].sum()
+
+                    if prev_5d_foreign > 0 and recent_5d_foreign < 0:
+                        flow_reversal_adj = -2.0
+                        factors['flow_reversal'] = 'SELL_TURN'
+                        factors['flow_reversal_adj'] = flow_reversal_adj
+                        factors['flow_reversal_reason'] = (
+                            f"외인 매도전환 (이전5D: {prev_5d_foreign:+,.0f} → 최근5D: {recent_5d_foreign:+,.0f})"
+                        )
+                    elif prev_5d_foreign < 0 and recent_5d_foreign > 0:
+                        flow_reversal_adj = 1.5
+                        factors['flow_reversal'] = 'BUY_TURN'
+                        factors['flow_reversal_adj'] = flow_reversal_adj
+                        factors['flow_reversal_reason'] = (
+                            f"외인 매수전환 (이전5D: {prev_5d_foreign:+,.0f} → 최근5D: {recent_5d_foreign:+,.0f})"
+                        )
+                except Exception as fr_err:
+                    logger.debug(f"   (QuantScorer) flow_reversal 계산 오류: {fr_err}")
+
+            total_score += flow_reversal_adj
+
+            # ============================================================
             # Smart Money 5D 조건부 보너스 (최대 +3점)
             # 외인 5일 누적 순매수가 강한 양의 신호일 때만 가산
             # 백테스트: 가중치 15점 > 25점 (중립 희석 문제) → 보너스 방식 최적
@@ -1308,6 +1377,7 @@ class QuantScorer:
                 daily_prices_df,
                 sector,
                 momentum_score=momentum_score,
+                momentum_details=momentum_details,
             )
             all_details['technical'] = technical_details
             

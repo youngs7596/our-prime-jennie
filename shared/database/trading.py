@@ -304,9 +304,21 @@ def save_to_watchlist_history(session, candidates_to_save, snapshot_date=None):
             session.commit()
             return
             
+        metadata_marker = "[LLM_METADATA]"
+
         for c in candidates_to_save:
             llm_score = c.get('llm_score', 0)
-            llm_reason = c.get('llm_reason', '')
+            llm_reason = c.get('llm_reason', '') or ''
+
+            # 메타데이터 임베딩 (백테스트 재현용)
+            llm_metadata = c.get('llm_metadata')
+            if llm_metadata and metadata_marker not in llm_reason:
+                try:
+                    metadata_json = json.dumps(llm_metadata, ensure_ascii=False)
+                    llm_reason = f"{llm_reason}\n\n{metadata_marker}{metadata_json}"
+                except Exception as e:
+                    logger.warning(f"⚠️ WatchList History 메타데이터 직렬화 실패: {e}")
+
             if len(llm_reason) > 3950:
                 llm_reason = llm_reason[:3950] + "..."
             

@@ -366,25 +366,50 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     judge_result = brain.run_judge_scoring_v5(decision_info, debate_log, quant_context, feedback_context)
     score = judge_result.get('score', 0)
     grade = judge_result.get('grade', 'D')
+    risk_tag = judge_result.get('risk_tag', 'NEUTRAL')
     reason = judge_result.get('reason', '분석 실패')
-    
+
+    # risk_tag 유효성 검증 (LLM이 잘못된 값 반환 시 NEUTRAL로 폴백)
+    valid_risk_tags = {'BULLISH', 'NEUTRAL', 'CAUTION', 'DISTRIBUTION_RISK'}
+    if risk_tag not in valid_risk_tags:
+        logger.warning(f"   ⚠️ [risk_tag] 유효하지 않은 값 '{risk_tag}' → NEUTRAL로 폴백")
+        risk_tag = 'NEUTRAL'
+
     # 하이브리드 점수 계산 (정량 60% + 정성 40%)
     quant_score = quant_result.total_score
     llm_score = score
-    
+
+    # [P2-2] Safety Lock 비대칭 구조
     score_diff = abs(quant_score - llm_score)
     if score_diff >= 30:
         if quant_score < llm_score:
+            # LLM이 지나치게 낙관 → 정량 중심 (과잉 낙관 억제)
             hybrid_score = quant_score * 0.75 + llm_score * 0.25
-            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정량({quant_score:.0f}) << 정성({llm_score}) → 보수적 판단")
+            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정량({quant_score:.0f}) << 정성({llm_score}) → 과잉낙관 억제")
         else:
-            hybrid_score = quant_score * 0.45 + llm_score * 0.55
-            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정성({llm_score}) << 정량({quant_score:.0f}) → 보수적 판단")
+            # LLM이 경고 (낮은 점수) → LLM 의견 존중 (경고 무시 방지)
+            hybrid_score = quant_score * 0.40 + llm_score * 0.60
+            logger.warning(f"   ⚠️ [Safety Lock] {info['name']} - 정성({llm_score}) << 정량({quant_score:.0f}) → LLM 경고 존중")
+    elif llm_score < 40:
+        # LLM이 명시적 경고 (40점 미만) → LLM 가중치 상향
+        hybrid_score = quant_score * 0.45 + llm_score * 0.55
+        logger.info(f"   ⚠️ [LLM Warning] {info['name']} - LLM({llm_score})<40 → LLM 경고 가중")
     else:
         hybrid_score = quant_score * 0.60 + llm_score * 0.40
-    
+
     is_tradable = hybrid_score >= 75
     approved = hybrid_score >= 50
+
+    # [P2-1] Veto Power: DISTRIBUTION_RISK → 워치리스트 제외
+    veto_applied = False
+    if risk_tag == 'DISTRIBUTION_RISK':
+        veto_applied = True
+        is_tradable = False
+        approved = False
+        logger.warning(
+            f"   🚫 [VETO] {info['name']}({code}) - DISTRIBUTION_RISK 감지 → 거래 차단 "
+            f"(hybrid={hybrid_score:.1f}, LLM={llm_score})"
+        )
 
     # -------------------------------------------------------------------------
     # [Project Recon] Trade Tier 산정
@@ -420,13 +445,17 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         recon_signals = []
 
     is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)
-    
+
     # [Project Recon] RECON tier도 거래 가능(is_tradable=True)으로 설정
     # 단, trade_tier로 TIER1과 구분하여 buy-executor에서 비중/손절 차등 적용
-    if is_recon:
+    if is_recon and not veto_applied:
         is_tradable = True
-    
-    trade_tier = "TIER1" if (hybrid_score >= 75) else ("RECON" if is_recon else "BLOCKED")
+
+    # Veto가 적용되면 무조건 BLOCKED
+    if veto_applied:
+        trade_tier = "BLOCKED"
+    else:
+        trade_tier = "TIER1" if (hybrid_score >= 75) else ("RECON" if is_recon else "BLOCKED")
     
     # [Market Regime] 하락장/횡보장은 기준을 낮추는 대신, 오히려 관망(No Trade)이 최선일 수 있음.
     # 사용자의 지적대로 "억지로 거래를 만드는 것"은 리스크를 키우므로 원복함.
@@ -446,19 +475,29 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
     def _build_judge_detail_log():
         """Judge 분석 상세 로그 생성 (옵션 B 스타일)"""
         lines = []
-        
+
         # 1. 점수 흐름
-        weight_info = "(60:40)" if score_diff < 30 else "(Safety Lock)"
+        if llm_score < 40 and score_diff < 30:
+            weight_info = "(LLM Warning 45:55)"
+        elif score_diff >= 30:
+            weight_info = "(Safety Lock)"
+        else:
+            weight_info = "(60:40)"
         lines.append(f"   📊 점수 흐름: Hunter:{hunter_score} → Quant:{quant_score:.0f} + LLM:{llm_score} = Hybrid:{hybrid_score:.1f} {weight_info}")
-        
-        # 2. Judge 판단 이유 (reason 축약 - 최대 60자)
+
+        # 2. risk_tag 표시
+        tag_emoji = {"BULLISH": "🟢", "NEUTRAL": "⚪", "CAUTION": "🟡", "DISTRIBUTION_RISK": "🔴"}.get(risk_tag, "⚪")
+        veto_str = " → VETO 발동!" if veto_applied else ""
+        lines.append(f"   🏷️ Risk Tag: {tag_emoji} {risk_tag}{veto_str}")
+
+        # 3. Judge 판단 이유 (reason 축약 - 최대 60자)
         reason_short = reason[:60] + "..." if len(reason) > 60 else reason
         lines.append(f"   💬 Judge 판단: {reason_short}")
-        
-        # 3. 거래 가능 여부
+
+        # 4. 거래 가능 여부
         tradable_emoji = "✅" if is_tradable else "❌"
         lines.append(f"   ⚡ 거래 가능: {tradable_emoji} (75점 기준)")
-        
+
         return "\n".join(lines)
     
     if approved:
@@ -496,6 +535,9 @@ def process_phase23_judge_v5_task(phase1_result, brain, archivist=None, market_r
         # Project Recon
         'trade_tier': trade_tier,
         'recon_signals': recon_signals,
+        # P2-1: risk_tag & Veto
+        'risk_tag': risk_tag,
+        'veto_applied': veto_applied,
     }
     
     # 스냅샷에서 재무 데이터 추출

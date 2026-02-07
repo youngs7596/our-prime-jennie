@@ -74,7 +74,7 @@ def collect_stock_data(code, kis_client):
             
         # DB 저장 (MariaDB: INSERT ... ON DUPLICATE KEY UPDATE)
         sql = """
-        INSERT INTO STOCK_DAILY_PRICES_3Y 
+        INSERT INTO STOCK_DAILY_PRICES_3Y
             (STOCK_CODE, PRICE_DATE, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
@@ -84,11 +84,30 @@ def collect_stock_data(code, kis_client):
             CLOSE_PRICE = VALUES(CLOSE_PRICE),
             VOLUME = VALUES(VOLUME)
         """
+        skipped = 0
         for row in rows:
+            # 주말/공휴일 필터링: 거래량 0 또는 토/일 데이터 제외
+            try:
+                row_date = row['date']
+                if isinstance(row_date, str):
+                    row_date = datetime.strptime(row_date.replace('-', ''), '%Y%m%d')
+                if hasattr(row_date, 'weekday') and row_date.weekday() >= 5:
+                    skipped += 1
+                    continue
+            except (ValueError, TypeError):
+                pass
+
+            if row.get('volume', 0) == 0:
+                skipped += 1
+                continue
+
             cur.execute(sql, (
-                code, row['date'], row['open'], row['high'], 
+                code, row['date'], row['open'], row['high'],
                 row['low'], row['close'], row['volume']
             ))
+
+        if skipped > 0:
+            logger.debug(f"[{code}] 주말/비거래일 {skipped}건 스킵")
         
         conn.commit()
         cur.close()
