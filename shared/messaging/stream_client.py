@@ -9,9 +9,11 @@ Redis Streams 기반 메시지 브로커 클라이언트.
 
 import os
 import json
+import hashlib
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
+import re
+from datetime import datetime, timezone, timedelta
+from typing import Dict, List, Optional, Any, Callable, Set
 
 import redis
 
@@ -279,6 +281,118 @@ def trim_stream(
     if trimmed > 0:
         logger.info(f"🧹 [Stream] 트리밍 완료: {trimmed}개 삭제 ({stream_name})")
     return trimmed
+
+
+# ==============================================================================
+# News Deduplicator (Redis SET 기반 영속 중복 체크)
+# ==============================================================================
+
+
+def compute_news_hash(text: str) -> str:
+    """뉴스 텍스트에서 중복 체크용 해시 생성 (정규화 후 MD5 12자리)"""
+    normalized = re.sub(r'[^\w]', '', text.lower())
+    return hashlib.md5(normalized.encode()).hexdigest()[:12]
+
+
+class NewsDeduplicator:
+    """
+    Redis SET 기반 뉴스 중복 체크.
+    날짜별 SET 키(dedup:news:YYYYMMDD)를 사용하여 자동 만료.
+    컨테이너 재시작에도 영속됨.
+    """
+
+    DEDUP_TTL_SECONDS = 3 * 86400  # 3일
+
+    def __init__(self, prefix: str = "dedup:news"):
+        self._prefix = prefix
+
+    def _today_key(self) -> bytes:
+        date_str = datetime.now(timezone.utc).strftime('%Y%m%d')
+        return f"{self._prefix}:{date_str}".encode()
+
+    def _recent_keys(self, days: int = 3) -> List[bytes]:
+        today = datetime.now(timezone.utc)
+        return [
+            f"{self._prefix}:{(today - timedelta(days=d)).strftime('%Y%m%d')}".encode()
+            for d in range(days)
+        ]
+
+    def is_seen(self, news_hash: str) -> bool:
+        """최근 3일 내 동일 해시가 존재하는지 확인"""
+        try:
+            client = get_redis_client()
+            hash_bytes = news_hash.encode()
+            pipe = client.pipeline()
+            for key in self._recent_keys():
+                pipe.sismember(key, hash_bytes)
+            return any(pipe.execute())
+        except Exception as e:
+            logger.warning(f"[Dedup] Redis 조회 실패, 신규로 처리: {e}")
+            return False
+
+    def mark_seen(self, news_hash: str):
+        """오늘 날짜 SET에 해시 추가"""
+        try:
+            client = get_redis_client()
+            today_key = self._today_key()
+            pipe = client.pipeline()
+            pipe.sadd(today_key, news_hash.encode())
+            pipe.expire(today_key, self.DEDUP_TTL_SECONDS)
+            pipe.execute()
+        except Exception as e:
+            logger.warning(f"[Dedup] Redis 저장 실패: {e}")
+
+    def check_and_mark(self, news_hash: str) -> bool:
+        """
+        중복 체크 후 신규면 마킹.
+        Returns: True = 신규 (처음 본 뉴스), False = 중복
+        """
+        if self.is_seen(news_hash):
+            return False
+        self.mark_seen(news_hash)
+        return True
+
+    def filter_new_batch(self, hashes: List[str]) -> Set[str]:
+        """
+        배치 중복 체크. 신규 해시 set 반환 + 마킹.
+        Redis 실패 시 전체를 신규로 처리 (안전한 폴백).
+        """
+        if not hashes:
+            return set()
+
+        try:
+            client = get_redis_client()
+            recent_keys = self._recent_keys()
+            n_keys = len(recent_keys)
+
+            # Pipeline으로 일괄 조회
+            pipe = client.pipeline()
+            for h in hashes:
+                h_bytes = h.encode()
+                for key in recent_keys:
+                    pipe.sismember(key, h_bytes)
+            results = pipe.execute()
+
+            # 결과 파싱: 각 hash에 대해 3일 중 하나라도 True면 중복
+            new_hashes = set()
+            for i, h in enumerate(hashes):
+                seen = any(results[i * n_keys + j] for j in range(n_keys))
+                if not seen:
+                    new_hashes.add(h)
+
+            # 신규 해시만 오늘 SET에 마킹
+            if new_hashes:
+                today_key = self._today_key()
+                pipe = client.pipeline()
+                for h in new_hashes:
+                    pipe.sadd(today_key, h.encode())
+                pipe.expire(today_key, self.DEDUP_TTL_SECONDS)
+                pipe.execute()
+
+            return new_hashes
+        except Exception as e:
+            logger.warning(f"[Dedup] 배치 체크 실패, 전체 신규 처리: {e}")
+            return set(hashes)
 
 
 # ==============================================================================

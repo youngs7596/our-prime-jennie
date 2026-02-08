@@ -24,7 +24,10 @@ from dotenv import load_dotenv
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
-from shared.messaging.stream_client import publish_news_batch, get_stream_length, trim_stream, STREAM_NEWS_RAW
+from shared.messaging.stream_client import (
+    publish_news_batch, get_stream_length, trim_stream,
+    STREAM_NEWS_RAW, NewsDeduplicator, compute_news_hash,
+)
 from shared.crawlers.naver import (
     crawl_stock_news,
     get_kospi_top_stocks,
@@ -61,8 +64,8 @@ GENERAL_RSS_FEEDS = [
     {"source_name": "Maeil Business (Stock)", "url": "https://www.mk.co.kr/rss/50100001/"},
 ]
 
-# 내부 중복 체크용 (RSS 뉴스용)
-_seen_rss_hashes = set()
+# Redis 기반 영속 중복 체크 (컨테이너 재시작에도 유지)
+_deduplicator = NewsDeduplicator()
 
 # ==============================================================================
 # Helper Functions
@@ -88,29 +91,26 @@ def _is_noise_title(title: str) -> bool:
 
 def crawl_general_rss_news() -> list:
     """일반 경제/금융 RSS 뉴스 수집"""
-    global _seen_rss_hashes
-    
     logger.info("📰 일반 경제 뉴스 RSS 수집 중...")
     documents = []
-    
+
     for feed_info in GENERAL_RSS_FEEDS:
         try:
             feed = feedparser.parse(feed_info["url"])
             for entry in feed.entries[:20]:
                 title = entry.get('title', '').strip()
                 link = entry.get('link', '')
-                
+
                 if not title or not link:
                     continue
-                
+
                 # Filter
                 if _is_noise_title(title):
                     continue
-                
+
                 news_hash = _compute_hash(title)
-                if news_hash in _seen_rss_hashes:
+                if not _deduplicator.check_and_mark(news_hash):
                     continue
-                _seen_rss_hashes.add(news_hash)
                 
                 # Timestamp
                 if hasattr(entry, 'published_parsed') and entry.published_parsed:
@@ -187,7 +187,21 @@ def run_collector_job():
                 except Exception as e:
                     logger.warning(f"종목 수집 실패 ({stock['name']}): {e}")
     
-    # 3. Publish to Redis Stream
+    # 3. Redis 영속 중복 체크 (naver.py 인메모리 dedup 보완 — 컨테이너 재시작 대응)
+    if all_documents:
+        doc_hashes = [compute_news_hash(doc["page_content"]) for doc in all_documents]
+        new_hashes = _deduplicator.filter_new_batch(doc_hashes)
+
+        before_count = len(all_documents)
+        all_documents = [
+            doc for doc, h in zip(all_documents, doc_hashes)
+            if h in new_hashes
+        ]
+        dedup_removed = before_count - len(all_documents)
+        if dedup_removed > 0:
+            logger.info(f"🔄 [Dedup] 영속 중복 제거: {dedup_removed}개 ({before_count} → {len(all_documents)})")
+
+    # 4. Publish to Redis Stream
     if all_documents:
         logger.info(f"📤 Redis Stream에 {len(all_documents)}개 뉴스 발행 중...")
         published = publish_news_batch(all_documents, STREAM_NEWS_RAW)

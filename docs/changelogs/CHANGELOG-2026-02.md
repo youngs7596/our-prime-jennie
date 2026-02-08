@@ -1,5 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-08
+### News Collector Redis 영속 중복 체크
+- **feat(news)**: `NewsDeduplicator` 클래스 구현 — Redis SET 기반 영속 뉴스 중복 체크 (날짜별 키, 3일 TTL)
+- **fix(news)**: news-collector 인메모리 dedup → Redis 영속 dedup 전환 (컨테이너 재시작 시 중복 발행 방지)
+- **test**: NewsDeduplicator 테스트 18개 추가 (shared 1113 + 18 전체 통과)
+
 ## 2026-02-07
 ### vLLM 부팅 안정화 & 인프라 정리
 - **fix(docker)**: vLLM `--model` → positional argument (v0.13 deprecation 대응)
@@ -245,4 +251,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-07 23:54 KST*
+*Last Updated: 2026-02-08 10:37 KST*
