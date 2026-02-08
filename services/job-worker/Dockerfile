@@ -34,6 +34,9 @@ COPY services/telegram-collector /app/services/telegram-collector
 # Copy service code
 COPY services/job-worker/main.py /app/services/job-worker/main.py
 
+# Create logs directory (일부 스크립트가 FileHandler로 사용)
+RUN mkdir -p /app/logs
+
 ENV PYTHONPATH=/app
 ENV TZ=Asia/Seoul
 
