@@ -11,6 +11,10 @@
 - **test(e2e)**: `test_filter_chain.py` 신규 12개 E2E 테스트 (Hard Floor/Stale Score/Shadow Mode/통합)
 - **test**: Jenkins 빌드 #322 SUCCESS (1304 passed), 전체 72 E2E PASS, 서비스 정상 구동 확인
 
+### collect_investor_trading pykrx 리팩터링
+- **perf(scripts)**: `collect_investor_trading.py` KIS Gateway 순차호출(~530초) → pykrx 전종목 일괄(~3초) 전환
+- **refactor(job-worker)**: `collect-investor-trading` timeout 600→120초
+
 ### 대시보드 개선
 - **refactor(dashboard)**: Login.tsx 삭제, Overview/Scout/System 페이지 개선
 - **refactor(dashboard)**: Sidebar 정리, API 클라이언트 개선
@@ -265,4 +269,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-08 17:07 KST*
+*Last Updated: 2026-02-08 20:29 KST*
