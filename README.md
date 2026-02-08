@@ -6,7 +6,7 @@ my-prime-jennie은 프로젝트의 다음 단계로, AI 에이전트 3인(Jennie
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.12-green)
 ![Docker](https://img.shields.io/badge/docker-compose-2496ED)
 ![Airflow](https://img.shields.io/badge/airflow-2.10-017CEE)
@@ -119,8 +119,8 @@ my-prime-jennie/
 
 | 기능 | 설명 |
 |------|------|
-| 🧠 **멀티 LLM 판단** | QuantScorer(정량) → Claude(Hunter) → OpenAI(Judge) 다단계 심사 |
-| 📊 **하이브리드 스코어링** | 정량 팩터(60%) + LLM 정성 분석(40%) 결합 |
+| 🧠 **멀티 LLM 판단** | Quant Scorer v2(잠재력) → Unified Analyst(1-pass LLM) 하이브리드 심사 |
+| 📊 **하이브리드 스코어링** | 정량 팩터(60%) + LLM 정성 분석(40%) 결합, ±15pt 가드레일 |
 | 🎯 **경쟁사 수혜 분석** | 경쟁사 악재 발생 시 반사이익 자동 포착 |
 | 📰 **실시간 뉴스 분석** | 뉴스 감성 분석 및 카테고리 자동 분류 |
 | 🔄 **마이크로서비스 아키텍처** | Docker Compose 기반 11개 서비스 |
@@ -138,30 +138,26 @@ my-prime-jennie/
 ### 1. Scout Pipeline (종목 발굴)
 
 ```
-KOSPI 200 Universe
+KOSPI+KOSDAQ Universe (200종목)
        ↓
-[Phase 1] Quant Scoring (정량 분석)
-   - 모멘텀, 가치, 수급, 기술적 지표
-   - **[New] Chart Phase Filter**: Stage 4(하락세) 원천 차단
-   - **[New] Sector Penalty**: "Falling Knife" 섹터(-10점) 패널티
+[Phase 1] Quant Scoring v2 (잠재력 기반)
+   - 모멘텀20 + 품질20 + 가치20 + 기술10 + 뉴스10 + 수급20 = 100
+   - Chart Phase Filter: Stage 4(하락세) 원천 차단
+   - Sector Penalty: "Falling Knife" 섹터(-10점)
    - 비용: $0 (LLM 미사용)
-   - 상위 30개 종목 선별
+   - 상위 25개 종목 선별
        ↓
-[Phase 2] Hunter Analysis (Claude)
-   - 펀더멘털 + 뉴스 RAG 분석 (Fast Hands News System)
-   - 경쟁사 수혜 점수 가산
-   - 통과 기준: 60점 이상
-       ↓
-[Phase 3] Debate (Claude)
-   - Bull vs Bear AI 토론
-   - 리스크 요인 검토
-       ↓
-[Phase 4] Judge Decision (OpenAI)
-   - 토론 내용 종합 판단
-   - 최종 승인 기준: 75점 이상
+[Phase 2] Unified Analyst (1-pass LLM, deepseek_cloud)
+   - Hunter+Debate+Judge 통합 → run_analyst_scoring()
+   - 코드 기반 risk_tag: classify_risk_tag(quant_result)
+   - ±15pt 가드레일: llm_score = clamp(raw, quant-15, quant+15)
+   - Veto Power: DISTRIBUTION_RISK → is_tradable=False
+   - Safety Lock 비대칭: LLM경고 존중 (40:60)
        ↓
 Watchlist (상위 15개)
 ```
+
+> **Legacy 경로**: `SCOUT_USE_UNIFIED_ANALYST=false` 시 기존 2-pass (Hunter→Debate→Judge) 폴백
 
 ### 2. 매수/매도 파이프라인
 
@@ -314,8 +310,8 @@ def call_kis_api():
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌───────────────┐    ┌───────────────┐    ┌───────────────┐           │
-│  │ News Collector│───▶│   ChromaDB    │◀───│  Scout Job    │           │
-│  │ (Analyzer/Arch)    │   (RAG)       │    │               │           │
+│  │ News Collector│───▶│    Qdrant     │◀───│  Scout Job    │           │
+│  │ (Analyzer/Arch)    │   (RAG)       │    │ (Unified Anl) │           │
 │  └───────────────┘    └───────────────┘    └───────────────┘           │
 │         │                                          │                    │
 │         ▼                                          ▼                    │
@@ -350,78 +346,101 @@ def call_kis_api():
 | 서비스 | 포트 | 설명 |
 |--------|------|------|
 | **kis-gateway** | 8080 | 한국투자증권 API 게이트웨이, 토큰 관리 |
-| **scout-job** | 8087 | AI 기반 종목 발굴 파이프라인 |
+| **scout-job** | 8087 | AI 기반 종목 발굴 (Unified Analyst, Quant Scorer v2) |
+| **scout-worker** | - | Scout 전용 워커 (포트 바인딩 없음) |
 | **buy-scanner** | 8081 | 매수 신호 스캔 (RSI, 볼린저밴드, 돌파) |
 | **buy-executor** | 8082 | 매수 주문 실행, 포지션 사이징 |
 | **sell-executor** | 8083 | 매도 주문 실행, 익절/손절 |
 | **price-monitor** | 8088 | 실시간 가격 모니터링, 매도 신호 발생 |
 | **command-handler** | 8091 | 텔레그램 명령 수신 → RabbitMQ 발행 (/buy, /sell, /sellall 등) |
-| **news-collector** | - | [Batch] 네이버 뉴스 수집 (Airflow) |
-| **news-analyzer** | - | [Batch] 뉴스 감성/카테고리 분석 (LLM FAST Tier) |
-| **news-archiver** | - | [Batch] 뉴스 벡터 임베딩 및 DB 저장 |
+| **news-collector** | - | 네이버 뉴스 수집 (Redis 영속 중복 체크) |
+| **news-analyzer** | - | 뉴스 감성/카테고리 분석 (LLM FAST Tier) |
+| **news-archiver** | - | 뉴스 벡터 임베딩 및 Qdrant 저장 |
 | **daily-briefing** | 8086 | 일간 브리핑 생성 |
-| **ollama-gateway** | 11500 | Local LLM 오케스트레이션 (회로 차단기 + Rate Limiter) |
-| **dashboard** | 80, 8090 | React + FastAPI 대시보드 |
+| **ollama-gateway** | 11500 | LLM 오케스트레이션 (vLLM/Ollama 투명 전환, Rate Limiter) |
+| **dashboard-backend** | 8090 | FastAPI 대시보드 API |
+| **dashboard-frontend** | 80 | React 대시보드 UI (Nginx) |
+| **telegram-collector** | - | 증권사 리서치 채널 메시지 수집 |
+| **macro-aggregator** | - | 매크로 신호 분석 및 집계 |
 
 ### 인프라 서비스
 
-| 서비스 | 포트 | 설명 |
-|--------|------|------|
-| **chromadb** | 8000 | 벡터 DB (뉴스 RAG) |
-| **redis** | 6379 | 캐시 및 실시간 상태 |
-| **rabbitmq** | 5672, 15672 | 메시지 큐 (서비스 간 통신) |
-| **grafana** | 3300 | 모니터링 대시보드 |
-| **loki** | 3400 | 로그 집계 |
-| **cloudflared** | - | Cloudflare Tunnel (외부 접근) |
-| **jenkins** | 8180 | CI/CD 서버 |
-| **airflow** | 8280 | 워크플로우 스케줄러 (DAGs) |
+| 서비스 | 포트 | 프로파일 | 설명 |
+|--------|------|----------|------|
+| **vllm-llm** | 8001 | infra | EXAONE 4.0 32B AWQ (메인 추론 엔진) |
+| **vllm-embed** | 8002 | infra | KURE-v1 (임베딩 전용) |
+| **qdrant** | 6333/6334 | infra | 벡터 DB (뉴스 RAG) |
+| **mariadb** | 3307 | infra | 영구 저장소 |
+| **redis** | 6379 | infra | 캐시 및 실시간 상태 |
+| **rabbitmq** | 5672/15672 | infra | 메시지 큐 (서비스 간 통신) |
+| **grafana** | 3300 | infra | 모니터링 대시보드 |
+| **loki** | 3400 | infra | 로그 집계 |
+| **cloudflared** | - | infra | Cloudflare Tunnel (외부 접근) |
+| **jenkins** | 8180 | ci | CI/CD 서버 |
+| **airflow** | 8085 | real | 워크플로우 스케줄러 (DAGs) |
+| **ollama** | 11434 | gpu-legacy | Ollama (레거시, vLLM 전환 완료) |
 
 ### 자동화 작업 (Airflow DAGs)
 
-> 🚨 **v1.2 변경**: `scheduler-service`가 Apache Airflow로 전환되었습니다. DAG 파일은 `dags/` 폴더에 있습니다.
+> DAG 파일은 `dags/` 폴더에 있습니다.
 
-| DAG | 시간 | 설명 |
-|-----|------|------|
-| **daily_ai_performance** | 평일 07:00 | AI 의사결정 승률/수익률 분석 리포트 생성 |
-| **daily_briefing** | 평일 17:00 | 포트폴리오 현황 및 금일 거래 내역 텔레그램 발송 |
-| **weekly_factor_analysis** | 금요일 22:00 | 주간 시장 팩터 유효성 검증 및 가중치 조정 |
-| **scout_job** | 평일 08:30 | AI 종목 발굴 파이프라인 실행 |
-| **scout_job** | 평일 08:30 | AI 종목 발굴 파이프라인 실행 |
-| **news_pipeline** | 평일 08:00 | News Collector → Analyzer → Archiver 파이프라인 실행 |
+| DAG | 시간 (KST) | 설명 |
+|-----|------------|------|
+| **scout_job_v1** | 평일 08:30-15:30, 1시간 | AI 종목 발굴 (Unified Analyst + Quant v2) |
+| **enhanced_macro_collection** | 평일 07:00, 12:00, 18:00 | 글로벌 매크로 수집 |
+| **enhanced_macro_quick** | 평일 09:30-14:30, 1시간 | 장중 매크로 빠른 업데이트 |
+| **macro_council** | 평일 07:30 | 3현자 매크로 분석 |
+| **collect_minute_chart** | 평일 09:00-15:35, 5분 | 5분봉 수집 |
+| **daily_market_data_collector** | 평일 16:00 | KOSPI 일봉 수집 |
+| **daily_asset_snapshot** | 평일 15:45 | 일일 자산 스냅샷 |
+| **daily_briefing_report** | 평일 17:00 | 브리핑 텔레그램 발송 |
+| **daily_ai_performance** | 평일 07:00 | AI 의사결정 성과 분석 |
+| **analyst_feedback_update** | 평일 18:00 | 분석가 피드백 |
+| **collect_investor_trading** | 평일 18:30 | 수급 데이터 |
+| **collect_foreign_holding_ratio** | 평일 18:35 | 외국인 지분율 (pykrx) |
+| **collect_dart_filings** | 평일 18:45 | DART 공시 |
+| **price_monitor_ops** | 평일 09:00/15:30 | 가격 모니터 시작/중지 |
+| **update_naver_sectors_weekly** | 일 20:00 | 네이버 업종 분류 업데이트 |
+| **weekly_factor_analysis** | 금 22:00 | 주간 팩터 분석 |
+| **data_cleanup_weekly** | 일 03:00 | 오래된 데이터 정리 |
 
 ---
 
 ## 🛠 기술 스택
 
 ### 백엔드
-- **Python 3.11** - 핵심 언어
+- **Python 3.12** - 핵심 언어
 - **Flask / FastAPI** - REST API
 - **SQLAlchemy** - ORM
 - **Gunicorn / Uvicorn** - WSGI/ASGI 서버
 
 ### AI / ML
-- **Anthropic Claude** - 심층 분석 (Hunter) + AI 토론 (Debate)
-- **OpenAI GPT** - 최종 판단 (Judge)
-- **Google Gemini** - 뉴스 임베딩 (ChromaDB RAG)
-- **ChromaDB** - 벡터 저장소 (뉴스 RAG)
+- **vLLM** - 로컬 LLM 추론 (EXAONE 4.0 32B AWQ, KURE-v1 임베딩)
+- **CloudFailoverProvider** - Cloud LLM 자동 failover (OpenRouter → DeepSeek → Ollama Cloud)
+- **Anthropic Claude** - 보조 분석, 검증
+- **OpenAI GPT** - 토론/판정
+- **Google Gemini** - 메인 분석
+- **Qdrant** - 벡터 저장소 (뉴스 RAG)
 
-## 🧠 핵심 지능: 탄력적 하이브리드 에이전트 (v1.1)
+## 🧠 핵심 지능: 탄력적 하이브리드 에이전트 (v2.0)
 **"세 명의 회의"** - 세 가지 독특한 페르소나가 이끄는 정교한 의사결정 시스템.
 
 ### 아키텍처
 - **3-Tier 전략**:
-    - **FAST (Ollama `exaone3.5:7.8b`)**: 뉴스 감성 분석 & 빠른 반응 (LG AI EXAONE 3.5).
-    - **REASONING (Ollama `gpt-oss:20b`)**: 심층 분석 & 로직 (GPT-OSS 20B, Scout Hunter용).
-    - **THINKING (Ollama `gpt-oss:20b`)**: 최종 판단 & 전략 (Judge 토론 종합).
+    - **FAST (vLLM `EXAONE 4.0 32B AWQ`)**: 뉴스 감성 분석 & 빠른 반응 (로컬 vLLM).
+    - **REASONING (`deepseek_cloud`)**: 심층 분석 (CloudFailoverProvider: OpenRouter → DeepSeek → Ollama Cloud).
+    - **THINKING (`deepseek_cloud`)**: 최종 판단 & 전략 (CloudFailoverProvider).
 
-> 🚀 **Dual Local LLM 운영**: `gpt-oss:20b` (20B, ~14GB VRAM)와 `exaone3.5:7.8b` (7.8B, ~5GB VRAM)를 **동시에 Ollama에 로드**하여 운영합니다.
-> - **총 VRAM 사용량**: ~19-20GB (RTX 3090/4090 권장)
-> - **장점**: 각 작업에 최적화된 모델 선택 가능
-> - **EXAONE**: 2배 빠른 뉴스 분석 속도 (~0.83 items/sec vs gpt-oss ~0.42 items/sec)
+> 🚀 **vLLM 기반 로컬 추론**: EXAONE 4.0 32B AWQ (GPU 0.90) + KURE-v1 임베딩 (GPU 0.05)
+> - **총 VRAM 사용량**: ~95% (RTX 3090/4090)
+> - **KV Cache**: ~9,792 tokens (`VLLM_MAX_MODEL_LEN=4096`)
+> - **부팅 시간**: vllm-embed ~51s, vllm-llm ~120s
+> - **REASONING/THINKING**: CloudFailoverProvider로 전환 (비용 최적화 + 품질 향상)
 
 - **탄력성**:
-    - **Thinking Gate**: 고확신 거래만 (Hunter Score ≥ 70) Judge에 도달.
-    - **Cloud Fallback**: Local LLM 무응답 시 자동으로 Cloud로 전환.
+    - **Unified Analyst**: 3→1 LLM 호출 통합, ±15pt 가드레일, 코드 기반 risk_tag.
+    - **CloudFailoverProvider**: OpenRouter → DeepSeek → Ollama Cloud 자동 failover.
+    - **Quant Scorer v2**: 잠재력 기반 (IC=+0.095, Top20% Hit Rate 70.6%).
 
 ### 🎭 스마트 페르소나: 프레임 충돌 토론
 기존 에이전트와 달리, 우리의 페르소나는 단순 의견이 아닌 **해석 프레임**의 대립을 기반으로 토론합니다.
@@ -453,7 +472,8 @@ def call_kis_api():
 
 - Docker & Docker Compose (또는 Docker Desktop for Windows)
 - MariaDB (WSL2 또는 Windows에 설치)
-- Python 3.11+
+- Python 3.12+
+- NVIDIA GPU (RTX 3090/4090 권장, vLLM 로컬 추론용)
 
 > ⚠️ **Docker Desktop for Windows 사용 시**: `secrets.json`과 `env-vars-wsl.yaml`에서 `mariadb-host`를 `host.docker.internal`로 설정해야 합니다.
 
@@ -496,8 +516,11 @@ cp secrets.example.json secrets.json
 ### 3. 서비스 실행
 
      ```bash
-# 인프라 서비스 먼저 실행
+# 인프라 서비스 먼저 실행 (vLLM 부팅 ~2분 소요)
 docker compose --profile infra up -d
+
+# vLLM 부팅 확인 (두 서비스 모두 healthy 대기)
+docker compose ps | grep vllm
 
 # Real 모드 (실제 거래)
 docker compose --profile real up -d
@@ -819,9 +842,11 @@ docker compose --profile infra --profile real up -d
 프로파일 요약:
 | 프로파일 | 목적 | 비고 |
 |----------|------|------|
-| `infra` | 인프라 서비스 | Redis, RabbitMQ, ChromaDB, Loki, Grafana, Jenkins, Cloudflared |
+| `infra` | 인프라 서비스 | MariaDB, Redis, RabbitMQ, Qdrant, Loki, Grafana, Cloudflared, vLLM |
 | `real` | 실거래/운영 | 기본 운영용 (infra 프로파일 필요) |
 | `mock` | 모의 실행 | 토큰 절약/시뮬레이션 (infra 프로파일 필요) |
+| `ci` | CI/CD | Jenkins 서버 |
+| `gpu-legacy` | 레거시 GPU | Ollama (vLLM 전환 전 사용) |
 
 ### CI/CD (Jenkins)
 
@@ -949,7 +974,7 @@ pytest tests/shared/hybrid_scoring/ -v
 | `test_circuit_breaker.py` | 13개 | - | KIS API Circuit Breaker |
 | `test_monitoring_alerts.py` | 7개 | - | Telegram 모니터링 알림 |
 | **services/** | 130개+ | 56-77% | scout-job, buy/sell-executor, scheduler |
-| **총계** | **550개+** | - | - |
+| **총계** | **1250개+** | - | - |
 
 ### 테스트 의존성
 
@@ -980,10 +1005,10 @@ MIT License
 
 <div align="center">
 
-**my-prime-jennie v1.2**
+**my-prime-jennie v2.0**
 
 *AI가 발굴하고, 통계가 검증하고, 사람이 결정한다.*
 
-**Last Updated: 2026-01-23**
+**Last Updated: 2026-02-08**
 
 </div>

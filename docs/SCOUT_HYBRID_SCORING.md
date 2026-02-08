@@ -311,6 +311,57 @@ if news_category in ['수주', '배당']:
 | 버전 | 날짜 | 주요 변경 |
 |------|------|----------|
 | v1.0 | 2025-12-05 | 하이브리드 스코어링 시스템 v1.0 릴리스 |
+| v2.0 | 2026-02-07 | Quant Scorer v2 (잠재력 기반) + Unified Analyst Pipeline |
+
+---
+
+## 📊 v2.0 핵심 변경사항 (2026-02-07)
+
+### Quant Scorer v2: 잠재력 기반 스코어링
+
+**ENV**: `QUANT_SCORER_VERSION=v2` (프로덕션 적용 완료)
+
+#### v1 vs v2 비교
+
+| 항목 | v1 (현재 수준) | v2 (변화/개선) |
+|------|---------------|---------------|
+| 모멘텀 | 현재 수익률 | 6M/1M/눌림목 시그널 |
+| 품질 | ROE 절대값 | ROE **트렌드** (전분기 대비) |
+| 가치 | PER/PBR 수준 | PER **할인** (업종 대비) |
+| 뉴스 | 감성 점수 | 센티먼트 **모멘텀** (변화율) |
+| 수급 | 순매수량 | 외인비율 **추세** + 수급 반전 |
+
+#### 배점 (100점 만점)
+```
+모멘텀: 20 + 품질: 20 + 가치: 20 + 기술: 10 + 뉴스: 10 + 수급: 20 = 100
+```
+
+#### 백테스트 결과 (Watchlist 28일, 330건)
+
+| 지표 | v1 | v2 | 변화 |
+|------|-----|-----|------|
+| D+5 IC | -0.056 | **+0.095** | +0.15 (양수 전환) |
+| Top20% Hit Rate | 60.8% | **70.6%** | +9.8pp |
+| IR | 0.007 | **0.905** | IC 일관성 대폭 향상 |
+| Spread | -2.55pp | **+1.72pp** | 고점수 → 실제 수익 |
+
+### Unified Analyst Pipeline
+
+**3→1 LLM 호출 통합**: Hunter+Debate+Judge → 1회 `run_analyst_scoring()` (REASONING tier)
+
+- **ENV**: `SCOUT_USE_UNIFIED_ANALYST=true`
+- **코드 기반 risk_tag**: `classify_risk_tag(quant_result)` — LLM CAUTION 편향 해소
+- **±15pt 가드레일**: `llm_score = clamp(raw, quant-15, quant+15)`
+- **Veto Power**: DISTRIBUTION_RISK → `is_tradable=False`, `trade_tier=BLOCKED`
+- **Safety Lock 비대칭**: LLM경고 존중 (40:60), LLM<40 가중 (45:55)
+
+### Factor Alpha P0+P1+P2 요약
+
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| P0 | LLM Calibrator ±30, risk_tag 도입 | 완료 |
+| P1 | 눌림목 시그널, Recon Protection, 수급 반전 | 완료 |
+| P2 | Veto Power, Safety Lock 비대칭, LLM Calibrator 확장 | 완료 |
 
 ---
 
@@ -338,4 +389,5 @@ PBR:     8% → 3%  (48.6% 무효)
 ---
 
 *작성: my-prime-jennie v1.0 (2025-12-05)*
+*업데이트: v2.0 (2026-02-07)*
 

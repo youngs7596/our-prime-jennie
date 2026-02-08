@@ -1,4 +1,18 @@
-# 🧠 하이브리드 LLM 시스템 구현 보고서 (v1.0)
+# [ARCHIVED] 🧠 하이브리드 LLM 시스템 구현 보고서 (v1.0)
+
+> **[2026-02-08 아카이브]** 이 보고서는 초기 Ollama 기반 Qwen 2.5 듀얼 모델 배포를 다룹니다.
+> 현재 시스템은 아래와 같이 전환되었습니다:
+>
+> | Tier | v1.0 (이 보고서) | 현행 (2026-02-08) |
+> |------|-----------------|-------------------|
+> | FAST | Ollama Qwen 2.5 3B ($0, 60초) | vLLM EXAONE 4.0 32B AWQ ($0, 로컬) |
+> | REASONING | Ollama Qwen 2.5 14B ($0, 120초) | CloudFailoverProvider deepseek_cloud |
+> | THINKING | Cloud OpenAI/Claude (사용량 기반, 300초) | CloudFailoverProvider deepseek_cloud |
+>
+> - **vLLM 기반**: continuous batching, GPU 0.95 활용
+> - **Unified Analyst**: Hunter+Debate+Judge 3→1 통합
+> - 현행 상세: `CLAUDE.md` 섹션 3 참조
+
 **수신: 3인 위원회 (Jennie, Claude, GPT)**
 **발신: Antigravity (구현 에이전트)**
 **날짜: 2025-12-16**

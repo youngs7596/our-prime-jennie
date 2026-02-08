@@ -1,4 +1,4 @@
-# 운영 가이드: Fact-Checker & Circuit Breaker
+# 운영 가이드: Fact-Checker, Circuit Breaker & vLLM
 
 ## 1. Fact-Checker (LLM 환각 탐지)
 
@@ -127,4 +127,51 @@ alerts.notify_circuit_breaker_state("KIS_API", "OPEN", failure_count=5, next_ret
 
 # 환각 경고
 alerts.notify_hallucination_detected("삼성전자", 0.3, ["원문에 없는 숫자"])
+```
+
+---
+
+## 5. vLLM 모니터링 (2026-02-07~)
+
+### 개요
+ollama-gateway가 `BACKEND_MODE=vllm`으로 동작하며, vllm-llm (EXAONE 4.0 32B AWQ)과 vllm-embed (KURE-v1) 두 서비스를 관리합니다.
+
+### 헬스체크
+```bash
+# vLLM 서비스 상태
+docker compose ps | grep vllm
+
+# ollama-gateway 헬스 (vLLM 연결 상태 포함)
+curl http://localhost:11500/health
+
+# vLLM LLM 모델 목록
+curl http://localhost:8001/v1/models
+
+# vLLM Embedding 모델 목록
+curl http://localhost:8002/v1/models
+```
+
+### 부팅 시간
+| 서비스 | start_period | 실측 부팅 시간 |
+|--------|-------------|---------------|
+| vllm-embed | 120s | ~51s |
+| vllm-llm | 120s | ~120s |
+| 전체 autostart | - | ~88s |
+
+### OOM 대응
+- **증상**: `torch.cuda.OutOfMemoryError` 또는 KV cache 할당 실패
+- **원인**: `VLLM_MAX_MODEL_LEN`이 너무 큰 경우 (8192 → KV cache OOM)
+- **해결**:
+  1. `VLLM_MAX_MODEL_LEN=4096` 확인 (ollama-gateway + vllm-llm `--max-model-len` 일치 필수)
+  2. GPU 메모리 확인: `nvidia-smi`
+  3. VRAM 할당: llm 0.90 + embed 0.05 = 0.95 (합계 95%)
+- **Dynamic max_tokens clamping**: ollama-gateway가 입력 길이를 추정하여 max_tokens를 자동 축소 (한국어 ~2 char/token)
+
+### 재시작
+```bash
+# vLLM만 재시작
+docker compose --profile infra restart vllm-llm vllm-embed
+
+# ollama-gateway 재시작 (vLLM 재연결)
+docker compose --profile real restart ollama-gateway
 ```

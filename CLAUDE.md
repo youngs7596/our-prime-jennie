@@ -37,33 +37,54 @@
 
 ## 2. 서비스 목록
 
+### 핵심 서비스
 | 서비스 | 포트 | 설명 |
 |--------|------|------|
 | kis-gateway | 8080 | 한국투자증권 API 게이트웨이 |
-| scout-job | 8087 | AI 종목 발굴 (30분 간격) |
-| buy-scanner | 8088 | 실시간 매수 기회 감시 |
-| buy-executor | 8089 | 매수 주문 실행 |
-| sell-executor | 8090 | 매도 주문 실행 |
-| price-monitor | 8091 | 실시간 가격 모니터링 |
-| command-handler | 8092 | 텔레그램 명령 처리 |
-| daily-briefing | 8093 | 일일 브리핑 생성 |
-| ollama-gateway | 11500 | 로컬 LLM 요청 큐잉/라우팅 |
+| scout-job | 8087 | AI 종목 발굴 (1시간 간격) |
+| scout-worker | - | Scout 전용 워커 (포트 바인딩 없음) |
+| buy-scanner | 8081 | 실시간 매수 기회 감시 |
+| buy-executor | 8082 | 매수 주문 실행 |
+| sell-executor | 8083 | 매도 주문 실행 |
+| price-monitor | 8088 | 실시간 가격 모니터링 |
+| command-handler | 8091 | 텔레그램 명령 처리 |
+| daily-briefing | 8086 | 일일 브리핑 생성 |
+| ollama-gateway | 11500 | LLM 요청 큐잉/라우팅 (vLLM/Ollama 투명 전환) |
+| dashboard-backend | 8090 | 대시보드 API (FastAPI) |
+| dashboard-frontend | 80 | 대시보드 UI (Nginx) |
 | airflow-webserver | 8085 | Airflow UI |
-| dashboard-backend | 8100 | 대시보드 API |
-| dashboard-frontend | 3000 | 대시보드 UI |
+
+### 인프라 서비스
+| 서비스 | 포트 | 프로파일 | 설명 |
+|--------|------|----------|------|
+| vllm-llm | 8001 | infra | EXAONE 4.0 32B AWQ (메인 추론) |
+| vllm-embed | 8002 | infra | KURE-v1 (임베딩 전용) |
+| qdrant | 6333/6334 | infra | 벡터 DB (뉴스 RAG) |
+| mariadb | 3307 | infra | 영구 저장소 |
+| redis | 6379 | infra | 캐시 및 실시간 상태 |
+| rabbitmq | 5672/15672 | infra | 메시지 큐 |
+| grafana | 3300 | infra | 모니터링 대시보드 |
+| loki | 3400 | infra | 로그 집계 |
+| cloudflared | - | infra | Cloudflare Tunnel |
+| jenkins | 8180 | ci | CI/CD 서버 |
+| ollama | 11434 | gpu-legacy | Ollama (레거시) |
 
 ## 3. LLM 구성
 
-### 3.1 로컬 LLM (Ollama via ollama-gateway)
+### 3.1 로컬 LLM (vLLM via ollama-gateway)
 ```yaml
-# config/env-vars-wsl.yaml 기준
+# ollama-gateway BACKEND_MODE=vllm
+# vllm-llm: EXAONE 4.0 32B AWQ (포트 8001)
+# vllm-embed: KURE-v1 (포트 8002)
+
 LLM Tiers:
-  FAST: exaone3.5:7.8b      # 빠른 응답 (뉴스 요약 등)
-  REASONING: gpt-oss:20b    # 복잡한 추론
-  THINKING: gpt-oss:20b     # 심층 분석
+  FAST: exaone3.5:7.8b (로컬 vLLM)  # 빠른 응답 (뉴스 요약 등)
+  REASONING: deepseek_cloud           # CloudFailoverProvider (OpenRouter → DeepSeek → Ollama Cloud)
+  THINKING: deepseek_cloud            # CloudFailoverProvider (OpenRouter → DeepSeek → Ollama Cloud)
 ```
 
-### 3.2 Cloud LLM
+### 3.2 Cloud LLM (CloudFailoverProvider)
+- **deepseek_cloud**: REASONING/THINKING 티어 (OpenRouter → DeepSeek API → Ollama Cloud 자동 failover)
 - **Gemini (Jennie)**: 메인 분석
 - **Claude (Minji)**: 보조 분석, 검증
 - **GPT-4o (Junho)**: 토론/판정
@@ -81,16 +102,24 @@ LLM Tiers:
 ### 주요 스케줄
 | DAG | 스케줄 (KST) | 설명 |
 |-----|-------------|------|
-| scout_job_v1 | 08:30-15:30, 30분 간격 | AI 종목 스캔 (KOSPI+KOSDAQ) |
+| scout_job_v1 | 08:30-15:30, 1시간 간격 | AI 종목 스캔 (KOSPI+KOSDAQ, Unified Analyst) |
 | enhanced_macro_collection | 07:00, 12:00, 18:00 | 글로벌 매크로 수집 |
+| enhanced_macro_quick | 09:30-14:30, 1시간 간격 | 장중 매크로 빠른 업데이트 (pykrx) |
 | macro_council | 07:30 | 3현자 매크로 분석 |
-| collect_intraday | 09:00-15:35, 5분 간격 | 5분봉 수집 |
+| collect_minute_chart | 09:00-15:35, 5분 간격 | 5분봉 수집 |
 | daily_market_data_collector | 16:00 | KOSPI 일봉 수집 |
-| daily_kosdaq_price_collector | 16:30 | KOSDAQ 일봉 수집 |
-| weekly_kosdaq_stock_master | 일요일 22:00 | KOSDAQ 마스터 업데이트 |
-| collect_investor_trading | 18:30 | 수급 데이터 |
-| collect_dart_filings | 18:45 | DART 공시 |
+| daily_asset_snapshot | 15:45 | 일일 자산 스냅샷 (총자산, 현금, 주식평가) |
+| daily_briefing_report | 17:00 | 일일 브리핑 발송 |
+| daily_ai_performance | 07:00 | AI 의사결정 성과 분석 |
 | analyst_feedback_update | 18:00 | 분석가 피드백 |
+| collect_investor_trading | 18:30 | 수급 데이터 |
+| collect_foreign_holding_ratio | 18:35 | 외국인 지분율 수집 (pykrx) |
+| collect_dart_filings | 18:45 | DART 공시 |
+| price_monitor_ops | 09:00 | 가격 모니터 시작 |
+| price_monitor_stop_ops | 15:30 | 가격 모니터 중지 |
+| update_naver_sectors_weekly | 일요일 20:00 | 네이버 업종 분류 업데이트 (79개 세분류) |
+| weekly_factor_analysis | 금요일 22:00 | 주간 팩터 분석 |
+| data_cleanup_weekly | 일요일 03:00 | 오래된 데이터 정리 |
 
 ## 5. 매매 로직
 
@@ -167,9 +196,17 @@ my-prime-jennie/
 │   ├── airflow/
 │   └── ...
 ├── shared/             # 공유 모듈
-│   ├── broker/        # 멀티 브로커 추상화 (NEW)
+│   ├── broker/        # 멀티 브로커 추상화
+│   ├── crawlers/      # 네이버 섹터 크롤러 등
+│   ├── db/            # SQLAlchemy 모델, Repository
+│   ├── hybrid_scoring/ # Quant Scorer v1/v2, HybridScorer
 │   ├── kis/           # 한투 API 클라이언트
 │   ├── macro_insight/ # 매크로 인사이트
+│   ├── llm.py         # JennieBrain (LLM 오케스트레이션)
+│   ├── llm_factory.py # LLMFactory (Tier→Provider 라우팅)
+│   ├── llm_providers.py # Provider 구현체 (Ollama, OpenAI, Claude, Gemini, CloudFailover)
+│   ├── sector_classifier.py  # 섹터 분류 v4.0 (네이버 기반)
+│   ├── sector_taxonomy.py    # NAVER_TO_GROUP 매핑 (79→14)
 │   ├── database.py    # DB 연결
 │   ├── config.py      # 설정 관리
 │   └── market_regime.py
@@ -181,17 +218,37 @@ my-prime-jennie/
 └── tests/              # 테스트
 ```
 
-## 8. 설정 파일
+## 8. Quant Scorer v2 & Unified Analyst Pipeline
+
+### 8.1 Quant Scorer v2 (잠재력 기반)
+- **ENV**: `QUANT_SCORER_VERSION=v2` (docker-compose.yml)
+- **핵심 전환**: "현재 수준" → "변화/개선" (ROE 트렌드, PER 할인, 센티먼트 모멘텀, 외인비율 추세)
+- **배점**: 모멘텀 20 + 품질 20 + 가치 20 + 기술 10 + 뉴스 10 + 수급 20 = 100
+- **백테스트 결과**: v2 D+5 IC=+0.095 (v1: -0.056), Top20% Hit Rate 70.6%
+- **코드**: `quant_scorer.py` (6개 v2 메서드), `quant_constants.py` (V2_* 상수)
+
+### 8.2 Unified Analyst Pipeline
+- **3→1 LLM 호출 통합**: Hunter+Debate+Judge → 1회 `run_analyst_scoring()` (REASONING tier)
+- **ENV**: `SCOUT_USE_UNIFIED_ANALYST=true`
+- **코드 기반 risk_tag**: `classify_risk_tag(quant_result)` — LLM CAUTION 편향 해소
+- **±15pt 가드레일**: `llm_score = clamp(raw, quant-15, quant+15)`
+- **Veto Power**: DISTRIBUTION_RISK → is_tradable=False, trade_tier=BLOCKED
+
+### 8.3 네이버 섹터 분류 (Single Source of Truth)
+- **79개 세분류 → 14개 대분류**: `STOCK_MASTER.SECTOR_NAVER` 컬럼
+- **초기 실행**: `python utilities/update_naver_sectors.py`
+- **주간 배치**: `update_naver_sectors_weekly` DAG (일요일 20:00)
+
+## 9. 설정 파일
 
 | 파일 | 용도 |
 |------|------|
 | `docker-compose.yml` | 서비스 정의 |
 | `secrets.json` | API 키 (gitignore) |
-| `config/env-vars-wsl.yaml` | 환경 변수 |
-| `config/secrets.json` | DB/API 자격증명 |
+| `infrastructure/env-vars-wsl.yaml` | 환경 변수 |
 | `Jenkinsfile` | CI/CD 파이프라인 |
 
-## 9. Docker 빌드 최적화
+## 10. Docker 빌드 최적화
 
 ### Layer Caching 패턴
 ```dockerfile
@@ -214,7 +271,7 @@ environment {
 }
 ```
 
-## 10. 테스트
+## 11. 테스트
 
 ```bash
 # 전체 테스트
@@ -227,7 +284,7 @@ environment {
 .venv/bin/pytest tests/shared/ -v
 ```
 
-## 11. 운영 명령어
+## 12. 운영 명령어
 
 ```bash
 # 서비스 로그
@@ -243,22 +300,22 @@ docker compose -p my-prime-jennie --profile real up -d --build scout-job
 docker compose -p my-prime-jennie --profile real up -d --build --force-recreate
 ```
 
-## 12. 자주 발생하는 문제
+## 13. 자주 발생하는 문제
 
-### 12.1 패키지 누락
+### 13.1 패키지 누락
 - 증상: `ModuleNotFoundError: No module named 'xxx'`
 - 해결: 해당 서비스의 `requirements.txt`에 패키지 추가
 - 예: scout-job에 pytz 누락 → `services/scout-job/requirements.txt`에 추가
 
-### 12.2 Airflow DAG 실패
+### 13.2 Airflow DAG 실패
 - 로그 확인: `docker logs my-prime-jennie-airflow-scheduler-1 2>&1 | grep -i "dag_name"`
 - 태스크 로그: Airflow UI (localhost:8085) → DAG → Graph → Task → Log
 
-### 12.3 시간 기반 테스트 실패
+### 13.3 시간 기반 테스트 실패
 - 원인: `_check_no_trade_window`, `_check_danger_zone` 등이 현재 시간에 따라 False 반환
 - 해결: 테스트에서 해당 메서드 mock 필요
 
-### 12.4 코드 손실 (CRITICAL - 2026-02-03 사건)
+### 13.4 코드 손실 (CRITICAL - 2026-02-03 사건)
 
 #### 사건 개요
 2026-02-02 세션에서 구현한 `Macro.tsx` 프론트엔드 페이지가 완전히 사라짐. 사용자가 분명히 기억하는 기능 (날짜 드롭다운, 자동차 섹터 회피 등)이 존재하지 않았음.
@@ -314,7 +371,7 @@ git push
 - **신규 파일은 특히 주의**: 기존 파일 수정은 `git diff`로 보이지만, 신규 파일은 `--others` 옵션 필요
 - **세션 히스토리는 최후의 보루**: Claude 세션 .jsonl 파일에서 Write tool 내역으로 복구 가능
 
-## 13. 세션 Handoff
+## 14. 세션 Handoff
 
 > **상세 세션 기록**: `.ai/sessions/session-YYYY-MM-DD-HH-MM.md`
 > **변경 이력**: `docs/changelogs/CHANGELOG-YYYY-MM.md`
@@ -323,17 +380,20 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-08 | 문서 현행화 (CLAUDE.md, README.md, docs/) | - |
+| 2026-02-07 | vLLM 전환, Quant Scorer v2, Unified Analyst, 네이버 섹터 통합 | - |
 | 2026-02-03 (밤) | 코드 손실 조사, MacroCouncil 기능 복구 | `session-2026-02-03-23-04.md` |
 | 2026-02-03 | Macro Council 수정, Dashboard Macro Insight 카드 | `session-2026-02-03-21-00.md` |
-| 2026-02-02 | 정치 뉴스 Council 통합, 투자자 수급 데이터 | `session-2026-02-02-23-00.md` |
 
-### 현재 시스템 상태 (2026-02-03)
+### 현재 시스템 상태 (2026-02-08)
 
-- **Scout**: KOSPI + KOSDAQ 통합 완료 (v1.1)
-- **Council**: 정치 뉴스 + 투자자 수급 + 트레이딩 권고 기능 완료
-- **Dashboard**: Macro Insight 카드 추가 (VIX, 수급, 전략 권고)
-- **트레이딩 서비스**: 매크로 컨텍스트 통합 완료 (buy-scanner, scout-job, price-monitor)
-- **테스트**: 1136 passed, 2 skipped
+- **Scout**: Unified Analyst Pipeline (1-pass LLM), Quant Scorer v2 프로덕션
+- **LLM**: vLLM (EXAONE 4.0 32B AWQ) + CloudFailoverProvider (deepseek_cloud)
+- **벡터DB**: ChromaDB → Qdrant 전환 완료
+- **섹터**: 네이버 업종 분류 Single Source of Truth (79개 세분류 → 14개 대분류)
+- **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator)
+- **Dashboard**: Macro Insight 카드, 자산 스냅샷
+- **테스트**: 1250+ passed (shared 1095 + v2 46 + scout-job 18 + services)
 
 ### 주요 데이터 흐름
 
@@ -348,5 +408,5 @@ git push
 ```
 
 ---
-*Last Updated: 2026-02-03*
+*Last Updated: 2026-02-08*
 *상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*

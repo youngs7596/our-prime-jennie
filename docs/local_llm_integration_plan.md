@@ -1,4 +1,17 @@
-# 구현 계획 - "탄력적 하이브리드 에이전트" 아키텍처
+# [ARCHIVED] 구현 계획 - "탄력적 하이브리드 에이전트" 아키텍처
+
+> **[2026-02-08 아카이브]** 이 문서는 초기 Ollama 기반 하이브리드 LLM 통합 계획입니다.
+> 현재 아키텍처는 아래와 같이 크게 변경되었습니다:
+>
+> | Tier | 초기 계획 | 현행 (2026-02-08) |
+> |------|----------|-------------------|
+> | FAST | Ollama qwen2.5:3b | vLLM EXAONE 4.0 32B AWQ (로컬) |
+> | REASONING | Ollama qwen2.5:14b | CloudFailoverProvider (OpenRouter → DeepSeek → Ollama Cloud) |
+> | THINKING | Cloud (OpenAI/Claude) | CloudFailoverProvider (deepseek_cloud) |
+>
+> - **ollama-gateway**: `BACKEND_MODE=vllm`으로 vLLM 투명 전환
+> - **Unified Analyst**: 3→1 LLM 호출 통합 (`SCOUT_USE_UNIFIED_ANALYST=true`)
+> - 현행 상세: `CLAUDE.md` 섹션 3, 8 참조
 
 이 계획은 "3현자" (Jennie, Claude, GPT)의 피드백을 종합하여 로컬 LLM의 견고하고 프로덕션급 통합을 만듭니다.
 
