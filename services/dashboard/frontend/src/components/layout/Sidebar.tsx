@@ -5,14 +5,12 @@ import {
   Brain,
   Activity,
   Settings,
-  LogOut,
   ChevronLeft,
   ChevronRight,
   BarChart3,
   Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/store/authStore'
 import { useState } from 'react'
 
 const navItems = [
@@ -28,7 +26,6 @@ const navItems = [
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
-  const { logout, user } = useAuthStore()
 
   const isItemActive = (path: string) => location.pathname === path
 
@@ -112,18 +109,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* User & Logout */}
+      {/* Version Info (로그아웃 버튼 제거됨 - Cloudflare Access로 인증) */}
       <div className="p-3 border-t border-border">
         <div
           className={cn(
-            'flex items-center gap-3 mb-2 px-2',
+            'flex items-center gap-3 px-2',
             collapsed && 'justify-center'
           )}
         >
           <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-sm font-medium">
-              {user?.username?.[0]?.toUpperCase() || 'U'}
-            </span>
+            <span className="text-white text-sm font-medium">v2</span>
           </div>
           <div
             className={cn(
@@ -132,33 +127,15 @@ export function Sidebar() {
             )}
           >
             <p className="text-sm font-medium text-white truncate">
-              {user?.username || 'User'}
+              Prime Jennie
             </p>
             <p className="text-xs text-muted-foreground">
-              {user?.role || 'admin'}
+              v2.0.0
             </p>
           </div>
         </div>
-        <button
-          onClick={logout}
-          className={cn(
-            'flex items-center gap-3 w-full px-3 py-2 rounded-md',
-            'text-muted-foreground hover:text-red-400 hover:bg-red-500/10',
-            'transition-colors duration-150',
-            collapsed && 'justify-center'
-          )}
-        >
-          <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
-          <span
-            className={cn(
-              'text-sm font-medium overflow-hidden whitespace-nowrap transition-all duration-200',
-              collapsed ? 'opacity-0 w-0' : 'opacity-100'
-            )}
-          >
-            Logout
-          </span>
-        </button>
       </div>
     </aside>
   )
 }
+

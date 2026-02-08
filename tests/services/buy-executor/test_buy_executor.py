@@ -59,9 +59,6 @@ class MockConfig:
             'TRADING_MODE': 'MOCK',
             'MAX_BUY_COUNT_PER_DAY': 5,
             'MAX_PORTFOLIO_SIZE': 10,
-            'MIN_LLM_SCORE': 60,
-            'MIN_LLM_SCORE_TIER2': 65,
-            'MIN_LLM_SCORE_RECON': 65,
             'MAX_SECTOR_PCT': 30.0,
             'MAX_POSITION_VALUE_PCT': 10.0,
             'RISK_PER_TRADE_PCT': 2.0,
@@ -410,37 +407,70 @@ class TestDiversificationCheck:
             assert is_approved == True
 
 
-class TestLLMScoreValidation:
-    """LLM 점수 검증 테스트"""
-    
-    def test_tier1_minimum_score(self, mock_config):
-        """TIER1 최소 점수 검증"""
-        config = MockConfig({'MIN_LLM_SCORE': 60})
-        
-        # TIER1 경로는 60점 이상 필요
-        candidate = {
-            'llm_score': 55,
-            'trade_tier': 'TIER1',
-            'is_tradable': True
-        }
-        
-        # 점수 미달 확인 로직
-        min_llm_score = config.get_int('MIN_LLM_SCORE', default=60)
-        assert candidate['llm_score'] < min_llm_score
-    
-    def test_tier2_minimum_score(self, mock_config):
-        """TIER2 최소 점수 검증"""
-        config = MockConfig({'MIN_LLM_SCORE_TIER2': 65})
-        
-        # TIER2 경로는 65점 이상 필요
-        candidate = {
-            'llm_score': 60,
-            'trade_tier': 'TIER2',
-            'is_tradable': False
-        }
-        
-        min_llm_score_tier2 = config.get_int('MIN_LLM_SCORE_TIER2', default=65)
-        assert candidate['llm_score'] < min_llm_score_tier2
+class TestStaleScoreMultiplier:
+    """Stale Score 포지션 배율 테스트 (scored_dt 다음날부터 카운트, 주말 제외)"""
+
+    def _calc_stale(self, scored_date, now_date):
+        """실제 executor.py와 동일한 business_days 계산 로직"""
+        from datetime import timedelta
+        business_days = 0
+        current_date = scored_date + timedelta(days=1)  # 스코어링 다음 날부터
+        while current_date <= now_date:
+            if current_date.weekday() < 5:
+                business_days += 1
+            current_date += timedelta(days=1)
+
+        if business_days >= 3:
+            return business_days, 0.3
+        elif business_days >= 2:
+            return business_days, 0.5
+        else:
+            return business_days, 1.0
+
+    def test_same_day_no_penalty(self):
+        """당일 점수는 배율 축소 없음"""
+        from datetime import date
+        scored = date(2026, 2, 3)  # 화요일
+        now = date(2026, 2, 3)     # 같은 화요일
+        bdays, mult = self._calc_stale(scored, now)
+        assert bdays == 0
+        assert mult == 1.0
+
+    def test_next_business_day_no_penalty(self):
+        """직전 영업일(1영업일 경과)은 정상 → 배율 축소 없음"""
+        from datetime import date
+        scored = date(2026, 2, 3)  # 화요일
+        now = date(2026, 2, 4)     # 수요일 (1영업일)
+        bdays, mult = self._calc_stale(scored, now)
+        assert bdays == 1
+        assert mult == 1.0
+
+    def test_friday_to_monday_no_penalty(self):
+        """금요일 Scout → 월요일 Scanner = 1영업일 → 정상 (주말 때문)"""
+        from datetime import date
+        scored = date(2026, 2, 6)  # 금요일
+        now = date(2026, 2, 9)     # 월요일
+        bdays, mult = self._calc_stale(scored, now)
+        assert bdays == 1
+        assert mult == 1.0
+
+    def test_2_business_days_half(self):
+        """2영업일 경과 시 stale_multiplier = 0.5"""
+        from datetime import date
+        scored = date(2026, 2, 3)  # 화요일
+        now = date(2026, 2, 5)     # 목요일 (2영업일)
+        bdays, mult = self._calc_stale(scored, now)
+        assert bdays == 2
+        assert mult == 0.5
+
+    def test_3_business_days_severe(self):
+        """3영업일 이상 경과 시 stale_multiplier = 0.3"""
+        from datetime import date
+        scored = date(2026, 2, 3)  # 화요일
+        now = date(2026, 2, 6)     # 금요일 (3영업일)
+        bdays, mult = self._calc_stale(scored, now)
+        assert bdays == 3
+        assert mult == 0.3
 
 
 class TestRealtimeSourceFastPath:

@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { useAuthStore } from '@/store/authStore'
 
 // 프로덕션에서는 /api로, 개발에서는 환경변수 사용
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
@@ -11,26 +10,18 @@ export const api = axios.create({
   },
 })
 
-// Request interceptor - JWT 토큰 자동 추가
+// Request interceptor - 인증 비활성화됨 (Cloudflare Access로 외부 인증 처리)
 api.interceptors.request.use(
-  (config) => {
-    const token = useAuthStore.getState().token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 )
 
-// Response interceptor - 401 에러 시 로그아웃
+// Response interceptor - 에러 로깅만 수행
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
-    }
+    // 인증 관련 리다이렉트 제거됨
+    console.error('API Error:', error.response?.status, error.message)
     return Promise.reject(error)
   }
 )

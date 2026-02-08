@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -12,32 +12,6 @@ from shared.db.repository import (
     get_portfolio_with_current_prices,
 )
 from shared.db.models import DailyAssetSnapshot # For history
-from auth import verify_token
-# Wait, verify_token is in main.py. I should probably move it to a shared util or duplication.
-# For now, I will import it from main if possible, but circular import might be an issue.
-# Better to expect `dependencies=[Depends(verify_token)]` on the router include in main, 
-# OR duplicate/move the auth logic.
-# Given the existing structure, `routers/system.py` doesn't use verify_token? 
-# Ah, `system.py` doesn't seem to have auth on some endpoints?
-# Let's check `main.py` again. `system.router` is included.
-# `routers/system.py` does use `verify_token`? No, it doesn't seem to import it in the file I viewed. 
-# Let me check `main.py` includes. 
-# `app.include_router(system.router)` 
-# If I look at `system.py` again... it imports `Depends` but doesn't seem to use `verify_token`.
-# Dashboard's `main.py` showed `verify_token` defined there. 
-# Best practice: Move `verify_token` to `services/dashboard/backend/auth.py` or similar.
-# But for now to avoid too much disruption, I will make `portfolio.py` just define the router 
-# and `main.py` will attach auth dependency globally or I'll assume I can import from a new `auth.py`.
-
-# Decision: I will create `routers/deps.py` or similar later?
-# Actually, I'll just put the router code here and assume `main.py` handles the auth dependency 
-# via `router = APIRouter(dependencies=[Depends(verify_token)])` or passed in the path operation.
-# BUT, the existing code in `main.py` uses `payload: dict = Depends(verify_token)` in each endpoint default arg.
-# I should probably duplicate `verify_token` or extract it. 
-# To stay clean, I'll extract `verify_token` to `services/dashboard/backend/dependencies.py`.
-
-# But first, I'll create `dependencies.py` to hold `verify_token`.
-
 logger = logging.getLogger(__name__)
 
 router = APIRouter(

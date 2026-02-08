@@ -313,8 +313,6 @@ def mock_config():
     # Default configuration values
     config_values = {
         'TRADING_MODE': 'MOCK',
-        'MIN_LLM_SCORE': 60,
-        'MIN_LLM_SCORE_TIER2': 65,
         'MAX_BUY_COUNT_PER_DAY': 5,
         'MAX_PORTFOLIO_SIZE': 10,
         'MAX_SECTOR_PCT': 30.0,
@@ -481,21 +479,25 @@ def danger_zone():
 def create_scan_result(stock_code: str, stock_name: str, llm_score: float = 80.0,
                        signal_type: str = "GOLDEN_CROSS", current_price: float = 70000,
                        market_regime: str = "BULL", is_tradable: bool = True,
-                       trade_tier: str = "TIER1") -> dict:
+                       trade_tier: str = "TIER1", llm_scored_at: str = None) -> dict:
     """
     Create a scan result for buy executor testing.
     """
+    candidate = {
+        'stock_code': stock_code,
+        'stock_name': stock_name,
+        'llm_score': llm_score,
+        'is_tradable': is_tradable,
+        'trade_tier': trade_tier,
+        'buy_signal_type': signal_type,
+        'current_price': current_price,
+        'llm_reason': f'Test reason for {stock_name}'
+    }
+    if llm_scored_at:
+        candidate['llm_scored_at'] = llm_scored_at
+
     return {
-        'candidates': [{
-            'stock_code': stock_code,
-            'stock_name': stock_name,
-            'llm_score': llm_score,
-            'is_tradable': is_tradable,
-            'trade_tier': trade_tier,
-            'buy_signal_type': signal_type,
-            'current_price': current_price,
-            'llm_reason': f'Test reason for {stock_name}'
-        }],
+        'candidates': [candidate],
         'market_regime': market_regime,
         'strategy_preset': {'name': 'TEST_PRESET', 'params': {}},
         'source': 'test'

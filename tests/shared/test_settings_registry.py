@@ -92,10 +92,10 @@ class TestRegistrySensitiveField:
 class TestRegistryCategories:
     """카테고리별 그룹화 테스트"""
 
-    def test_llm_category_exists(self):
-        """LLM 카테고리 항목 존재 확인"""
-        llm_keys = [k for k, v in REGISTRY.items() if v.get("category") == "LLM"]
-        assert len(llm_keys) >= 2, "LLM 카테고리에 최소 2개 항목 필요"
+    def test_recon_category_exists(self):
+        """Recon 카테고리 항목 존재 확인"""
+        recon_keys = [k for k, v in REGISTRY.items() if v.get("category") == "Recon"]
+        assert len(recon_keys) >= 2, "Recon 카테고리에 최소 2개 항목 필요"
 
     def test_risk_category_exists(self):
         """Risk 카테고리 항목 존재 확인"""
@@ -119,9 +119,9 @@ class TestGetRegistryDefaults:
     def test_contains_all_keys(self):
         """모든 키 포함"""
         defaults = get_registry_defaults()
-        assert "MIN_LLM_SCORE" in defaults
         assert "MAX_BUY_COUNT_PER_DAY" in defaults
         assert "OPENAI_API_KEY" in defaults
+        assert "RECON_POSITION_MULT" in defaults
 
 
 class TestRegistryDefaultValues:

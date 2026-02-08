@@ -10,11 +10,6 @@ Centralized configuration registry (Project Recon - Phase 1)
 """
 
 REGISTRY = {
-    # ===== LLM / 점수 임계값 (운영 튜닝) =====
-    "MIN_LLM_SCORE": {"value": 60, "type": "int", "desc": "LLM 최소 점수(Tier1)", "category": "LLM", "db_priority": True},
-    "MIN_LLM_SCORE_TIER2": {"value": 65, "type": "int", "desc": "LLM 최소 점수(Tier2)", "category": "LLM", "db_priority": True},
-    "MIN_LLM_SCORE_RECON": {"value": 65, "type": "int", "desc": "LLM 최소 점수(정찰병)", "category": "LLM", "db_priority": True},
-
     # ===== Recon / Trend (운영 튜닝) =====
     "RECON_POSITION_MULT": {"value": 0.3, "type": "float", "desc": "정찰병 포지션 비중 배수", "category": "Recon", "db_priority": True},
     "TIER2_POSITION_MULT": {"value": 0.5, "type": "float", "desc": "TIER2 포지션 비중 배수", "category": "Recon", "db_priority": True},

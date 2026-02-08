@@ -268,11 +268,11 @@ app.include_router(configs.router) # Config registry/API router
 app.include_router(scheduler.router) # Scheduler proxy router
 app.include_router(system.router) # System status router (Cached)
 app.include_router(performance.router) # Performance analytics router
-app.include_router(portfolio.router, dependencies=[Depends(verify_token)]) # Portfolio router
-app.include_router(market.router, dependencies=[Depends(verify_token)]) # Market router
-app.include_router(airflow.router, dependencies=[Depends(verify_token)]) # Airflow router
-app.include_router(logs.router, dependencies=[Depends(verify_token)]) # Logs router
-app.include_router(logic.router, dependencies=[Depends(verify_token)]) # Logic Observability router
+app.include_router(portfolio.router) # Portfolio router
+app.include_router(market.router) # Market router
+app.include_router(airflow.router) # Airflow router
+app.include_router(logs.router) # Logs router
+app.include_router(logic.router) # Logic Observability router
 
 # =============================================================================
 # 인증 API
@@ -333,7 +333,6 @@ async def refresh_token(payload: dict = Depends(verify_token)):
 @app.get("/api/watchlist", response_model=list[WatchlistItem])
 async def get_watchlist_api(
     limit: int = Query(50, ge=1, le=200),
-    payload: dict = Depends(verify_token)
 ):
     """관심 종목 목록"""
     try:
@@ -362,7 +361,6 @@ async def get_watchlist_api(
 async def get_trades_api(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    payload: dict = Depends(verify_token)
 ):
     """거래 내역"""
     try:
@@ -393,7 +391,7 @@ async def get_trades_api(
 # =============================================================================
 
 @app.get("/api/scout/status")
-async def get_scout_status_api(payload: dict = Depends(verify_token)):
+async def get_scout_status_api():
     """Scout Pipeline 현재 상태"""
     r = get_redis()
     if not r:
@@ -418,7 +416,7 @@ async def get_scout_status_api(payload: dict = Depends(verify_token)):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/scout/results")
-async def get_scout_results_api(payload: dict = Depends(verify_token)):
+async def get_scout_results_api():
     """Scout Pipeline 최근 결과"""
     r = get_redis()
     if not r:
@@ -441,7 +439,6 @@ async def get_scout_results_api(payload: dict = Depends(verify_token)):
 async def get_news_sentiment_api(
     stock_code: Optional[str] = None,
     limit: int = Query(20, ge=1, le=100),
-    payload: dict = Depends(verify_token)
 ):
     """뉴스 감성 점수 (shared/database.py의 sentiment:{code} 키 사용)"""
     r = get_redis()
@@ -559,7 +556,7 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 
 @app.get("/api/briefing/latest")
-async def get_daily_briefing_api(payload: dict = Depends(verify_token)):
+async def get_daily_briefing_api():
     """최신 Daily Briefing 조회"""
     r = get_redis()
     
@@ -618,7 +615,6 @@ async def get_analyst_performance_api(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     lookback_days: int = Query(30, ge=7, le=90),
-    payload: dict = Depends(verify_token)
 ):
     """AI Analyst 성과 분석 데이터 (페이징 지원)"""
     try:
@@ -769,7 +765,7 @@ async def get_analyst_performance_api(
 # =============================================================================
 
 @app.get("/api/llm/stats")
-async def get_llm_stats_api(payload: dict = Depends(verify_token)):
+async def get_llm_stats_api():
     """LLM 서비스별 사용 통계 (v1.2 - 새로운 키 구조 지원)"""
     r = get_redis()
     
@@ -859,7 +855,7 @@ class SageReview(BaseModel):
     confidence: float
 
 @app.get("/api/council/daily-review")
-async def get_three_sages_review_api(payload: dict = Depends(verify_token)):
+async def get_three_sages_review_api():
     """3현자 데일리 리뷰 - Jennie, Minji, Junho의 시스템 검토"""
     r = get_redis()
     
@@ -979,7 +975,7 @@ async def get_three_sages_review_api(payload: dict = Depends(verify_token)):
 # =============================================================================
 
 @app.get("/api/macro/dates")
-async def get_macro_insight_dates(payload: dict = Depends(verify_token)):
+async def get_macro_insight_dates():
     """매크로 인사이트 날짜 목록 조회 (최근 30일)"""
     try:
         from sqlalchemy import text
@@ -1001,7 +997,6 @@ async def get_macro_insight_dates(payload: dict = Depends(verify_token)):
 @app.get("/api/macro/insight")
 async def get_macro_insight_api(
     date: Optional[str] = Query(None, description="조회할 날짜 (YYYY-MM-DD)"),
-    payload: dict = Depends(verify_token)
 ):
     """매크로 인사이트 조회 - Council 분석 결과"""
     r = get_redis()

@@ -11,7 +11,6 @@ from datetime import datetime, timezone, timedelta
 import shared.database as database
 from shared.db.connection import session_scope
 from shared.db import repository as repo
-from shared.db.models import StockMinutePrice
 import shared.auth as auth
 from shared import redis_cache
 from shared.position_sizing import PositionSizer
@@ -147,14 +146,8 @@ class BuyExecutor:
                     logger.warning(f"⏳ 쿨타임(24h): {c_name}({c_code})은 최근 24시간 내 매도 이력이 있어 매수 보류")
                     return {"status": "skipped", "reason": f"Cooldown active (Sold within 24h): {c_code}"}
             
-            # [NEW] 2.6 Micro-Timing Check (5분봉 패턴 분석)
-            # Shooting Star, Bearish Engulfing 등 단기 고점 패턴 감지 시 매수 지연
-            if self.config.get_bool('ENABLE_MICRO_TIMING', default=True):
-                timing_result = self._validate_entry_timing(session, candidates)
-                if not timing_result['allowed']:
-                    logger.warning(f"⏳ [Micro-Timing] 매수 지연: {timing_result['reason']}")
-                    return {"status": "skipped", "reason": f"Micro-Timing: {timing_result['reason']}"}
-            
+            # Micro-Timing 체크는 Scanner(opportunity_watcher.py)로 이동됨
+
             # 3. [Fast Hands] LLM 점수 기반 즉시 선정 (동기 호출 제거)
             # candidates는 이미 buy-scanner에서 필터링되어 넘어옴 (is_tradable=True인 경우만)
             # 하지만 안전을 위해 점수 역순 정렬 후 최고점자 선정
@@ -164,7 +157,25 @@ class BuyExecutor:
             current_score = selected_candidate.get('llm_score', 0)
             is_tradable = selected_candidate.get('is_tradable', False)
             trade_tier = selected_candidate.get('trade_tier') or ("TIER1" if is_tradable else "TIER2")
-            
+
+            # [Safety Net] 최소 품질 hard floor — 데이터 오류/Redis 불일치 방어
+            ABSOLUTE_MIN_SCORE = 40
+            if current_score < ABSOLUTE_MIN_SCORE:
+                stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
+                stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
+                logger.warning(f"🚫 [Hard Floor] {stock_name}({stock_code}) score={current_score} < {ABSOLUTE_MIN_SCORE} → 매수 거부 (데이터 오류 의심)")
+                return {"status": "skipped", "reason": f"Score below hard floor ({current_score} < {ABSOLUTE_MIN_SCORE})"}
+
+            # [Shadow Mode] 기존 기준이었으면 차단됐을 종목 로깅 (1~2주 한정 추적용)
+            # 기존 기준: recon_score_by_regime(STRONG_BULL:58, BULL:62, SIDEWAYS:65, BEAR:70) + MIN_LLM_SCORE(60)
+            _shadow_cutlines = {"STRONG_BULL": 58, "BULL": 62, "SIDEWAYS": 65, "BEAR": 70}
+            _shadow_min = _shadow_cutlines.get(market_regime, 62)
+            _shadow_min_llm = max(_shadow_min, 60)  # 기존 MIN_LLM_SCORE=60과 비교
+            if current_score < _shadow_min_llm:
+                _s_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
+                _s_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
+                logger.info(f"👻 [Shadow] 기존 기준이면 차단: {_s_name}({_s_code}) score={current_score} < {_shadow_min_llm} (regime={market_regime})")
+
             # [Phase 3] Realtime Source 빠른 경로 (OpportunityWatcher에서 온 신호)
             signal_source = scan_result.get('source', 'buy-scanner')
             if signal_source == 'opportunity_watcher':
@@ -172,7 +183,9 @@ class BuyExecutor:
                 logger.info(f"⚡ [Realtime] OpportunityWatcher 신호 → LLM 점수 체크 스킵 (score={current_score})")
                 # 하지만 llm_scored_at stale 체크는 수행
                 
-            # [Phase 3] llm_scored_at stale 체크 (준호 제안: 1영업일 이상 지난 점수는 보수적 처리)
+            # [Phase 3] Stale Score → 포지션 배율 축소 (차단 아님)
+            # Scout에서 이미 점수 기반 필터링 완료 → Executor에서는 포지션 관리만 수행
+            stale_multiplier = 1.0
             stock_info_data = selected_candidate.get('stock_info') or {}
             llm_scored_at = stock_info_data.get('llm_scored_at') or selected_candidate.get('llm_scored_at')
             if llm_scored_at:
@@ -180,80 +193,27 @@ class BuyExecutor:
                     scored_dt = datetime.fromisoformat(llm_scored_at.replace('Z', '+00:00'))
                     now_utc = datetime.now(timezone.utc)
                     age_hours = (now_utc - scored_dt).total_seconds() / 3600
-                    
-                    # [개선] 영업일 기준 계산 (주말 제외)
+
+                    # 영업일 기준 계산 (주말 제외)
+                    # scored_dt 다음 날부터 now_utc 날짜까지 평일 수 계산
+                    # 금요일 Scout → 월요일 Scanner = 1영업일 (정상, 주말 때문)
                     business_days = 0
-                    current_date = scored_dt.date()
-                    while current_date < now_utc.date():
-                        if current_date.weekday() < 5:  # 월(0)~금(4)
+                    current_date = scored_dt.date() + timedelta(days=1)  # 스코어링 다음 날부터 카운트
+                    while current_date <= now_utc.date():
+                        if current_date.weekday() < 5:
                             business_days += 1
                         current_date += timedelta(days=1)
-                    
-                    if business_days >= 1:
-                        # 영업일 기준: 1일 경과 시 -5점, 2일 이상 시 -10점
-                        penalty = 5 if business_days == 1 else 10
-                        current_score = max(0, current_score - penalty)
-                        logger.warning(f"⚠️ [Stale Score] {business_days}영업일 경과 ({age_hours:.1f}시간) → {penalty}점 감점 (현재: {current_score}점)")
+
+                    # business_days >= 2: 2영업일 이상 경과 (예: 수요일 Scout → 금요일 신호)
+                    # business_days == 1: 직전 영업일 스코어 (예: 금요일 Scout → 월요일 신호) → 정상
+                    if business_days >= 3:
+                        stale_multiplier = 0.3
+                        logger.warning(f"⚠️ [STALE_ENTRY] {business_days}영업일 경과 ({age_hours:.1f}시간) → 포지션 배율 {stale_multiplier}")
+                    elif business_days >= 2:
+                        stale_multiplier = 0.5
+                        logger.warning(f"⚠️ [STALE_ENTRY] {business_days}영업일 경과 ({age_hours:.1f}시간) → 포지션 배율 {stale_multiplier}")
                 except Exception as e:
                     logger.debug(f"llm_scored_at 파싱 실패: {e}")
-            
-            # 점수 확인 (환경변수로 설정 가능, 기본값 70점 - B등급 이상만 매수)
-            # Tier2(Scout Judge 미통과) 경로는 별도 최소 점수 적용 (품질 상향)
-            base_min_llm_score = self.config.get_int('MIN_LLM_SCORE', default=60)
-            tier2_min_llm_score = self.config.get_int('MIN_LLM_SCORE_TIER2', default=65)
-            
-            # [Dynamic RECON Score] 시장 국면별 RECON 기준 점수 적용
-            recon_score_by_regime = {
-                MarketRegimeDetector.REGIME_STRONG_BULL: 58,
-                MarketRegimeDetector.REGIME_BULL: 62,
-                MarketRegimeDetector.REGIME_SIDEWAYS: 65,
-                MarketRegimeDetector.REGIME_BEAR: 70,
-            }
-            # 시장 국면에 따른 동적 점수 사용 (DB 오버라이드 없음)
-            recon_min_llm_score = recon_score_by_regime.get(market_regime, tier2_min_llm_score)
-            logger.info(f"📊 [Dynamic RECON] 시장 국면({market_regime}) → RECON 기준: {recon_min_llm_score}점")
-
-            if trade_tier == "TIER1":
-                min_llm_score = base_min_llm_score
-            elif trade_tier == "RECON":
-                min_llm_score = recon_min_llm_score
-            else:
-                # TIER2: 비주력 종목도 강세장(STRONG_BULL)에서는 적극 매수 (RECON 기준 적용)
-                # 그 외에는 기본 TIER2 점수(65)와 비교하여 더 유연한 쪽 적용 가능하나, 여기서는 단순화
-                if market_regime == MarketRegimeDetector.REGIME_STRONG_BULL:
-                     # 강세장 버프: Tier 2 기준을 58점까지 획기적으로 완화 (물 들어올 때 노 젓기)
-                     min_llm_score = 58 
-                elif market_regime == MarketRegimeDetector.REGIME_BULL:
-                     # 상승장 버프: 62점까지 완화
-                     min_llm_score = 62
-                else:
-                     min_llm_score = tier2_min_llm_score
-
-            if current_score < min_llm_score: 
-                # [Strategy Refinement] Hunter Score 90+ (Super Prime) Check
-                # 스캐너에서 Hunter Score가 높아 추천된 경우, Executor의 최소 점수 기준을 우회
-                stock_info_data = selected_candidate.get('stock_info') or {}
-                metadata = stock_info_data.get('llm_metadata') or {}
-                hunter_score = metadata.get('hunter_score')
-                
-                # Fallback: 키 위치가 다를 경우 대비
-                if hunter_score is None:
-                    hunter_score = selected_candidate.get('llm_metadata', {}).get('hunter_score')
-                
-                try:
-                    hunter_score_val = float(hunter_score)
-                except (ValueError, TypeError):
-                    hunter_score_val = 0.0
-                
-                is_super_prime = hunter_score_val >= 90.0
-
-                if is_super_prime:
-                     logger.info(f"🔓 [Super Prime] Hunter Score({hunter_score_val}) 우수로 점수 미달({current_score} < {min_llm_score}) 예외 통과")
-                else:
-                    c_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
-                    tier_label = trade_tier
-                    logger.warning(f"⚠️ 최고점 후보({c_name}) {tier_label} 점수({current_score})가 기준({min_llm_score}점) 미달입니다. 매수 건너뜀.")
-                    return {"status": "skipped", "reason": f"Low LLM Score: {current_score} < {min_llm_score}"}
 
             stock_code = selected_candidate.get('stock_code', selected_candidate.get('code'))
             stock_name = selected_candidate.get('stock_name', selected_candidate.get('name'))
@@ -429,6 +389,9 @@ class BuyExecutor:
                 
                 # 상관관계 조정 적용
                 position_size_ratio *= correlation_adjustment
+
+                # Stale Score 배율 적용 (오래된 점수 → 포지션 축소, 차단 아님)
+                position_size_ratio *= stale_multiplier
                 
                 position_size = int(base_quantity * position_size_ratio)
                 
@@ -637,6 +600,8 @@ class BuyExecutor:
                 except Exception as e:
                     logger.warning(f"⚠️ 텔레그램 알림 발송 실패: {e}")
             
+            if stale_multiplier < 1.0:
+                logger.info(f"📋 [STALE_ENTRY] 매수 완료 (stale_mult={stale_multiplier}) — 성과 추적 대상")
             logger.info("=== 매수 처리 완료 ===")
             return {
                 "status": "success",
@@ -646,7 +611,9 @@ class BuyExecutor:
                 "quantity": position_size,
                 "price": current_price,
                 "total_amount": position_size * current_price,
-                "dry_run": dry_run
+                "dry_run": dry_run,
+                "stale_entry": stale_multiplier < 1.0,
+                "stale_multiplier": stale_multiplier,
             }
             
     def _check_safety_constraints(self, session) -> dict:
@@ -734,83 +701,6 @@ class BuyExecutor:
             logger.error(f"분산 검증 오류: {e}", exc_info=True)
             # 에러 시 보수적으로 False 반환
             return False, {'reason': str(e)}
-
-    def _validate_entry_timing(self, session, candidates: list) -> dict:
-        """
-        [Micro-Timing] 매수 진입 타이밍 검증 (5분봉 패턴 분석)
-        대상: 리스트의 첫 번째 후보 (최우선 순위)
-        """
-        try:
-            if not candidates:
-                return {"allowed": True, "reason": "No candidates"}
-                
-            # 최우선 후보만 체크 (어차피 하나만 사니까)
-            # 점수순 정렬은 3번 단계에서 하지만, 여기서 미리 살짝 봄
-            top_candidate = max(candidates, key=lambda x: x.get('llm_score', 0))
-            stock_code = top_candidate.get('stock_code', top_candidate.get('code'))
-            stock_name = top_candidate.get('stock_name', top_candidate.get('name'))
-            
-            from sqlalchemy import select
-            
-            # 최근 2개 5분봉 조회 (완성봉 기준)
-            # 현재 시간 기준 15분 이내 데이터만 유효
-             
-            # 20분 전 ~ 현재
-            check_start_time = datetime.now() - timedelta(minutes=20)
-            
-            query = select(StockMinutePrice).where(
-                StockMinutePrice.stock_code == stock_code,
-                StockMinutePrice.price_time >= check_start_time
-            ).order_by(StockMinutePrice.price_time.desc()).limit(2)
-            
-            rows = session.execute(query).scalars().all()
-            
-            if len(rows) < 2:
-                # 데이터 부족 시 Pass (데이터 수집 지연일 수 있으나, 안전하게 Pass or Fail? Plan says 'Pass if stale')
-                return {"allowed": True, "reason": "Insufficient minute data (passed safety)"}
-            
-            # rows[0]: 최신봉 (직전 5분), rows[1]: 이전봉
-            curr = rows[0]
-            prev = rows[1]
-            
-            # Data Freshness Check (15분 이상 지연되면 무시하고 진행)
-            time_diff = (datetime.now() - curr.price_time).total_seconds()
-            if time_diff > 900: # 15분
-                return {"allowed": True, "reason": "Data stale (>15m), skipping check"}
-
-            # --- Pattern 1: Shooting Star (유성형) ---
-            # 윗꼬리가 몸통의 2배 이상이고, 양봉/음봉 무관하게 고점에서 발생 시 하락 반전 신호
-            body = abs(curr.close_price - curr.open_price)
-            upper_wick = curr.high_price - max(curr.close_price, curr.open_price)
-            
-            # 몸통이 너무 작으면(도지) 노이즈일 수 있으므로 최소 가격의 0.1% 이상일 때만 체크? 
-            # 아니면 도지형 Shooting Star도 강력하므로 그냥 둠.
-            
-            if body > 0 and upper_wick > (body * 2.0):
-                 # 추가조건: 거래량이 평소보다 좀 터졌는지? (선택)
-                 return {"allowed": False, "reason": f"{stock_name}({stock_code}) Shooting Star detected (Wick/Body={upper_wick/body:.1f})"}
-            
-            # --- Pattern 2: Bearish Engulfing (하락 장악형) ---
-            # 1. 이전 봉: 양봉
-            # 2. 현재 봉: 음봉
-            # 3. 현재 시가 >= 이전 종가 AND 현재 종가 <= 이전 시가 (몸통이 이전 몸통을 감쌈)
-            # 4. 거래량: 현재 > 이전 (매도세 압도)
-            
-            is_prev_bull = prev.close_price > prev.open_price
-            is_curr_bear = curr.close_price < curr.open_price
-            
-            if is_prev_bull and is_curr_bear:
-                engulfing = (curr.open_price >= prev.close_price) and (curr.close_price <= prev.open_price)
-                vol_confirm = curr.volume > prev.volume
-                
-                if engulfing and vol_confirm:
-                     return {"allowed": False, "reason": f"{stock_name}({stock_code}) Bearish Engulfing detected"}
-
-            return {"allowed": True, "reason": "OK"}
-            
-        except Exception as e:
-            logger.warning(f"Micro-Timing check failed: {e}")
-            return {"allowed": True, "reason": "Check Error (Fail-Safe)"}
 
     def _record_trade(
         self,

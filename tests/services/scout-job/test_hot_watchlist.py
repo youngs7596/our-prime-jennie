@@ -178,30 +178,33 @@ class TestRefilterHotWatchlistByRegime(unittest.TestCase):
             mock_save.assert_not_called()
 
 
-    def test_refilter_bear_higher_threshold(self):
-        """BEAR 전환 시 더 높은 threshold 적용"""
+    def test_refilter_regime_change_updates_metadata(self):
+        """국면 전환 시 메타데이터만 갱신 (커트라인 제거됨)"""
         with patch('shared.watchlist.get_redis_connection') as mock_get_redis, \
              patch('shared.watchlist.get_hot_watchlist') as mock_get_list, \
              patch('shared.watchlist.save_hot_watchlist') as mock_save:
-            
+
             mock_r = MagicMock()
             mock_get_redis.return_value = mock_r
             mock_get_list.return_value = {
                 'stocks': [
                     {'code': '005930', 'llm_score': 72, 'name': '삼성전자', 'is_tradable': True},
-                    {'code': '000660', 'llm_score': 65, 'name': 'SK하이닉스', 'is_tradable': True},
+                    {'code': '000660', 'llm_score': 55, 'name': 'SK하이닉스', 'is_tradable': True},
                 ],
                 'market_regime': 'BULL',
-                'score_threshold': 62
+                'score_threshold': 0
             }
             mock_save.return_value = True
-            
+
             scout_cache = load_scout_cache_module()
-            result = scout_cache.refilter_hot_watchlist_by_regime('BEAR')  # BEAR = 70점 기준
-            
+            result = scout_cache.refilter_hot_watchlist_by_regime('BEAR')
+
             self.assertTrue(result)
-            # save_hot_watchlist 호출 확인
-            # mock_save.assert_called_once()
+            # 커트라인 없이 전체 종목이 유지되어야 함
+            mock_save.assert_called_once()
+            call_kwargs = mock_save.call_args
+            saved_stocks = call_kwargs[1].get('stocks', call_kwargs[0][0] if call_kwargs[0] else [])
+            self.assertEqual(len(saved_stocks), 2)  # 커트라인 없으므로 2개 모두 유지
     
 
     def test_refilter_empty_watchlist(self):

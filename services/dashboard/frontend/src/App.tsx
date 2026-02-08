@@ -1,10 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
-import { useAuthStore } from '@/store/authStore'
 
 // Lazy load pages for code splitting
-const LoginPage = lazy(() => import('@/pages/Login').then(m => ({ default: m.LoginPage })))
+// 로그인 페이지 제거됨 - Cloudflare Access로 외부 인증 처리
 const OverviewPage = lazy(() => import('@/pages/Overview').then(m => ({ default: m.OverviewPage })))
 const PortfolioPage = lazy(() => import('@/pages/Portfolio').then(m => ({ default: m.PortfolioPage })))
 const ScoutPage = lazy(() => import('@/pages/Scout').then(m => ({ default: m.ScoutPage })))
@@ -22,34 +21,13 @@ function PageLoader() {
   )
 }
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
-  const checkAuth = useAuthStore((state) => state.checkAuth)
-
-  if (!isAuthenticated || !checkAuth()) {
-    return <Navigate to="/login" replace />
-  }
-
-  return <>{children}</>
-}
-
 function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-
-          {/* Protected Routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
+          {/* 모든 라우트 인증 없이 접근 가능 */}
+          <Route path="/" element={<Layout />}>
             <Route index element={<OverviewPage />} />
             <Route path="portfolio" element={<PortfolioPage />} />
             <Route path="scout" element={<ScoutPage />} />
@@ -59,7 +37,7 @@ function App() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
-          {/* Fallback */}
+          {/* Fallback - /login 포함 모든 경로를 / 로 리다이렉트 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

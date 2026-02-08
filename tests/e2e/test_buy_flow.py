@@ -125,11 +125,11 @@ class TestBuyFlow:
         assert result['status'] == 'skipped'
         assert 'Emergency Stop' in result['reason']
 
-    def test_low_llm_score_skipped(
+    def test_hard_floor_rejects_low_score(
         self, kis_server, mock_config, buy_executor_class, e2e_db, mock_redis_connection, mocker
     ):
         """
-        Test: Candidates with LLM score below threshold are skipped.
+        Test: Candidates with hybrid_score below hard floor (40) are rejected.
         """
         mocker.patch('shared.database.get_market_regime_cache', return_value={'regime': 'BULL'})
         mocker.patch('shared.db.repository.get_today_buy_count', return_value=0)
@@ -141,18 +141,18 @@ class TestBuyFlow:
 
         executor = buy_executor_class(kis=mock_kis, config=mock_config)
 
-        # Low score candidate
+        # Score below hard floor (40)
         scan_result = create_scan_result(
             stock_code="005930",
             stock_name="삼성전자",
-            llm_score=45.0,  # Below threshold
+            llm_score=35.0,  # Below hard floor of 40
             trade_tier="TIER1"
         )
 
         result = executor.process_buy_signal(scan_result, dry_run=False)
 
         assert result['status'] == 'skipped'
-        assert 'LLM Score' in result['reason']
+        assert 'hard floor' in result['reason'].lower()
 
     def test_already_held_stock_skipped(
         self, kis_server, mock_config, buy_executor_class, e2e_db, mock_redis_connection, mocker

@@ -38,11 +38,6 @@ class MockConfig:
             'MAX_BUY_COUNT_PER_DAY': 5,
             'MAX_PORTFOLIO_SIZE': 10,
             
-            # LLM Scores
-            'MIN_LLM_SCORE': 60,
-            'MIN_LLM_SCORE_TIER2': 65,
-            'MIN_LLM_SCORE_RECON': 65,
-            
             # Diversification
             'MAX_SECTOR_PCT': 30.0,
             'MAX_POSITION_VALUE_PCT': 10.0,

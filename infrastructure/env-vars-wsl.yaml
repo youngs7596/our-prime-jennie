@@ -1,6 +1,6 @@
 #
 # my-prime-jennie 환경 변수 (WSL2 + Docker Compose)
-# Cloud Run 없이 로컬/WSL2에서 실행하기 위한 기본값입니다.
+# 로컬/WSL2에서 실행하기 위한 기본값입니다.
 
 # 1. 공통 런타임 설정
 TRADING_MODE: "REAL"
@@ -30,40 +30,27 @@ SECRET_ID_CLAUDE_API_KEY: "claude-api-key"
 KIS_TOKEN_FILE_PATH: "/tmp/kis_token.json"
 KIS_ACCOUNT_SUFFIX: "01"
 
-# 6. 하락장 대응 (LLM 기반)
+# 6. 하락장 대응
 ALLOW_BEAR_TRADING: "true"
 MIN_LLM_CONFIDENCE_BEAR: "80"
-BEAR_POSITION_RATIO: "0.2"
-BEAR_STOP_LOSS_ATR_MULT: "2.0"
-BEAR_FIRST_TP_PCT: "0.03"
-BEAR_PARTIAL_CLOSE_RATIO: "0.5"
-BEAR_VOLUME_SPIKE_MULTIPLIER: "1.5"
 
-# 7. Gateway / Redis / Chroma (network_mode: host용 127.0.0.1)
+# 7. Gateway / Redis (network_mode: host용 127.0.0.1)
 USE_KIS_GATEWAY: "true"
 KIS_GATEWAY_URL: "http://127.0.0.1:8080"
 USE_GATEWAY_AUTH: "false"
 USE_DISTRIBUTED_AUTH: "false"
 REDIS_URL: "redis://127.0.0.1:6379"
-CHROMA_SERVER_HOST: "127.0.0.1"
-CHROMA_PORT: "8000"
 CIRCUIT_BREAKER_FAIL_MAX: "20"
 CIRCUIT_BREAKER_TIMEOUT: "60"
 
 # 8. RabbitMQ 설정
 USE_RABBITMQ: "true"
-USE_CLOUD_TASKS: "false"
 RABBITMQ_URL: "amqp://guest:guest@127.0.0.1:5672/"
 RABBITMQ_QUEUE_SELL_ORDERS: "sell-orders-real"
 RABBITMQ_QUEUE_BUY_SIGNALS: "buy-signals-real"
 
-# 9. 뉴스 감성 분석 설정
-MAX_SENTIMENT_DOCS_PER_RUN: "40"
-SENTIMENT_COOLDOWN_SECONDS: "0.2"
-
 # 10. MariaDB 설정 (비밀번호는 secrets.json에서 로드)
 DB_TYPE: "MARIADB"
-# Docker Desktop 제거 후 WSL 호스트로 직접 연결
 MARIADB_HOST: "127.0.0.1"
 MARIADB_PORT: "3307"
 # MARIADB_USER, MARIADB_PASSWORD는 secrets.json의 mariadb-user, mariadb-password 사용
@@ -81,10 +68,6 @@ SCHEDULER_SERVICE_URL: "http://127.0.0.1:8095"  # network_mode: host용
 SCHEDULER_DB_PATH: "/app/data/scheduler.db"
 SCHEDULER_TICK_SECONDS: "5"
 SCHEDULER_TIMEZONE: "Asia/Seoul"
-SCHEDULER_QUEUE_BUY_SCANNER: "real.jobs.buy-scanner"
-ENABLE_BUY_SCANNER_JOB_WORKER: "true"
-SCHEDULER_QUEUE_PRICE_MONITOR: "real.jobs.price-monitor"
-ENABLE_PRICE_MONITOR_JOB_WORKER: "true"
 SCHEDULER_QUEUE_SCOUT_JOB: "real.jobs.scout"
 ENABLE_SCOUT_JOB_WORKER: "true"
 SCHEDULER_SCOUT_JOB_ID: "scout-daily"  # jobs 테이블의 job_id와 일치해야 함
@@ -94,30 +77,21 @@ ENABLE_BEAR_ENTRY_BLOCK: "true"           # BEAR/STRONG_BEAR 시장 진입 차�
 ENABLE_VOLUME_BREAKOUT_1MIN: "false"      # VOLUME_BREAKOUT_1MIN 비활성화 (수익률 -0.34%)
 STOPLOSS_COOLDOWN_DAYS: "5"               # 손절 종목 재진입 방지 (5거래일 ≈ 7캘린더일)
 
-# 13. 매수 기준 점수
-# - Tier1(Scout Judge 통과): 60점 이상
-# - Tier2(Scout Judge 미통과): 65점 이상 + 복합 조건(3/4) 통과
-MIN_LLM_SCORE: "60"
-MIN_LLM_SCORE_TIER2: "65"
+# 13. Watchlist 크기 제한 (Scout → Hot Watchlist)
+# 하류 Scanner(9개 Risk Gate) + Executor(20개 필터)가 충분히 걸러내므로 넉넉하게 설정
+MAX_WATCHLIST_SIZE: "20"
 
-# 14. Scout Job LLM 최적화 설정
-#  # [Scout] LLM 실행 간격 (분) -> 4시간으로 변경
-SCOUT_MAX_CANDIDATES_PHASE2: "5"        # Phase 2 진입 종목 수 제한
-SCOUT_LLM_MAX_WORKERS: "4"                  # LLM 동시 호출 최대 수 (GPT-OSS:20B 속도 최적화)
+# 14. Scout Job LLM 설정
 TIER_REASONING_PROVIDER: "deepseek_cloud"   # [CloudFailover] OpenRouter → DeepSeek → Ollama Cloud
 TIER_THINKING_PROVIDER: "deepseek_cloud"    # [CloudFailover] OpenRouter → DeepSeek → Ollama Cloud
-TIER_FAST_PROVIDER: "ollama"                # [Sentiment] Switch to Local for zero cost
+TIER_FAST_PROVIDER: "ollama"                # [Sentiment] Local vLLM (zero cost)
 LOCAL_MODEL_FAST: "exaone3.5:7.8b"          # [News] LG Exaone 3.5 (Best for Korean Nuance & Speed)
 OLLAMA_NUM_PARALLEL: "2"                    # [Optimization] Batch Priority
-# LLM_FLASH_MODEL_NAME: "gemini-2.5-flash"  # [Config] Disabled for Local switch
-SCOUT_PHASE2_MAX_ENTRIES: "25"              # Phase 2 진입 최대 종목 수 (최종 15~20개 목표)
 
-# 16. Scout Universe Configuration (LLM Cost Control)
+# 15. Scout Universe Configuration
 SCOUT_UNIVERSE_SIZE: "200"
 ENABLE_NEWS_ANALYSIS: "true"
-SCOUT_V5_ENABLED: "true"  # 하이브리드 스코어링 활성화
-FACT_CHECK_ALERT_ENABLED: "true"  # LLM 환각 탐지 시 Telegram 알림 활성화
-ENABLE_AI_AUDITOR: "false" # [Config] Disable Cloud AI Verification (User Request)
+SCOUT_V5_ENABLED: "true"                   # 하이브리드 스코어링 활성화
 
 ENABLE_STARTUP_ONESHOT: "false"
 AIRFLOW_FERNET_KEY=4g8yR8W14v5coc3o9xXA-yNcn4x5a8QFk57fbARQNtU=

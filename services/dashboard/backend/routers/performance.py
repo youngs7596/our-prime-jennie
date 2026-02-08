@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Optional
 from enum import Enum
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 
 import sys
@@ -120,19 +120,11 @@ def get_date_range(preset: Optional[PeriodPreset], start_date: Optional[date], e
     return start_date, end_date or today
 
 
-# JWT 인증 의존성 (main.py에서 동적 로드)
-def _get_verify_token():
-    """JWT 토큰 검증 의존성 반환 (lazy import로 circular dependency 방지)"""
-    from main import verify_token
-    return verify_token
-
-
 @router.get("", response_model=PerformanceResponse)
 async def get_performance(
     preset: Optional[PeriodPreset] = Query(None, description="기간 프리셋 (today/week/month/year/all)"),
     start_date: Optional[date] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="종료일 (YYYY-MM-DD)"),
-    _payload: dict = Depends(_get_verify_token())
 ):
     """
     투자 성과 조회 API
@@ -167,9 +159,7 @@ async def get_performance(
 
 
 @router.get("/summary")
-async def get_performance_summary(
-    _payload: dict = Depends(_get_verify_token())
-):
+async def get_performance_summary():
     """
     간단한 성과 요약 (Overview 페이지용)
     

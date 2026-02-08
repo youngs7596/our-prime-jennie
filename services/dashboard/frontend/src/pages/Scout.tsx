@@ -2,13 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Brain,
   Target,
-  Scale,
-  Gavel,
   CheckCircle2,
   Clock,
   TrendingUp,
   TrendingDown,
   Sparkles,
+  Calculator,
+  MessageSquare,
+  Filter,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { scoutApi, watchlistApi } from '@/lib/api'
@@ -19,27 +20,18 @@ import {
   cn,
 } from '@/lib/utils'
 
-const phaseIcons = [Target, Scale, Gavel]
-const phaseNames = ['Hunter Scout', 'Bull vs Bear Debate', 'Final Judge']
-const phaseDescriptions = [
-  'gpt-oss:20b (Local LLM)로 정밀한 1차 필터링',
-  'gpt-oss:20b로 Bull vs Bear 심층 토론',
-  'gpt-oss:20b로 최종 의사결정 및 등급 부여',
-]
-const phaseLLMs = ['gpt-oss:20b', 'gpt-oss:20b', 'gpt-oss:20b']
-
 export function ScoutPage() {
   const { data: status } = useQuery({
     queryKey: ['scout-status'],
     queryFn: scoutApi.getStatus,
-    refetchInterval: 30000, // 30초 (5초 → 30초, 83% 감소)
+    refetchInterval: 30000,
     staleTime: 15000,
   })
 
   const { data: results } = useQuery({
     queryKey: ['scout-results'],
     queryFn: scoutApi.getResults,
-    refetchInterval: 60000, // 1분 (30초 → 1분)
+    refetchInterval: 60000,
     staleTime: 30000,
   })
 
@@ -60,15 +52,15 @@ export function ScoutPage() {
             <Brain className="w-8 h-8 text-muted-foreground" />
             <div>
               <h1 className="text-2xl font-semibold text-white">
-                Scout-Debate-Judge Pipeline
+                Unified Analyst Pipeline
               </h1>
               <p className="text-xs text-blue-400 font-medium">
-                The Slow Brain of Prime Jennie
+                Quant Scorer v2 + 1-Pass LLM Analyst
               </p>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            3단계 Multi-Agent LLM이 신중하게 종목을 선별합니다 •
+            정량 분석(Quant) + AI 정성 분석(LLM)을 결합한 하이브리드 종목 선별 •
             <span className="text-blue-400 ml-1">1시간마다 시장 상황 재평가</span>
           </p>
         </div>
@@ -85,12 +77,12 @@ export function ScoutPage() {
         )}
       </div>
 
-      {/* Pipeline Visualization */}
+      {/* Pipeline Visualization - 2 Steps */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-sm font-medium">
             <Sparkles className="w-4 h-4 text-muted-foreground" />
-            3-Phase LLM Pipeline
+            Unified Analyst Pipeline
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -98,88 +90,144 @@ export function ScoutPage() {
             {/* Connection Line */}
             <div className="absolute top-10 left-0 right-0 h-px bg-white/10" />
 
-            {/* Phases */}
-            <div className="grid grid-cols-3 gap-3 relative">
-              {[1, 2, 3].map((phase) => {
-                const PhaseIcon = phaseIcons[phase - 1]
-                const isActive = status?.phase === phase
-                const isComplete = status?.phase > phase
-                const isPending = status?.phase < phase
+            {/* Steps */}
+            <div className="grid grid-cols-2 gap-6 relative">
+              {/* Step 1: Quant Scorer */}
+              {(() => {
+                const phase = status?.phase || 0
+                const isActive = phase === 1
+                const isComplete = phase > 1
 
                 return (
                   <div
-                    key={phase}
                     className={cn(
-                      'relative p-4 rounded-lg border transition-all',
+                      'relative p-5 rounded-lg border transition-all',
                       isActive && 'border-blue-500/50 bg-blue-500/5',
                       isComplete && 'border-green-500/30 bg-green-500/5',
-                      isPending && 'border-white/5 bg-white/[0.02]'
+                      !isActive && !isComplete && 'border-white/5 bg-white/[0.02]'
                     )}
                   >
-                    {/* Phase Number Badge */}
                     <div
                       className={cn(
                         'absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center font-medium text-xs',
                         isActive && 'bg-blue-500 text-white',
                         isComplete && 'bg-green-500 text-white',
-                        isPending && 'bg-white/10 text-muted-foreground'
+                        !isActive && !isComplete && 'bg-white/10 text-muted-foreground'
                       )}
                     >
-                      {isComplete ? <CheckCircle2 className="w-4 h-4" /> : phase}
+                      {isComplete ? <CheckCircle2 className="w-4 h-4" /> : 1}
                     </div>
 
-                    {/* Content */}
                     <div className="flex flex-col items-center text-center">
                       <div
                         className={cn(
                           'w-12 h-12 rounded-lg flex items-center justify-center mb-3',
                           isActive && 'bg-blue-500/10',
                           isComplete && 'bg-green-500/10',
-                          isPending && 'bg-white/5'
+                          !isActive && !isComplete && 'bg-white/5'
                         )}
                       >
-                        <PhaseIcon
+                        <Calculator
                           className={cn(
                             'w-6 h-6',
                             isActive && 'text-blue-400',
                             isComplete && 'text-green-400',
-                            isPending && 'text-muted-foreground'
+                            !isActive && !isComplete && 'text-muted-foreground'
                           )}
                         />
                       </div>
 
-                      <h3 className="text-sm font-medium mb-1">{phaseNames[phase - 1]}</h3>
-                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                        {phaseDescriptions[phase - 1]}
+                      <h3 className="text-sm font-medium mb-1">Quant Scorer v2</h3>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        코드 기반 정량 분석 (비용 $0)
                       </p>
 
-                      {/* LLM Badge */}
-                      <div className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-muted-foreground">
-                        {phaseLLMs[phase - 1]}
+                      <div className="flex flex-wrap gap-1 justify-center mb-3">
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
+                          모멘텀 20
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
+                          품질 20
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
+                          가치 20
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs text-muted-foreground">
+                          수급 20
+                        </span>
                       </div>
 
-                      {/* Stats */}
-                      <div className="mt-3 text-xs">
-                        {phase === 1 && (
-                          <span className={cn(isActive && 'text-blue-400', isComplete && 'text-green-400')}>
-                            {status?.passed_phase1 || 0}개 통과
-                          </span>
-                        )}
-                        {phase === 2 && (
-                          <span className={cn(isActive && 'text-blue-400', isComplete && 'text-green-400')}>
-                            {status?.passed_phase2 || 0}개 토론
-                          </span>
-                        )}
-                        {phase === 3 && (
-                          <span className={cn(isActive && 'text-blue-400', isComplete && 'text-green-400')}>
-                            {status?.final_selected || 0}개 선정
-                          </span>
-                        )}
-                      </div>
+                      <span className={cn('text-xs', isActive && 'text-blue-400', isComplete && 'text-green-400')}>
+                        {status?.passed_phase1 || 0}개 통과
+                      </span>
                     </div>
                   </div>
                 )
-              })}
+              })()}
+
+              {/* Step 2: Unified Analyst */}
+              {(() => {
+                const phase = status?.phase || 0
+                const isActive = phase >= 2 && isRunning
+                const isComplete = phase >= 2 && !isRunning
+
+                return (
+                  <div
+                    className={cn(
+                      'relative p-5 rounded-lg border transition-all',
+                      isActive && 'border-blue-500/50 bg-blue-500/5',
+                      isComplete && 'border-green-500/30 bg-green-500/5',
+                      !isActive && !isComplete && 'border-white/5 bg-white/[0.02]'
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center font-medium text-xs',
+                        isActive && 'bg-blue-500 text-white',
+                        isComplete && 'bg-green-500 text-white',
+                        !isActive && !isComplete && 'bg-white/10 text-muted-foreground'
+                      )}
+                    >
+                      {isComplete ? <CheckCircle2 className="w-4 h-4" /> : 2}
+                    </div>
+
+                    <div className="flex flex-col items-center text-center">
+                      <div
+                        className={cn(
+                          'w-12 h-12 rounded-lg flex items-center justify-center mb-3',
+                          isActive && 'bg-blue-500/10',
+                          isComplete && 'bg-green-500/10',
+                          !isActive && !isComplete && 'bg-white/5'
+                        )}
+                      >
+                        <MessageSquare
+                          className={cn(
+                            'w-6 h-6',
+                            isActive && 'text-blue-400',
+                            isComplete && 'text-green-400',
+                            !isActive && !isComplete && 'text-muted-foreground'
+                          )}
+                        />
+                      </div>
+
+                      <h3 className="text-sm font-medium mb-1">Unified Analyst</h3>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        1-Pass LLM 분석 (deepseek_cloud)
+                      </p>
+
+                      <div className="flex flex-wrap gap-1 justify-center mb-3">
+                        <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-xs font-mono text-muted-foreground">
+                          CloudFailover
+                        </span>
+                      </div>
+
+                      <span className={cn('text-xs', isActive && 'text-blue-400', isComplete && 'text-green-400')}>
+                        {status?.final_selected || 0}개 선정
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
@@ -223,11 +271,11 @@ export function ScoutPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <CheckCircle2 className="w-4 h-4 text-green-400" />
-              선정된 종목 (Judge 통과)
+              선정된 종목 (Analyst 통과)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {results?.results?.filter((r: any) => r.selected)?.length === 0 && (
+            {(!results?.results || results?.results?.filter((r: any) => r.selected)?.length === 0) && (
               <p className="text-center text-muted-foreground py-8 text-sm">
                 아직 선정된 종목이 없습니다
               </p>
@@ -264,7 +312,7 @@ export function ScoutPage() {
                           {result.final_score}점
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          최종 점수
+                          하이브리드 점수
                         </p>
                       </div>
                     </div>
@@ -343,60 +391,64 @@ export function ScoutPage() {
         <Card>
           <CardContent className="p-4 text-center">
             <Clock className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
-            <p className="text-xl font-semibold">{status?.total_candidates || 200}</p>
+            <p className="text-xl font-semibold">{status?.total_candidates || 0}</p>
             <p className="text-xs text-muted-foreground">전체 후보</p>
-            <p className="text-xs text-blue-400 mt-1">KOSPI 200</p>
+            <p className="text-xs text-blue-400 mt-1">KOSPI + KOSDAQ</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Filter className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
+            <p className="text-xl font-semibold">{status?.passed_phase1 || 0}</p>
+            <p className="text-xs text-muted-foreground">Quant 통과</p>
+            <p className="text-xs text-muted-foreground mt-1">Smart Skip 필터</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <Brain className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
+            <p className="text-xl font-semibold">{status?.final_selected || 0}</p>
+            <p className="text-xs text-muted-foreground">최종 선정</p>
+            <p className="text-xs text-green-400 mt-1">Watchlist</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <Target className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
-            <p className="text-xl font-semibold">{status?.passed_phase1 || 0}</p>
-            <p className="text-xs text-muted-foreground">Phase 1 통과</p>
-            <p className="text-xs text-muted-foreground mt-1">gpt-oss:20b</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Scale className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
-            <p className="text-xl font-semibold">{status?.passed_phase2 || 0}</p>
-            <p className="text-xs text-muted-foreground">Phase 2 토론</p>
-            <p className="text-xs text-muted-foreground mt-1">Bull vs Bear</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Gavel className="w-5 h-5 mx-auto text-muted-foreground mb-2" />
-            <p className="text-xl font-semibold">{status?.final_selected || 0}</p>
-            <p className="text-xs text-muted-foreground">최종 선정</p>
-            <p className="text-xs text-green-400 mt-1">→ Watchlist</p>
+            <p className="text-xl font-semibold">
+              {status?.total_candidates && status?.final_selected
+                ? ((status.final_selected / status.total_candidates) * 100).toFixed(1)
+                : '0'}%
+            </p>
+            <p className="text-xs text-muted-foreground">선정률</p>
+            <p className="text-xs text-muted-foreground mt-1">전체 대비</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Slow Brain Philosophy */}
+      {/* Architecture Info */}
       <Card className="border-dashed">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                <Brain className="w-5 h-5 text-muted-foreground" />
+                <Calculator className="w-5 h-5 text-muted-foreground" />
               </div>
               <div>
-                <h4 className="text-sm font-medium">Slow Brain</h4>
-                <p className="text-xs text-muted-foreground">신중하게 종목 선별 • UPSERT로 누적 관리</p>
+                <h4 className="text-sm font-medium">Quant Scorer v2</h4>
+                <p className="text-xs text-muted-foreground">잠재력 기반 정량 분석 (비용 $0)</p>
               </div>
             </div>
             <div className="text-center px-4">
-              <p className="text-xs text-muted-foreground">→</p>
+              <p className="text-xs text-muted-foreground">60:40</p>
             </div>
             <div className="flex items-center gap-3">
               <div>
-                <h4 className="text-sm font-medium text-right">Fast Hand</h4>
-                <p className="text-xs text-muted-foreground">가격 변동 시 빠른 체결</p>
+                <h4 className="text-sm font-medium text-right">Unified Analyst</h4>
+                <p className="text-xs text-muted-foreground">1-Pass LLM (deepseek_cloud)</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                <Target className="w-5 h-5 text-muted-foreground" />
+                <MessageSquare className="w-5 h-5 text-muted-foreground" />
               </div>
             </div>
           </div>

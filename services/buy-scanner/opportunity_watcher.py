@@ -662,7 +662,23 @@ class BuyOpportunityWatcher:
             self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
                                           current_rsi, risk_gate_passed, risk_gate_checks, [], None)
             return None
-        
+
+        # [Micro-Timing] 5분봉 패턴 체크 (Executor에서 이동)
+        if self.config.get_bool('ENABLE_MICRO_TIMING', default=True):
+            micro_passed, micro_reason = self._check_micro_timing(recent_bars)
+            risk_gate_checks.append({
+                "name": "Micro-Timing",
+                "passed": micro_passed,
+                "value": micro_reason,
+                "threshold": "No bearish reversal pattern"
+            })
+            if not micro_passed:
+                risk_gate_passed = False
+                logger.info(f"⏳ [{stock_code}] Micro-Timing 차단: {micro_reason}")
+                self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                              current_rsi, risk_gate_passed, risk_gate_checks, [], None)
+                return None
+
         signal_type = None
         signal_reason = ""
         signal_checks = []  # [Logic Observability] 전략별 체크 결과 수집
@@ -1596,7 +1612,43 @@ class BuyOpportunityWatcher:
             return False
         return True
 
-    
+    def _check_micro_timing(self, bars: List[dict]) -> Tuple[bool, str]:
+        """
+        [Micro-Timing] 5분봉 패턴 분석 (Executor에서 이동)
+        Shooting Star, Bearish Engulfing 감지 시 매수 지연
+
+        Args:
+            bars: 최근 1분봉 리스트 (BarAggregator에서 제공)
+
+        Returns:
+            (passed, reason)
+        """
+        if len(bars) < 2:
+            return True, "Insufficient data"
+
+        curr = bars[-1]
+        prev = bars[-2]
+
+        # Pattern 1: Shooting Star (유성형)
+        body = abs(curr['close'] - curr['open'])
+        upper_wick = curr['high'] - max(curr['close'], curr['open'])
+
+        if body > 0 and upper_wick > (body * 2.0):
+            return False, f"Shooting Star (Wick/Body={upper_wick/body:.1f})"
+
+        # Pattern 2: Bearish Engulfing (하락 장악형)
+        is_prev_bull = prev['close'] > prev['open']
+        is_curr_bear = curr['close'] < curr['open']
+
+        if is_prev_bull and is_curr_bear:
+            engulfing = (curr['open'] >= prev['close']) and (curr['close'] <= prev['open'])
+            vol_confirm = curr['volume'] > prev['volume']
+
+            if engulfing and vol_confirm:
+                return False, "Bearish Engulfing detected"
+
+        return True, "OK"
+
     def _set_cooldown(self, stock_code: str) -> None:
         if not self.redis:
             return

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/Button'
 import { systemApi, configApi } from '@/lib/api'
 import { formatRelativeTime, cn } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
-import { useAuthStore } from '@/store/authStore'
+// 인증 비활성화됨 - Cloudflare Access로 외부 인증 처리
 import LogicVisualization from '@/components/LogicVisualization'
 import SuperPrimeVisualization from '@/components/SuperPrimeVisualization'
 
@@ -432,7 +432,6 @@ function WorkflowsTab() {
   const [dags, setDags] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [triggerLoading, setTriggerLoading] = useState<string | null>(null)
-  const { token } = useAuthStore()
 
   useEffect(() => {
     fetchDags()
@@ -441,9 +440,7 @@ function WorkflowsTab() {
   const fetchDags = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/airflow/dags', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await fetch('/api/airflow/dags')
       if (res.ok) {
         const data = await res.json()
         setDags(data)
@@ -460,7 +457,6 @@ function WorkflowsTab() {
     try {
       const res = await fetch(`/api/airflow/dags/${dagId}/trigger`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
         toast.success(`Triggered ${dagId}`)
@@ -556,7 +552,6 @@ function LogsTab() {
   const [selectedService, setSelectedService] = useState('scout-job')
   const [timeRange, setTimeRange] = useState('1h')
   const [loading, setLoading] = useState(false)
-  const { token } = useAuthStore()
 
   useEffect(() => {
     fetchLogs()
@@ -574,8 +569,7 @@ function LogsTab() {
       const startNs = start * 1000000
 
       const res = await fetch(
-        `/api/logs/stream?service=${selectedService}&limit=1000&start=${startNs}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        `/api/logs/stream?service=${selectedService}&limit=1000&start=${startNs}`
       )
       if (res.ok) {
         const data = await res.json()
@@ -723,7 +717,7 @@ function OperationsTab() {
 
   const disableMarketCheck = Array.isArray(configData)
     ? configData.find((c: { key: string; value: boolean }) => c.key === 'DISABLE_MARKET_OPEN_CHECK')
-        ?.value ?? false
+      ?.value ?? false
     : false
 
   return (

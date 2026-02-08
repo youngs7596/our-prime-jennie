@@ -124,17 +124,17 @@ class TestDetectSourceNonSensitiveKeys:
 
     def test_non_sensitive_key_from_env(self, monkeypatch, mock_config_manager, mock_session):
         """일반 키가 env에 있을 때 실제 값 반환"""
-        monkeypatch.setenv("MIN_LLM_SCORE", "75")
+        monkeypatch.setenv("MAX_BUY_COUNT_PER_DAY", "8")
 
         from services.dashboard.backend.routers.configs import _detect_source
 
         with patch('services.dashboard.backend.routers.configs.repository.get_config', return_value=None):
-            result = _detect_source("MIN_LLM_SCORE", mock_config_manager, mock_session)
+            result = _detect_source("MAX_BUY_COUNT_PER_DAY", mock_config_manager, mock_session)
 
-        assert result.key == "MIN_LLM_SCORE"
-        assert result.value == 75
+        assert result.key == "MAX_BUY_COUNT_PER_DAY"
+        assert result.value == 8
         assert result.source == "env"
-        assert result.env_value == "75"
+        assert result.env_value == "8"
         assert result.sensitive is False
 
     def test_non_sensitive_key_from_db(self, monkeypatch, mock_config_manager, mock_session):

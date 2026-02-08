@@ -146,57 +146,40 @@ def get_hot_watchlist() -> Optional[dict]:
 
 def refilter_hot_watchlist_by_regime(new_regime: str) -> bool:
     """
-    시장 국면 변경 시 Hot Watchlist 경량 재필터링 (LLM 재호출 없음)
-    
+    시장 국면 변경 시 Hot Watchlist 국면 정보만 갱신 (LLM 재호출 없음)
+
+    커트라인 제거됨: 점수 기반 필터링 없이 국면 메타데이터만 업데이트.
+    하류 Scanner(Risk Gate) + Executor(포트폴리오 관리)가 충분히 걸러냄.
+
     Args:
         new_regime: 새 시장 국면 (STRONG_BULL, BULL, SIDEWAYS, BEAR)
-    
+
     Returns:
         성공 여부
     """
     try:
-        # 1. 현재 Hot Watchlist 로드
         current = get_hot_watchlist()
         if not current or not current.get('stocks'):
             logger.info("Hot Watchlist가 비어있어 재필터링 불필요")
             return True
-        
+
         old_regime = current.get('market_regime', 'UNKNOWN')
         if old_regime == new_regime:
             logger.info(f"시장 국면 변경 없음 ({new_regime}) - 재필터링 스킵")
             return True
-        
-        # 2. 새 시장 국면별 score threshold
-        recon_score_by_regime = {
-            "STRONG_BULL": 58,
-            "BULL": 62,
-            "SIDEWAYS": 65,
-            "BEAR": 70,
-        }
-        new_threshold = recon_score_by_regime.get(new_regime, 65)
-        old_threshold = current.get('score_threshold', 65)
-        
-        # 3. 새 기준으로 종목 필터링 (llm_score >= new_threshold)
-        original_stocks = current.get('stocks', [])
-        filtered_stocks = [
-            s for s in original_stocks 
-            if s.get('llm_score', 0) >= new_threshold
-        ]
-        
+
+        stocks = current.get('stocks', [])
         # 재정렬 (llm_score 내림차순)
-        filtered_stocks = sorted(filtered_stocks, key=lambda x: x.get('llm_score', 0), reverse=True)
-        
-        logger.info(f"🔄 [Regime Change] {old_regime}({old_threshold}점) → {new_regime}({new_threshold}점)")
-        logger.info(f"   종목 수: {len(original_stocks)} → {len(filtered_stocks)}개")
-        
-        # 4. 새 버전으로 저장 (버저닝 패턴)
-        # 중요: 기존 strategies 정보 등은 그대로 유지됨
+        stocks = sorted(stocks, key=lambda x: x.get('llm_score', 0), reverse=True)
+
+        logger.info(f"🔄 [Regime Change] {old_regime} → {new_regime} (종목 수: {len(stocks)}개, 커트라인 없음)")
+
         return save_hot_watchlist(
-            stocks=filtered_stocks,
+            stocks=stocks,
             market_regime=new_regime,
-            score_threshold=new_threshold
+            score_threshold=0
         )
-        
+
     except Exception as e:
         logger.error(f"Hot Watchlist 재필터링 실패: {e}")
         return False
