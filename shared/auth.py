@@ -149,6 +149,7 @@ def get_secret(secret_id, project_id=None, use_cache=True):
         "gemini-api-key": "GEMINI_API_KEY",
         "openrouter-api-key": "OPENROUTER_API_KEY",
         "deepseek-api-key": "DEEPSEEK_API_KEY",
+        "claude-api-key": "ANTHROPIC_API_KEY",
     }
     
     # 로컬 환경 체크: 환경 변수가 직접 설정되어 있으면 사용

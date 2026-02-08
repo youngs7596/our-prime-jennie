@@ -1093,6 +1093,10 @@ class ClaudeLLMProvider(BaseLLMProvider):
         if not api_key and project_id and claude_api_key_secret:
             from . import auth
             api_key = auth.get_secret(claude_api_key_secret, project_id)
+        # secrets.json 자동 조회 폴백 (인자 없이 호출된 경우)
+        if not api_key:
+            from . import auth
+            api_key = auth.get_secret("claude-api-key")
 
         self.client = self._anthropic_module.Anthropic(api_key=api_key)
         self.fast_model = os.getenv("CLAUDE_FAST_MODEL", "claude-haiku-4-5")

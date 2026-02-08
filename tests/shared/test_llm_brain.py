@@ -434,47 +434,64 @@ class TestV5HybridScoring:
 # ============================================================================
 
 class TestGenerateDailyBriefing:
-    """데일리 브리핑 생성 테스트 (REASONING Tier)"""
-    
-    def test_daily_briefing_success(self, mock_brain, mock_claude_provider):
-        """브리핑 생성 성공"""
+    """데일리 브리핑 생성 테스트 (Claude Opus 4.6 직접 호출)"""
+
+    @patch('shared.llm.ClaudeLLMProvider')
+    def test_daily_briefing_success(self, mock_claude_cls, mock_brain, mock_claude_provider):
+        """브리핑 생성 성공 (Claude Opus 4.6)"""
         market_data = "KOSPI 2500"
         execution_log = "Bought Samsung"
-        
-        # Briefing uses THINKING Tier (Claude)
-        mock_claude_provider.generate_chat.return_value = {
+
+        mock_provider_instance = MagicMock()
+        mock_provider_instance.name = "claude"
+        mock_provider_instance.generate_chat.return_value = {
             'text': "Overall Market: Bullish..."
         }
-        
-        # Mock default model for tokens
-        mock_claude_provider.default_model = 'claude-3-opus'
-        
+        mock_claude_cls.return_value = mock_provider_instance
+
         result = mock_brain.generate_daily_briefing(market_data, execution_log)
-        
+
         assert "Bullish" in result
-        
-        from shared.llm_factory import LLMTier
-        mock_brain._get_provider.assert_any_call(LLMTier.THINKING)
-    
-    def test_daily_briefing_provider_error(self):
-        """Provider 오류시 에러 메시지 반환"""
+        mock_claude_cls.assert_called_once()
+        mock_provider_instance.generate_chat.assert_called_once()
+        # model_name에 claude-opus-4-6 전달 확인
+        call_kwargs = mock_provider_instance.generate_chat.call_args
+        assert call_kwargs[1].get('model_name') == 'claude-opus-4-6'
+
+    @patch('shared.llm.ClaudeLLMProvider', side_effect=Exception("API key missing"))
+    def test_daily_briefing_claude_fallback_to_thinking(self, mock_claude_cls, mock_brain, mock_claude_provider):
+        """Claude 초기화 실패 시 THINKING tier 폴백"""
+        mock_claude_provider.generate_chat.return_value = {
+            'text': "Fallback report"
+        }
+
+        result = mock_brain.generate_daily_briefing("market", "log")
+        assert "Fallback" in result
+
+    @patch('shared.llm.ClaudeLLMProvider', side_effect=Exception("API key missing"))
+    def test_daily_briefing_provider_error(self, mock_claude_cls):
+        """모든 Provider 실패 시 에러 메시지 반환"""
         from shared.llm import JennieBrain
-        
+
         brain = object.__new__(JennieBrain)
         brain._get_provider = MagicMock(return_value=None)
-        
+
         result = brain.generate_daily_briefing("market", "log")
-        
+
         assert "실패" in result or "오류" in result
-    
-    def test_daily_briefing_empty_data(self, mock_brain, mock_claude_provider):
+
+    @patch('shared.llm.ClaudeLLMProvider')
+    def test_daily_briefing_empty_data(self, mock_claude_cls, mock_brain, mock_claude_provider):
         """빈 데이터도 처리"""
-        mock_claude_provider.generate_chat.return_value = {
+        mock_provider_instance = MagicMock()
+        mock_provider_instance.name = "claude"
+        mock_provider_instance.generate_chat.return_value = {
             'text': "No data available report"
         }
-        
+        mock_claude_cls.return_value = mock_provider_instance
+
         result = mock_brain.generate_daily_briefing("", "")
-        
+
         assert result is not None
 
 

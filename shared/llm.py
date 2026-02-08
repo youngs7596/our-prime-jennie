@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Union
 
 # Factory & Enum
 from shared.llm_factory import LLMFactory, LLMTier
+from shared.llm_providers import ClaudeLLMProvider
 import shared.database as database
 import shared.auth as auth
 
@@ -606,24 +607,22 @@ class JennieBrain:
     # -----------------------------------------------------------------
     def generate_daily_briefing(self, market_summary: str, execution_log: str) -> str:
         """
-        Generate Daily Briefing Report.
-        Task Type: REASONING or THINKING (depending on desired quality).
-        Let's use THINKING for high quality report.
+        Daily Briefing Report 생성.
+        [2026-02-08] Claude Opus 4.6 전용 (THINKING tier 대신 직접 호출)
         """
-        provider = self._get_provider(LLMTier.THINKING) 
-        if provider is None:
-            return "보고서 생성 실패: 모델 초기화 오류"
-
-        # [Prompt Engineering]
-        # Role: Jennie (Smart, Friendly, Professional AI Investment Assistant)
-        # Goal: Provide a clear, structured, and actionable daily briefing.
-        # Constraints: 
-        # 1. Use Data: Do NOT make up market conditions. If data is missing (e.g. market_summary is empty), state it clearly.
-        # 2. Tone: Friendly, reliable, and encouraging (like a trusted partner).
-        # 3. Format: Clean Markdown for Telegram.
+        # Claude Opus 4.6 직접 사용 (THINKING tier의 deepseek_cloud 의존성 제거)
+        try:
+            provider = ClaudeLLMProvider()
+            logger.info("--- [JennieBrain/Briefing] Claude Opus 4.6 Provider 초기화 완료 ---")
+        except Exception as e:
+            logger.error(f"❌ [Briefing] Claude Provider 초기화 실패: {e}")
+            # THINKING tier 폴백
+            provider = self._get_provider(LLMTier.THINKING)
+            if provider is None:
+                return "보고서 생성 실패: 모델 초기화 오류"
 
         prompt = f"""
-        안녕하세요! 당신은 사용자의 똑똑하고 다정항 주식 투자 파트너 '제니(Jennie)'입니다.
+        안녕하세요! 당신은 사용자의 똑똑하고 다정한 주식 투자 파트너 '제니(Jennie)'입니다.
         오늘의 시장 상황과 자동매매 수행 기록을 바탕으로 사용자가 퇴근길(또는 하루 마무리)에 보기 좋은 '일일 브리핑 리포트'를 작성해주세요.
 
         ---
@@ -636,54 +635,47 @@ class JennieBrain:
         ---
 
         [작성 가이드라인]
-        1. **톤앤매너**: 
+        1. **톤앤매너**:
            - 다정하고 따뜻한 어조 ("~했어요", "~보입니다" 등).
            - 전문성은 유지하되, 딱딱하지 않게 작성해주세요.
            - 사용자를 격려하는 멘트를 자연스럽게 포함하세요.
 
         2. **구조 (Telegram Markdown)**:
-           # 📅 [YYYY-MM-DD] 제니의 일일 브리핑
+           📅 [YYYY-MM-DD] 제니의 일일 브리핑
 
-           ## 1. 🌍 시장 현황 (Market Pulse)
-           - 시장 요약 데이터를 바탕으로 주요 지수(KOSPI, KOSDAC 등)의 흐름과 특징을 요약해주세요.
-           - *주의*: 데이터가 '정보 없음'이라면, "오늘은 시장 데이터를 불러오지 못했어요. 😢"라고 솔직하게 적어주세요. 
+           🌍 1. 시장 현황 (Market Pulse)
+           - 시장 요약 데이터를 바탕으로 주요 지수(KOSPI, KOSDAQ 등)의 흐름과 특징을 요약해주세요.
+           - *주의*: 데이터가 '정보 없음'이라면, "오늘은 시장 데이터를 불러오지 못했어요. 😢"라고 솔직하게 적어주세요.
            - *절대* "특이 사항 없이 안정적"이라는 멘트를 데이터 없이 사용하지 마세요.
 
-           ## 2. 💼 포트폴리오 및 매매 분석
+           💼 2. 포트폴리오 및 매매 분석
            - 오늘 발생한 매수/매도 내역을 간략히 정리해주세요.
            - 매매가 없었다면 "오늘은 쉬어가는 하루였어요. 현금을 보유하며 기회를 엿보고 있습니다." 처럼 긍정적으로 작성해주세요.
-           
-           ## 3. 📰 주요 뉴스 및 이슈 (Highlights)
+
+           📰 3. 주요 뉴스 및 이슈 (Highlights)
            - 시장 요약에 포함된 뉴스나 특징주가 있다면 2~3줄로 요약해주세요.
            - 정보가 없다면 이 섹션은 생략해도 좋습니다.
 
-           ## 4. 💡 내일의 투자 전략 (Jennie's Note)
+           💡 4. 내일의 투자 전략 (Jennie's Note)
            - 현재 상황을 바탕으로 간단한 조언이나 다짐을 적어주세요.
            - 예: "내일도 변동성을 주시하며 안전하게 대응할게요!"
-           
-           ## 5. 마무리 인사
+
+           ✨ 5. 마무리 인사
            - 따뜻한 하루 마무리를 위한 인사말.
 
         3. **주의사항**:
            - 없는 내용을 지어내지 마세요.
            - 긍정적이고 희망적인 에너지를 전달하세요.
            - 이모지(📊, 📈, 💰, ✨)를 적절히 사용하여 가독성을 높여주세요.
+           - Telegram에서 렌더링되므로 '#' 마크다운 헤더 대신 이모지+볼드로 구분해주세요.
         """
         try:
-            logger.info(f"--- [JennieBrain/Briefing] 리포트 생성 via {provider.name} ---")
-            # generate_chat requires list of dicts.
-            # Gemini expects 'parts': [{'text': ...}] structure for 'user' role
-            # However, BaseLLMProvider.generate_chat implementations (like GeminiLLMProvider) usually handle normalization from standard role/content.
-            # Let's check GeminiLLMProvider.generate_chat. It uses history[-1]['parts'][0]['text'] implies it expects 'parts'.
-            # But the Provider implementation should ideally handle 'content' -> 'parts' mapping.
-            # Looking at logs: "provided dictionary has keys: ['role', 'content']".
-            # It seems GeminiLLMProvider passes `history` directly to `model.start_chat(history=history)`?
-            # Yes, `chat = model.start_chat(history=history)`.
-            # Google GenAI `start_chat` expects standard Google format: role='user'|'model', parts=[{'text': '...'}]
-            
-            chat_history = [{"role": "user", "parts": [{"text": prompt}]}]
-            result = provider.generate_chat(chat_history, temperature=0.7)
-            
+            briefing_model = os.getenv("BRIEFING_LLM_MODEL", "claude-opus-4-6")
+            logger.info(f"--- [JennieBrain/Briefing] 리포트 생성 via {provider.name} (model={briefing_model}) ---")
+
+            chat_history = [{"role": "user", "content": prompt}]
+            result = provider.generate_chat(chat_history, temperature=0.7, model_name=briefing_model)
+
             if isinstance(result, dict):
                 return result.get('text') or result.get('content') or str(result)
             return str(result)
