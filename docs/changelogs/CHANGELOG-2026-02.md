@@ -1,6 +1,20 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-08
+### 필터 체인 재배치 + E2E 검증 (3현자 리뷰 반영)
+- **refactor(executor)**: Hard Floor 도입 (hybrid_score<40 거부), MIN_LLM_SCORE 이중 체크 제거
+- **feat(executor)**: Stale Score 배율 축소 (차단→2영업일:0.5, 3영업일+:0.3), 주말 처리 (금→월=정상)
+- **feat(executor)**: Shadow Mode 로깅 (기존 기준이면 차단됐을 종목 `[Shadow]` 태그)
+- **refactor(scanner)**: `_check_micro_timing()` Executor→Scanner 이동
+- **refactor(scout)**: `recon_score_by_regime` 커트라인 제거, `MAX_WATCHLIST_SIZE` env var 도입
+- **refactor(registry)**: MIN_LLM_SCORE, MIN_LLM_SCORE_TIER2, MIN_LLM_SCORE_RECON 삭제
+- **test(e2e)**: `test_filter_chain.py` 신규 12개 E2E 테스트 (Hard Floor/Stale Score/Shadow Mode/통합)
+- **test**: Jenkins 빌드 #322 SUCCESS (1304 passed), 전체 72 E2E PASS, 서비스 정상 구동 확인
+
+### 대시보드 개선
+- **refactor(dashboard)**: Login.tsx 삭제, Overview/Scout/System 페이지 개선
+- **refactor(dashboard)**: Sidebar 정리, API 클라이언트 개선
+
 ### News Collector Redis 영속 중복 체크
 - **feat(news)**: `NewsDeduplicator` 클래스 구현 — Redis SET 기반 영속 뉴스 중복 체크 (날짜별 키, 3일 TTL)
 - **fix(news)**: news-collector 인메모리 dedup → Redis 영속 dedup 전환 (컨테이너 재시작 시 중복 발행 방지)
@@ -251,4 +265,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-08 10:37 KST*
+*Last Updated: 2026-02-08 17:07 KST*
