@@ -44,7 +44,7 @@ JOB_REGISTRY = {
         "timeout": 300,
     },
     "collect-investor-trading": {
-        "cmd": ["python", "scripts/collect_investor_trading.py"],
+        "cmd": ["python", "scripts/collect_investor_trading.py", "--days", "1"],
         "timeout": 600,
     },
     "collect-dart-filings": {
