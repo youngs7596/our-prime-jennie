@@ -4,6 +4,9 @@ from datetime import datetime, timedelta
 import sys
 import pendulum
 
+sys.path.append('/opt/airflow')
+from shared.airflow_utils import send_telegram_alert
+
 # KST timezone setting
 local_tz = pendulum.timezone("Asia/Seoul")
 
@@ -12,22 +15,10 @@ default_args = {
     'depends_on_past': False,
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
-}
-
-# Common Environment Variables (Docker 네트워크 내 서비스 접근용)
-COMMON_ENV = {
-    'PYTHONPATH': '/opt/airflow',
-    'MARIADB_HOST': 'mariadb',
-    'MARIADB_PORT': '3306',
-    'MARIADB_USER': 'root',
-    'REDIS_HOST': 'redis',
-    'REDIS_PORT': '6379',
-    'KIS_GATEWAY_URL': 'http://host.docker.internal:8080',
-    'TZ': 'Asia/Seoul',
+    'on_failure_callback': send_telegram_alert,
 }
 
 # Schedule: 15:45 KST (Market Close + Settlement Time)
-# KST time directly
 with DAG(
     'daily_asset_snapshot',
     default_args=default_args,
@@ -38,13 +29,8 @@ with DAG(
     tags=['asset', 'snapshot', 'statistics'],
 ) as dag:
 
-    # Run the snapshot script
-    # Assuming the project root is mounted at /opt/airflow
-    # {{ ds }} is execution date (YYYY-MM-DD)
+    # {{ ds }} is Airflow execution date (YYYY-MM-DD), passed as query param
     run_snapshot = BashOperator(
         task_id='run_snapshot_script',
-        bash_command='cd /opt/airflow && python3 scripts/daily_asset_snapshot.py --date {{ ds }}',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 300 -X POST "http://job-worker:8095/jobs/daily-asset-snapshot?date={{ ds }}"',
     )

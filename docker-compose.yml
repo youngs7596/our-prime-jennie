@@ -1120,6 +1120,47 @@ services:
     restart: always
 
   # ============================================================================
+  # 12-1. Job Worker (Airflow job 실행 전용 워커)
+  # ============================================================================
+  job-worker:
+    build:
+      context: .
+      dockerfile: services/job-worker/Dockerfile
+    profiles: [ "real" ]
+    networks:
+      - msa-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8095:8095"
+    environment:
+      - PORT=8095
+      - SECRETS_FILE=/app/config/secrets.json
+      - MARIADB_HOST=mariadb
+      - MARIADB_PORT=3306
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KIS_GATEWAY_URL=http://host.docker.internal:8080
+      - OLLAMA_GATEWAY_URL=http://host.docker.internal:11500
+      - TZ=Asia/Seoul
+    env_file:
+      - infrastructure/env-vars-wsl.yaml
+    volumes:
+      - ./secrets.json:/app/config/secrets.json:ro
+      - ./.telegram_sessions:/app/.telegram_sessions
+    restart: unless-stopped
+    labels:
+      - app=job-worker
+      - stack=my-prime-jennie
+    container_name: job-worker
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8095/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ============================================================================
   # 12. News Pipeline (Pub/Sub Architecture)
   # ============================================================================
 

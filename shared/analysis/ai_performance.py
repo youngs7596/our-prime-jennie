@@ -19,7 +19,7 @@ def fetch_ai_decisions(session, lookback_days=DEFAULT_LOOKBACK_DAYS):
         LLMDecisionLedger.timestamp >= cutoff_date
     ).order_by(LLMDecisionLedger.timestamp.desc())
 
-    decisions = pd.read_sql(stmt, session.bind)
+    decisions = pd.read_sql(stmt, session.connection())
     # Normalize columns to lowercase to handle DB case discrepancies
     decisions.columns = [c.lower() for c in decisions.columns]
     
@@ -33,7 +33,7 @@ def fetch_price_history(session, stock_code, start_date, days=30):
         StockDailyPrice.price_date >= start_date
     ).order_by(StockDailyPrice.price_date.asc())
 
-    prices = pd.read_sql(stmt, session.bind)
+    prices = pd.read_sql(stmt, session.connection())
     prices.columns = [c.lower() for c in prices.columns]
     return prices
 

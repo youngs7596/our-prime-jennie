@@ -1,0 +1,56 @@
+# Job Worker Service Dependencies
+# 모든 scripts/ 및 utilities/ 스크립트를 실행하기 위한 의존성 통합
+
+# Web Framework
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+
+# Database
+pymysql>=1.0.0
+mysql-connector-python>=8.0.0
+SQLAlchemy==2.0.31
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+pyarrow
+
+# LLM Providers
+google-generativeai>=0.5.0
+google-genai>=1.0.0
+openai>=1.0.0
+anthropic>=0.30.0
+
+# LangChain & RAG
+langchain-core>=0.3.0
+langchain-google-genai==4.1.2
+langchain-qdrant>=0.1.0
+qdrant-client>=1.7.0
+langchain-text-splitters
+langchain-ollama
+
+# Financial Data
+finance-datareader>=0.9.0
+pykrx>=1.0.0
+OpenDartReader
+
+# Redis & Messaging
+redis>=5.0.0
+pika>=1.3.0
+
+# Telegram (macro_council → telegram-collector 의존)
+telethon>=1.34.0
+
+# HTTP & Web
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+websocket-client>=1.8.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+pytz>=2024.1
+filelock>=3.14.0
+python-dateutil>=2.8.0
+pybreaker>=1.2.0

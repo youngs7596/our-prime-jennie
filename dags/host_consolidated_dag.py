@@ -18,19 +18,6 @@ default_args = {
     'on_failure_callback': send_telegram_alert,
 }
 
-# Common Environment Variables (Same as utility_jobs_dag)
-COMMON_ENV = {
-    'PYTHONPATH': '/opt/airflow',
-    'MARIADB_HOST': 'mariadb',
-    'MARIADB_PORT': '3306',
-    'MARIADB_USER': 'root',
-    'REDIS_HOST': 'redis',
-    'REDIS_PORT': '6379',
-    'KIS_GATEWAY_URL': 'http://host.docker.internal:8080',
-    'OLLAMA_GATEWAY_URL': 'http://host.docker.internal:11500',
-    'TZ': 'Asia/Seoul',
-}
-
 # 1. Weekly Factor Analysis (Friday 22:00 KST)
 with DAG(
     'weekly_factor_analysis',
@@ -42,10 +29,7 @@ with DAG(
 ) as dag_weekly:
     run_analysis = BashOperator(
         task_id='run_factor_analysis',
-        bash_command='cd /opt/airflow && python3 scripts/weekly_factor_analysis_batch.py --analysis-only',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 1800 -X POST http://job-worker:8095/jobs/weekly-factor-analysis',
     )
 
 # 2. Daily Price Collector (Weekday 16:00 KST)
@@ -59,13 +43,10 @@ with DAG(
 ) as dag_collector:
     run_collector = BashOperator(
         task_id='collect_full_market_data',
-        bash_command='cd /opt/airflow && python3 scripts/collect_full_market_data_parallel.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 600 -X POST http://job-worker:8095/jobs/collect-full-market-data',
     )
 
-# 3. Daily Briefing (Weekday 17:00 KST)
+# 3. Daily Briefing (Weekday 17:00 KST) - 이미 HTTP 트리거 (변경 불필요)
 with DAG(
     'daily_briefing_report',
     default_args=default_args,
@@ -74,8 +55,6 @@ with DAG(
     catchup=False,
     tags=['briefing', 'report'],
 ) as dag_briefing:
-    # This calls the service API. Inside Docker network, use service name.
-    # Host crontab used localhost:8086, inside docker it is http://daily-briefing:8086
     trigger_briefing = BashOperator(
         task_id='trigger_briefing_api',
         bash_command='curl -s -X POST http://host.docker.internal:8086/report',
@@ -92,8 +71,5 @@ with DAG(
 ) as dag_ai_perf:
     run_ai_perf = BashOperator(
         task_id='analyze_ai_performance',
-        bash_command='cd /opt/airflow && python3 scripts/analyze_ai_performance.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 300 -X POST http://job-worker:8095/jobs/analyze-ai-performance',
     )

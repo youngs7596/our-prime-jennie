@@ -3,9 +3,7 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime, timedelta
 import sys
-import os
 
-# Add airflow root to path for shared imports if needed
 sys.path.append('/opt/airflow')
 from shared.airflow_utils import send_telegram_alert
 
@@ -21,56 +19,32 @@ default_args = {
     'on_failure_callback': send_telegram_alert,
 }
 
-# Common Environment Variables
-# DB & Redis services are in the same bridge network (msa-network), so we use service names.
-# KIS Gateway & Ollama Gateway are on the host network, so we use host.docker.internal (requires extra_hosts in docker-compose).
-COMMON_ENV = {
-    'PYTHONPATH': '/opt/airflow',
-    'MARIADB_HOST': 'mariadb',
-    'MARIADB_PORT': '3306',
-    'MARIADB_USER': 'jennie',
-    'MARIADB_PASSWORD': 'q1w2e3R$',
-    'MARIADB_DBNAME': 'jennie_db',
-    'REDIS_HOST': 'redis',
-    'REDIS_PORT': '6379',
-    'KIS_GATEWAY_URL': 'http://host.docker.internal:8080',
-    'OLLAMA_GATEWAY_URL': 'http://host.docker.internal:11500',
-    'TZ': 'Asia/Seoul',
-}
-
-# KST Schedules
 # 1. Collect Minute Chart Data: 09:00 - 15:35 KST. 5 min interval.
 with DAG(
     'collect_minute_chart',
     default_args=default_args,
-    schedule_interval='*/5 9-15 * * 1-5', # KST explicitly
+    schedule_interval='*/5 9-15 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'intraday', 'chart'],
 ) as dag_intraday:
     run_intraday = BashOperator(
         task_id='run_collect_minute_chart',
-        bash_command='python scripts/collect_minute_chart.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 300 -X POST http://job-worker:8095/jobs/collect-minute-chart',
     )
 
 # 2. Analyst Feedback Update: 18:00 KST
 with DAG(
     'analyst_feedback_update',
     default_args=default_args,
-    schedule_interval='0 18 * * 1-5', # 18:00 KST
+    schedule_interval='0 18 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['analysis', 'feedback', 'llm'],
 ) as dag_feedback:
     run_feedback = BashOperator(
         task_id='run_update_analyst_feedback',
-        bash_command='python scripts/update_analyst_feedback.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 120 -X POST http://job-worker:8095/jobs/analyst-feedback',
     )
 
 # 3. (삭제됨) collect_daily_prices - daily_market_data_collector(KIS API, 16:00)와 중복으로 제거
@@ -79,34 +53,28 @@ with DAG(
 with DAG(
     'collect_investor_trading',
     default_args=default_args,
-    schedule_interval='30 18 * * 1-5', # 18:30 KST
+    schedule_interval='30 18 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'investor', 'trading'],
 ) as dag_trading:
     run_trading = BashOperator(
         task_id='run_collect_investor_trading',
-        bash_command='python scripts/collect_investor_trading.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 600 -X POST http://job-worker:8095/jobs/collect-investor-trading',
     )
 
 # 5. Collect DART Filings: 18:45 KST
 with DAG(
     'collect_dart_filings',
     default_args=default_args,
-    schedule_interval='45 18 * * 1-5', # 18:45 KST
+    schedule_interval='45 18 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'dart', 'filings'],
 ) as dag_dart:
     run_dart = BashOperator(
         task_id='run_collect_dart_filings',
-        bash_command='python scripts/collect_dart_filings.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 300 -X POST http://job-worker:8095/jobs/collect-dart-filings',
     )
 
 # 6. Data Cleanup (Weekly): 03:00 KST on Sunday
@@ -114,17 +82,14 @@ with DAG(
 with DAG(
     'data_cleanup_weekly',
     default_args=default_args,
-    schedule_interval='0 3 * * 0',  # 매주 일요일 03:00 KST
+    schedule_interval='0 3 * * 0',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['maintenance', 'cleanup', 'retention'],
 ) as dag_cleanup:
     run_cleanup = BashOperator(
         task_id='run_cleanup_old_data',
-        bash_command='python scripts/cleanup_old_data.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 600 -X POST http://job-worker:8095/jobs/cleanup-old-data',
     )
 
 # 7. Collect Foreign Holding Ratio: 18:35 KST (investor trading 수집 이후)
@@ -132,17 +97,14 @@ with DAG(
 with DAG(
     'collect_foreign_holding_ratio',
     default_args=default_args,
-    schedule_interval='35 18 * * 1-5',  # 18:35 KST (collect_investor_trading 18:30 이후)
+    schedule_interval='35 18 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'investor', 'foreign', 'holding'],
 ) as dag_foreign:
     run_foreign = BashOperator(
         task_id='run_collect_foreign_holding_ratio',
-        bash_command='python scripts/collect_foreign_holding_ratio.py --days 1',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 300 -X POST http://job-worker:8095/jobs/collect-foreign-holding',
     )
 
 # 8. Naver Sector Update (Weekly): 20:00 KST on Sunday
@@ -154,15 +116,12 @@ with DAG(
         'retries': 2,
         'execution_timeout': timedelta(minutes=15),
     },
-    schedule_interval='0 20 * * 0',  # 매주 일요일 20:00 KST
+    schedule_interval='0 20 * * 0',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['data', 'sector', 'naver', 'weekly'],
 ) as dag_naver_sector:
     run_naver_sector = BashOperator(
         task_id='run_update_naver_sectors',
-        bash_command='python utilities/update_naver_sectors.py',
-        cwd='/opt/airflow',
-        env=COMMON_ENV,
-        append_env=True,
+        bash_command='curl -sf --max-time 900 -X POST http://job-worker:8095/jobs/update-naver-sectors',
     )

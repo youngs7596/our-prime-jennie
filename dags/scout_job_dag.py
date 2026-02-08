@@ -17,13 +17,13 @@ default_args = {
     'on_failure_callback': send_telegram_alert,
 }
 
-# KST 08:30 - 15:30 (Every 1 hour) - 비용 최적화: 30분→1시간
+# KST 08:30 - 14:30 (Every 1 hour) - 비용 최적화: 30분→1시간
 # Mon-Fri (1-5) in KST
 with DAG(
     'scout_job_v1',
     default_args=default_args,
     description='AI Scout Job (Intraday)',
-    schedule_interval='30 8-15 * * 1-5',
+    schedule_interval='30 8-14 * * 1-5',
     start_date=datetime(2025, 1, 1, tzinfo=kst),
     catchup=False,
     tags=['scout', 'ai'],
