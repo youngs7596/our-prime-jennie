@@ -107,6 +107,7 @@ from scout_universe import (
 )
 import scout_cache
 from shared.watchlist import save_hot_watchlist
+from shared.db import repository as repo
 # 파이프라인 태스크 (scout_pipeline.py)
 from scout_pipeline import (
     is_hybrid_scoring_enabled,
@@ -1241,7 +1242,24 @@ def main():
                     phase1_passed = [r for r in llm_decision_records.values() if r.get('approved')]
 
                     logger.info(f"   ✅ v5 최종 승인: {len([r for r in llm_decision_records.values() if r.get('approved')])}개")
-                    
+
+                    # 매수불가 종목 사전 제거 (보유 중 + 매도 쿨다운 24h)
+                    try:
+                        approved_codes = [s.get('code') for s in final_approved_list if s.get('code') and s.get('code') != '0001']
+                        held_stocks = {p['code'] for p in repo.get_active_portfolio(session)}
+                        sell_cooldown = repo.get_recently_traded_stocks_batch(session, approved_codes, hours=24, trade_type='SELL') if approved_codes else set()
+                        untradable = held_stocks | sell_cooldown
+                        if untradable:
+                            before_count = len(final_approved_list)
+                            final_approved_list = [s for s in final_approved_list if s.get('code') not in untradable]
+                            removed = before_count - len(final_approved_list)
+                            if removed > 0:
+                                removed_held = [c for c in approved_codes if c in held_stocks]
+                                removed_cool = [c for c in approved_codes if c in sell_cooldown and c not in held_stocks]
+                                logger.info(f"   🚫 매수불가 {removed}개 제거 (보유: {removed_held}, 매도쿨다운: {removed_cool})")
+                    except Exception as e:
+                        logger.warning(f"   ⚠️ 매수불가 종목 필터 실패 (무시하고 진행): {e}")
+
                     # 쿼터제 적용 (Risk-Off 레벨에 따라 동적 조정)
                     MAX_WATCHLIST_SIZE = int(os.getenv("MAX_WATCHLIST_SIZE", "20"))
                     if trading_context and trading_context.risk_off_level >= 2:

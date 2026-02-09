@@ -463,11 +463,38 @@ class TestTradeLog:
     def test_get_recently_traded_stocks_batch_empty_input(self, session_with_trade_logs):
         """빈 입력"""
         from shared.db.repository import get_recently_traded_stocks_batch
-        
+
         result = get_recently_traded_stocks_batch(session_with_trade_logs, [], hours=24)
-        
+
         assert result == set()
-    
+
+    def test_get_recently_traded_stocks_batch_sell_only(self, session_with_trade_logs):
+        """trade_type='SELL' 필터링: 매도만 반환"""
+        from shared.db.repository import get_recently_traded_stocks_batch
+
+        codes = ["005930", "000660", "035420", "005380"]
+        result = get_recently_traded_stocks_batch(session_with_trade_logs, codes, hours=48, trade_type='SELL')
+
+        # 어제 매도: 035420만 해당 (48시간 이내)
+        assert "035420" in result
+        # 매수 건은 제외
+        assert "005930" not in result
+        assert "000660" not in result
+        assert "005380" not in result
+
+    def test_get_recently_traded_stocks_batch_buy_only(self, session_with_trade_logs):
+        """trade_type='BUY' 필터링: 매수만 반환"""
+        from shared.db.repository import get_recently_traded_stocks_batch
+
+        codes = ["005930", "000660", "035420"]
+        result = get_recently_traded_stocks_batch(session_with_trade_logs, codes, hours=24, trade_type='BUY')
+
+        # 오늘 매수: 005930, 000660
+        assert "005930" in result
+        assert "000660" in result
+        # 매도 건은 제외
+        assert "035420" not in result
+
     def test_get_recent_trades(self, session_with_trade_logs):
         """최근 거래 조회 (Dashboard용)"""
         from shared.db.repository import get_recent_trades

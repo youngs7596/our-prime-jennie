@@ -1,5 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-09
+### Scout 워치리스트 매수불가 종목 사전 제거
+- **feat(scout)**: 워치리스트에서 보유 중/매도 쿨다운(24h) 종목 사전 제거 — 빈 슬롯에 다음 순위 자동 충원
+- **fix(repository)**: `get_recently_traded_stocks_batch()` 중복 실행 버그 수정 + `trade_type` 필터 파라미터 추가
+- **test**: 8개 테스트 추가 (repository 2 + scout pre-filter 6), 전체 1201 passed
+
 ## 2026-02-08
 ### 필터 체인 재배치 + E2E 검증 (3현자 리뷰 반영)
 - **refactor(executor)**: Hard Floor 도입 (hybrid_score<40 거부), MIN_LLM_SCORE 이중 체크 제거

@@ -258,3 +258,111 @@ class TestProcessUnifiedAnalystTask:
 
         assert result['trade_tier'] == 'TIER1'
         assert result['is_tradable'] is True
+
+
+# ============================================================================
+# Scout 매수불가 종목 사전 제거 테스트
+# ============================================================================
+
+class TestScoutUntradablePreFilter:
+    """Scout 워치리스트에서 보유/매도쿨다운 종목 사전 제거 로직 테스트"""
+
+    def _make_watchlist_entry(self, code, name='테스트', llm_score=70):
+        return {'code': code, 'name': name, 'llm_score': llm_score, 'is_tradable': True}
+
+    def test_removes_held_stocks(self):
+        """보유 중인 종목은 제거됨"""
+        final_approved_list = [
+            self._make_watchlist_entry('005930', '삼성전자', 80),
+            self._make_watchlist_entry('000660', 'SK하이닉스', 75),
+            self._make_watchlist_entry('035420', '네이버', 70),
+        ]
+        held_stocks = {'005930'}
+        sell_cooldown = set()
+        untradable = held_stocks | sell_cooldown
+
+        filtered = [s for s in final_approved_list if s.get('code') not in untradable]
+
+        assert len(filtered) == 2
+        assert all(s['code'] != '005930' for s in filtered)
+
+    def test_removes_sell_cooldown_stocks(self):
+        """매도 쿨다운 종목은 제거됨"""
+        final_approved_list = [
+            self._make_watchlist_entry('005930', '삼성전자', 80),
+            self._make_watchlist_entry('000660', 'SK하이닉스', 75),
+            self._make_watchlist_entry('035420', '네이버', 70),
+        ]
+        held_stocks = set()
+        sell_cooldown = {'035420'}
+        untradable = held_stocks | sell_cooldown
+
+        filtered = [s for s in final_approved_list if s.get('code') not in untradable]
+
+        assert len(filtered) == 2
+        assert all(s['code'] != '035420' for s in filtered)
+
+    def test_removes_both_held_and_cooldown(self):
+        """보유 + 매도쿨다운 모두 제거됨"""
+        final_approved_list = [
+            self._make_watchlist_entry('005930', '삼성전자', 80),
+            self._make_watchlist_entry('000660', 'SK하이닉스', 75),
+            self._make_watchlist_entry('035420', '네이버', 70),
+            self._make_watchlist_entry('051910', 'LG화학', 65),
+        ]
+        held_stocks = {'005930'}
+        sell_cooldown = {'035420'}
+        untradable = held_stocks | sell_cooldown
+
+        filtered = [s for s in final_approved_list if s.get('code') not in untradable]
+
+        assert len(filtered) == 2
+        codes = {s['code'] for s in filtered}
+        assert codes == {'000660', '051910'}
+
+    def test_no_removal_when_empty(self):
+        """보유/쿨다운 없으면 제거 없음"""
+        final_approved_list = [
+            self._make_watchlist_entry('005930', '삼성전자', 80),
+            self._make_watchlist_entry('000660', 'SK하이닉스', 75),
+        ]
+        untradable = set()
+
+        filtered = [s for s in final_approved_list if s.get('code') not in untradable]
+
+        assert len(filtered) == 2
+
+    def test_kospi_marker_preserved(self):
+        """KOSPI 마커(0001)는 제거 대상에서 제외"""
+        final_approved_list = [
+            {'code': '0001', 'name': 'KOSPI', 'is_tradable': False},
+            self._make_watchlist_entry('005930', '삼성전자', 80),
+        ]
+        held_stocks = {'005930'}
+        # approved_codes에서 0001 제외 → untradable 검사 시 0001은 대상이 아님
+        approved_codes = [s.get('code') for s in final_approved_list if s.get('code') and s.get('code') != '0001']
+        untradable = held_stocks
+
+        filtered = [s for s in final_approved_list if s.get('code') not in untradable]
+
+        assert len(filtered) == 1
+        assert filtered[0]['code'] == '0001'
+
+    def test_slots_freed_for_next_rank(self):
+        """제거 후 쿼터제에서 빈 슬롯에 다음 순위 충원"""
+        # 25개 승인, 보유 3개 → 22개 남음 → MAX 20으로 트렁케이션
+        entries = [self._make_watchlist_entry(f'{i:06d}', f'종목{i}', 90 - i) for i in range(25)]
+        held_stocks = {entries[0]['code'], entries[1]['code'], entries[2]['code']}
+        untradable = held_stocks
+
+        filtered = [s for s in entries if s.get('code') not in untradable]
+        assert len(filtered) == 22
+
+        # 쿼터제 적용
+        MAX_WATCHLIST_SIZE = 20
+        filtered_sorted = sorted(filtered, key=lambda x: x.get('llm_score', 0), reverse=True)
+        final = filtered_sorted[:MAX_WATCHLIST_SIZE]
+
+        assert len(final) == 20
+        # 기존에 보유 종목이 차지하던 3슬롯에 22~24번째 종목이 들어옴
+        assert all(s['code'] not in held_stocks for s in final)

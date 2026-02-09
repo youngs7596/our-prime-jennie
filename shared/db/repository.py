@@ -310,9 +310,10 @@ def was_traded_recently(session: Session, stock_code: str, hours: int = 24, trad
     return result is not None
 
 
-def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str], hours: int = 24) -> Set[str]:
+def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str], hours: int = 24, trade_type: str = None) -> Set[str]:
     """
     여러 종목의 최근 거래 여부를 한 번에 조회.
+    trade_type: 'BUY' 또는 'SELL' 지정 시 해당 유형만 필터링. None이면 전체.
     """
     stock_codes = list(stock_codes)
     if not stock_codes:
@@ -320,16 +321,17 @@ def get_recently_traded_stocks_batch(session: Session, stock_codes: Iterable[str
 
     # [Hybrid Fix] Python timedelta 사용
     from datetime import datetime, timedelta, timezone
-    
+
     threshold_dt = datetime.now(timezone.utc) - timedelta(hours=hours)
-    
+
     query = (
         select(models.TradeLog.stock_code)
         .where(models.TradeLog.stock_code.in_(stock_codes))
         .where(models.TradeLog.trade_timestamp >= threshold_dt)
-        .distinct()
     )
-    rows = session.execute(query).scalars().all()
+    if trade_type:
+        query = query.where(models.TradeLog.trade_type == trade_type)
+    query = query.distinct()
     rows = session.execute(query).scalars().all()
     return set(rows)
 
