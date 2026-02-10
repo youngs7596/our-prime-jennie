@@ -22,6 +22,7 @@ from shared.strategy_presets import (
     resolve_preset_for_regime,
 )
 from shared.correlation import check_portfolio_correlation, get_correlation_risk_adjustment
+from shared.portfolio_guard import PortfolioGuard
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class BuyExecutor:
         self.sector_classifier = SectorClassifier(kis, db_pool_initialized=True)
         self.diversification_checker = DiversificationChecker(config, self.sector_classifier)
         self.market_regime_detector = MarketRegimeDetector()
+        self.portfolio_guard = PortfolioGuard(config, self.sector_classifier)
 
     def process_buy_signal(self, scan_result: dict, dry_run: bool = True) -> dict:
         """
@@ -406,6 +408,19 @@ class BuyExecutor:
                     return {"status": "skipped", "reason": "Position size too small"}
 
             logger.info(f"포지션 사이즈: {position_size}주, 예상 금액: {position_size * current_price:,}원")
+
+            # 5.9 Portfolio Guard (포트폴리오 수준 리스크 관리)
+            guard_result = self.portfolio_guard.check_all(
+                candidate_code=stock_code,
+                candidate_name=stock_name,
+                current_portfolio=current_portfolio,
+                buy_amount=position_size * current_price,
+                available_cash=available_cash,
+                total_assets=total_assets,
+                market_regime=market_regime,
+            )
+            if not guard_result["passed"]:
+                return {"status": "skipped", "reason": guard_result["reason"]}
 
             # 6. 분산 검증 (위에서 구한 수량 사용)
             # Dynamic Limits 적용

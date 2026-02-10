@@ -594,9 +594,10 @@ class TestDryRunMode:
              patch.object(executor_module, 'DiversificationChecker') as mock_div, \
              patch.object(executor_module, 'SectorClassifier') as mock_sector, \
              patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
              patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
              patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
-            
+
             # Setup mocks
             mock_db.get_market_regime_cache.return_value = None
             mock_repo.get_active_portfolio.return_value = []
@@ -609,6 +610,9 @@ class TestDryRunMode:
             }
             mock_div.return_value.check_diversification.return_value = {
                 'approved': True, 'reason': 'OK'
+            }
+            mock_guard.return_value.check_all.return_value = {
+                'passed': True, 'reason': 'OK', 'shadow': False, 'checks': {}
             }
             
             mock_ctx = MagicMock()
@@ -808,6 +812,194 @@ class TestEmergencyStopCheck:
             assert result['status'] == 'skipped'
             assert 'No candidates' in result['reason']
             assert 'Trading Paused' not in result['reason']
+
+class TestPortfolioGuardIntegration:
+    """Portfolio Guard가 executor에서 제대로 동작하는지 통합 테스트"""
+
+    def test_portfolio_guard_blocks_sector_concentration(self, mock_kis, mock_config):
+        """섹터 종목 수 초과 시 executor가 skipped 반환"""
+        executor_module = load_executor_module()
+
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
+
+            mock_db.get_market_regime_cache.return_value = None
+            mock_repo.get_active_portfolio.return_value = []
+            mock_repo.get_today_buy_count.return_value = 0
+            mock_repo.was_traded_recently.return_value = False
+            mock_redis.is_trading_stopped.return_value = False
+            mock_redis.is_trading_paused.return_value = False
+            mock_redis.get_redis_connection.return_value = MagicMock(set=MagicMock(return_value=True))
+            mock_sector.return_value.get_sector.return_value = "IT"
+            mock_sizer.return_value.calculate_quantity.return_value = {
+                'quantity': 10, 'reason': 'test'
+            }
+            mock_sizer.return_value.calculate_intraday_atr.return_value = None
+            mock_sizer.return_value.refresh_from_config.return_value = None
+            # Portfolio Guard가 차단
+            mock_guard.return_value.check_all.return_value = {
+                'passed': False,
+                'reason': "Portfolio Guard: 섹터 종목 수 초과: '금융' 대분류에 이미 3종목 보유 (한도: 3)",
+                'shadow': False,
+                'checks': {},
+            }
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor_module.BuyExecutor(
+                kis=mock_kis, config=mock_config
+            )
+
+            candidates = [{
+                'stock_code': '105560',
+                'stock_name': 'KB금융',
+                'llm_score': 80,
+                'is_tradable': True,
+                'current_price': 70000,
+                'trade_tier': 'TIER1',
+            }]
+
+            result = buy_exec.process_buy_signal({'candidates': candidates}, dry_run=True)
+
+            assert result['status'] == 'skipped'
+            assert 'Portfolio Guard' in result['reason']
+            # 실제 주문 없어야 함
+            mock_kis.place_buy_order.assert_not_called()
+
+    def test_portfolio_guard_blocks_cash_floor(self, mock_kis, mock_config):
+        """현금 하한선 위반 시 executor가 skipped 반환"""
+        executor_module = load_executor_module()
+
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
+
+            mock_db.get_market_regime_cache.return_value = None
+            mock_repo.get_active_portfolio.return_value = []
+            mock_repo.get_today_buy_count.return_value = 0
+            mock_repo.was_traded_recently.return_value = False
+            mock_redis.is_trading_stopped.return_value = False
+            mock_redis.is_trading_paused.return_value = False
+            mock_redis.get_redis_connection.return_value = MagicMock(set=MagicMock(return_value=True))
+            mock_sector.return_value.get_sector.return_value = "IT"
+            mock_sizer.return_value.calculate_quantity.return_value = {
+                'quantity': 10, 'reason': 'test'
+            }
+            mock_sizer.return_value.calculate_intraday_atr.return_value = None
+            mock_sizer.return_value.refresh_from_config.return_value = None
+            mock_guard.return_value.check_all.return_value = {
+                'passed': False,
+                'reason': "Portfolio Guard: 현금 하한선 위반: 매수 후 현금 3.0% < 하한선 10.0% (국면: BULL)",
+                'shadow': False,
+                'checks': {},
+            }
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor_module.BuyExecutor(
+                kis=mock_kis, config=mock_config
+            )
+
+            candidates = [{
+                'stock_code': '005930',
+                'stock_name': '삼성전자',
+                'llm_score': 80,
+                'is_tradable': True,
+                'current_price': 70000,
+                'trade_tier': 'TIER1',
+            }]
+
+            result = buy_exec.process_buy_signal(
+                {'candidates': candidates, 'market_regime': 'BULL'},
+                dry_run=True,
+            )
+
+            assert result['status'] == 'skipped'
+            assert 'Portfolio Guard' in result['reason']
+            assert '현금 하한선' in result['reason']
+
+    def test_portfolio_guard_passes_allows_execution(self, mock_kis, mock_config):
+        """Portfolio Guard 통과 → 매수 진행"""
+        executor_module = load_executor_module()
+
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
+
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = None
+            mock_db.execute_trade_and_log.return_value = True
+            mock_repo.get_active_portfolio.return_value = []
+            mock_repo.get_today_buy_count.return_value = 0
+            mock_repo.was_traded_recently.return_value = False
+            mock_redis.is_trading_stopped.return_value = False
+            mock_redis.is_trading_paused.return_value = False
+            mock_redis.get_redis_connection.return_value = MagicMock(set=MagicMock(return_value=True))
+            mock_redis.reset_trading_state_for_stock.return_value = None
+            mock_sector.return_value.get_sector.return_value = "IT"
+            mock_sizer.return_value.calculate_quantity.return_value = {
+                'quantity': 10, 'reason': 'test'
+            }
+            mock_sizer.return_value.calculate_intraday_atr.return_value = None
+            mock_sizer.return_value.refresh_from_config.return_value = None
+            mock_div.return_value.check_diversification.return_value = {
+                'approved': True, 'reason': 'OK'
+            }
+            mock_guard.return_value.check_all.return_value = {
+                'passed': True, 'reason': 'OK', 'shadow': False, 'checks': {}
+            }
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor_module.BuyExecutor(
+                kis=mock_kis, config=mock_config
+            )
+
+            candidates = [{
+                'stock_code': '005930',
+                'stock_name': '삼성전자',
+                'llm_score': 80,
+                'is_tradable': True,
+                'current_price': 70000,
+                'trade_tier': 'TIER1',
+            }]
+
+            result = buy_exec.process_buy_signal({'candidates': candidates}, dry_run=True)
+
+            assert result['status'] == 'success'
+            assert 'DRY_RUN' in result.get('order_no', '')
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
