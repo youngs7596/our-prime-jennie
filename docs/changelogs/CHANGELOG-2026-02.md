@@ -1,5 +1,15 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-10
+### Portfolio Guard Layer 2 (포트폴리오 수준 리스크 관리)
+- **feat(shared)**: `PortfolioGuard` 클래스 신규 — 섹터 종목 수 제한 + 국면별 현금 하한선
+  - `check_sector_stock_count()`: 동일 대분류(14개) MAX_SECTOR_STOCKS(3) 초과 방지
+  - `check_cash_floor()`: STRONG_BULL:5%, BULL:10%, SIDEWAYS:15%, BEAR:25%
+  - `check_all()`: fail-fast + shadow mode (PORTFOLIO_GUARD_ENABLED=false)
+- **feat(executor)**: Portfolio Guard를 포지션 사이징 후, 분산 검증 전에 삽입
+- **feat(registry)**: 7개 설정 추가 (PORTFOLIO_GUARD_ENABLED, MAX_SECTOR_STOCKS, CASH_FLOOR_*_PCT)
+- **test**: 24개 유닛 + 3개 통합 테스트 추가, 전체 1140 shared + 26 buy-executor passed
+
 ## 2026-02-09
 ### Scout 워치리스트 매수불가 종목 사전 제거
 - **feat(scout)**: 워치리스트에서 보유 중/매도 쿨다운(24h) 종목 사전 제거 — 빈 슬롯에 다음 순위 자동 충원
