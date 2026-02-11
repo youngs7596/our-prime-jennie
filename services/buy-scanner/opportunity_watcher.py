@@ -22,6 +22,12 @@ from shared.db.factor_repository import FactorRepository
 
 logger = logging.getLogger(__name__)
 
+# 모멘텀 계열 전략 (확인 바 + 지정가 주문 대상)
+MOMENTUM_STRATEGIES = {
+    "MOMENTUM", "MOMENTUM_CONTINUATION_BULL",
+    "SHORT_TERM_HIGH_BREAKOUT", "VCP_BREAKOUT",
+}
+
 
 # Macro Trading Context 로드 (선택적)
 def _load_trading_context():
@@ -194,6 +200,10 @@ class BuyOpportunityWatcher:
 
         # Cooldown (중복 시그널 방지) - 설정에서 로드 (기본 600초)
         self.cooldown_seconds = self.config.get_int("SIGNAL_COOLDOWN_SECONDS", default=600)
+
+        # [모멘텀 확인 바] 시그널 감지 → 다음 봉에서 가격 유지 확인 → 발행 or 폐기
+        self.pending_momentum_signals: Dict[str, dict] = {}
+        self.momentum_confirmation_bars = self.config.get_int("MOMENTUM_CONFIRMATION_BARS", default=0)
 
         # [Enhanced Macro] 트레이딩 컨텍스트
         self._trading_context = None
@@ -459,6 +469,10 @@ class BuyOpportunityWatcher:
         
         if completed_bar:
             self.metrics['bar_count'] += 1
+            # 먼저 pending 모멘텀 시그널 확인
+            confirmed = self._check_pending_momentum(stock_code, completed_bar)
+            if confirmed:
+                return confirmed
             return self._check_buy_signal(stock_code, price, completed_bar)
         
         return None
@@ -873,12 +887,6 @@ class BuyOpportunityWatcher:
         if not signal_type:
             return None
 
-        self._set_cooldown(stock_code)
-        logger.info(f"🔔 [{stock_code}] {signal_type} 신호 감지: {signal_reason}")
-
-        # [Logic Observability] 신호 히스토리 저장
-        self._save_signal_history(stock_code, stock_info.get('name', stock_code), 'BUY', signal_type, signal_reason, current_price)
-
         # [Enhanced Macro] 포지션 배율 및 컨텍스트 정보 추가
         position_mult = self._get_position_multiplier()
         ctx = self._get_trading_context()
@@ -904,9 +912,28 @@ class BuyOpportunityWatcher:
             } if ctx else None,
         }
 
+        # [모멘텀 확인 바] 모멘텀 전략이면 pending 저장 후 다음 봉에서 확인
+        if (self.momentum_confirmation_bars > 0
+                and signal_type in MOMENTUM_STRATEGIES):
+            self.pending_momentum_signals[stock_code] = {
+                'signal_type': signal_type,
+                'initial_price': current_price,
+                'signal': signal,
+                'created_at': datetime.now(timezone.utc),
+            }
+            self._set_cooldown(stock_code)  # 쿨다운은 즉시 설정 (중복 방지)
+            logger.info(f"[{stock_code}] 모멘텀 확인 대기: {signal_type} @ {current_price}")
+            return None  # 아직 발행하지 않음
+
+        self._set_cooldown(stock_code)
+        logger.info(f"[{stock_code}] {signal_type} 신호 감지: {signal_reason}")
+
+        # [Logic Observability] 신호 히스토리 저장
+        self._save_signal_history(stock_code, stock_info.get('name', stock_code), 'BUY', signal_type, signal_reason, current_price)
+
         if ctx:
             logger.info(
-                f"📊 [{stock_code}] Macro: pos_mult={position_mult}, "
+                f"[{stock_code}] Macro: pos_mult={position_mult}, "
                 f"vix={ctx.vix_regime}, risk_off={ctx.risk_off_level}"
             )
 
@@ -1556,6 +1583,36 @@ class BuyOpportunityWatcher:
         except Exception as e:
             logger.error(f"Legendary Pattern 체크 실패: {e}")
             return False
+
+    def _check_pending_momentum(self, stock_code: str, completed_bar: dict) -> Optional[dict]:
+        """
+        [모멘텀 확인 바] pending 모멘텀 시그널의 가격 유지 확인
+
+        다음 봉 종가가 시그널 시점 가격 이상이면 확인 성공 → 발행
+        하락하면 확인 실패 → 폐기
+        """
+        if stock_code not in self.pending_momentum_signals:
+            return None
+
+        pending = self.pending_momentum_signals.pop(stock_code)
+        current_close = completed_bar['close']
+
+        if current_close >= pending['initial_price']:
+            # 확인 성공 → 시그널 발행 (업데이트된 가격으로)
+            logger.info(
+                f"[{stock_code}] 모멘텀 확인 완료: {pending['signal_type']} "
+                f"({pending['initial_price']}→{current_close})"
+            )
+            pending['signal']['current_price'] = current_close
+            self.publish_signal(pending['signal'])
+            return pending['signal']
+        else:
+            # 확인 실패 → 폐기
+            logger.info(
+                f"[{stock_code}] 모멘텀 확인 실패: {pending['signal_type']} "
+                f"({pending['initial_price']}→{current_close}, 하락)"
+            )
+            return None
 
     def _check_cooldown(self, stock_code: str) -> bool:
         """쿨타임 체크 (Redis에 키가 없으면 True)"""

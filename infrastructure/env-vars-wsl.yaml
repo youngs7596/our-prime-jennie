@@ -85,6 +85,12 @@ CASH_FLOOR_BULL_PCT: "10"                    # 상승장 현금 하한선 (%)
 CASH_FLOOR_SIDEWAYS_PCT: "15"               # 횡보장 현금 하한선 (%)
 CASH_FLOOR_BEAR_PCT: "25"                   # 하락장 현금 하한선 (%)
 
+# 12-3. 모멘텀 전략 실행 최적화
+MOMENTUM_LIMIT_ORDER_ENABLED: "false"
+MOMENTUM_LIMIT_PREMIUM: "0.003"
+MOMENTUM_LIMIT_TIMEOUT_SEC: "10"
+MOMENTUM_CONFIRMATION_BARS: "0"
+
 # 13. Watchlist 크기 제한 (Scout → Hot Watchlist)
 # 하류 Scanner(9개 Risk Gate) + Executor(20개 필터)가 충분히 걸러내므로 넉넉하게 설정
 MAX_WATCHLIST_SIZE: "20"

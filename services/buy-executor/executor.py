@@ -26,6 +26,12 @@ from shared.portfolio_guard import PortfolioGuard
 
 logger = logging.getLogger(__name__)
 
+# 모멘텀 계열 전략 (지정가 주문 대상)
+MOMENTUM_STRATEGIES = {
+    "MOMENTUM", "MOMENTUM_CONTINUATION_BULL",
+    "SHORT_TERM_HIGH_BREAKOUT", "VCP_BREAKOUT",
+}
+
 
 class BuyExecutor:
     """매수 결재 및 주문 실행 클래스"""
@@ -69,7 +75,8 @@ class BuyExecutor:
             }
         """
         logger.info("=== 매수 신호 처리 시작 ===")
-        
+        execution_started_at = datetime.now(timezone.utc).isoformat()
+
         # [Emergency Stop Check]
         # Redis에서 실시간으로 플래그 확인 (ConfigManager 캐시 우회)
         if redis_cache.is_trading_stopped():
@@ -508,21 +515,61 @@ class BuyExecutor:
                     return {"status": "skipped", "reason": "Diversification check failed"}
             
             # 7. 매수 주문 실행
+            buy_signal_type = selected_candidate.get('buy_signal_type', 'UNKNOWN')
+            use_limit = (
+                self.config.get_bool("MOMENTUM_LIMIT_ORDER_ENABLED", default=False)
+                and buy_signal_type in MOMENTUM_STRATEGIES
+            )
+            limit_price = None
+
             if dry_run:
-                logger.info(f"🔧 [DRY_RUN] 매수 주문: {stock_name}({stock_code}) {position_size}주 @ {current_price:,}원")
+                if use_limit:
+                    premium = self.config.get_float("MOMENTUM_LIMIT_PREMIUM", default=0.003)
+                    limit_price = int(current_price * (1 + premium))
+                    logger.info(f"[DRY_RUN] 지정가 매수: {stock_name}({stock_code}) {position_size}주 @ {limit_price:,}원 (+{premium*100:.1f}%, 시그널가 {current_price:,})")
+                else:
+                    logger.info(f"[DRY_RUN] 시장가 매수: {stock_name}({stock_code}) {position_size}주 @ {current_price:,}원")
                 order_no = f"DRY_RUN_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            elif use_limit:
+                import time as _time
+                premium = self.config.get_float("MOMENTUM_LIMIT_PREMIUM", default=0.003)
+                limit_price = int(current_price * (1 + premium))
+                timeout_sec = self.config.get_int("MOMENTUM_LIMIT_TIMEOUT_SEC", default=10)
+
+                logger.info(f"지정가 매수 주문: {stock_name}({stock_code}) {position_size}주 @ {limit_price:,}원 (+{premium*100:.1f}%)")
+                order_no = self.kis.place_buy_order(
+                    stock_code=stock_code,
+                    quantity=position_size,
+                    price=limit_price,
+                )
+
+                if not order_no:
+                    logger.error("매수 주문 실패")
+                    return {"status": "error", "reason": "Order failed"}
+
+                # 지정가: 타임아웃 후 미체결 취소
+                _time.sleep(timeout_sec)
+                cancelled = self.kis.cancel_order(order_no, position_size)
+                if cancelled:
+                    # 취소 성공 = 미체결 → 기회 포기
+                    logger.warning(f"지정가 미체결 취소: {stock_name}({stock_code}) (limit={limit_price:,}, timeout={timeout_sec}s)")
+                    return {"status": "skipped", "reason": f"Limit order not filled within {timeout_sec}s"}
+                else:
+                    # 취소 실패 = 이미 체결됨 → 성공
+                    logger.info(f"지정가 매수 체결: {stock_name}({stock_code}) 주문번호 {order_no}")
             else:
+                # 기존 시장가 주문 (변경 없음)
                 order_no = self.kis.place_buy_order(
                     stock_code=stock_code,
                     quantity=position_size,
                     price=0  # 시장가
                 )
-                
+
                 if not order_no:
                     logger.error("매수 주문 실패")
                     return {"status": "error", "reason": "Order failed"}
-                
-                logger.info(f"✅ 매수 주문 체결: 주문번호 {order_no}")
+
+                logger.info(f"매수 주문 체결: 주문번호 {order_no}")
             
             # 8. DB 기록
             
@@ -554,6 +601,10 @@ class BuyExecutor:
                 tier2_met_count=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_met_count'),
                 tier2_conditions_met=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_met'),
                 tier2_conditions_failed=(selected_candidate.get('key_metrics_dict') or {}).get('tier2_conditions_failed'),
+                scan_timestamp=scan_result.get('scan_timestamp'),
+                execution_started_at=execution_started_at,
+                order_type="limit" if use_limit else "market",
+                limit_price=limit_price,
             )
             
             # 8.5 [FIX] 새 포지션 시작: 이전 포지션의 Redis 상태 초기화 (오염 데이터 방지)
@@ -736,6 +787,10 @@ class BuyExecutor:
         tier2_met_count: int | None = None,
         tier2_conditions_met: list | None = None,
         tier2_conditions_failed: list | None = None,
+        scan_timestamp: str | None = None,
+        execution_started_at: str | None = None,
+        order_type: str = "market",
+        limit_price: int | None = None,
     ):
         """거래 기록"""
         try:
@@ -756,6 +811,7 @@ class BuyExecutor:
             
             # Tier/조건 정보를 key_metrics에 포함 (사후 분석/리포트/모니터링용)
             tier = trade_tier or ("TIER1" if is_tradable else "TIER2")
+            execution_completed_at = datetime.now(timezone.utc).isoformat()
             key_metrics = {
                 "factor_score": factor_score,
                 "is_dry_run": dry_run,
@@ -763,6 +819,11 @@ class BuyExecutor:
                 "tier": tier,
                 "llm_score": llm_score,
                 "buy_signal_type": buy_signal_type,
+                "order_type": order_type,
+                "limit_price": limit_price,
+                "scan_timestamp": scan_timestamp,
+                "execution_started_at": execution_started_at,
+                "execution_completed_at": execution_completed_at,
             }
             if tier == "TIER2":
                 key_metrics["tier2_met_count"] = tier2_met_count

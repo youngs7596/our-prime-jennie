@@ -87,6 +87,12 @@ REGISTRY = {
     "CASH_FLOOR_SIDEWAYS_PCT": {"value": 15.0, "type": "float", "desc": "횡보장 현금 하한선 (%)", "category": "Risk", "db_priority": True},
     "CASH_FLOOR_BEAR_PCT": {"value": 25.0, "type": "float", "desc": "하락장 현금 하한선 (%)", "category": "Risk", "db_priority": True},
 
+    # ===== 모멘텀 전략 실행 최적화 (Execution) =====
+    "MOMENTUM_LIMIT_ORDER_ENABLED": {"value": False, "type": "bool", "desc": "모멘텀 전략 지정가 주문 활성화", "category": "Execution"},
+    "MOMENTUM_LIMIT_PREMIUM": {"value": 0.003, "type": "float", "desc": "지정가 프리미엄 (0.003=+0.3%)", "category": "Execution"},
+    "MOMENTUM_LIMIT_TIMEOUT_SEC": {"value": 10, "type": "int", "desc": "지정가 미체결 취소 대기 시간(초)", "category": "Execution"},
+    "MOMENTUM_CONFIRMATION_BARS": {"value": 0, "type": "int", "desc": "모멘텀 신호 확인 바 수 (0=비활성)", "category": "Signal"},
+
     # ===== 운영 설정 (Operations) =====
     "DISABLE_MARKET_OPEN_CHECK": {"value": False, "type": "bool", "desc": "장 운영시간 체크 비활성화 (true 시 장외 시간에도 서비스 실행)", "category": "Operations", "db_priority": True},
 
