@@ -35,8 +35,9 @@ class LLMStatsResponse(BaseModel):
     reasoning: Optional[LLMStatItem]
     thinking: Optional[LLMStatItem]
     news_analysis: Optional[LLMStatItem] # Legacy
-    scout: Optional[LLMStatItem] # Legacy
-    briefing: Optional[LLMStatItem] # Legacy
+    scout: Optional[LLMStatItem]
+    briefing: Optional[LLMStatItem]
+    macro_council: Optional[LLMStatItem]
     decisions_today: Optional[Dict[str, int]]
 
 # --- Helper ---
@@ -111,7 +112,7 @@ async def get_llm_stats():
         # Let's support both Tier-based and Functional keys if they exist.
         
         stats = {}
-        target_keys = ["news_analysis", "scout", "briefing", "fast", "reasoning", "thinking"]
+        target_keys = ["news_analysis", "scout", "briefing", "macro_council", "fast", "reasoning", "thinking"]
         
         for k in target_keys:
             key = f"{base_key}:{k}"
@@ -151,6 +152,7 @@ async def get_llm_stats():
             news_analysis=stats.get("news_analysis"),
             scout=stats.get("scout"),
             briefing=stats.get("briefing"),
+            macro_council=stats.get("macro_council"),
             decisions_today={"buy": buy_count, "reject": reject_count}
         )
         

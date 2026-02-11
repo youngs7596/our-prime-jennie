@@ -32,6 +32,29 @@ class BaseLLMProvider(ABC):
     def name(self) -> str:
         return self.__class__.__name__
 
+    def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):
+        """
+        LLM 사용량을 Redis에 기록 (Dashboard 통계용)
+        """
+        try:
+            import redis
+            from datetime import datetime
+
+            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
+            r = redis.from_url(redis_url, decode_responses=True)
+
+            today = datetime.now().strftime("%Y-%m-%d")
+            key = f"llm:stats:{today}:{service}"
+
+            r.hincrby(key, "calls", 1)
+            r.hincrby(key, "tokens_in", tokens_in)
+            r.hincrby(key, "tokens_out", tokens_out)
+            r.expire(key, 86400 * 7)  # 7일 보관
+
+            logger.debug(f"📊 [LLM Stats] {service}: +{tokens_in}/{tokens_out} tokens")
+        except Exception as e:
+            logger.warning(f"⚠️ [LLM Stats] 사용량 기록 실패: {e}")
+
     @abstractmethod
     def generate_json(
         self,
@@ -41,6 +64,7 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         ...
 
@@ -53,6 +77,7 @@ class BaseLLMProvider(ABC):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         ...
 
@@ -369,9 +394,10 @@ class OllamaLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         target_model = model_name or self.model
-        
+
         payload = {
             "model": target_model,
             "prompt": prompt,
@@ -384,10 +410,10 @@ class OllamaLLMProvider(BaseLLMProvider):
         }
 
         # [Defensive] Internal Retry for Empty/Malformed Content
-        # Sometimes Ollama returns empty string or cut-off JSON. 
+        # Sometimes Ollama returns empty string or cut-off JSON.
         # We retry locally before falling back to Cloud.
         max_internal_retries = 2
-        
+
         for attempt in range(max_internal_retries):
             try:
                 # [Debug] Log Request/Response for Qwen3 stability check
@@ -489,9 +515,10 @@ class OllamaLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         target_model = model_name or self.model
-        
+
         messages = []
         for h in history:
             role = h.get('role', 'user')
@@ -633,6 +660,7 @@ class GeminiLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.default_model]
         if fallback_models:
@@ -680,6 +708,7 @@ class GeminiLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.default_model]
         if fallback_models:
@@ -815,30 +844,7 @@ class OpenAILLMProvider(BaseLLMProvider):
         # Thinking (Judge Tier): gpt-4o (Balanced Cost/Perf)
         self.default_model = default_model or os.getenv("OPENAI_MODEL_NAME", "gpt-4o-mini")
         self.reasoning_model = os.getenv("OPENAI_REASONING_MODEL_NAME", "gpt-4o")
-    
-    def _record_llm_usage(self, service: str, tokens_in: int, tokens_out: int, model: str):
-        """
-        LLM 사용량을 Redis에 기록 (Dashboard 통계용)
-        """
-        try:
-            import redis
-            from datetime import datetime
-            
-            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379")
-            r = redis.from_url(redis_url, decode_responses=True)
-            
-            today = datetime.now().strftime("%Y-%m-%d")
-            key = f"llm:stats:{today}:{service}"
-            
-            r.hincrby(key, "calls", 1)
-            r.hincrby(key, "tokens_in", tokens_in)
-            r.hincrby(key, "tokens_out", tokens_out)
-            r.expire(key, 86400 * 7)  # 7일 보관
-            
-            logger.debug(f"📊 [LLM Stats] {service}: +{tokens_in}/{tokens_out} tokens")
-        except Exception as e:
-            logger.warning(f"⚠️ [LLM Stats] 사용량 기록 실패: {e}")
-    
+
     def _is_reasoning_model(self, model_name: str) -> bool:
         """Reasoning 모델인지 확인 (temperature 미지원)"""
         return any(rm in model_name.lower() for rm in self.REASONING_MODELS)
@@ -855,11 +861,12 @@ class OpenAILLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.default_model]
         if fallback_models:
             model_candidates.extend(fallback_models)
-        
+
         last_error: Optional[Exception] = None
         for target_model in model_candidates:
             try:
@@ -874,23 +881,23 @@ class OpenAILLMProvider(BaseLLMProvider):
                 }
                 if not self._is_reasoning_model(target_model):
                     kwargs["temperature"] = temperature
-                
+
                 response = self.client.chat.completions.create(**kwargs)
-                
+
                 # 토큰 사용량 기록
                 if hasattr(response, 'usage') and response.usage:
                     self._record_llm_usage(
-                        "news_analysis",
+                        service or "unknown",
                         response.usage.prompt_tokens,
                         response.usage.completion_tokens,
                         target_model
                     )
-                
+
                 return json.loads(response.choices[0].message.content)
             except Exception as exc:
                 last_error = exc
                 logger.warning(f"⚠️ [OpenAIProvider] 모델 '{target_model}' 호출 실패: {exc}")
-        
+
         raise RuntimeError(f"OpenAI LLM 호출 실패: {last_error}") from last_error
     
     def generate_chat(
@@ -901,22 +908,23 @@ class OpenAILLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.default_model]
         if fallback_models:
             model_candidates.extend(fallback_models)
-        
+
         messages = []
         if response_schema:
             messages.append({"role": "system", "content": "You are a helpful assistant. Always respond with valid JSON."})
-        
+
         for entry in history:
             role = entry.get('role', 'user')
             if role == 'model':
                 role = 'assistant'
             content = entry['parts'][0]['text'] if 'parts' in entry else entry.get('content', '')
             messages.append({"role": role, "content": content})
-        
+
         last_error: Optional[Exception] = None
         for target_model in model_candidates:
             try:
@@ -925,26 +933,26 @@ class OpenAILLMProvider(BaseLLMProvider):
                     kwargs["temperature"] = temperature
                 if response_schema:
                     kwargs["response_format"] = {"type": "json_object"}
-                
+
                 response = self.client.chat.completions.create(**kwargs)
                 content = response.choices[0].message.content
-                
+
                 # 토큰 사용량 기록
                 if hasattr(response, 'usage') and response.usage:
                     self._record_llm_usage(
-                        "news_analysis",
+                        service or "unknown",
                         response.usage.prompt_tokens,
                         response.usage.completion_tokens,
                         target_model
                     )
-                
+
                 if response_schema:
                     return json.loads(content)
                 return {"text": content}
             except Exception as exc:
                 last_error = exc
                 logger.warning(f"⚠️ [OpenAIProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
-        
+
         raise RuntimeError(f"OpenAI Chat 호출 실패: {last_error}") from last_error
 
 
@@ -1023,12 +1031,14 @@ class CloudFailoverProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         return self._failover_call(
             "generate_json",
             prompt=prompt,
             response_schema=response_schema,
             temperature=temperature,
+            service=service,
         )
 
     def generate_chat(
@@ -1039,12 +1049,14 @@ class CloudFailoverProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         return self._failover_call(
             "generate_chat",
             history=history,
             response_schema=response_schema,
             temperature=temperature,
+            service=service,
         )
 
     def _failover_call(self, method: str, **kwargs) -> Dict:
@@ -1114,11 +1126,12 @@ class ClaudeLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.fast_model]
         if fallback_models:
             model_candidates.extend(fallback_models)
-        
+
         last_error: Optional[Exception] = None
         for target_model in model_candidates:
             try:
@@ -1129,6 +1142,16 @@ class ClaudeLLMProvider(BaseLLMProvider):
                     system="You are a helpful assistant. Always respond with valid JSON only, no markdown formatting.",
                     messages=[{"role": "user", "content": prompt}]
                 )
+
+                # 토큰 사용량 기록
+                if service and hasattr(response, 'usage') and response.usage:
+                    self._record_llm_usage(
+                        service,
+                        response.usage.input_tokens,
+                        response.usage.output_tokens,
+                        target_model
+                    )
+
                 content = response.content[0].text
                 raw_content = content
                 if "```json" in content:
@@ -1143,7 +1166,7 @@ class ClaudeLLMProvider(BaseLLMProvider):
             except Exception as exc:
                 last_error = exc
                 logger.warning(f"⚠️ [ClaudeProvider] 모델 '{target_model}' 호출 실패: {exc}")
-        
+
         raise RuntimeError(f"Claude LLM 호출 실패: {last_error}") from last_error
     
     def generate_chat(
@@ -1154,43 +1177,54 @@ class ClaudeLLMProvider(BaseLLMProvider):
         temperature: float = 0.2,
         model_name: Optional[str] = None,
         fallback_models: Optional[Sequence[str]] = None,
+        service: Optional[str] = None,
     ) -> Dict:
         model_candidates = [model_name or self.fast_model]
         if fallback_models:
             model_candidates.extend(fallback_models)
-        
+
         messages = []
         system_msg = "You are a helpful assistant."
-        
+
         # [Fix] Extract System Prompt from history
         for entry in history:
             role = entry.get('role', 'user')
             content = entry['parts'][0]['text'] if 'parts' in entry else entry.get('content', '')
-            
+
             if role == 'system':
                 system_msg = content
                 continue
-                
+
             if role == 'model':
                 role = 'assistant'
-                
+
             messages.append({"role": role, "content": content})
-        
+
         last_error: Optional[Exception] = None
         for target_model in model_candidates:
             try:
                 if response_schema:
                     system_msg += " Always respond with valid JSON only, no markdown formatting."
-                
+
                 response = self.client.messages.create(
                     model=target_model,
-                    max_tokens=4096, 
+                    max_tokens=4096,
                     temperature=temperature,
                     system=system_msg,
                     messages=messages
                 )
+
+                # 토큰 사용량 기록
+                if service and hasattr(response, 'usage') and response.usage:
+                    self._record_llm_usage(
+                        service,
+                        response.usage.input_tokens,
+                        response.usage.output_tokens,
+                        target_model
+                    )
+
                 content = response.content[0].text
-                
+
                 if response_schema:
                     if "```json" in content:
                         content = content.split("```json")[1].split("```")[0]
@@ -1201,7 +1235,7 @@ class ClaudeLLMProvider(BaseLLMProvider):
             except Exception as exc:
                 last_error = exc
                 logger.warning(f"⚠️ [ClaudeProvider] Chat 모델 '{target_model}' 호출 실패: {exc}")
-        
+
         raise RuntimeError(f"Claude Chat 호출 실패: {last_error}") from last_error
 
     def generate_json_with_thinking(
@@ -1212,6 +1246,7 @@ class ClaudeLLMProvider(BaseLLMProvider):
         model_name: str = "claude-opus-4-6",
         budget_tokens: int = 8000,
         max_tokens: int = 16000,
+        service: Optional[str] = None,
     ) -> Dict:
         """
         Extended Thinking을 사용한 JSON 생성.
@@ -1266,13 +1301,20 @@ class ClaudeLLMProvider(BaseLLMProvider):
 
             parsed = json.loads(content.strip())
 
-            # 토큰 사용량 로깅
+            # 토큰 사용량 로깅 + Redis 기록
             if hasattr(response, "usage"):
                 logger.info(
                     f"🧠 [Claude Thinking] model={model_name}, "
                     f"input={response.usage.input_tokens}, "
                     f"output={response.usage.output_tokens}"
                 )
+                if service:
+                    self._record_llm_usage(
+                        service,
+                        response.usage.input_tokens,
+                        response.usage.output_tokens,
+                        model_name
+                    )
 
             return parsed
 

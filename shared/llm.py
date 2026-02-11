@@ -522,7 +522,8 @@ class JennieBrain:
             result = provider.generate_json(
                 prompt,
                 ANALYST_RESPONSE_SCHEMA,
-                temperature=0.2
+                temperature=0.2,
+                service="scout",
             )
 
             # 등급 강제 산정 (LLM 출력 오버라이드)
@@ -674,7 +675,7 @@ class JennieBrain:
             logger.info(f"--- [JennieBrain/Briefing] 리포트 생성 via {provider.name} (model={briefing_model}) ---")
 
             chat_history = [{"role": "user", "content": prompt}]
-            result = provider.generate_chat(chat_history, temperature=0.7, model_name=briefing_model)
+            result = provider.generate_chat(chat_history, temperature=0.7, model_name=briefing_model, service="briefing")
 
             if isinstance(result, dict):
                 return result.get('text') or result.get('content') or str(result)

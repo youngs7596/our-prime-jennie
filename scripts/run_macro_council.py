@@ -186,6 +186,7 @@ def run_structured_council(
             prompt=strategist_prompt,
             response_schema=MACRO_STRATEGIST_SCHEMA,
             temperature=0.1,
+            service="macro_council",
         )
         logger.info(
             f"전략가 분석 완료: sentiment={strategist_output.get('overall_sentiment')}, "
@@ -203,6 +204,7 @@ def run_structured_council(
                 response_schema=MACRO_STRATEGIST_SCHEMA,
                 budget_tokens=4000,
                 max_tokens=12000,
+                service="macro_council",
             )
             total_cost += 0.35
             logger.info("전략가 Fallback(Claude Opus 4.6) 성공")
@@ -231,6 +233,7 @@ def run_structured_council(
             prompt=risk_prompt,
             response_schema=MACRO_RISK_ANALYST_SCHEMA,
             temperature=0.1,
+            service="macro_council",
         )
         logger.info(
             f"리스크분석가 완료: political_risk={risk_output.get('political_risk_level')}, "
@@ -276,6 +279,7 @@ def run_structured_council(
             response_schema=MACRO_CHIEF_JUDGE_SCHEMA,
             budget_tokens=4000,
             max_tokens=8000,
+            service="macro_council",
         )
         logger.info(
             f"수석심판 완료: final_sentiment={judge_output.get('final_sentiment')}, "

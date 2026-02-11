@@ -10,8 +10,9 @@ auth.get_secret과 API 클라이언트들을 mock하여 외부 의존성 없이 
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch, PropertyMock, call
 import json
+import os
 
 
 # ============================================================================
@@ -521,12 +522,240 @@ class TestProviderProperties:
     def test_gemini_default_model_from_env(self, mock_client_class, mock_get_secret, mock_safety_settings, monkeypatch):
         """환경변수에서 기본 모델명 로드"""
         from shared.llm_providers import GeminiLLMProvider
-        
+
         mock_get_secret.return_value = 'fake-api-key'
         mock_client_class.return_value = MagicMock()
         monkeypatch.setenv('LLM_MODEL_NAME', 'gemini-custom-pro')
-        
+
         provider = GeminiLLMProvider('project', 'secret', mock_safety_settings)
-        
+
         assert provider.default_model == 'gemini-custom-pro'
+
+
+# ============================================================================
+# Tests: LLM Usage Recording (_record_llm_usage)
+# ============================================================================
+
+class TestLLMUsageRecording:
+    """LLM 사용량 Redis 기록 테스트"""
+
+    @patch('redis.from_url')
+    def test_base_provider_record_llm_usage(self, mock_redis_from_url, monkeypatch):
+        """BaseLLMProvider._record_llm_usage가 Redis에 올바르게 기록"""
+        from shared.llm_providers import BaseLLMProvider
+
+        # Concrete subclass for testing
+        class DummyProvider(BaseLLMProvider):
+            def generate_json(self, *a, **kw): pass
+            def generate_chat(self, *a, **kw): pass
+
+        monkeypatch.setenv("REDIS_URL", "redis://test:6379")
+        mock_r = MagicMock()
+        mock_redis_from_url.return_value = mock_r
+
+        provider = DummyProvider()
+        provider._record_llm_usage("scout", 1000, 500, "deepseek-chat")
+
+        mock_redis_from_url.assert_called_once()
+        mock_r.hincrby.assert_any_call(mock_r.hincrby.call_args_list[0][0][0], "calls", 1)
+        mock_r.hincrby.assert_any_call(mock_r.hincrby.call_args_list[1][0][0], "tokens_in", 1000)
+        mock_r.hincrby.assert_any_call(mock_r.hincrby.call_args_list[2][0][0], "tokens_out", 500)
+        mock_r.expire.assert_called_once()
+
+    @patch('redis.from_url')
+    def test_record_llm_usage_redis_failure_no_raise(self, mock_redis_from_url):
+        """Redis 실패 시 예외를 발생시키지 않음"""
+        from shared.llm_providers import BaseLLMProvider
+
+        class DummyProvider(BaseLLMProvider):
+            def generate_json(self, *a, **kw): pass
+            def generate_chat(self, *a, **kw): pass
+
+        mock_redis_from_url.side_effect = Exception("Connection refused")
+
+        provider = DummyProvider()
+        # Should not raise
+        provider._record_llm_usage("scout", 100, 50, "test-model")
+
+    def test_openai_generate_json_passes_service(self, sample_response_schema):
+        """OpenAILLMProvider.generate_json이 service 파라미터를 _record_llm_usage에 전달"""
+        from shared.llm_providers import OpenAILLMProvider
+
+        provider = object.__new__(OpenAILLMProvider)
+        provider.safety_settings = None
+        provider.default_model = 'deepseek-chat'
+        provider.REASONING_MODELS = {"gpt-5-mini", "o1"}
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({
+            'score': 80, 'grade': 'A', 'reason': 'Good'
+        })
+        mock_response.usage.prompt_tokens = 500
+        mock_response.usage.completion_tokens = 200
+        mock_client.chat.completions.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_json("Test", sample_response_schema, service="scout")
+            mock_record.assert_called_once_with("scout", 500, 200, "deepseek-chat")
+
+    def test_openai_generate_json_default_service_unknown(self, sample_response_schema):
+        """OpenAILLMProvider.generate_json에서 service 미지정 시 'unknown'"""
+        from shared.llm_providers import OpenAILLMProvider
+
+        provider = object.__new__(OpenAILLMProvider)
+        provider.safety_settings = None
+        provider.default_model = 'deepseek-chat'
+        provider.REASONING_MODELS = {"gpt-5-mini"}
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({
+            'score': 70, 'grade': 'B', 'reason': 'OK'
+        })
+        mock_response.usage.prompt_tokens = 300
+        mock_response.usage.completion_tokens = 100
+        mock_client.chat.completions.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_json("Test", sample_response_schema)
+            mock_record.assert_called_once_with("unknown", 300, 100, "deepseek-chat")
+
+    def test_openai_generate_chat_passes_service(self):
+        """OpenAILLMProvider.generate_chat이 service 파라미터를 _record_llm_usage에 전달"""
+        from shared.llm_providers import OpenAILLMProvider
+
+        provider = object.__new__(OpenAILLMProvider)
+        provider.safety_settings = None
+        provider.default_model = 'deepseek-chat'
+        provider.REASONING_MODELS = {"gpt-5-mini"}
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "Hello"
+        mock_response.usage.prompt_tokens = 100
+        mock_response.usage.completion_tokens = 50
+        mock_client.chat.completions.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_chat(
+                [{"role": "user", "content": "Hi"}],
+                service="briefing"
+            )
+            mock_record.assert_called_once_with("briefing", 100, 50, "deepseek-chat")
+
+    def test_claude_generate_json_records_usage(self, sample_response_schema):
+        """ClaudeLLMProvider.generate_json이 service 지정 시 사용량 기록"""
+        from shared.llm_providers import ClaudeLLMProvider
+
+        provider = object.__new__(ClaudeLLMProvider)
+        provider.safety_settings = None
+        provider.fast_model = 'claude-haiku-4-5'
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.text = json.dumps({'score': 85, 'grade': 'A', 'reason': 'Great'})
+        mock_response.content = [mock_content]
+        mock_response.usage.input_tokens = 800
+        mock_response.usage.output_tokens = 300
+        mock_client.messages.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_json("Test", sample_response_schema, service="macro_council")
+            mock_record.assert_called_once_with("macro_council", 800, 300, "claude-haiku-4-5")
+
+    def test_claude_generate_json_no_record_without_service(self, sample_response_schema):
+        """ClaudeLLMProvider.generate_json에서 service=None이면 기록 안 함"""
+        from shared.llm_providers import ClaudeLLMProvider
+
+        provider = object.__new__(ClaudeLLMProvider)
+        provider.safety_settings = None
+        provider.fast_model = 'claude-haiku-4-5'
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.text = json.dumps({'score': 85, 'grade': 'A', 'reason': 'Great'})
+        mock_response.content = [mock_content]
+        mock_response.usage.input_tokens = 800
+        mock_response.usage.output_tokens = 300
+        mock_client.messages.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_json("Test", sample_response_schema)
+            mock_record.assert_not_called()
+
+    def test_claude_generate_chat_records_usage(self):
+        """ClaudeLLMProvider.generate_chat이 service 지정 시 사용량 기록"""
+        from shared.llm_providers import ClaudeLLMProvider
+
+        provider = object.__new__(ClaudeLLMProvider)
+        provider.safety_settings = None
+        provider.fast_model = 'claude-haiku-4-5'
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_content = MagicMock()
+        mock_content.text = "Hello response"
+        mock_response.content = [mock_content]
+        mock_response.usage.input_tokens = 200
+        mock_response.usage.output_tokens = 100
+        mock_client.messages.create.return_value = mock_response
+        provider.client = mock_client
+
+        with patch.object(provider, '_record_llm_usage') as mock_record:
+            provider.generate_chat(
+                [{"role": "user", "content": "Hi"}],
+                service="briefing"
+            )
+            mock_record.assert_called_once_with("briefing", 200, 100, "claude-haiku-4-5")
+
+    def test_cloud_failover_passes_service_to_inner_provider(self, sample_response_schema):
+        """CloudFailoverProvider가 service를 inner provider에 전달"""
+        from shared.llm_providers import CloudFailoverProvider
+
+        # 직접 생성 (auth 우회)
+        provider = object.__new__(CloudFailoverProvider)
+        provider.tier_name = "REASONING"
+
+        mock_inner = MagicMock()
+        mock_inner.generate_json.return_value = {'score': 70, 'grade': 'B', 'reason': 'OK'}
+        provider._providers = [mock_inner]
+        provider._provider_names = ["MockProvider"]
+
+        provider.generate_json("Test", sample_response_schema, service="scout")
+
+        mock_inner.generate_json.assert_called_once()
+        call_kwargs = mock_inner.generate_json.call_args[1]
+        assert call_kwargs['service'] == 'scout'
+
+    def test_cloud_failover_chat_passes_service(self):
+        """CloudFailoverProvider.generate_chat도 service 전달"""
+        from shared.llm_providers import CloudFailoverProvider
+
+        provider = object.__new__(CloudFailoverProvider)
+        provider.tier_name = "REASONING"
+
+        mock_inner = MagicMock()
+        mock_inner.generate_chat.return_value = {'text': 'response'}
+        provider._providers = [mock_inner]
+        provider._provider_names = ["MockProvider"]
+
+        provider.generate_chat(
+            [{"role": "user", "content": "Hi"}],
+            service="macro_council"
+        )
+
+        mock_inner.generate_chat.assert_called_once()
+        call_kwargs = mock_inner.generate_chat.call_args[1]
+        assert call_kwargs['service'] == 'macro_council'
 
