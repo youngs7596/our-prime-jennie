@@ -380,21 +380,23 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-11 | LLM 사용 통계 서비스별 정확 기록 (_record_llm_usage 승격) | `session-2026-02-11-20-30.md` |
 | 2026-02-10 | Portfolio Guard Layer 2 (섹터 종목 수 + 현금 하한선) | `session-2026-02-10-20-30.md` |
 | 2026-02-08 | 필터 체인 재배치, 문서 현행화 | - |
 | 2026-02-07 | vLLM 전환, Quant Scorer v2, Unified Analyst, 네이버 섹터 통합 | - |
 | 2026-02-03 (밤) | 코드 손실 조사, MacroCouncil 기능 복구 | `session-2026-02-03-23-04.md` |
 
-### 현재 시스템 상태 (2026-02-10)
+### 현재 시스템 상태 (2026-02-11)
 
 - **Scout**: Unified Analyst Pipeline (1-pass LLM), Quant Scorer v2 프로덕션
 - **LLM**: vLLM (EXAONE 4.0 32B AWQ) + CloudFailoverProvider (deepseek_cloud)
+- **LLM Stats**: 서비스별 Redis 기록 (scout, briefing, macro_council) — Dashboard 자동 표시
 - **벡터DB**: ChromaDB → Qdrant 전환 완료
 - **섹터**: 네이버 업종 분류 Single Source of Truth (79개 세분류 → 14개 대분류)
 - **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator)
-- **Dashboard**: Macro Insight 카드, 자산 스냅샷
+- **Dashboard**: Macro Insight 카드, 자산 스냅샷, LLM 사용 통계 (scout/briefing/macro_council)
 - **Portfolio Guard**: 섹터 종목 수 제한(3) + 국면별 현금 하한선 (shadow mode 토글 가능)
-- **테스트**: 1140 shared + 26 buy-executor passed
+- **테스트**: 1160 shared + 26 buy-executor + 31 macro council passed
 
 ### 주요 데이터 흐름
 
@@ -409,5 +411,5 @@ git push
 ```
 
 ---
-*Last Updated: 2026-02-10*
+*Last Updated: 2026-02-11*
 *상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*
