@@ -46,14 +46,24 @@ def get_model_info_for_tier(tier: LLMTier, role_desc: str) -> LLMModelInfo:
         # LLMFactory 내부 로직 재사용 (Accessing protected methods for inspection)
         provider_type = LLMFactory._get_env_provider_type(tier)
         
+        # Ollama 모델명 → 실제 vLLM 모델 표시명 매핑
+        VLLM_DISPLAY_MAP = {
+            "exaone3.5:7.8b": "EXAONE 4.0 32B",
+            "exaone": "EXAONE 4.0 32B",
+            "gpt-oss:20b": "EXAONE 4.0 32B",
+        }
+
         model_name = "Unknown"
         if provider_type == "ollama":
-            model_name = LLMFactory._get_local_model_name(tier)
+            raw_name = LLMFactory._get_local_model_name(tier)
+            # vLLM 표시명이 있으면 사용, 없으면 원본 이름
+            model_name = VLLM_DISPLAY_MAP.get(raw_name, raw_name)
+        elif provider_type == "deepseek_cloud":
+            model_name = "DeepSeek v3.2"
         elif provider_type == "openai":
             model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-5.2")
         elif provider_type == "gemini":
-            model_name = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview") # Default from Factory
-            # Fast Tier usually uses Flash
+            model_name = os.getenv("LLM_MODEL_NAME", "gemini-3-pro-preview")
             if tier == LLMTier.FAST:
                  model_name = os.getenv("LLM_FLASH_MODEL_NAME", "gemini-2.5-flash")
         elif provider_type == "claude":

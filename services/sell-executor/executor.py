@@ -47,10 +47,11 @@ class SellExecutor:
     def execute_sell_order(self, stock_code: str, stock_name: str, quantity: int,
                           sell_reason: str, strategy_preset: dict | None = None,
                           risk_setting: dict | None = None,
-                          dry_run: bool = True, current_price: float | None = None) -> dict:
+                          dry_run: bool = True, current_price: float | None = None,
+                          signal_issued_at: str | None = None) -> dict:
         """
         매도 주문 실행
-        
+
         Args:
             stock_code: 종목 코드
             stock_name: 종목 이름
@@ -60,6 +61,7 @@ class SellExecutor:
             risk_setting: 리스크 설정 (Optional)
             dry_run: True면 로그만 기록, False면 실제 주문
             current_price: 현재가 (Optional). 제공되면 API 조회 없이 즉시 사용.
+            signal_issued_at: 매도 시그널 발행 시각 (ISO format, UTC)
         
         Returns:
             {
@@ -73,7 +75,8 @@ class SellExecutor:
             }
         """
         logger.info(f"=== 매도 주문 실행 시작: {stock_name}({stock_code}) ===")
-        
+        execution_started_at = datetime.now(timezone.utc).isoformat()
+
         # [Emergency Stop Check]
         is_manual = "MANUAL" in sell_reason.upper()
         if not is_manual and is_trading_stopped():
@@ -207,6 +210,7 @@ class SellExecutor:
                     logger.error(f"RAG 컨텍스트 조회 오류: {e}")
                 
                 # 복기용 지표 수집
+                execution_completed_at = datetime.now(timezone.utc).isoformat()
                 key_metrics_dict = {
                     "sell_reason": sell_reason,
                     "current_price": float(effective_price),
@@ -218,7 +222,10 @@ class SellExecutor:
                     "high_price": float(holding.get('high_price', 0)),
                     "rag_fresh": is_fresh,
                     "rag_last_updated": str(last_updated) if last_updated else None,
-                    "risk_setting": risk_setting
+                    "risk_setting": risk_setting,
+                    "signal_issued_at": signal_issued_at,
+                    "execution_started_at": execution_started_at,
+                    "execution_completed_at": execution_completed_at,
                 }
                 
                 # 4. 매도 주문 실행

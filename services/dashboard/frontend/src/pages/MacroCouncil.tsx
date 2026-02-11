@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { macroApi, councilApi } from '@/lib/api'
+import { macroApi, councilApi, llmApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export function MacroCouncilPage() {
@@ -41,6 +41,12 @@ export function MacroCouncilPage() {
     queryKey: ['council-review'],
     queryFn: councilApi.getDailyReview,
     refetchInterval: 600000,
+    staleTime: 300000,
+  })
+
+  const { data: llmStats } = useQuery({
+    queryKey: ['llm-stats'],
+    queryFn: llmApi.getStats,
     staleTime: 300000,
   })
 
@@ -94,6 +100,11 @@ export function MacroCouncilPage() {
           <h1 className="text-2xl font-semibold text-white flex items-center gap-3">
             <Globe className="w-7 h-7" />
             Macro Council
+            {macroInsight?.insight_date && (
+              <span className="text-sm font-normal text-muted-foreground ml-1">
+                ({macroInsight.insight_date})
+              </span>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             3현자 Council의 매크로 분석 및 트레이딩 권고
@@ -534,17 +545,23 @@ export function MacroCouncilPage() {
             </CardContent>
           </Card>
 
-          {/* Footer: Source + Cost (inline) */}
-          {(macroInsight.source_channel || macroInsight.source_analyst || macroInsight.council_cost_usd) && (
-            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-              <div className="flex items-center gap-4">
-                {macroInsight.source_channel && (
-                  <span>출처: <span className="text-blue-400">@{macroInsight.source_channel}</span></span>
-                )}
-                {macroInsight.source_analyst && (
-                  <span>분석가: <span className="text-white">{macroInsight.source_analyst}</span></span>
-                )}
-              </div>
+          {/* Footer: Source + Cost + LLM Usage (inline) */}
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+            <div className="flex items-center gap-4">
+              {macroInsight.source_channel && (
+                <span>출처: <span className="text-blue-400">@{macroInsight.source_channel}</span></span>
+              )}
+              {macroInsight.source_analyst && (
+                <span>분석가: <span className="text-white">{macroInsight.source_analyst}</span></span>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              {llmStats?.macro_council && (llmStats.macro_council.calls > 0 || llmStats.macro_council.tokens > 0) && (
+                <div className="flex items-center gap-1">
+                  <Zap className="w-3 h-3" />
+                  <span>LLM {llmStats.macro_council.calls}회 / {llmStats.macro_council.tokens.toLocaleString()} tokens</span>
+                </div>
+              )}
               {macroInsight.council_cost_usd && (
                 <div className="flex items-center gap-1">
                   <DollarSign className="w-3 h-3" />
@@ -554,7 +571,7 @@ export function MacroCouncilPage() {
                 </div>
               )}
             </div>
-          )}
+          </div>
         </>
       )}
     </div>

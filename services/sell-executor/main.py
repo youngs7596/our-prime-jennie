@@ -91,6 +91,7 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
     quantity = sell_request.get('quantity')
     sell_reason = sell_request.get('sell_reason', 'Unknown')
     current_price = sell_request.get('current_price')
+    signal_issued_at = sell_request.get('signal_issued_at')
 
     if not all([stock_code, stock_name, quantity]):
         raise ValueError("Missing required fields")
@@ -118,7 +119,8 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
                 quantity=quantity,
                 sell_reason=sell_reason,
                 dry_run=dry_run,
-                current_price=current_price
+                current_price=current_price,
+                signal_issued_at=signal_issued_at
             )
     else:
         result = executor.execute_sell_order(
@@ -127,7 +129,8 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
             quantity=quantity,
             sell_reason=sell_reason,
             dry_run=dry_run,
-            current_price=current_price
+            current_price=current_price,
+            signal_issued_at=signal_issued_at
         )
     return result
 

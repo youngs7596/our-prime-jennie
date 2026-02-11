@@ -6,7 +6,7 @@ import time
 import logging
 import sys
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Event
 import pytz
 
@@ -269,9 +269,9 @@ class PriceMonitor:
                 profit_lock_l1_trigger = max(1.5, min(3.0, atr_pct * 1.5))
                 profit_lock_l2_trigger = max(3.0, min(5.0, atr_pct * 2.5))
                 
-                # Level 1: 동적 트리거 도달 시 -> 본전(+0.2% fee/tax 고려) 보장
+                # Level 1: 동적 트리거 도달 시 -> 본전(+0.5% 슬리피지 마진 포함) 보장
                 if profit_pct >= profit_lock_l1_trigger:
-                    lock_stop = 0.2
+                    lock_stop = 0.5
                     if profit_pct < lock_stop: # 이미 떨어졌으면 즉시 청산
                          potential_signal = {"signal": True, "reason": f"Profit Lock L1 Break (Hit {profit_lock_l1_trigger:.1f}%, Now {profit_pct:.2f}% < {lock_stop}%)", "quantity_pct": 100.0}
                 
@@ -297,13 +297,15 @@ class PriceMonitor:
                 profit_lock_l1_trigger = max(1.5, min(3.0, atr_pct * 1.5))
                 profit_lock_l2_trigger = max(3.0, min(5.0, atr_pct * 2.5))
                 
-                # L2: 고점이 L2 트리거 이상이었는데, 현재 수익이 1.0% 미만이면 청산
-                if high_profit_pct >= profit_lock_l2_trigger and profit_pct < 1.0:
-                    potential_signal = {"signal": True, "reason": f"Profit Lock L2 (High {high_profit_pct:.1f}% >= {profit_lock_l2_trigger:.1f}%, Now {profit_pct:.1f}% < 1.0%)", "quantity_pct": 100.0}
-                
-                # L1: 고점이 L1 트리거 이상이었는데, 현재 수익이 0.2% 미만이면 청산
-                elif high_profit_pct >= profit_lock_l1_trigger and profit_pct < 0.2:
-                    potential_signal = {"signal": True, "reason": f"Profit Lock L1 (High {high_profit_pct:.1f}% >= {profit_lock_l1_trigger:.1f}%, Now {profit_pct:.1f}% < 0.2%)", "quantity_pct": 100.0}
+                # L2: 고점이 L2 트리거 이상이었는데, 현재 수익이 1.5% 미만이면 청산
+                # (+0.5% 슬리피지 마진: 체결 시에도 최소 +1.0% 이상 보장)
+                if high_profit_pct >= profit_lock_l2_trigger and profit_pct < 1.5:
+                    potential_signal = {"signal": True, "reason": f"Profit Lock L2 (High {high_profit_pct:.1f}% >= {profit_lock_l2_trigger:.1f}%, Now {profit_pct:.1f}% < 1.5%)", "quantity_pct": 100.0}
+
+                # L1: 고점이 L1 트리거 이상이었는데, 현재 수익이 0.5% 미만이면 청산
+                # (+0.3% 슬리피지 마진: 체결 시에도 본전 이상 보장)
+                elif high_profit_pct >= profit_lock_l1_trigger and profit_pct < 0.5:
+                    potential_signal = {"signal": True, "reason": f"Profit Lock L1 (High {high_profit_pct:.1f}% >= {profit_lock_l1_trigger:.1f}%, Now {profit_pct:.1f}% < 0.5%)", "quantity_pct": 100.0}
             
             # =====================================================================
             # 0.5 MACD Divergence Early Warning
@@ -684,7 +686,8 @@ class PriceMonitor:
             "quantity": qty,
             "current_price": current_price,
             "sell_reason": signal['reason'],
-            "holding_id": holding.get('id')
+            "holding_id": holding.get('id'),
+            "signal_issued_at": datetime.now(timezone.utc).isoformat()
         }
         
         # RabbitMQPublisher.publish() 사용 (create_task 대신)

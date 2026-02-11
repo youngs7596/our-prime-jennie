@@ -426,9 +426,9 @@ export function OverviewPage() {
           <CardContent>
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                <p className="text-xs text-muted-foreground mb-1">News Analysis (Fast)</p>
+                <p className="text-xs text-muted-foreground mb-1">News Analysis</p>
                 <p className="text-xs font-medium text-green-400 truncate">
-                  {llmConfig?.fast ? `${llmConfig.fast.provider.toUpperCase()} ${llmConfig.fast.model_name}` : '-'}
+                  {llmConfig?.fast ? `${llmConfig.fast.model_name}` : '-'}
                 </p>
                 <div className="mt-2 text-right">
                   <p className="text-lg font-semibold text-green-400">{llmStats.news_analysis?.calls || llmStats.fast?.calls || 0}회</p>
@@ -438,24 +438,24 @@ export function OverviewPage() {
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                <p className="text-xs text-muted-foreground mb-1">Unified Analyst (Reasoning)</p>
+                <p className="text-xs text-muted-foreground mb-1">Unified Analyst</p>
                 <p className="text-xs font-medium text-blue-400 truncate">
-                  {llmConfig?.reasoning ? `${llmConfig.reasoning.provider.toUpperCase()} ${llmConfig.reasoning.model_name}` : '-'}
+                  {llmConfig?.reasoning ? `${llmConfig.reasoning.model_name}` : '-'}
                 </p>
                 <div className="mt-2 text-right">
-                  <p className="text-lg font-semibold text-blue-400">{llmStats.scout?.calls || llmStats.reasoning?.calls || 0}회</p>
+                  <p className="text-lg font-semibold text-blue-400">{llmStats.scout?.calls || 0}회</p>
                   <p className="text-xs text-blue-400/60">
                     {((llmStats.scout?.tokens || 0)).toLocaleString()} tokens
                   </p>
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-purple-500/5 border border-purple-500/20">
-                <p className="text-xs text-muted-foreground mb-1">Briefing (Thinking)</p>
+                <p className="text-xs text-muted-foreground mb-1">Daily Briefing</p>
                 <p className="text-xs font-medium text-purple-400 truncate">
-                  {llmConfig?.thinking ? `${llmConfig.thinking.provider.toUpperCase()} ${llmConfig.thinking.model_name}` : '-'}
+                  Claude Opus 4.6
                 </p>
                 <div className="mt-2 text-right">
-                  <p className="text-lg font-semibold text-purple-400">{llmStats.briefing?.calls || llmStats.thinking?.calls || 0}회</p>
+                  <p className="text-lg font-semibold text-purple-400">{llmStats.briefing?.calls || 0}회</p>
                   <p className="text-xs text-purple-400/60">
                     {((llmStats.briefing?.tokens || 0)).toLocaleString()} tokens
                   </p>
