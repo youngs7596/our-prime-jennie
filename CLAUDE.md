@@ -380,11 +380,11 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-11 (밤) | 모멘텀 전략 지정가 주문 + 확인 바 (고점 매수 방지) | `session-2026-02-11-23-00.md` |
 | 2026-02-11 | LLM 사용 통계 서비스별 정확 기록 (_record_llm_usage 승격) | `session-2026-02-11-20-30.md` |
 | 2026-02-10 | Portfolio Guard Layer 2 (섹터 종목 수 + 현금 하한선) | `session-2026-02-10-20-30.md` |
 | 2026-02-08 | 필터 체인 재배치, 문서 현행화 | - |
 | 2026-02-07 | vLLM 전환, Quant Scorer v2, Unified Analyst, 네이버 섹터 통합 | - |
-| 2026-02-03 (밤) | 코드 손실 조사, MacroCouncil 기능 복구 | `session-2026-02-03-23-04.md` |
 
 ### 현재 시스템 상태 (2026-02-11)
 
@@ -396,7 +396,8 @@ git push
 - **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator)
 - **Dashboard**: Macro Insight 카드, 자산 스냅샷, LLM 사용 통계 (scout/briefing/macro_council)
 - **Portfolio Guard**: 섹터 종목 수 제한(3) + 국면별 현금 하한선 (shadow mode 토글 가능)
-- **테스트**: 1160 shared + 26 buy-executor + 31 macro council passed
+- **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 (기본 비활성, env var 토글)
+- **테스트**: 1160 shared + 26 buy-executor + 16 buy-scanner + 31 macro council passed
 
 ### 주요 데이터 흐름
 
