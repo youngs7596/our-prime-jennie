@@ -777,7 +777,7 @@ class GeminiLLMProvider(BaseLLMProvider):
 class OpenAILLMProvider(BaseLLMProvider):
     """OpenAI GPT Provider for reasoning-heavy tasks"""
     
-    REASONING_MODELS = {"gpt-5-mini", "gpt-5", "o1", "o1-mini", "o1-preview", "o3", "o3-mini"}
+    REASONING_MODELS = {"gpt-5-mini", "gpt-5", "gpt-5.2", "o1", "o1-mini", "o1-preview", "o3", "o3-mini"}
     
     def __init__(self, project_id: Optional[str] = None, openai_api_key_secret: Optional[str] = None, safety_settings=None, base_url: Optional[str] = None, api_key: Optional[str] = None, default_model: Optional[str] = None):
         super().__init__(safety_settings)
@@ -1204,5 +1204,84 @@ class ClaudeLLMProvider(BaseLLMProvider):
         
         raise RuntimeError(f"Claude Chat 호출 실패: {last_error}") from last_error
 
+    def generate_json_with_thinking(
+        self,
+        prompt: str,
+        response_schema: Dict,
+        *,
+        model_name: str = "claude-opus-4-6",
+        budget_tokens: int = 8000,
+        max_tokens: int = 16000,
+    ) -> Dict:
+        """
+        Extended Thinking을 사용한 JSON 생성.
+        Claude Opus 4.6의 깊은 사고 모드를 활용하여 복잡한 분석을 수행합니다.
+
+        주의사항:
+        - thinking 모드에서는 temperature 설정 불가 (API에서 1.0 고정)
+        - system 파라미터 사용 가능하나, thinking과 함께 사용 시 제한 있을 수 있음
+
+        Args:
+            prompt: 분석 요청 프롬프트 (시스템 지시 포함)
+            response_schema: 참고용 JSON 스키마 (API 강제 아님)
+            model_name: 사용할 모델 (기본: claude-opus-4-6)
+            budget_tokens: thinking에 할당할 최대 토큰 수
+            max_tokens: 전체 응답 최대 토큰 수 (thinking + text 합계)
+
+        Returns:
+            파싱된 JSON dict
+        """
+        try:
+            response = self.client.messages.create(
+                model=model_name,
+                max_tokens=max_tokens,
+                thinking={
+                    "type": "enabled",
+                    "budget_tokens": budget_tokens,
+                },
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            # Extended Thinking 응답: [ThinkingBlock, TextBlock]
+            text_content = ""
+            for block in response.content:
+                if block.type == "text":
+                    text_content = block.text
+                    break
+
+            if not text_content:
+                raise ValueError("Extended Thinking 응답에서 TextBlock을 찾을 수 없습니다.")
+
+            # JSON 추출
+            content = text_content.strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            elif content[0] != "{":
+                start = content.find("{")
+                end = content.rfind("}") + 1
+                if start != -1 and end > start:
+                    content = content[start:end]
+
+            parsed = json.loads(content.strip())
+
+            # 토큰 사용량 로깅
+            if hasattr(response, "usage"):
+                logger.info(
+                    f"🧠 [Claude Thinking] model={model_name}, "
+                    f"input={response.usage.input_tokens}, "
+                    f"output={response.usage.output_tokens}"
+                )
+
+            return parsed
+
+        except json.JSONDecodeError as je:
+            logger.error(f"❌ [Claude Thinking] JSON 파싱 실패: {je}")
+            logger.error(f"   Raw text: {text_content[:500]}...")
+            raise
+        except Exception as exc:
+            logger.error(f"❌ [Claude Thinking] 호출 실패: {exc}")
+            raise
 
 

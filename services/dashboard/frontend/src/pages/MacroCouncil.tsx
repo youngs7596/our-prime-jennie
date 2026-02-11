@@ -146,7 +146,7 @@ export function MacroCouncilPage() {
         </Card>
       ) : (
         <>
-          {/* Summary Cards Row */}
+          {/* 1. Summary Cards Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Sentiment Card */}
             <Card>
@@ -205,18 +205,19 @@ export function MacroCouncilPage() {
             </Card>
           </div>
 
-          {/* Main Content Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Global Indicators */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Globe className="w-4 h-4 text-muted-foreground" />
-                    글로벌 지표
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
+          {/* 2. 글로벌 시장 현황 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Globe className="w-4 h-4 text-muted-foreground" />
+                글로벌 시장 현황
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left: 글로벌 지표 */}
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3 font-medium">글로벌 지표</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <p className="text-xs text-muted-foreground mb-1">USD/KRW</p>
@@ -235,18 +236,11 @@ export function MacroCouncilPage() {
                       <p className="text-xl font-semibold">{macroInsight.data_completeness_pct || '-'}%</p>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
 
-              {/* Investor Trading Data */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Users className="w-4 h-4 text-muted-foreground" />
-                    투자자별 순매수 (KOSPI, 억원)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                {/* Right: 투자자별 순매수 */}
+                <div>
+                  <p className="text-xs text-muted-foreground mb-3 font-medium">투자자별 순매수 (KOSPI, 억원)</p>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/5">
                       <span className="text-sm">외국인</span>
@@ -279,207 +273,154 @@ export function MacroCouncilPage() {
                       </span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Source Info */}
-              {(macroInsight.source_channel || macroInsight.source_analyst) && (
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="space-y-2">
-                      {macroInsight.source_channel && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">출처 채널</span>
-                          <span className="text-blue-400">@{macroInsight.source_channel}</span>
-                        </div>
-                      )}
-                      {macroInsight.source_analyst && (
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">분석가</span>
-                          <span className="text-white">{macroInsight.source_analyst}</span>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Council Cost */}
-              {macroInsight.council_cost_usd && (
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">Council 분석 비용</span>
-                      </div>
-                      <span className="text-sm font-medium">
-                        ${Number(macroInsight.council_cost_usd)?.toFixed(3)} (~{Math.round(Number(macroInsight.council_cost_usd || 0) * 1450)}원)
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Middle Column - Trading Recommendations */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                    <Zap className="w-4 h-4 text-muted-foreground" />
-                    트레이딩 권고
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Strategies to Favor */}
-                  <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className="w-4 h-4 text-green-400" />
-                      <span className="text-sm font-medium text-green-400">허용 전략</span>
-                    </div>
-                    {macroInsight.strategies_to_favor?.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {macroInsight.strategies_to_favor.map((s: string, i: number) => (
-                          <span
-                            key={i}
-                            className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded-md"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">지정된 전략 없음</p>
-                    )}
-                  </div>
-
-                  {/* Strategies to Avoid */}
-                  <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-                    <div className="flex items-center gap-2 mb-2">
-                      <XCircle className="w-4 h-4 text-red-400" />
-                      <span className="text-sm font-medium text-red-400">회피 전략</span>
-                    </div>
-                    {macroInsight.strategies_to_avoid?.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {macroInsight.strategies_to_avoid.map((s: string, i: number) => (
-                          <span
-                            key={i}
-                            className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded-md"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">지정된 전략 없음</p>
-                    )}
-                  </div>
-
-                  {/* Sectors */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs font-medium text-blue-400">유망 섹터</span>
-                      </div>
-                      {macroInsight.sectors_to_favor?.length > 0 ? (
-                        <div className="space-y-1">
-                          {macroInsight.sectors_to_favor.slice(0, 5).map((s: string, i: number) => (
-                            <span key={i} className="block text-xs text-blue-400/80">{s}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">-</p>
-                      )}
-                    </div>
-                    <div className="p-3 rounded-lg bg-gray-500/5 border border-gray-500/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingDown className="w-4 h-4 text-gray-400" />
-                        <span className="text-xs font-medium text-gray-400">회피 섹터</span>
-                      </div>
-                      {macroInsight.sectors_to_avoid?.length > 0 ? (
-                        <div className="space-y-1">
-                          {macroInsight.sectors_to_avoid.slice(0, 5).map((s: string, i: number) => (
-                            <span key={i} className="block text-xs text-gray-400/80">{s}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">-</p>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Trading Reasoning */}
-              {macroInsight.trading_reasoning && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">Council 판단 근거</CardTitle>
-                  </CardHeader>
-                  <CardContent>
+          {/* 3. 트레이딩 전략 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Zap className="w-4 h-4 text-muted-foreground" />
+                트레이딩 전략
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Regime Badge + Trading Reasoning */}
+              {(macroInsight.regime_hint || macroInsight.trading_reasoning) && (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                  {macroInsight.regime_hint && (
+                    <span className="shrink-0 px-2.5 py-1 rounded text-xs font-bold bg-accent/20 text-accent">
+                      {macroInsight.regime_hint}
+                    </span>
+                  )}
+                  {macroInsight.trading_reasoning && (
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {macroInsight.trading_reasoning}
                     </p>
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
               )}
-            </div>
 
-            {/* Right Column - Risk & Council */}
-            <div className="space-y-4">
-              {/* Political Risk */}
-              <Card className={cn('border', politicalRiskInfo.borderColor)}>
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between text-sm font-medium">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-muted-foreground" />
-                      정치/지정학적 리스크
+              {/* 2x2 Grid: Strategies + Sectors */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 허용 전략 */}
+                <div className="p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <span className="text-sm font-medium text-green-400">허용 전략</span>
+                  </div>
+                  {macroInsight.strategies_to_favor?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {macroInsight.strategies_to_favor.map((s: string, i: number) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded-md"
+                        >
+                          {s}
+                        </span>
+                      ))}
                     </div>
-                    <span className={cn('px-2.5 py-1 rounded text-xs font-bold', politicalRiskInfo.color)}>
-                      {macroInsight.political_risk_level?.toUpperCase() || 'UNKNOWN'}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">지정된 전략 없음</p>
+                  )}
+                </div>
+
+                {/* 회피 전략 */}
+                <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <XCircle className="w-4 h-4 text-red-400" />
+                    <span className="text-sm font-medium text-red-400">회피 전략</span>
+                  </div>
+                  {macroInsight.strategies_to_avoid?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {macroInsight.strategies_to_avoid.map((s: string, i: number) => (
+                        <span
+                          key={i}
+                          className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded-md"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">지정된 전략 없음</p>
+                  )}
+                </div>
+
+                {/* 유망 섹터 */}
+                <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-4 h-4 text-blue-400" />
+                    <span className="text-xs font-medium text-blue-400">유망 섹터</span>
+                  </div>
+                  {macroInsight.sectors_to_favor?.length > 0 ? (
+                    <div className="space-y-1">
+                      {macroInsight.sectors_to_favor.slice(0, 5).map((s: string, i: number) => (
+                        <span key={i} className="block text-xs text-blue-400/80">{s}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">-</p>
+                  )}
+                </div>
+
+                {/* 회피 섹터 */}
+                <div className="p-3 rounded-lg bg-gray-500/5 border border-gray-500/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingDown className="w-4 h-4 text-gray-400" />
+                    <span className="text-xs font-medium text-gray-400">회피 섹터</span>
+                  </div>
+                  {macroInsight.sectors_to_avoid?.length > 0 ? (
+                    <div className="space-y-1">
+                      {macroInsight.sectors_to_avoid.slice(0, 5).map((s: string, i: number) => (
+                        <span key={i} className="block text-xs text-gray-400/80">{s}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">-</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 4. 리스크 & 기회 분석 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                리스크 & 기회 분석
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Political Risk Banner */}
+              <div className={cn('flex items-start gap-3 p-3 rounded-lg border', politicalRiskInfo.borderColor)}>
+                <span className={cn('shrink-0 px-2.5 py-1 rounded text-xs font-bold', politicalRiskInfo.color)}>
+                  {macroInsight.political_risk_level?.toUpperCase() || 'UNKNOWN'}
+                </span>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">정치/지정학적 리스크</p>
                   {macroInsight.political_risk_summary ? (
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {macroInsight.political_risk_summary}
                     </p>
                   ) : (
-                    <p className="text-sm text-muted-foreground">정치 리스크 요약 없음</p>
+                    <p className="text-sm text-muted-foreground">요약 없음</p>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              {/* Regime Hint */}
-              {macroInsight.regime_hint && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <BarChart3 className="w-4 h-4 text-muted-foreground" />
-                      Market Regime
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-white leading-relaxed">
-                      {macroInsight.regime_hint}
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Risk Factors */}
-              {macroInsight.risk_factors?.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <AlertTriangle className="w-4 h-4 text-red-400" />
-                      리스크 요인
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+              {/* 2-col: Risk + Opportunity */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 리스크 요인 */}
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    <span className="text-sm font-medium text-red-400">리스크 요인</span>
+                  </div>
+                  {macroInsight.risk_factors?.length > 0 ? (
                     <ul className="space-y-2">
                       {macroInsight.risk_factors.map((factor: string, i: number) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -488,20 +429,18 @@ export function MacroCouncilPage() {
                         </li>
                       ))}
                     </ul>
-                  </CardContent>
-                </Card>
-              )}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">리스크 요인 없음</p>
+                  )}
+                </div>
 
-              {/* Opportunity Factors */}
-              {macroInsight.opportunity_factors?.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                      <TrendingUp className="w-4 h-4 text-green-400" />
-                      기회 요인
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
+                {/* 기회 요인 */}
+                <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-4 h-4 text-green-400" />
+                    <span className="text-sm font-medium text-green-400">기회 요인</span>
+                  </div>
+                  {macroInsight.opportunity_factors?.length > 0 ? (
                     <ul className="space-y-2">
                       {macroInsight.opportunity_factors.map((factor: string, i: number) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -510,84 +449,15 @@ export function MacroCouncilPage() {
                         </li>
                       ))}
                     </ul>
-                  </CardContent>
-                </Card>
-              )}
+                  ) : (
+                    <p className="text-xs text-muted-foreground">기회 요인 없음</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Key Themes */}
-              {macroInsight.key_themes?.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">핵심 테마</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {macroInsight.key_themes.map((theme: string, i: number) => (
-                        <span
-                          key={i}
-                          className="px-2.5 py-1 text-xs bg-purple-500/20 text-purple-400 rounded-md"
-                        >
-                          {theme}
-                        </span>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Key Stocks */}
-              {macroInsight.key_stocks?.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">주목 종목</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {macroInsight.key_stocks.map((stock: string, i: number) => (
-                        <span
-                          key={i}
-                          className="px-2.5 py-1 text-xs bg-accent/20 text-accent rounded-md font-medium"
-                        >
-                          {stock}
-                        </span>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Sector Signals */}
-              {macroInsight.sector_signals && Object.keys(macroInsight.sector_signals).length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm font-medium">섹터별 신호</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {Object.entries(macroInsight.sector_signals).map(([sector, signal]: [string, any]) => (
-                        <div
-                          key={sector}
-                          className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/5"
-                        >
-                          <span className="text-sm">{sector}</span>
-                          <span className={cn(
-                            'px-2 py-0.5 text-xs rounded font-medium',
-                            signal === 'bullish' || signal === 'favor' ? 'bg-green-500/20 text-green-400' :
-                              signal === 'bearish' || signal === 'avoid' ? 'bg-red-500/20 text-red-400' :
-                                'bg-gray-500/20 text-gray-400'
-                          )}>
-                            {typeof signal === 'string' ? signal : JSON.stringify(signal)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-
-          {/* 3 Sages Council Review Section */}
+          {/* 5. 3현자 Council 리뷰 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm font-medium">
@@ -663,6 +533,28 @@ export function MacroCouncilPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Footer: Source + Cost (inline) */}
+          {(macroInsight.source_channel || macroInsight.source_analyst || macroInsight.council_cost_usd) && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
+              <div className="flex items-center gap-4">
+                {macroInsight.source_channel && (
+                  <span>출처: <span className="text-blue-400">@{macroInsight.source_channel}</span></span>
+                )}
+                {macroInsight.source_analyst && (
+                  <span>분석가: <span className="text-white">{macroInsight.source_analyst}</span></span>
+                )}
+              </div>
+              {macroInsight.council_cost_usd && (
+                <div className="flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  <span>
+                    ${Number(macroInsight.council_cost_usd)?.toFixed(3)} (~{Math.round(Number(macroInsight.council_cost_usd || 0) * 1450)}원)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

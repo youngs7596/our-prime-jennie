@@ -116,3 +116,194 @@ SAFETY_SETTINGS = [
     {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
 ]
+
+
+# ==============================================================================
+# Macro Council JSON Schemas (3현자 구조화 파이프라인)
+# ==============================================================================
+
+# 시스템에 등록된 매수 전략 목록 (buy-scanner에서 사용)
+TRADING_STRATEGIES = [
+    "GOLDEN_CROSS",
+    "RSI_REBOUND",
+    "MOMENTUM",
+    "RECON_BULL_ENTRY",
+    "MOMENTUM_CONTINUATION",
+    "SHORT_TERM_HIGH_BREAKOUT",
+    "VOLUME_BREAKOUT_1MIN",
+    "BULL_PULLBACK",
+    "VCP_BREAKOUT",
+    "INSTITUTIONAL_ENTRY",
+]
+
+# 섹터 대분류 14개 (sector_taxonomy.py NAVER_TO_GROUP 기반)
+SECTOR_GROUPS = [
+    "반도체/IT",
+    "자동차/운송",
+    "바이오/헬스케어",
+    "2차전지/에너지",
+    "금융",
+    "조선/기계",
+    "방산/우주",
+    "철강/화학",
+    "건설/부동산",
+    "미디어/엔터",
+    "유통/소비재",
+    "통신/인터넷",
+    "음식료/농업",
+    "기타",
+]
+
+# Step 1: 전략가 (Claude Opus 4.6) 출력 스키마
+MACRO_STRATEGIST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "overall_sentiment": {
+            "type": "string",
+            "enum": ["bullish", "neutral_to_bullish", "neutral", "neutral_to_bearish", "bearish"],
+        },
+        "sentiment_score": {
+            "type": "integer",
+            "description": "시장 심리 점수 (0-100, 50=중립)",
+        },
+        "regime_hint": {
+            "type": "string",
+            "description": "시장 레짐 힌트 (예: KOSDAQ_Momentum, Trend_Following, Mean_Reversion, Defensive)",
+        },
+        "risk_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "리스크 요인 3-5개",
+        },
+        "opportunity_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "기회 요인 3-5개",
+        },
+        "sector_signals": {
+            "type": "object",
+            "description": "섹터별 신호 (14개 대분류 중 유의미한 변화가 있는 섹터만)",
+            "additionalProperties": {"type": "string", "enum": ["bullish", "neutral", "bearish"]},
+        },
+        "investor_flow_analysis": {
+            "type": "string",
+            "description": "투자자별 수급 분석 요약 (외국인/기관/개인)",
+        },
+    },
+    "required": [
+        "overall_sentiment", "sentiment_score", "regime_hint",
+        "sector_signals", "risk_factors", "opportunity_factors", "investor_flow_analysis",
+    ],
+}
+
+# Step 2: 리스크분석가 (DeepSeek v3.2) 출력 스키마
+MACRO_RISK_ANALYST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "risk_assessment": {
+            "type": "object",
+            "properties": {
+                "agree_with_sentiment": {"type": "boolean"},
+                "adjusted_sentiment_score": {
+                    "type": "integer",
+                    "description": "조정된 심리 점수 (0-100)",
+                },
+                "adjustment_reason": {"type": "string"},
+            },
+            "required": ["agree_with_sentiment", "adjusted_sentiment_score", "adjustment_reason"],
+        },
+        "political_risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "critical"],
+        },
+        "political_risk_summary": {
+            "type": "string",
+            "description": "정치/지정학 리스크 요약 (1-2문장)",
+        },
+        "additional_risk_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "전략가가 놓친 추가 리스크",
+        },
+        "position_size_pct": {
+            "type": "integer",
+            "description": "권장 포지션 사이즈 (50-130, 기본 100)",
+        },
+        "stop_loss_adjust_pct": {
+            "type": "integer",
+            "description": "손절폭 조정 (80-150, 기본 100)",
+        },
+        "risk_reasoning": {
+            "type": "string",
+            "description": "리스크 평가 근거 (2-3문장)",
+        },
+    },
+    "required": [
+        "risk_assessment", "political_risk_level", "political_risk_summary",
+        "additional_risk_factors", "position_size_pct", "stop_loss_adjust_pct",
+        "risk_reasoning",
+    ],
+}
+
+# Step 3: 수석심판 (Gemini 3.0 Pro) 출력 스키마
+MACRO_CHIEF_JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "final_sentiment": {
+            "type": "string",
+            "enum": ["bullish", "neutral_to_bullish", "neutral", "neutral_to_bearish", "bearish"],
+        },
+        "final_sentiment_score": {
+            "type": "integer",
+            "description": "최종 심리 점수 (0-100)",
+        },
+        "final_regime_hint": {
+            "type": "string",
+            "description": "최종 시장 레짐 힌트",
+        },
+        "strategies_to_favor": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "오늘 유리한 전략 (시스템 전략 목록에서 선택)",
+        },
+        "strategies_to_avoid": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "오늘 피해야 할 전략",
+        },
+        "sectors_to_favor": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "유망 섹터 (14개 대분류에서 선택)",
+        },
+        "sectors_to_avoid": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "회피 섹터 (14개 대분류에서 선택)",
+        },
+        "final_position_size_pct": {
+            "type": "integer",
+            "description": "최종 포지션 사이즈 (50-130)",
+        },
+        "final_stop_loss_adjust_pct": {
+            "type": "integer",
+            "description": "최종 손절폭 조정 (80-150)",
+        },
+        "trading_reasoning": {
+            "type": "string",
+            "description": "종합 트레이딩 근거 (2-3문장, 정치 리스크 포함)",
+        },
+        "council_consensus": {
+            "type": "string",
+            "enum": ["strong_agree", "agree", "partial_disagree", "disagree"],
+            "description": "전략가-리스크분석가 간 의견 합치도",
+        },
+    },
+    "required": [
+        "final_sentiment", "final_sentiment_score", "final_regime_hint",
+        "strategies_to_favor", "strategies_to_avoid",
+        "sectors_to_favor", "sectors_to_avoid",
+        "final_position_size_pct", "final_stop_loss_adjust_pct",
+        "trading_reasoning", "council_consensus",
+    ],
+}

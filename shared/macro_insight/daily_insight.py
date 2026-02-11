@@ -71,6 +71,8 @@ class DailyMacroInsight:
     risk_factors: List[str] = field(default_factory=list)
     opportunity_factors: List[str] = field(default_factory=list)
     key_stocks: List[str] = field(default_factory=list)
+    risk_stocks: List[str] = field(default_factory=list)
+    opportunity_stocks: List[str] = field(default_factory=list)
 
     # 원본 데이터
     raw_message: str = ""
@@ -99,6 +101,7 @@ class DailyMacroInsight:
 
     def to_dict(self) -> Dict[str, Any]:
         """딕셔너리 변환"""
+        gs = self.global_snapshot or {}
         return {
             "insight_date": self.insight_date.isoformat(),
             "source_channel": self.source_channel,
@@ -117,13 +120,25 @@ class DailyMacroInsight:
             "risk_factors": self.risk_factors,
             "opportunity_factors": self.opportunity_factors,
             "key_stocks": self.key_stocks,
+            "risk_stocks": self.risk_stocks,
+            "opportunity_stocks": self.opportunity_stocks,
             "council_cost_usd": self.council_cost_usd,
             # Enhanced fields
             "global_snapshot": self.global_snapshot,
             "data_sources_used": self.data_sources_used,
             "data_citations": self.data_citations,
-            "vix_regime": self.vix_regime,
+            "vix_regime": gs.get("vix_regime") or self.vix_regime,
             "rate_differential": self.rate_differential,
+            # Market Data (global_snapshot에서 추출, 프론트엔드 호환)
+            "vix_value": gs.get("vix"),
+            "usd_krw": gs.get("usd_krw"),
+            "kospi_index": gs.get("kospi_index"),
+            "kosdaq_index": gs.get("kosdaq_index"),
+            "kospi_foreign_net": gs.get("kospi_foreign_net"),
+            "kosdaq_foreign_net": gs.get("kosdaq_foreign_net"),
+            "kospi_institutional_net": gs.get("kospi_institutional_net"),
+            "kospi_retail_net": gs.get("kospi_retail_net"),
+            "data_completeness_pct": round((gs.get("completeness_score") or 0) * 100),
             # Trading Recommendations
             "position_size_pct": self.position_size_pct,
             "stop_loss_adjust_pct": self.stop_loss_adjust_pct,
@@ -156,6 +171,8 @@ class DailyMacroInsight:
             risk_factors=data.get("risk_factors", []),
             opportunity_factors=data.get("opportunity_factors", []),
             key_stocks=data.get("key_stocks", []),
+            risk_stocks=data.get("risk_stocks", []),
+            opportunity_stocks=data.get("opportunity_stocks", []),
             raw_message=data.get("raw_message", ""),
             raw_council_output=data.get("raw_council_output", {}),
             council_cost_usd=data.get("council_cost_usd", 0.0),
@@ -205,7 +222,7 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             INSIGHT_DATE, SOURCE_CHANNEL, SOURCE_ANALYST,
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
-            OPPORTUNITY_FACTORS, KEY_STOCKS,
+            OPPORTUNITY_FACTORS, KEY_STOCKS, RISK_STOCKS, OPPORTUNITY_STOCKS,
             RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
             POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
             STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
@@ -216,7 +233,7 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
             DATA_COMPLETENESS_PCT
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) ON DUPLICATE KEY UPDATE
@@ -230,6 +247,8 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             RISK_FACTORS = VALUES(RISK_FACTORS),
             OPPORTUNITY_FACTORS = VALUES(OPPORTUNITY_FACTORS),
             KEY_STOCKS = VALUES(KEY_STOCKS),
+            RISK_STOCKS = VALUES(RISK_STOCKS),
+            OPPORTUNITY_STOCKS = VALUES(OPPORTUNITY_STOCKS),
             RAW_MESSAGE = VALUES(RAW_MESSAGE),
             RAW_COUNCIL_OUTPUT = VALUES(RAW_COUNCIL_OUTPUT),
             COUNCIL_COST_USD = VALUES(COUNCIL_COST_USD),
@@ -268,6 +287,8 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
         risk_factors_json = json.dumps(insight.risk_factors, ensure_ascii=False)
         opportunity_factors_json = json.dumps(insight.opportunity_factors, ensure_ascii=False)
         key_stocks_json = json.dumps(insight.key_stocks, ensure_ascii=False)
+        risk_stocks_json = json.dumps(insight.risk_stocks, ensure_ascii=False)
+        opportunity_stocks_json = json.dumps(insight.opportunity_stocks, ensure_ascii=False)
         raw_council_json = json.dumps(insight.raw_council_output, ensure_ascii=False, default=str)
         strategies_favor_json = json.dumps(insight.strategies_to_favor, ensure_ascii=False)
         strategies_avoid_json = json.dumps(insight.strategies_to_avoid, ensure_ascii=False)
@@ -285,7 +306,7 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
         kosdaq_foreign_net = gs.get("kosdaq_foreign_net")
         kospi_institutional_net = gs.get("kospi_institutional_net")
         kospi_retail_net = gs.get("kospi_retail_net")
-        data_completeness_pct = gs.get("completeness_score")  # Fixed: was "data_completeness_pct"
+        data_completeness_pct = round((gs.get("completeness_score") or 0) * 100)  # 0.71 → 71
 
         params = (
             insight.insight_date,
@@ -299,6 +320,8 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             risk_factors_json,
             opportunity_factors_json,
             key_stocks_json,
+            risk_stocks_json,
+            opportunity_stocks_json,
             insight.raw_message,
             raw_council_json,
             insight.council_cost_usd,
@@ -364,6 +387,7 @@ def load_insight_from_db(
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
             OPPORTUNITY_FACTORS, KEY_STOCKS,
+            RISK_STOCKS, OPPORTUNITY_STOCKS,
             RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
             POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
             STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
@@ -392,20 +416,22 @@ def load_insight_from_db(
             risk_factors=json.loads(row[8]) if row[8] else [],
             opportunity_factors=json.loads(row[9]) if row[9] else [],
             key_stocks=json.loads(row[10]) if row[10] else [],
-            raw_message=row[11] or "",
-            raw_council_output=json.loads(row[12]) if row[12] else {},
-            council_cost_usd=float(row[13]) if row[13] else 0.0,
+            risk_stocks=json.loads(row[11]) if row[11] else [],
+            opportunity_stocks=json.loads(row[12]) if row[12] else [],
+            raw_message=row[13] or "",
+            raw_council_output=json.loads(row[14]) if row[14] else {},
+            council_cost_usd=float(row[15]) if row[15] else 0.0,
             # Trading Recommendations
-            position_size_pct=int(row[14]) if row[14] else 100,
-            stop_loss_adjust_pct=int(row[15]) if row[15] else 100,
-            strategies_to_favor=json.loads(row[16]) if row[16] else [],
-            strategies_to_avoid=json.loads(row[17]) if row[17] else [],
-            sectors_to_favor=json.loads(row[18]) if row[18] else [],
-            sectors_to_avoid=json.loads(row[19]) if row[19] else [],
-            trading_reasoning=row[20] or "",
+            position_size_pct=int(row[16]) if row[16] else 100,
+            stop_loss_adjust_pct=int(row[17]) if row[17] else 100,
+            strategies_to_favor=json.loads(row[18]) if row[18] else [],
+            strategies_to_avoid=json.loads(row[19]) if row[19] else [],
+            sectors_to_favor=json.loads(row[20]) if row[20] else [],
+            sectors_to_avoid=json.loads(row[21]) if row[21] else [],
+            trading_reasoning=row[22] or "",
             # Political Risk
-            political_risk_level=row[21] or "low",
-            political_risk_summary=row[22] or "",
+            political_risk_level=row[23] or "low",
+            political_risk_summary=row[24] or "",
         )
 
     except Exception as e:
@@ -442,6 +468,7 @@ def load_recent_insights(
             SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
             SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
             OPPORTUNITY_FACTORS, KEY_STOCKS,
+            RISK_STOCKS, OPPORTUNITY_STOCKS,
             RAW_MESSAGE, RAW_COUNCIL_OUTPUT, COUNCIL_COST_USD,
             POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
             STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
@@ -470,20 +497,22 @@ def load_recent_insights(
                 risk_factors=json.loads(row[8]) if row[8] else [],
                 opportunity_factors=json.loads(row[9]) if row[9] else [],
                 key_stocks=json.loads(row[10]) if row[10] else [],
-                raw_message=row[11] or "",
-                raw_council_output=json.loads(row[12]) if row[12] else {},
-                council_cost_usd=float(row[13]) if row[13] else 0.0,
+                risk_stocks=json.loads(row[11]) if row[11] else [],
+                opportunity_stocks=json.loads(row[12]) if row[12] else [],
+                raw_message=row[13] or "",
+                raw_council_output=json.loads(row[14]) if row[14] else {},
+                council_cost_usd=float(row[15]) if row[15] else 0.0,
                 # Trading Recommendations
-                position_size_pct=int(row[14]) if row[14] else 100,
-                stop_loss_adjust_pct=int(row[15]) if row[15] else 100,
-                strategies_to_favor=json.loads(row[16]) if row[16] else [],
-                strategies_to_avoid=json.loads(row[17]) if row[17] else [],
-                sectors_to_favor=json.loads(row[18]) if row[18] else [],
-                sectors_to_avoid=json.loads(row[19]) if row[19] else [],
-                trading_reasoning=row[20] or "",
+                position_size_pct=int(row[16]) if row[16] else 100,
+                stop_loss_adjust_pct=int(row[17]) if row[17] else 100,
+                strategies_to_favor=json.loads(row[18]) if row[18] else [],
+                strategies_to_avoid=json.loads(row[19]) if row[19] else [],
+                sectors_to_favor=json.loads(row[20]) if row[20] else [],
+                sectors_to_avoid=json.loads(row[21]) if row[21] else [],
+                trading_reasoning=row[22] or "",
                 # Political Risk
-                political_risk_level=row[21] or "low",
-                political_risk_summary=row[22] or "",
+                political_risk_level=row[23] or "low",
+                political_risk_summary=row[24] or "",
             ))
 
         return insights

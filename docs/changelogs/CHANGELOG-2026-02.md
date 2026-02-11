@@ -1,5 +1,17 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-11
+### Macro Council 구조화 JSON 파이프라인 + 토큰 효율화
+- **refactor(macro)**: subprocess+regex → 구조화 JSON 직접 호출 (`generate_json()` / `generate_json_with_thinking()`)
+  - 전략가(DeepSeek v3.2) → 리스크분석가(DeepSeek v3.2) → 수석심판(Claude Opus 4.6 Extended Thinking)
+  - 비용: ~$0.215/회 ($0.43/일), 기존 대비 67% 절감
+- **feat(llm)**: `ClaudeLLMProvider.generate_json_with_thinking()` Extended Thinking 메서드 추가
+- **feat(macro)**: 3개 스키마 + 3개 프롬프트 파일 신규 (전략가/리스크분석가/수석심판)
+- **perf(macro)**: 전략가 출력에서 개별 종목(key_stocks), key_themes 제거 (토큰 낭비 방지)
+- **fix(macro)**: sector_signals 복원 (trading_context.py 섹터 회피 폴백에 필수)
+- **refactor(dashboard)**: MacroCouncil 시장 분석 섹션 4개 카드 제거 (종목/테마 UI)
+- **test**: 31개 macro council 파이프라인 테스트 신규, 전체 통과
+
 ## 2026-02-10
 ### Portfolio Guard Layer 2 (포트폴리오 수준 리스크 관리)
 - **feat(shared)**: `PortfolioGuard` 클래스 신규 — 섹터 종목 수 제한 + 국면별 현금 하한선
@@ -290,4 +302,4 @@
 - **fix(frontend)**: Macro 데이터(`vix_value` 등) `toFixed` 타입 에러 해결 (`Number()` 래핑)
 
 ---
-*Last Updated: 2026-02-08 21:34 KST*
+*Last Updated: 2026-02-11 14:17 KST*

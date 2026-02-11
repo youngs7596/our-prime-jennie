@@ -1022,6 +1022,7 @@ async def get_macro_insight_api(
                         SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
                         SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
                         OPPORTUNITY_FACTORS, KEY_STOCKS,
+                        RISK_STOCKS, OPPORTUNITY_STOCKS,
                         POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
                         STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
                         SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
@@ -1044,6 +1045,7 @@ async def get_macro_insight_api(
                         SENTIMENT, SENTIMENT_SCORE, REGIME_HINT,
                         SECTOR_SIGNALS, KEY_THEMES, RISK_FACTORS,
                         OPPORTUNITY_FACTORS, KEY_STOCKS,
+                        RISK_STOCKS, OPPORTUNITY_STOCKS,
                         POSITION_SIZE_PCT, STOP_LOSS_ADJUST_PCT,
                         STRATEGIES_TO_FAVOR, STRATEGIES_TO_AVOID,
                         SECTORS_TO_FAVOR, SECTORS_TO_AVOID,
@@ -1071,6 +1073,10 @@ async def get_macro_insight_api(
                         return json.loads(val)
                     except (json.JSONDecodeError, TypeError):
                         return default if default is not None else []
+
+                risk_stocks = parse_json_field(getattr(row, 'RISK_STOCKS', None))
+                opportunity_stocks = parse_json_field(getattr(row, 'OPPORTUNITY_STOCKS', None))
+                key_stocks_raw = parse_json_field(row.KEY_STOCKS)
 
                 insight = {
                     "insight_date": row.INSIGHT_DATE.isoformat() if row.INSIGHT_DATE else None,
@@ -1113,7 +1119,9 @@ async def get_macro_insight_api(
                     "key_themes": parse_json_field(row.KEY_THEMES),
                     "risk_factors": parse_json_field(row.RISK_FACTORS),
                     "opportunity_factors": parse_json_field(row.OPPORTUNITY_FACTORS),
-                    "key_stocks": parse_json_field(row.KEY_STOCKS),
+                    "key_stocks": key_stocks_raw,
+                    "risk_stocks": risk_stocks,
+                    "opportunity_stocks": opportunity_stocks,
 
                     # Meta
                     "data_completeness_pct": row.DATA_COMPLETENESS_PCT,
