@@ -317,7 +317,7 @@ services:
       - KIS_TOKEN_PROVIDER_URL=http://127.0.0.1:8080/api/token
       - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
       # 모멘텀 전략 실행 최적화
-      - MOMENTUM_CONFIRMATION_BARS=${MOMENTUM_CONFIRMATION_BARS:-0}
+      - MOMENTUM_CONFIRMATION_BARS=${MOMENTUM_CONFIRMATION_BARS:-1}
 
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host
@@ -384,7 +384,7 @@ services:
       - PORT=8082
       - SECRETS_FILE=/app/config/secrets.json
       # 모멘텀 전략 실행 최적화
-      - MOMENTUM_LIMIT_ORDER_ENABLED=${MOMENTUM_LIMIT_ORDER_ENABLED:-false}
+      - MOMENTUM_LIMIT_ORDER_ENABLED=${MOMENTUM_LIMIT_ORDER_ENABLED:-true}
       - MOMENTUM_LIMIT_PREMIUM=${MOMENTUM_LIMIT_PREMIUM:-0.003}
       - MOMENTUM_LIMIT_TIMEOUT_SEC=${MOMENTUM_LIMIT_TIMEOUT_SEC:-10}
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
