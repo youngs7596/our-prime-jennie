@@ -16,6 +16,77 @@ logger = logging.getLogger(__name__)
 # KIS Gateway 실시간 현재가 조회 (Dashboard V2용)
 # =============================================================================
 
+REALTIME_PRICE_KEY = "prices:realtime"
+
+
+def fetch_current_prices_from_redis(stock_codes: List[str]) -> Dict[str, float]:
+    """
+    Redis Hash에서 WebSocket 실시간 현재가를 조회합니다.
+    kis-gateway가 WebSocket on_price 콜백에서 저장한 데이터를 읽습니다.
+
+    Args:
+        stock_codes: 종목 코드 리스트
+
+    Returns:
+        {stock_code: current_price} 딕셔너리 (미스 종목은 제외)
+    """
+    if not stock_codes:
+        return {}
+
+    try:
+        from shared.redis_cache import get_redis_connection
+        r = get_redis_connection()
+        if r is None:
+            return {}
+
+        values = r.hmget(REALTIME_PRICE_KEY, *stock_codes)
+        prices = {}
+        for code, val in zip(stock_codes, values):
+            if val is not None:
+                try:
+                    prices[code] = float(val)
+                except (ValueError, TypeError):
+                    pass
+        return prices
+    except Exception as e:
+        logger.warning(f"Redis 실시간 현재가 조회 실패: {e}")
+        return {}
+
+
+def _fetch_current_prices(stock_codes: List[str]) -> Dict[str, float]:
+    """
+    Redis 우선 조회 → 미스 종목만 KIS API 폴백.
+
+    Args:
+        stock_codes: 종목 코드 리스트
+
+    Returns:
+        {stock_code: current_price} 딕셔너리
+    """
+    if not stock_codes:
+        return {}
+
+    # 1단계: Redis에서 조회
+    prices = fetch_current_prices_from_redis(stock_codes)
+
+    # 2단계: 미스 종목만 KIS API 폴백
+    missing_codes = [c for c in stock_codes if c not in prices]
+
+    if missing_codes:
+        logger.info(
+            f"Redis 현재가 hit={len(prices)}, miss={len(missing_codes)} -> KIS API 폴백"
+        )
+        try:
+            kis_prices = fetch_current_prices_from_kis(missing_codes)
+            prices.update(kis_prices)
+        except Exception as e:
+            logger.warning(f"KIS API 현재가 폴백 실패: {e}")
+    else:
+        logger.debug(f"Redis 현재가 전체 hit ({len(prices)}개)")
+
+    return prices
+
+
 def fetch_current_prices_from_kis(stock_codes: List[str]) -> Dict[str, float]:
     """
     KIS Gateway API를 통해 여러 종목의 실시간 현재가를 조회합니다.
@@ -378,16 +449,16 @@ def get_portfolio_summary(session: Session, use_realtime: bool = True) -> dict:
             "positions_count": 0,
         }
     
-    # 실시간 현재가 조회
+    # 실시간 현재가 조회 (Redis 우선 → KIS API 폴백)
     stock_codes = [p["code"] for p in portfolio]
     current_prices = {}
-    
+
     if use_realtime:
         try:
-            current_prices = fetch_current_prices_from_kis(stock_codes)
+            current_prices = _fetch_current_prices(stock_codes)
         except Exception as e:
             logger.warning(f"⚠️ 실시간 현재가 조회 실패: {e}")
-    
+
     total_invested = sum(p["avg_price"] * p["quantity"] for p in portfolio)
     
     # 실시간 현재가로 총 평가금액 계산
@@ -431,13 +502,13 @@ def get_portfolio_with_current_prices(session: Session, use_realtime: bool = Tru
     if not portfolio:
         return []
     
-    # 실시간 현재가 조회
+    # 실시간 현재가 조회 (Redis 우선 → KIS API 폴백)
     stock_codes = [p["code"] for p in portfolio]
     current_prices = {}
-    
+
     if use_realtime:
         try:
-            current_prices = fetch_current_prices_from_kis(stock_codes)
+            current_prices = _fetch_current_prices(stock_codes)
             if current_prices:
                 logger.info(f"✅ 실시간 현재가 {len(current_prices)}개 조회 성공")
         except Exception as e:

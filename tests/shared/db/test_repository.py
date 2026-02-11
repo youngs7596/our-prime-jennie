@@ -815,11 +815,11 @@ class TestDashboardV2Api:
         """실시간 조회 활성화 (mocked)"""
         from shared.db.repository import get_portfolio_with_current_prices
         from unittest.mock import patch
-        
-        # fetch_current_prices_from_kis를 mock
+
+        # _fetch_current_prices를 mock (Redis 우선 → KIS 폴백 통합 함수)
         mock_prices = {"005930": 77000.0, "000660": 165000.0}
-        
-        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+
+        with patch('shared.db.repository._fetch_current_prices', return_value=mock_prices):
             result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=True)
         
         assert len(result) == 2
@@ -835,10 +835,10 @@ class TestDashboardV2Api:
         """포트폴리오 요약 (실시간)"""
         from shared.db.repository import get_portfolio_summary
         from unittest.mock import patch
-        
+
         mock_prices = {"005930": 77000.0, "000660": 165000.0}
-        
-        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
+
+        with patch('shared.db.repository._fetch_current_prices', return_value=mock_prices):
             with patch('shared.db.repository.fetch_cash_balance_from_kis', return_value=1000000.0):
                 result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
         
@@ -943,12 +943,12 @@ class TestAdditionalCoverage:
         assert "000660" not in result  # 두 번째 종목은 실패
     
     def test_get_portfolio_summary_realtime_exception(self, session_with_portfolio, monkeypatch):
-        """get_portfolio_summary 실시간 조회 예외 시 (라인 332-333)"""
+        """get_portfolio_summary 실시간 조회 예외 시"""
         from shared.db.repository import get_portfolio_summary
         from unittest.mock import patch
-        
-        # fetch_current_prices_from_kis 예외 발생
-        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+
+        # _fetch_current_prices 예외 발생
+        with patch('shared.db.repository._fetch_current_prices',
                    side_effect=Exception("Network error")):
             with patch('shared.db.repository.fetch_cash_balance_from_kis', return_value=0.0):
                 result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
@@ -958,14 +958,14 @@ class TestAdditionalCoverage:
         assert result["positions_count"] == 2
     
     def test_get_portfolio_summary_cash_balance_exception(self, session_with_portfolio, monkeypatch):
-        """get_portfolio_summary 현금 잔고 조회 예외 시 (라인 352-353)"""
+        """get_portfolio_summary 현금 잔고 조회 예외 시"""
         from shared.db.repository import get_portfolio_summary
         from unittest.mock import patch
-        
+
         mock_prices = {"005930": 77000.0, "000660": 165000.0}
-        
-        with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=mock_prices):
-            with patch('shared.db.repository.fetch_cash_balance_from_kis', 
+
+        with patch('shared.db.repository._fetch_current_prices', return_value=mock_prices):
+            with patch('shared.db.repository.fetch_cash_balance_from_kis',
                        side_effect=Exception("Cash balance error")):
                 result = get_portfolio_summary(session_with_portfolio, use_realtime=True)
         
@@ -973,11 +973,11 @@ class TestAdditionalCoverage:
         assert result["cash_balance"] == 0.0
     
     def test_get_portfolio_with_current_prices_realtime_exception(self, session_with_portfolio, monkeypatch):
-        """get_portfolio_with_current_prices 실시간 조회 예외 시 (라인 387-388)"""
+        """get_portfolio_with_current_prices 실시간 조회 예외 시"""
         from shared.db.repository import get_portfolio_with_current_prices
         from unittest.mock import patch
-        
-        with patch('shared.db.repository.fetch_current_prices_from_kis', 
+
+        with patch('shared.db.repository._fetch_current_prices',
                    side_effect=Exception("Network error")):
             result = get_portfolio_with_current_prices(session_with_portfolio, use_realtime=True)
         
@@ -1060,4 +1060,137 @@ class TestAdditionalCoverage:
         result = delete_config(db_session, "ANY_KEY")
 
         assert result is False
+
+
+# ============================================================================
+# Tests: Redis 실시간 현재가 조회
+# ============================================================================
+
+class TestRedisRealtimePrice:
+    """Redis Hash 기반 실시간 현재가 조회 테스트"""
+
+    def test_fetch_from_redis_success(self):
+        """Redis에서 전체 종목 현재가 조회 성공"""
+        from shared.db.repository import fetch_current_prices_from_redis
+        from unittest.mock import MagicMock, patch
+
+        mock_redis = MagicMock()
+        mock_redis.hmget.return_value = ["75000", "165000"]
+
+        with patch('shared.redis_cache.get_redis_connection', return_value=mock_redis):
+            result = fetch_current_prices_from_redis(["005930", "000660"])
+
+        assert result == {"005930": 75000.0, "000660": 165000.0}
+        mock_redis.hmget.assert_called_once_with("prices:realtime", "005930", "000660")
+
+    def test_fetch_from_redis_empty_list(self):
+        """빈 종목 리스트 -> 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_redis
+
+        result = fetch_current_prices_from_redis([])
+        assert result == {}
+
+    def test_fetch_from_redis_partial_hit(self):
+        """일부 종목만 Redis에 존재"""
+        from shared.db.repository import fetch_current_prices_from_redis
+        from unittest.mock import MagicMock, patch
+
+        mock_redis = MagicMock()
+        mock_redis.hmget.return_value = ["75000", None]  # 000660은 미스
+
+        with patch('shared.redis_cache.get_redis_connection', return_value=mock_redis):
+            result = fetch_current_prices_from_redis(["005930", "000660"])
+
+        assert result == {"005930": 75000.0}
+        assert "000660" not in result
+
+    def test_fetch_from_redis_connection_failure(self):
+        """Redis 연결 실패 시 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_redis
+        from unittest.mock import patch
+
+        with patch('shared.redis_cache.get_redis_connection', return_value=None):
+            result = fetch_current_prices_from_redis(["005930"])
+
+        assert result == {}
+
+    def test_fetch_from_redis_exception(self):
+        """Redis 예외 발생 시 빈 딕셔너리"""
+        from shared.db.repository import fetch_current_prices_from_redis
+        from unittest.mock import MagicMock, patch
+
+        mock_redis = MagicMock()
+        mock_redis.hmget.side_effect = Exception("Redis error")
+
+        with patch('shared.redis_cache.get_redis_connection', return_value=mock_redis):
+            result = fetch_current_prices_from_redis(["005930"])
+
+        assert result == {}
+
+    def test_fetch_current_prices_all_redis_hit(self):
+        """_fetch_current_prices: 전체 Redis 히트 → KIS API 호출 없음"""
+        from shared.db.repository import _fetch_current_prices
+        from unittest.mock import patch
+
+        redis_prices = {"005930": 75000.0, "000660": 165000.0}
+
+        with patch('shared.db.repository.fetch_current_prices_from_redis', return_value=redis_prices) as mock_redis:
+            with patch('shared.db.repository.fetch_current_prices_from_kis') as mock_kis:
+                result = _fetch_current_prices(["005930", "000660"])
+
+        assert result == {"005930": 75000.0, "000660": 165000.0}
+        mock_redis.assert_called_once()
+        mock_kis.assert_not_called()
+
+    def test_fetch_current_prices_partial_miss_kis_fallback(self):
+        """_fetch_current_prices: 일부 미스 → KIS API 폴백"""
+        from shared.db.repository import _fetch_current_prices
+        from unittest.mock import patch
+
+        redis_prices = {"005930": 75000.0}  # 000660 미스
+        kis_prices = {"000660": 165000.0}
+
+        with patch('shared.db.repository.fetch_current_prices_from_redis', return_value=redis_prices):
+            with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=kis_prices) as mock_kis:
+                result = _fetch_current_prices(["005930", "000660"])
+
+        assert result == {"005930": 75000.0, "000660": 165000.0}
+        # KIS API는 미스 종목만 호출
+        mock_kis.assert_called_once_with(["000660"])
+
+    def test_fetch_current_prices_redis_fail_full_kis_fallback(self):
+        """_fetch_current_prices: Redis 전체 실패 → KIS API 전체 폴백"""
+        from shared.db.repository import _fetch_current_prices
+        from unittest.mock import patch
+
+        kis_prices = {"005930": 75000.0, "000660": 165000.0}
+
+        with patch('shared.db.repository.fetch_current_prices_from_redis', return_value={}):
+            with patch('shared.db.repository.fetch_current_prices_from_kis', return_value=kis_prices) as mock_kis:
+                result = _fetch_current_prices(["005930", "000660"])
+
+        assert result == {"005930": 75000.0, "000660": 165000.0}
+        mock_kis.assert_called_once_with(["005930", "000660"])
+
+    def test_fetch_current_prices_empty_list(self):
+        """_fetch_current_prices: 빈 리스트"""
+        from shared.db.repository import _fetch_current_prices
+
+        result = _fetch_current_prices([])
+        assert result == {}
+
+    def test_fetch_current_prices_kis_fallback_exception(self):
+        """_fetch_current_prices: KIS API 폴백 예외 시 Redis 결과만 반환"""
+        from shared.db.repository import _fetch_current_prices
+        from unittest.mock import patch
+
+        redis_prices = {"005930": 75000.0}
+
+        with patch('shared.db.repository.fetch_current_prices_from_redis', return_value=redis_prices):
+            with patch('shared.db.repository.fetch_current_prices_from_kis', side_effect=Exception("KIS error")):
+                result = _fetch_current_prices(["005930", "000660"])
+
+        # Redis 결과만 반환, KIS 실패한 종목은 없음
+        assert result == {"005930": 75000.0}
+        assert "000660" not in result
 

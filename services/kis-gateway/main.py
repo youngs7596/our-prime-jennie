@@ -178,6 +178,7 @@ import threading
 
 STREAM_NAME = "kis:prices"
 STREAM_MAXLEN = 10000  # 최대 메시지 수 (XTRIM)
+REALTIME_PRICE_KEY = "prices:realtime"  # WebSocket 현재가 Redis Hash
 
 class KISWebSocketStreamer:
     """
@@ -256,6 +257,7 @@ class KISWebSocketStreamer:
                         maxlen=STREAM_MAXLEN,
                         approximate=True
                     )
+                    self.redis_client.hset(REALTIME_PRICE_KEY, code, str(price))
                 except Exception as e:
                     logger.error(f"❌ [Streamer] Redis XADD 실패: {e}")
             
@@ -276,6 +278,10 @@ class KISWebSocketStreamer:
                 # 연결 유지 루프
                 while self.is_running and kis_client.websocket.is_connected():
                     time.sleep(5)
+                    try:
+                        self.redis_client.expire(REALTIME_PRICE_KEY, 120)
+                    except Exception:
+                        pass
                 
                 logger.info("🛑 [Streamer] WebSocket 루프 종료")
                 
