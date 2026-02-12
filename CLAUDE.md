@@ -49,7 +49,6 @@
 | price-monitor | 8088 | 실시간 가격 모니터링 |
 | command-handler | 8091 | 텔레그램 명령 처리 |
 | daily-briefing | 8086 | 일일 브리핑 생성 |
-| ollama-gateway | 11500 | LLM 요청 큐잉/라우팅 (vLLM/Ollama 투명 전환) |
 | dashboard-backend | 8090 | 대시보드 API (FastAPI) |
 | dashboard-frontend | 80 | 대시보드 UI (Nginx) |
 | airflow-webserver | 8085 | Airflow UI |
@@ -61,8 +60,7 @@
 | vllm-embed | 8002 | infra | KURE-v1 (임베딩 전용) |
 | qdrant | 6333/6334 | infra | 벡터 DB (뉴스 RAG) |
 | mariadb | 3307 | infra | 영구 저장소 |
-| redis | 6379 | infra | 캐시 및 실시간 상태 |
-| rabbitmq | 5672/15672 | infra | 메시지 큐 |
+| redis | 6379 | infra | 캐시, 실시간 상태, 메시지 큐 (Redis Streams) |
 | grafana | 3300 | infra | 모니터링 대시보드 |
 | loki | 3400 | infra | 로그 집계 |
 | cloudflared | - | infra | Cloudflare Tunnel |
@@ -71,11 +69,11 @@
 
 ## 3. LLM 구성
 
-### 3.1 로컬 LLM (vLLM via ollama-gateway)
+### 3.1 로컬 LLM (vLLM 직접 호출)
 ```yaml
-# ollama-gateway BACKEND_MODE=vllm
-# vllm-llm: EXAONE 4.0 32B AWQ (포트 8001)
-# vllm-embed: KURE-v1 (포트 8002)
+# OllamaLLMProvider → vLLM OpenAI-compatible API 직접 호출
+# vllm-llm: EXAONE 4.0 32B AWQ (포트 8001, VLLM_LLM_URL)
+# vllm-embed: KURE-v1 (포트 8002, VLLM_EMBED_URL)
 
 LLM Tiers:
   FAST: exaone3.5:7.8b (로컬 vLLM)  # 빠른 응답 (뉴스 요약 등)
@@ -192,7 +190,6 @@ my-prime-jennie/
 │   ├── sell-executor/
 │   ├── price-monitor/
 │   ├── kis-gateway/
-│   ├── ollama-gateway/
 │   ├── airflow/
 │   └── ...
 ├── shared/             # 공유 모듈
@@ -380,24 +377,25 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-12 (밤) | 인프라 단순화: RabbitMQ→Redis Streams, Ollama Gateway 제거 | `session-2026-02-12-23-00.md` |
+| 2026-02-12 | news-archiver Qdrant 장애 복구 + pending 자동 복구 | `session-2026-02-12-22-10.md` |
 | 2026-02-11 (밤) | 모멘텀 전략 지정가 주문 + 확인 바 (고점 매수 방지) | `session-2026-02-11-23-00.md` |
 | 2026-02-11 | LLM 사용 통계 서비스별 정확 기록 (_record_llm_usage 승격) | `session-2026-02-11-20-30.md` |
 | 2026-02-10 | Portfolio Guard Layer 2 (섹터 종목 수 + 현금 하한선) | `session-2026-02-10-20-30.md` |
-| 2026-02-08 | 필터 체인 재배치, 문서 현행화 | - |
-| 2026-02-07 | vLLM 전환, Quant Scorer v2, Unified Analyst, 네이버 섹터 통합 | - |
 
-### 현재 시스템 상태 (2026-02-11)
+### 현재 시스템 상태 (2026-02-12)
 
+- **메시징**: RabbitMQ 제거 → Redis Streams (`shared/messaging/trading_signals.py`)
+- **LLM**: vLLM 직접 호출 (Ollama Gateway 제거), OllamaLLMProvider → `/v1/chat/completions`
 - **Scout**: Unified Analyst Pipeline (1-pass LLM), Quant Scorer v2 프로덕션
-- **LLM**: vLLM (EXAONE 4.0 32B AWQ) + CloudFailoverProvider (deepseek_cloud)
 - **LLM Stats**: 서비스별 Redis 기록 (scout, briefing, macro_council) — Dashboard 자동 표시
-- **벡터DB**: ChromaDB → Qdrant 전환 완료
+- **벡터DB**: Qdrant + vLLM KURE-v1 임베딩 (langchain-openai)
 - **섹터**: 네이버 업종 분류 Single Source of Truth (79개 세분류 → 14개 대분류)
-- **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator)
-- **Dashboard**: Macro Insight 카드, 자산 스냅샷, LLM 사용 통계 (scout/briefing/macro_council)
+- **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator), pending 자동 복구
+- **Dashboard**: Macro Insight 카드, 자산 스냅샷, LLM 사용 통계
 - **Portfolio Guard**: 섹터 종목 수 제한(3) + 국면별 현금 하한선 (shadow mode 토글 가능)
-- **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 (기본 비활성, env var 토글)
-- **테스트**: 1160 shared + 26 buy-executor + 16 buy-scanner + 31 macro council passed
+- **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 (env var 토글)
+- **테스트**: 1162 shared + 174 services + 35 integration/scripts passed
 
 ### 주요 데이터 흐름
 
@@ -412,5 +410,5 @@ git push
 ```
 
 ---
-*Last Updated: 2026-02-11*
+*Last Updated: 2026-02-12*
 *상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*

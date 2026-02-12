@@ -112,7 +112,7 @@ class BuyExecutor:
              return {"status": "skipped", "reason": "Emergency Stop Active"}
              
         if redis_cache.is_trading_paused():
-             # 수동 매수인 경우는 허용해야 할 수도 있으나, 현재 구조상 RabbitMQ로 들어오는 건 다 자동 매수로 간주될 수 있음.
+             # 수동 매수인 경우는 허용해야 할 수도 있으나, 현재 구조상 Redis Stream으로 들어오는 건 다 자동 매수로 간주될 수 있음.
              # 단, Telegram Manual Buy는 source='telegram-manual'로 옴.
              source = scan_result.get('source', '')
              if source != 'telegram-manual':

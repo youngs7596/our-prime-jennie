@@ -89,19 +89,18 @@ def main():
     except Exception as e:
         logger.error(f"[FAIL] Failed to parse/check KIS Gateway URL: {e}")
 
-    # Ollama Gateway
-    ollama_gateway_url = os.environ.get("OLLAMA_GATEWAY_URL", "http://host.docker.internal:11500")
-    logger.info(f"Checking Ollama Gateway at {ollama_gateway_url}...")
+    # vLLM LLM
+    vllm_llm_url = os.environ.get("VLLM_LLM_URL", "http://localhost:8001/v1")
+    logger.info(f"Checking vLLM LLM at {vllm_llm_url}...")
     try:
         from urllib.parse import urlparse
-        parsed = urlparse(ollama_gateway_url)
+        parsed = urlparse(vllm_llm_url)
         host = parsed.hostname
         port = parsed.port or 80
         check_host_resolution(host)
         check_tcp_connection(host, port)
-        check_http_connection(ollama_gateway_url)
     except Exception as e:
-        logger.error(f"[FAIL] Failed to parse/check Ollama Gateway URL: {e}")
+        logger.error(f"[FAIL] Failed to parse/check vLLM LLM URL: {e}")
 
     logger.info("--- Check Complete ---")
 

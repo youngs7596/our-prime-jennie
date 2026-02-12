@@ -12,7 +12,7 @@ from shared.db.connection import session_scope
 from shared.db import repository as repo
 import shared.database as database
 import shared.redis_cache as redis_cache
-from shared.rabbitmq import RabbitMQPublisher
+from shared.messaging.trading_signals import TradingSignalPublisher
 
 from limits import check_and_increment_manual_trade_limit
 
@@ -24,7 +24,7 @@ def handle_manual_buy(
     dry_run: bool,
     kis,
     telegram_bot,
-    buy_publisher: RabbitMQPublisher,
+    buy_publisher: TradingSignalPublisher,
     manual_trade_daily_limit: int,
     resolve_stock_fn
 ) -> str:
@@ -149,7 +149,7 @@ def handle_manual_sell(
     dry_run: bool,
     kis,
     telegram_bot,
-    sell_publisher: RabbitMQPublisher,
+    sell_publisher: TradingSignalPublisher,
     manual_trade_daily_limit: int,
     resolve_stock_fn
 ) -> str:
@@ -279,7 +279,7 @@ def handle_manual_sell(
 def handle_sellall(
     cmd: dict,
     dry_run: bool,
-    sell_publisher: RabbitMQPublisher
+    sell_publisher: TradingSignalPublisher
 ) -> str:
     """
     전체 청산 핸들러

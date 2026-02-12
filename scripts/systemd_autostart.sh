@@ -31,7 +31,7 @@ for service in rabbitmq redis; do
   timeout 120 bash -c "until docker compose ps $service | grep -q 'healthy'; do sleep 5; done" || true
 done
 
-echo "[systemd-autostart] Starting real profile (ollama-gateway will wait for vLLM healthy via depends_on)..."
+echo "[systemd-autostart] Starting real profile (services connect to vLLM directly)..."
 /usr/bin/docker compose --profile real up -d
 
 echo "[systemd-autostart] All profiles started successfully!"

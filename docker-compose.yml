@@ -4,29 +4,6 @@ services:
   # ============================================================================
   # 0. Messaging / Supporting Services
   # ============================================================================
-  rabbitmq:
-    image: rabbitmq:3.13-management
-    profiles: [ "infra" ]
-    environment:
-      - RABBITMQ_DEFAULT_USER=guest
-      - RABBITMQ_DEFAULT_PASS=guest
-      - RABBIT_SERVER_ADDITIONAL_ERL_ARGS="-+sbwt none -+sbwtdcpu none -+sbwtdio none"
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    restart: always
-    healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 15s
-    networks:
-      - msa-network
-    labels:
-      - app=rabbitmq
-      - stack=my-prime-jennie
-
   # ============================================================================
   # 0. Infrastructure Dependencies (ChromaDB & Redis)
   # ============================================================================
@@ -186,7 +163,7 @@ services:
       - infrastructure/env-vars-mock.yaml
     environment:
       - PORT=9095
-      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
     volumes:
       - /docker_data/scheduler_data:/app/data
     labels:
@@ -198,8 +175,7 @@ services:
     depends_on:
       kis-gateway-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -347,7 +323,7 @@ services:
       - PORT=9081
       - SECRETS_FILE=/app/config/secrets.json
       - KIS_GATEWAY_URL=http://localhost:9080
-      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
       # WebSocket 모드 활성화
       - USE_WEBSOCKET_MODE=true
       - MOCK_SKIP_TIME_CHECK=true
@@ -361,8 +337,7 @@ services:
         condition: service_healthy
       kis-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -415,7 +390,7 @@ services:
       - PORT=9082
       - SECRETS_FILE=/app/config/secrets.json
       - KIS_GATEWAY_URL=http://localhost:9080
-      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
     network_mode: host
     labels:
       - app=buy-executor-mock
@@ -423,8 +398,7 @@ services:
     depends_on:
       scheduler-service-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -473,7 +447,7 @@ services:
       - PORT=9083
       - SECRETS_FILE=/app/config/secrets.json
       - KIS_GATEWAY_URL=http://localhost:9080
-      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
     network_mode: host
     labels:
       - app=sell-executor-mock
@@ -481,8 +455,7 @@ services:
     depends_on:
       scheduler-service-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -596,7 +569,7 @@ services:
       - KIS_GATEWAY_URL=http://localhost:9080
       - KIS_TOKEN_PROVIDER_URL=http://localhost:9080/api/token
       - REDIS_URL=redis://localhost:6379
-      - RABBITMQ_URL=amqp://guest:guest@localhost:5672/
+
     network_mode: host
     labels:
       - app=price-monitor-mock
@@ -604,8 +577,7 @@ services:
     depends_on:
       scheduler-service-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -659,8 +631,7 @@ services:
     depends_on:
       scheduler-service-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -684,8 +655,8 @@ services:
     environment:
       - PORT=8087
       - SECRETS_FILE=/app/config/secrets.json
-      - USE_OLLAMA_GATEWAY=true
-      - OLLAMA_GATEWAY_URL=http://localhost:11500
+
+
       - TIER_REASONING_PROVIDER=deepseek_cloud
       - TIER_THINKING_PROVIDER=deepseek_cloud
       - DISABLE_MARKET_OPEN_CHECK=false
@@ -723,8 +694,8 @@ services:
       - /docker_data/llm_debug_logs:/app/logs
     environment:
       - SECRETS_FILE=/app/config/secrets.json
-      - USE_OLLAMA_GATEWAY=true
-      - OLLAMA_GATEWAY_URL=http://localhost:11500
+
+
       - TIER_REASONING_PROVIDER=deepseek_cloud
       - TIER_THINKING_PROVIDER=deepseek_cloud
       - DISABLE_MARKET_OPEN_CHECK=false
@@ -766,8 +737,7 @@ services:
     depends_on:
       scheduler-service-mock:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+
         required: false
       redis:
         condition: service_healthy
@@ -877,69 +847,7 @@ services:
   # 11. AI/LLM Services
   # ============================================================================
 
-  # LLM Gateway - 중앙화된 Local LLM 요청 처리 (Ollama/vLLM 투명 전환)
-  ollama-gateway:
-    build:
-      context: .
-      dockerfile: services/ollama-gateway/Dockerfile
-    profiles: [ "real" ]
-    network_mode: host
-    depends_on:
-      vllm-llm:
-        condition: service_healthy
-        required: false
-      vllm-embed:
-        condition: service_healthy
-        required: false
-    environment:
-      - BACKEND_MODE=vllm
-      - VLLM_LLM_URL=http://localhost:8001
-      - VLLM_EMBED_URL=http://localhost:8002
-      - VLLM_MAX_MODEL_LEN=4096
-      - OLLAMA_HOST=http://localhost:11434
-      - REDIS_URL=redis://localhost:6379/0
-      # vLLM continuous batching → Ollama 대비 rate limit 대폭 완화
-      - OLLAMA_RATE_LIMIT=300 per minute
-      - OLLAMA_RATE_LIMIT_FAST=600 per minute
-      - OLLAMA_RATE_LIMIT_EMBED=6000 per minute
-      - OLLAMA_FAST_MODELS=exaone
-      - OLLAMA_CIRCUIT_FAIL_MAX=5
-      - OLLAMA_CIRCUIT_RESET_TIMEOUT=120
-      - OLLAMA_MAX_CONCURRENT_REQUESTS=10
-    volumes:
-      - ./secrets.json:/app/config/secrets.json:ro
-    restart: unless-stopped
-    labels:
-      - app=ollama-gateway
-      - stack=my-prime-jennie
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:11500/health').raise_for_status()" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
-  ollama-gateway-mock:
-    build:
-      context: .
-      dockerfile: services/ollama-gateway/Dockerfile
-    profiles: [ "mock" ]
-    network_mode: host
-    environment:
-      - PORT=11501
-      - OLLAMA_HOST=http://localhost:11434
-      - REDIS_URL=redis://localhost:6379/0
-      - OLLAMA_RATE_LIMIT=1 per 5 seconds
-    restart: unless-stopped
-    labels:
-      - app=ollama-gateway-mock
-      - stack=my-prime-jennie
-    healthcheck:
-      test: [ "CMD", "python", "-c", "import requests; requests.get('http://localhost:11501/health').raise_for_status()" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+  # (ollama-gateway removed — OllamaLLMProvider now calls vLLM directly)
 
   # vLLM LLM Server (EXAONE 4.0 32B AWQ) - 메인 추론 엔진
   vllm-llm:
@@ -1148,7 +1056,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_URL=redis://redis:6379
       - KIS_GATEWAY_URL=http://host.docker.internal:8080
-      - OLLAMA_GATEWAY_URL=http://host.docker.internal:11500
+
       - TZ=Asia/Seoul
     env_file:
       - infrastructure/env-vars-wsl.yaml
@@ -1220,8 +1128,8 @@ services:
       - infrastructure/env-vars-wsl.yaml
     environment:
       - REDIS_URL=redis://localhost:6379/0
-      - USE_OLLAMA_GATEWAY=true
-      - OLLAMA_GATEWAY_URL=http://localhost:11500
+
+
       - SECRETS_FILE=/app/config/secrets.json
     volumes:
       - ./secrets.json:/app/config/secrets.json:ro

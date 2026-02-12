@@ -51,7 +51,7 @@ def get_scout_main():
     from scout import main as run_scout_job
     return run_scout_job
 
-from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
+from shared.messaging.trading_signals import TradingSignalPublisher, TradingSignalWorker, STREAM_JOBS_SCOUT, GROUP_SCOUT_WORKER
 # scheduler_runtime 의존성 제거 (Airflow 전환 완료 - 2026-01-17)
 from shared.scheduler_client import mark_job_run
 
@@ -146,41 +146,41 @@ _worker_started = False
 _publisher_initialized = False
 
 def init_scheduler_publisher():
-    """RabbitMQ Publisher 초기화 (트리거용)"""
+    """Signal Publisher 초기화 (트리거용)"""
     global scheduler_job_publisher, _publisher_initialized
     if _publisher_initialized:
         return
-    
-    amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-    queue_name = _get_scheduler_queue_name()
-    scheduler_job_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
+
+    redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    scheduler_job_publisher = TradingSignalPublisher(redis_url=redis_url, stream_name=STREAM_JOBS_SCOUT)
     _publisher_initialized = True
-    logger.info("✅ Scout Job Publisher 초기화 완료 (queue=%s)", queue_name)
+    logger.info("✅ Scout Job Publisher 초기화 완료 (stream=%s)", STREAM_JOBS_SCOUT)
 
 def start_scheduler_worker():
-    """RabbitMQ Worker 시작 (작업 처리용)"""
+    """Stream Worker 시작 (작업 처리용)"""
     global scheduler_job_worker, scheduler_job_publisher, _worker_started
-    
+
     # Publisher는 무조건 초기화
     init_scheduler_publisher()
 
     if _worker_started:
         return
-    
+
     if os.getenv("ENABLE_SCOUT_JOB_WORKER", "true").lower() != "true":
         logger.info("⚠️ Scout Job Scheduler Worker 비활성화 상태 (API 모드)")
         return
 
-    amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-    queue_name = _get_scheduler_queue_name()
-    scheduler_job_worker = RabbitMQWorker(
-        amqp_url=amqp_url,
-        queue_name=queue_name,
+    redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    scheduler_job_worker = TradingSignalWorker(
+        redis_url=redis_url,
+        stream_name=STREAM_JOBS_SCOUT,
+        group_name=GROUP_SCOUT_WORKER,
+        consumer_name=f"scout-worker-{os.getpid()}",
         handler=handle_scheduler_job,
     )
     scheduler_job_worker.start()
     _worker_started = True
-    logger.info("✅ Scout Job Scheduler Worker 시작 (queue=%s)", queue_name)
+    logger.info("✅ Scout Job Scheduler Worker 시작 (stream=%s)", STREAM_JOBS_SCOUT)
     _bootstrap_scheduler_job()
 
 

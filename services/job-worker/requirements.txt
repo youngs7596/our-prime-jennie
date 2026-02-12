@@ -37,7 +37,6 @@ OpenDartReader
 
 # Redis & Messaging
 redis>=5.0.0
-pika>=1.3.0
 
 # Telegram (macro_council → telegram-collector 의존)
 telethon>=1.34.0

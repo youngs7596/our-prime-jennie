@@ -1,6 +1,6 @@
 """
 Dashboard Backend - System Router
-시스템 상태(Docker, RabbitMQ, Scheduler, Logs)를 조회하는 API 라우터입니다.
+시스템 상태(Docker, Scheduler, Logs)를 조회하는 API 라우터입니다.
 성능 최적화를 위해 Redis 캐싱이 적용되어 있습니다.
 """
 
@@ -155,40 +155,9 @@ async def get_docker_status():
 @router.get("/rabbitmq")
 @cache_response(ttl_seconds=5)
 async def get_rabbitmq_status():
-    """RabbitMQ 큐 상태 - 5초 캐싱"""
-    try:
-        rabbitmq_url = os.getenv("RABBITMQ_MANAGEMENT_URL", "http://127.0.0.1:15672")
-        rabbitmq_user = os.getenv("RABBITMQ_USER", "guest")
-        rabbitmq_pass = os.getenv("RABBITMQ_PASS", "guest")
-        
-        import base64
-        auth = base64.b64encode(f"{rabbitmq_user}:{rabbitmq_pass}".encode()).decode()
-        
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.get(
-                f"{rabbitmq_url}/api/queues",
-                headers={"Authorization": f"Basic {auth}"}
-            )
-            
-            if response.status_code == 200:
-                queues_raw = response.json()
-                queues = []
-                for q in queues_raw:
-                    queues.append({
-                        "name": q.get("name", ""),
-                        "messages": q.get("messages", 0),
-                        "messages_ready": q.get("messages_ready", 0),
-                        "messages_unacknowledged": q.get("messages_unacknowledged", 0),
-                        "consumers": q.get("consumers", 0),
-                        "state": q.get("state", "unknown")
-                    })
-                return {"queues": queues, "count": len(queues)}
-            else:
-                return {"queues": [], "error": f"HTTP {response.status_code}"}
-                
-    except Exception as e:
-        logger.error(f"RabbitMQ 상태 조회 실패: {e}")
-        return {"queues": [], "error": str(e)}
+    """Redis Streams 상태 (레거시 엔드포인트명 유지)"""
+    # RabbitMQ 제거됨 — Redis Streams로 전환 완료
+    return {"queues": [], "count": 0, "note": "Migrated to Redis Streams"}
 
 
 @router.get("/scheduler")

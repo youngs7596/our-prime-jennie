@@ -21,7 +21,7 @@ from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
 from shared.notification import TelegramBot
-from shared.rabbitmq import RabbitMQPublisher
+from shared.messaging.trading_signals import TradingSignalPublisher, STREAM_BUY_SIGNALS, STREAM_SELL_ORDERS
 
 from handler import CommandHandler
 
@@ -103,14 +103,11 @@ def initialize_service():
         )
         logger.info("✅ Telegram Bot 초기화 완료")
         
-        # 5. RabbitMQ Publisher 초기화
-        amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-        buy_queue = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
-        sell_queue = os.getenv("RABBITMQ_QUEUE_SELL_ORDERS", "sell-orders")
-        
-        buy_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=buy_queue)
-        sell_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=sell_queue)
-        logger.info("✅ RabbitMQ Publisher 초기화 완료 (buy=%s, sell=%s)", buy_queue, sell_queue)
+        # 5. Signal Publisher 초기화 (Redis Streams)
+        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+        buy_publisher = TradingSignalPublisher(redis_url=redis_url, stream_name=STREAM_BUY_SIGNALS)
+        sell_publisher = TradingSignalPublisher(redis_url=redis_url, stream_name=STREAM_SELL_ORDERS)
+        logger.info("✅ Signal Publisher 초기화 완료 (buy=%s, sell=%s)", STREAM_BUY_SIGNALS, STREAM_SELL_ORDERS)
         
         # 6. Command Handler 초기화
         command_handler = CommandHandler(

@@ -16,7 +16,7 @@ import shared.redis_cache as redis_cache
 from shared.db.connection import session_scope
 from shared.db.repository import get_active_watchlist as get_active_watchlist_v2
 from shared.notification import TelegramBot
-from shared.rabbitmq import RabbitMQPublisher
+from shared.messaging.trading_signals import TradingSignalPublisher
 from limits import (
     is_rate_limited,
     check_and_increment_manual_trade_limit,
@@ -35,8 +35,8 @@ class CommandHandler:
     """Telegram 명령 처리 클래스"""
     
     def __init__(self, kis, config, telegram_bot: TelegramBot = None,
-                 buy_publisher: RabbitMQPublisher = None,
-                 sell_publisher: RabbitMQPublisher = None):
+                 buy_publisher: TradingSignalPublisher = None,
+                 sell_publisher: TradingSignalPublisher = None):
         """
         Args:
             kis: KIS API 클라이언트

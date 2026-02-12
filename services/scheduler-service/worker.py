@@ -10,7 +10,7 @@ from typing import Dict
 # Add shared to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shared.rabbitmq import RabbitMQWorker
+from shared.messaging.trading_signals import TradingSignalWorker, STREAM_JOBS_PREFIX
 from shared import auth
 
 # Setup logging
@@ -22,14 +22,14 @@ logging.basicConfig(
 logger = logging.getLogger("scheduler-worker")
 
 # Configuration
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 SCHEDULER_SCOPE = os.getenv("SCHEDULER_SCOPE", "real")
 
-# List of queues to consume
-QUEUES = [
-    f"{SCHEDULER_SCOPE}.jobs.data.intraday",
-    f"{SCHEDULER_SCOPE}.jobs.data.trading",
-    f"{SCHEDULER_SCOPE}.jobs.data.dart",
+# List of streams to consume (converted from RabbitMQ queue names)
+STREAMS = [
+    f"{STREAM_JOBS_PREFIX}{SCHEDULER_SCOPE}.jobs.data.intraday",
+    f"{STREAM_JOBS_PREFIX}{SCHEDULER_SCOPE}.jobs.data.trading",
+    f"{STREAM_JOBS_PREFIX}{SCHEDULER_SCOPE}.jobs.data.dart",
 ]
 
 workers = []
@@ -86,10 +86,16 @@ def execute_job(payload: Dict):
 
 def main():
     logger.info(f"Starting Scheduler Worker for scope: {SCHEDULER_SCOPE}")
-    logger.info(f"Listening on queues: {QUEUES}")
-    
-    for queue in QUEUES:
-        worker = RabbitMQWorker(RABBITMQ_URL, queue, execute_job)
+    logger.info(f"Listening on streams: {STREAMS}")
+
+    for i, stream in enumerate(STREAMS):
+        worker = TradingSignalWorker(
+            redis_url=REDIS_URL,
+            stream_name=stream,
+            group_name=f"group_scheduler_worker",
+            consumer_name=f"scheduler-worker-{os.getpid()}-{i}",
+            handler=execute_job,
+        )
         worker.start()
         workers.append(worker)
         

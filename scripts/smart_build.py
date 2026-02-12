@@ -39,7 +39,6 @@ SERVICE_MAP = {
     "services/sell-executor": ["sell-executor"],
     "services/price-monitor": ["price-monitor"],
     "services/kis-gateway": ["kis-gateway"],
-    "services/ollama-gateway": ["ollama-gateway"],
     "services/news-archiver": ["news-archiver"],
     "services/news-collector": ["news-collector"],
     "services/news-analyzer": ["news-analyzer"],
@@ -64,7 +63,6 @@ CRITICAL_PATHS = [
 # 배포 순서 (의존성 고려)
 DEPLOY_ORDER = [
     "kis-gateway",
-    "ollama-gateway",
     "news-archiver",
     "buy-scanner",
     "buy-executor",

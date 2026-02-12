@@ -20,13 +20,7 @@ class SystemDiagnoser:
     
     def __init__(self, kis_client: Optional[KISClient] = None):
         self.kis_client = kis_client
-        self.redis_url = os.getenv("RABBITMQ_URL", "redis://localhost:6379/0").replace("amqp://", "redis://").replace("5672", "6379")
-        # Redis URL이 amqp로 잘못 설정되는 경우 방지 (환경 변수 혼용 시)
-        # 실제 Redis URL 환경변수가 있으면 그것 사용
-        if os.getenv("REDIS_URL"):
-            self.redis_url = os.getenv("REDIS_URL")
-        elif "redis" not in self.redis_url:
-             self.redis_url = "redis://localhost:6379/0"
+        self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
     def run_diagnostics(self) -> str:
         """전체 시스템 진단 실행 및 리포트 생성"""

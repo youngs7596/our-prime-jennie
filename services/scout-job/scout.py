@@ -500,20 +500,18 @@ def main():
                     embeddings = None
                     if rag_provider == "local":
                         # Local Embedding (Ollama)
-                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (Ollama Embeddings: daynice/kure-v1) ...")
+                        logger.info("   ... ChromaDB 클라이언트 연결 시도 (vLLM Embeddings: KURE-v1) ...")
                         try:
-                            from langchain_ollama import OllamaEmbeddings
-                            # Use OLLAMA_GATEWAY_URL if defined, else fallback to OLLAMA_HOST or localhost
-                            ollama_base_url = os.getenv("OLLAMA_GATEWAY_URL")
-                            if not ollama_base_url:
-                                ollama_base_url = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+                            from langchain_openai import OpenAIEmbeddings
+                            vllm_embed_url = os.getenv("VLLM_EMBED_URL", "http://localhost:8002/v1")
 
-                            embeddings = OllamaEmbeddings(
-                                model="daynice/kure-v1",
-                                base_url=ollama_base_url
+                            embeddings = OpenAIEmbeddings(
+                                base_url=vllm_embed_url,
+                                api_key="EMPTY",
+                                model="nlpai-lab/KURE-v1",
                             )
                         except ImportError:
-                            logger.error("🚨 langchain_ollama 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
+                            logger.error("🚨 langchain_openai 모듈이 설치되지 않았습니다. RAG를 사용할 수 없습니다.")
                             raise
 
                     else:

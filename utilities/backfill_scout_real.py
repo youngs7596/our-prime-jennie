@@ -412,18 +412,16 @@ def mock_fetch_stock_news(vectorstore, stock_code, stock_name, k=3, target_date=
 # ============================================================================
 
 def _force_local_llm_gateway():
-    """백필 비용 절감을 위해 Ollama Gateway 강제 사용 설정"""
+    """백필 비용 절감을 위해 로컬 vLLM 강제 사용 설정"""
     os.environ["TIER_FAST_PROVIDER"] = "ollama"
     os.environ["TIER_REASONING_PROVIDER"] = "ollama"
     os.environ["TIER_THINKING_PROVIDER"] = "ollama"
-    
-    # 모델 설정 (Gateway에 등록된 모델명 확인 필요, 여기선 gpt-oss:20b 등 사용 가정)
-    # 실제 Gateway가 라우팅하므로 내부 모델명은 Gateway 설정에 따름
-    os.environ["LOCAL_MODEL_REASONING"] = "gpt-oss:20b" 
-    
-    os.environ["USE_OLLAMA_GATEWAY"] = "true"
-    os.environ["OLLAMA_GATEWAY_URL"] = "http://localhost:11500"
-    logger.info("🔧 [Config] Ollama Gateway 강제 설정 완료 (비용 0원 모드)")
+
+    # 모델 설정 (vLLM에 등록된 모델명 확인 필요)
+    os.environ["LOCAL_MODEL_REASONING"] = "gpt-oss:20b"
+
+    os.environ["VLLM_LLM_URL"] = "http://localhost:8001/v1"
+    logger.info("🔧 [Config] vLLM 직접 연결 강제 설정 완료 (비용 0원 모드)")
 
 def _load_trading_days(session, start_date: date, end_date: date) -> list[date]:
     rows = session.execute(

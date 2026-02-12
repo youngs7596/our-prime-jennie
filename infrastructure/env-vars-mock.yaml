@@ -46,12 +46,7 @@ CHROMA_PORT: "8000"
 CIRCUIT_BREAKER_FAIL_MAX: "20"
 CIRCUIT_BREAKER_TIMEOUT: "60"
 
-# 8. RabbitMQ 설정
-USE_RABBITMQ: "true"
-USE_CLOUD_TASKS: "false"
-RABBITMQ_URL: "amqp://guest:guest@localhost:5672/"
-RABBITMQ_QUEUE_SELL_ORDERS: "sell-orders-mock"
-RABBITMQ_QUEUE_BUY_SIGNALS: "buy-signals-mock"
+# 8. (RabbitMQ 제거됨 — Redis Streams 사용)
 
 # 9. 뉴스 감성 분석 설정
 MAX_SENTIMENT_DOCS_PER_RUN: "40"

@@ -64,7 +64,7 @@ def get_vectorstore():
     if _vectorstore is None:
         from langchain_qdrant import QdrantVectorStore
         from qdrant_client import QdrantClient
-        from langchain_ollama import OllamaEmbeddings
+        from langchain_openai import OpenAIEmbeddings
         from langchain_text_splitters import RecursiveCharacterTextSplitter
 
         # Qdrant Connection (Port 6333)
@@ -73,11 +73,12 @@ def get_vectorstore():
 
         logger.info(f"🔌 Qdrant 연결 중... ({QDRANT_HOST}:{QDRANT_PORT})")
 
-        # Embeddings (Ollama via Host/Gateway)
-        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-        embeddings = OllamaEmbeddings(
-            model="daynice/kure-v1",
-            base_url=ollama_base_url
+        # Embeddings (vLLM 직접 호출 — OpenAI-compatible API)
+        vllm_embed_url = os.getenv("VLLM_EMBED_URL", "http://localhost:8002/v1")
+        embeddings = OpenAIEmbeddings(
+            base_url=vllm_embed_url,
+            api_key="EMPTY",  # vLLM은 인증 불필요
+            model="nlpai-lab/KURE-v1",
         )
 
         from qdrant_client.http import models

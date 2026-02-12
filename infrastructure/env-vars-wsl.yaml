@@ -43,11 +43,7 @@ REDIS_URL: "redis://127.0.0.1:6379"
 CIRCUIT_BREAKER_FAIL_MAX: "20"
 CIRCUIT_BREAKER_TIMEOUT: "60"
 
-# 8. RabbitMQ 설정
-USE_RABBITMQ: "true"
-RABBITMQ_URL: "amqp://guest:guest@127.0.0.1:5672/"
-RABBITMQ_QUEUE_SELL_ORDERS: "sell-orders-real"
-RABBITMQ_QUEUE_BUY_SIGNALS: "buy-signals-real"
+# 8. (RabbitMQ 제거됨 — Redis Streams 사용)
 
 # 10. MariaDB 설정 (비밀번호는 secrets.json에서 로드)
 DB_TYPE: "MARIADB"

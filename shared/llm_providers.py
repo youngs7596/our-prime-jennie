@@ -84,16 +84,25 @@ class BaseLLMProvider(ABC):
 
 class OllamaLLMProvider(BaseLLMProvider):
     """
-    Ollama Local LLM Provider.
+    Local LLM Provider — vLLM 직접 호출 (OpenAI-compatible API).
     Implements defensive coding: Retries, Tag Removal, Timeouts, Keep-Alive.
-    
-    Gateway 모드 지원:
-    - USE_OLLAMA_GATEWAY=true 설정 시 중앙 Gateway를 통해 요청 (순차 처리 보장)
-    - Gateway가 Rate Limiting, Circuit Breaker, 큐잉 처리
-    
+
+    vLLM 모드:
+    - VLLM_LLM_URL로 직접 vLLM /v1/chat/completions 호출
+    - 토큰 클램핑: 한국어 ~2char/token 기준 동적 max_tokens 조정
+
     Debug 로깅:
     - LLM_DEBUG_LOG_PATH 환경변수 설정 시 요청/응답을 JSON 파일로 저장
     """
+
+    # Ollama 모델명 → vLLM 실제 모델명 매핑 (ollama-gateway에서 이전)
+    VLLM_MODEL_MAP = {
+        "exaone3.5:7.8b": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+        "exaone": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+        "gpt-oss:20b": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",
+        "gemma3:27b": "LGAI-EXAONE/EXAONE-4.0-32B-AWQ",  # 레거시 호환
+    }
+
     def __init__(
         self,
         model: str,
@@ -107,9 +116,9 @@ class OllamaLLMProvider(BaseLLMProvider):
         self.state_manager = state_manager
         self.host = os.getenv("OLLAMA_HOST", host)
 
-        # Gateway 모드 설정 (로컬 GPU 보호용)
-        self.use_gateway = os.getenv("USE_OLLAMA_GATEWAY", "false").lower() == "true"
-        self.gateway_url = os.getenv("OLLAMA_GATEWAY_URL", "http://ollama-gateway:11500")
+        # vLLM 직접 호출 설정
+        self.vllm_llm_url = os.getenv("VLLM_LLM_URL", "http://localhost:8001/v1")
+        self.vllm_max_model_len = int(os.getenv("VLLM_MAX_MODEL_LEN", "4096"))
 
         # ☁️ Cloud 직접 연결 모드 (Gateway 우회)
         self.is_cloud = model.endswith(":cloud")
@@ -123,9 +132,6 @@ class OllamaLLMProvider(BaseLLMProvider):
             else:
                 logger.warning(f"⚠️ [Ollama] Cloud 모델 요청이나 API Key 없음. Gateway 폴백 사용")
 
-        if self.use_gateway and not self.is_cloud:
-            logger.info(f"🌐 [Ollama] Gateway 모드 활성화: {self.gateway_url}")
-        
         # Debug 로깅 설정 (Toggle Support)
         self.debug_enabled = os.getenv("LLM_DEBUG_ENABLED", "false").lower() == "true"
         # 기본 경로 설정
@@ -294,97 +300,83 @@ class OllamaLLMProvider(BaseLLMProvider):
             # but we update our state manager to reflect intent.
             self.state_manager.set_current_model(self.model)
 
-    def _call_via_gateway(self, payload: Dict, endpoint: str = None) -> Dict:
+    def _clamp_max_tokens(self, prompt_text: str, requested_max: int) -> int:
+        """vLLM max_model_len 초과 방지: 프롬프트 길이 추정 후 동적 클램핑"""
+        estimated_input = max(len(prompt_text) // 2, 100)  # 한국어 ~2char/token
+        available = self.vllm_max_model_len - estimated_input - 64  # 64 토큰 여유
+        safe_max = max(available, 256)  # 최소 256 토큰 보장
+        return min(requested_max, safe_max)
+
+    def _call_vllm_direct(self, endpoint: str, payload: Dict) -> Dict:
         """
-        Gateway를 통해 Ollama API 호출
-        Gateway가 Rate Limiting, Circuit Breaker, 큐잉을 처리
-        
-        타임아웃 증가: Gateway 큐 대기 시간 + 실제 처리 시간 고려
-        /api/chat 지원 추가
+        vLLM OpenAI-compatible API 직접 호출.
+        Ollama 형식 payload를 OpenAI 형식으로 변환.
         """
-        # Endpoint 결정 (기본값 하위 호환)
-        if endpoint is None:
-             endpoint = "/api/generate"
-        
-        url = f"{self.gateway_url}{endpoint}"
-        
-        # Gateway 전용 페이로드 구성
-        gateway_payload = {
-            "model": payload.get("model", self.model),
-            "options": payload.get("options", {"temperature": 0.2, "num_ctx": 8192}),
-            "timeout": self.timeout,
+        model_name = payload.get("model", self.model)
+        vllm_model = self.VLLM_MODEL_MAP.get(model_name, model_name)
+        options = payload.get("options", {})
+        temperature = options.get("temperature", 0.2)
+        requested_max_tokens = options.get("num_predict", 2048)
+
+        # /api/generate → /v1/chat/completions 변환
+        if endpoint == "/api/generate":
+            prompt = payload.get("prompt", "")
+            messages = [{"role": "user", "content": prompt}]
+            max_tokens = self._clamp_max_tokens(prompt, requested_max_tokens)
+        elif endpoint == "/api/chat":
+            messages = payload.get("messages", [])
+            total_text = " ".join(m.get("content", "") for m in messages)
+            max_tokens = self._clamp_max_tokens(total_text, requested_max_tokens)
+        else:
+            raise ValueError(f"Unsupported endpoint: {endpoint}")
+
+        openai_payload = {
+            "model": vllm_model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
         }
-        
-        # Payload 필드 매핑
-        if "prompt" in payload:
-            gateway_payload["prompt"] = payload["prompt"]
-        if "messages" in payload:  # Chat support
-            gateway_payload["messages"] = payload["messages"]
-        if "format" in payload:
-            gateway_payload["format"] = payload["format"]
-            
-        # Gateway 모드에서는 큐 대기 시간을 고려하여 더 긴 타임아웃 사용
-        # 최대 5개 요청 대기 (30초 x 5) + 자신의 처리 시간 (300초) = 450초, 여유 포함 600초
-        gateway_timeout = int(os.getenv("OLLAMA_GATEWAY_TIMEOUT", "600"))
-        
-        try:
-            logger.info(f"🌐 [Ollama] Gateway 요청: {self.gateway_url}{endpoint} (timeout={gateway_timeout}s)")
-            response = requests.post(url, json=gateway_payload, timeout=gateway_timeout)
-            response.raise_for_status()
-            
-            result = response.json()
-            
-            # Gateway가 이미 파싱한 JSON 반환 (/api/generate-json 등 사용 시)
-            if "parsed_json" in result:
-                return {"response": json.dumps(result["parsed_json"])}
-            
-            return result
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"❌ [Ollama] Gateway 타임아웃 ({gateway_timeout}s)")
-            raise TimeoutError(f"Ollama Gateway timed out after {gateway_timeout}s")
-        except Exception as e:
-            logger.error(f"❌ [Ollama] Gateway 요청 실패: {e}")
-            raise
 
-    def _call_ollama_api(self, endpoint: str, payload: Dict) -> Dict:
-        """
-        [Defensive] Robust API Caller with Retries
-        Cloud 모델: Ollama Cloud API 직접 호출 (Gateway 우회)
-        Local 모델: Gateway 또는 직접 호출
-        """
-        # ☁️ Cloud 모드: Gateway 우회, 직접 호출
-        if self.is_cloud and self._cloud_api_key:
-            return self._call_cloud_api(endpoint, payload)
-
-        # Gateway 모드 체크
-        if self.use_gateway:
-            return self._call_via_gateway(payload, endpoint=endpoint)
-
-        # 직접 호출 모드 (기존 로직)
-        url = f"{self.host}{endpoint}"
-        payload["stream"] = False
-        payload["keep_alive"] = -1 # [Ops] Prevent unloading
-
+        url = f"{self.vllm_llm_url}/chat/completions"
         last_error = None
 
         for attempt in range(self.max_retries):
             try:
-                self._ensure_model_loaded()
-                response = requests.post(url, json=payload, timeout=self.timeout)
+                logger.info(f"🔮 [vLLM] 직접 호출: {url} (model={vllm_model}, max_tokens={max_tokens})")
+                response = requests.post(url, json=openai_payload, timeout=self.timeout)
                 response.raise_for_status()
-                return response.json()
+                result = response.json()
+
+                content = result["choices"][0]["message"]["content"]
+
+                # OpenAI → Ollama 응답 형식 변환
+                if endpoint == "/api/generate":
+                    return {"response": content}
+                else:
+                    return {"message": {"content": content}}
             except requests.exceptions.Timeout:
-                logger.warning(f"⚠️ [Ollama] Timeout ({self.timeout}s) on attempt {attempt+1}/{self.max_retries}")
-                last_error = TimeoutError(f"Ollama timed out after {self.timeout}s")
+                logger.warning(f"⚠️ [vLLM] Timeout ({self.timeout}s) on attempt {attempt+1}/{self.max_retries}")
+                last_error = TimeoutError(f"vLLM timed out after {self.timeout}s")
             except Exception as e:
-                logger.warning(f"⚠️ [Ollama] Error on attempt {attempt+1}/{self.max_retries}: {e}")
+                logger.warning(f"⚠️ [vLLM] Error on attempt {attempt+1}/{self.max_retries}: {e}")
                 last_error = e
 
-            # Exponential Backoff
             time.sleep(2 ** attempt)
 
         raise last_error
+
+    def _call_ollama_api(self, endpoint: str, payload: Dict) -> Dict:
+        """
+        [Defensive] Robust API Caller with Retries
+        Cloud 모델: Ollama Cloud API 직접 호출
+        Local 모델: vLLM 직접 호출
+        """
+        # ☁️ Cloud 모드: Ollama Cloud API 직접 호출
+        if self.is_cloud and self._cloud_api_key:
+            return self._call_cloud_api(endpoint, payload)
+
+        # vLLM 직접 호출 (Gateway 제거됨)
+        return self._call_vllm_direct(endpoint, payload)
 
     def generate_json(
         self,

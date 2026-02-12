@@ -52,7 +52,7 @@ import shared.database as database
 from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQWorker  # [변경] shared 모듈 사용
+from shared.messaging.trading_signals import TradingSignalWorker, STREAM_SELL_ORDERS, GROUP_SELL_EXECUTOR
 from shared.graceful_shutdown import GracefulShutdown, TaskTracker, init_global_shutdown
 
 from executor import SellExecutor
@@ -69,7 +69,7 @@ app = Flask(__name__)
 
 # 전역 변수
 executor = None
-rabbitmq_worker = None
+stream_worker = None
 shutdown_handler: GracefulShutdown = None
 task_tracker: TaskTracker = None
 
@@ -135,40 +135,41 @@ def _process_sell_request(sell_request, request_source: str = "http") -> dict:
     return result
 
 
-def _rabbitmq_handler(payload):
+def _stream_handler(payload):
     try:
-        result = _process_sell_request(payload, request_source="rabbitmq")
-        logger.info("RabbitMQ 매도 처리 결과: %s", result.get("status"))
+        result = _process_sell_request(payload, request_source="stream")
+        logger.info("Stream 매도 처리 결과: %s", result.get("status"))
     except Exception as exc:
-        logger.error("RabbitMQ 메시지 처리 실패: %s", exc, exc_info=True)
+        logger.error("Stream 메시지 처리 실패: %s", exc, exc_info=True)
 
 
-def _start_rabbitmq_worker_if_needed():
-    global rabbitmq_worker
-    use_rabbitmq = os.getenv("USE_RABBITMQ", "false").lower() == "true"
-    if not use_rabbitmq:
+def _start_stream_worker_if_needed():
+    global stream_worker
+    if stream_worker and stream_worker._thread and stream_worker._thread.is_alive():
         return
-    if rabbitmq_worker and rabbitmq_worker._thread and rabbitmq_worker._thread.is_alive():
-        return
-    amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-    queue_name = os.getenv("RABBITMQ_QUEUE_SELL_ORDERS", "sell-orders")
-    
-    # shared.rabbitmq.RabbitMQWorker 사용
-    rabbitmq_worker = RabbitMQWorker(amqp_url=amqp_url, queue_name=queue_name, handler=_rabbitmq_handler)
-    rabbitmq_worker.start()
+
+    redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    stream_worker = TradingSignalWorker(
+        redis_url=redis_url,
+        stream_name=STREAM_SELL_ORDERS,
+        group_name=GROUP_SELL_EXECUTOR,
+        consumer_name=f"sell-executor-{os.getpid()}",
+        handler=_stream_handler,
+    )
+    stream_worker.start()
 
 
 def _on_shutdown_callback():
     """Graceful Shutdown 시 호출되는 콜백"""
     logger.info("🛑 [Graceful Shutdown] sell-executor 종료 콜백 실행...")
 
-    # RabbitMQ Worker 정지
-    if rabbitmq_worker:
+    # Stream Worker 정지
+    if stream_worker:
         try:
-            rabbitmq_worker.stop()
-            logger.info("   - RabbitMQ Worker 정지 요청")
+            stream_worker.stop()
+            logger.info("   - Stream Worker 정지 요청")
         except Exception as e:
-            logger.warning(f"   - RabbitMQ Worker 정지 오류: {e}")
+            logger.warning(f"   - Stream Worker 정지 오류: {e}")
 
     logger.info("✅ [Graceful Shutdown] sell-executor 콜백 완료")
 
@@ -241,7 +242,7 @@ def initialize_service():
 
         logger.info("=== Sell Executor Service 초기화 완료 ===")
 
-        _start_rabbitmq_worker_if_needed()
+        _start_stream_worker_if_needed()
 
         return True
         
@@ -268,13 +269,13 @@ def health_check():
     # 의존성 체크
     checks = {}
 
-    # RabbitMQ Worker 체크
-    if rabbitmq_worker and rabbitmq_worker._thread and rabbitmq_worker._thread.is_alive():
-        checks["rabbitmq"] = "ok"
-    elif rabbitmq_worker:
-        checks["rabbitmq"] = "worker_stopped"
+    # Stream Worker 체크
+    if stream_worker and stream_worker._thread and stream_worker._thread.is_alive():
+        checks["stream_worker"] = "ok"
+    elif stream_worker:
+        checks["stream_worker"] = "worker_stopped"
     else:
-        checks["rabbitmq"] = "not_initialized"
+        checks["stream_worker"] = "not_initialized"
 
     # 전체 상태 결정
     if not is_ready:
@@ -283,7 +284,7 @@ def health_check():
     elif is_shutting_down:
         status = "shutting_down"
         http_status = 503
-    elif checks.get("rabbitmq") != "ok":
+    elif checks.get("stream_worker") != "ok":
         status = "degraded"
         http_status = 200
     else:
@@ -343,6 +344,6 @@ if __name__ == '__main__':
         if not initialize_service():
             sys.exit(1)
     else:
-        _start_rabbitmq_worker_if_needed()
+        _start_stream_worker_if_needed()
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False)

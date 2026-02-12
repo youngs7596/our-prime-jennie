@@ -131,7 +131,7 @@ class TestPriceMonitor(unittest.TestCase):
             self.assertIn("ATR Stop", result['reason'])
 
     def test_publish_sell_order(self):
-        """Test publishing sell order to RabbitMQ"""
+        """Test publishing sell order to Redis Streams"""
         signal = {"reason": "Test Reason", "quantity_pct": 50.0}
         holding = {"code": "005930", "name": "Samsung", "quantity": 10, "id": 1}
         

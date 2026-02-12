@@ -6,13 +6,13 @@ services/buy-executor/main.py - 매수 실행 서비스
 
 주요 기능:
 ---------
-1. RabbitMQ에서 매수 신호 수신 (buy-signals 큐)
+1. Redis Streams에서 매수 신호 수신 (stream:buy-signals)
 2. LLM 점수 확인 및 포지션 사이징
 3. KIS Gateway를 통한 매수 주문 실행
 4. 텔레그램 알림 발송
 5. 거래 로그 기록 (TRADELOG)
 
-입력 (RabbitMQ 메시지):
+입력 (Redis Stream 메시지):
 --------------------
 {
     "stock_code": "005930",
@@ -28,7 +28,7 @@ services/buy-executor/main.py - 매수 실행 서비스
 - TRADING_MODE: REAL/MOCK
 - DRY_RUN: true면 실제 주문 미실행
 - MIN_LLM_SCORE: 매수 최소 점수 (Real: 70, Mock: 50)
-- RABBITMQ_URL: RabbitMQ 연결 URL
+- REDIS_URL: Redis 연결 URL
 - KIS_GATEWAY_URL: KIS Gateway URL
 """
 
@@ -48,7 +48,7 @@ import shared.database as database
 from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQWorker # [변경] shared 모듈 사용
+from shared.messaging.trading_signals import TradingSignalWorker, STREAM_BUY_SIGNALS, GROUP_BUY_EXECUTOR
 from shared.graceful_shutdown import GracefulShutdown, TaskTracker, init_global_shutdown
 
 # Lazy import: executor 모듈은 사용 시점에 import
@@ -66,13 +66,13 @@ app = Flask(__name__)
 
 # 전역 변수
 executor = None
-rabbitmq_worker = None
+stream_worker = None
 shutdown_handler: GracefulShutdown = None
 task_tracker: TaskTracker = None
 
 
-def _process_buy_signal(scan_result, source="rabbitmq"):
-    """매수 신호 처리 로직 (HTTP/RabbitMQ 공통 사용)"""
+def _process_buy_signal(scan_result, source="stream"):
+    """매수 신호 처리 로직 (HTTP/Redis Stream 공통 사용)"""
     if not executor:
         raise RuntimeError("Service not initialized")
 
@@ -101,42 +101,39 @@ def _process_buy_signal(scan_result, source="rabbitmq"):
 
     return result
 
-def _rabbitmq_handler(payload):
+def _stream_handler(payload):
     try:
-        _process_buy_signal(payload, source="rabbitmq")
+        _process_buy_signal(payload, source="stream")
     except Exception as exc:
-        logger.error(f"RabbitMQ 메시지 처리 실패: {exc}", exc_info=True)
+        logger.error(f"Stream 메시지 처리 실패: {exc}", exc_info=True)
 
-def _start_rabbitmq_worker_if_needed():
-    global rabbitmq_worker
-    # USE_RABBITMQ 환경 변수가 없으면 기본적으로 켜는 방향으로 (GCP 제거 대체제이므로)
-    # 하지만 기존 로직과 호환성을 위해 체크
-    use_rabbitmq = os.getenv("USE_RABBITMQ", "true").lower() == "true"
-    
-    if not use_rabbitmq:
+def _start_stream_worker_if_needed():
+    global stream_worker
+    if stream_worker and stream_worker._thread and stream_worker._thread.is_alive():
         return
 
-    if rabbitmq_worker and rabbitmq_worker._thread and rabbitmq_worker._thread.is_alive():
-        return
-        
-    amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-    queue_name = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
-    
-    rabbitmq_worker = RabbitMQWorker(amqp_url=amqp_url, queue_name=queue_name, handler=_rabbitmq_handler)
-    rabbitmq_worker.start()
+    redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    stream_worker = TradingSignalWorker(
+        redis_url=redis_url,
+        stream_name=STREAM_BUY_SIGNALS,
+        group_name=GROUP_BUY_EXECUTOR,
+        consumer_name=f"buy-executor-{os.getpid()}",
+        handler=_stream_handler,
+    )
+    stream_worker.start()
 
 
 def _on_shutdown_callback():
     """Graceful Shutdown 시 호출되는 콜백"""
     logger.info("🛑 [Graceful Shutdown] buy-executor 종료 콜백 실행...")
 
-    # RabbitMQ Worker 정지
-    if rabbitmq_worker:
+    # Stream Worker 정지
+    if stream_worker:
         try:
-            rabbitmq_worker.stop()
-            logger.info("   - RabbitMQ Worker 정지 요청")
+            stream_worker.stop()
+            logger.info("   - Stream Worker 정지 요청")
         except Exception as e:
-            logger.warning(f"   - RabbitMQ Worker 정지 오류: {e}")
+            logger.warning(f"   - Stream Worker 정지 오류: {e}")
 
     logger.info("✅ [Graceful Shutdown] buy-executor 콜백 완료")
 
@@ -215,8 +212,8 @@ def initialize_service():
 
         logger.info("=== Buy Executor Service 초기화 완료 ===")
 
-        # RabbitMQ 워커 시작
-        _start_rabbitmq_worker_if_needed()
+        # Stream 워커 시작
+        _start_stream_worker_if_needed()
 
         return True
         
@@ -243,13 +240,13 @@ def health_check():
     # 의존성 체크
     checks = {}
 
-    # RabbitMQ Worker 체크
-    if rabbitmq_worker and rabbitmq_worker._thread and rabbitmq_worker._thread.is_alive():
-        checks["rabbitmq"] = "ok"
-    elif rabbitmq_worker:
-        checks["rabbitmq"] = "worker_stopped"
+    # Stream Worker 체크
+    if stream_worker and stream_worker._thread and stream_worker._thread.is_alive():
+        checks["stream_worker"] = "ok"
+    elif stream_worker:
+        checks["stream_worker"] = "worker_stopped"
     else:
-        checks["rabbitmq"] = "not_initialized"
+        checks["stream_worker"] = "not_initialized"
 
     # 전체 상태 결정
     if not is_ready:
@@ -258,7 +255,7 @@ def health_check():
     elif is_shutting_down:
         status = "shutting_down"
         http_status = 503
-    elif checks.get("rabbitmq") != "ok":
+    elif checks.get("stream_worker") != "ok":
         status = "degraded"
         http_status = 200
     else:
@@ -283,7 +280,7 @@ def health_check():
 def process():
     """
     Pub/Sub Push 구독 엔드포인트 (Legacy 지원)
-    RabbitMQ 전환 후에는 사용되지 않을 수 있으나, 테스트용으로 유지
+    Legacy 엔드포인트, 테스트용으로 유지
     """
     try:
         if not executor:
@@ -343,6 +340,6 @@ if __name__ == '__main__':
         if not initialize_service():
             sys.exit(1)
     else:
-        _start_rabbitmq_worker_if_needed()
+        _start_stream_worker_if_needed()
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port, debug=False)

@@ -47,8 +47,7 @@ def _force_local_llm() -> None:
     os.environ.setdefault("TIER_REASONING_PROVIDER", "ollama")
     os.environ.setdefault("TIER_THINKING_PROVIDER", "ollama")
     os.environ.setdefault("LOCAL_MODEL_REASONING", "gpt-oss:20b")
-    os.environ.setdefault("USE_OLLAMA_GATEWAY", "true")
-    os.environ.setdefault("OLLAMA_GATEWAY_URL", "http://localhost:11500")
+    os.environ.setdefault("VLLM_LLM_URL", "http://localhost:8001/v1")
 
 
 def _load_trading_days(conn, start: datetime, end: datetime) -> List[datetime]:

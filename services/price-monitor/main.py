@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 import shared.auth as auth
 from shared.kis.client import KISClient as KIS_API
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQPublisher
+from shared.messaging.trading_signals import TradingSignalPublisher, STREAM_SELL_ORDERS
 from shared.notification import TelegramBot
 from shared.graceful_shutdown import GracefulShutdown, init_global_shutdown
 
@@ -64,8 +64,6 @@ app = Flask(__name__)
 price_monitor = None
 monitor_thread = None
 is_monitoring = False
-rabbitmq_url = None
-rabbitmq_sell_queue = None
 tasks_publisher = None
 monitor_lock = threading.Lock()
 shutdown_handler: GracefulShutdown = None
@@ -91,7 +89,7 @@ def _on_shutdown_callback():
 
 def initialize_service():
     """서비스 초기화"""
-    global price_monitor, rabbitmq_url, rabbitmq_sell_queue, tasks_publisher, shutdown_handler
+    global price_monitor, tasks_publisher, shutdown_handler
 
     logger.info("=== Price Monitor Service 초기화 시작 (Redis Streams Mode) ===")
     load_dotenv()
@@ -126,12 +124,10 @@ def initialize_service():
         telegram_chat_id = auth.get_secret("telegram_chat_id") if auth.get_secret("telegram_chat_id") else os.getenv("TELEGRAM_CHAT_ID")
         telegram_bot = TelegramBot(token=telegram_token, chat_id=telegram_chat_id) if telegram_token and telegram_chat_id else None
         
-        # 5. 매도 요청 Publisher 초기화 (RabbitMQ)
-        rabbitmq_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-        rabbitmq_sell_queue = os.getenv("RABBITMQ_QUEUE_SELL_ORDERS", "sell-orders")
-        
-        tasks_publisher = RabbitMQPublisher(amqp_url=rabbitmq_url, queue_name=rabbitmq_sell_queue)
-        logger.info("✅ RabbitMQ Publisher 초기화 완료 (queue=%s)", rabbitmq_sell_queue)
+        # 5. 매도 요청 Publisher 초기화 (Redis Streams)
+        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+        tasks_publisher = TradingSignalPublisher(redis_url=redis_url, stream_name=STREAM_SELL_ORDERS)
+        logger.info("✅ Signal Publisher 초기화 완료 (stream=%s)", STREAM_SELL_ORDERS)
         
         # 6. Price Monitor 초기화
         price_monitor = PriceMonitor(
@@ -180,8 +176,8 @@ def health_check():
     # 의존성 체크
     checks = {}
 
-    # RabbitMQ Publisher 체크
-    checks["rabbitmq"] = "ok" if tasks_publisher else "not_initialized"
+    # Signal Publisher 체크
+    checks["signal_publisher"] = "ok" if tasks_publisher else "not_initialized"
 
     # 모니터링 상태
     checks["monitoring_active"] = "ok" if is_monitoring else "stopped"

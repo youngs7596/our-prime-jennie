@@ -772,8 +772,8 @@ class TestEmergencyStopCheck:
                 telegram_bot=mock_telegram
             )
             
-            # 일반 경로 (RabbitMQ)
-            result = buy_exec.process_buy_signal({'candidates': [{'stock_code': '005930'}], 'source': 'rabbitmq'}, dry_run=True)
+            # 일반 경로 (Redis Streams)
+            result = buy_exec.process_buy_signal({'candidates': [{'stock_code': '005930'}], 'source': 'stream'}, dry_run=True)
             
             assert result['status'] == 'skipped'
             assert 'Trading Paused' in result['reason']

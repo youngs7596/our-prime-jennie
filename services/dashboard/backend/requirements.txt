@@ -13,7 +13,6 @@ mysql-connector-python>=8.0.0
 
 # Cache & Queue
 redis>=5.0.0
-pika>=1.3.2
 
 # Utils
 python-dotenv>=1.0.0

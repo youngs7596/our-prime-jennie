@@ -21,7 +21,7 @@ services/buy-scanner/main.py - 매수 신호 스캔 서비스 (Stream-Only)
 --------
 - PORT: HTTP 서버 포트 (기본: 8081)
 - TRADING_MODE: REAL/MOCK
-- RABBITMQ_URL: RabbitMQ 연결 URL
+- REDIS_URL: Redis 연결 URL
 - USE_REDIS_STREAMS: true (필수)
 """
 
@@ -44,7 +44,7 @@ import shared.redis_cache as redis_cache
 from shared.kis.client import KISClient as KIS_API
 from shared.kis.gateway_client import KISGatewayClient
 from shared.config import ConfigManager
-from shared.rabbitmq import RabbitMQPublisher, RabbitMQWorker
+from shared.messaging.trading_signals import TradingSignalPublisher, STREAM_BUY_SIGNALS
 from shared.graceful_shutdown import GracefulShutdown, init_global_shutdown
 # from shared.scheduler_runtime import parse_job_message, SchedulerJobMessage # Removed
 # from shared.scheduler_client import mark_job_run # Polling 제거로 미사용
@@ -70,7 +70,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # 전역 변수
-rabbitmq_publisher = None
+signal_publisher = None
 # scheduler_job_worker = None # Removed
 # scheduler_job_publisher = None # Removed
 # scheduler_job_queue = None # Removed
@@ -120,7 +120,7 @@ def _on_shutdown_callback():
 
 def initialize_service():
     """서비스 초기화"""
-    global scanner, rabbitmq_publisher, scheduler_job_worker, scheduler_job_publisher, scheduler_job_queue
+    global signal_publisher
     global kis_client, opportunity_watcher, is_websocket_mode, shutdown_handler
 
     logger.info("=== Buy Scanner Service 초기화 시작 ===")
@@ -164,20 +164,18 @@ def initialize_service():
         # 3. ConfigManager 초기화
         config_manager = ConfigManager(db_conn=None, cache_ttl=300)
         
-        # 4. RabbitMQ Publisher 초기화
-        amqp_url = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
-        queue_name = os.getenv("RABBITMQ_QUEUE_BUY_SIGNALS", "buy-signals")
-        rabbitmq_publisher = RabbitMQPublisher(amqp_url=amqp_url, queue_name=queue_name)
-        logger.info("✅ RabbitMQ Publisher 초기화 완료 (queue=%s)", queue_name)
+        # 4. Signal Publisher 초기화 (Redis Streams)
+        redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+        signal_publisher = TradingSignalPublisher(redis_url=redis_url, stream_name=STREAM_BUY_SIGNALS)
+        logger.info("✅ Signal Publisher 초기화 완료 (stream=%s)", STREAM_BUY_SIGNALS)
 
         # 6. 실시간 모드 결정: Redis Streams vs Direct WebSocket
         use_redis_streams = os.getenv("USE_REDIS_STREAMS", "false").lower() == "true"
         
         if is_websocket_mode:
-            redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
             opportunity_watcher = BuyOpportunityWatcher(
                 config=config_manager,
-                tasks_publisher=rabbitmq_publisher,
+                tasks_publisher=signal_publisher,
                 redis_url=redis_url
             )
             
@@ -446,10 +444,10 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
         
         logger.info(f"   (Mock WS) 🎯 테스트 매수 신호 수신: {stock_code} ({signal_type})")
         
-        # RabbitMQ로 즉시 발행
+        # Redis Streams로 즉시 발행
         if opportunity_watcher and opportunity_watcher.tasks_publisher:
             opportunity_watcher.tasks_publisher.publish(data)
-            logger.info(f"   (Mock WS) ✅ RabbitMQ 발행 완료: {stock_code}")
+            logger.info(f"   (Mock WS) ✅ 신호 발행 완료: {stock_code}")
     
     @sio.event
     def disconnect():
@@ -512,7 +510,7 @@ def _on_price_update(stock_code: str, current_price: float, current_high: float)
 def health_check():
     """Enhanced health check with detailed status"""
     # 기본 상태 확인
-    is_ready = opportunity_watcher is not None and rabbitmq_publisher is not None
+    is_ready = opportunity_watcher is not None and signal_publisher is not None
     is_live = True  # 프로세스 살아있음
 
     # Graceful Shutdown 상태
@@ -537,8 +535,8 @@ def health_check():
     except Exception as e:
         checks["redis"] = f"error: {str(e)[:50]}"
 
-    # RabbitMQ 체크
-    checks["rabbitmq"] = "ok" if rabbitmq_publisher else "not_initialized"
+    # Signal Publisher 체크
+    checks["signal_publisher"] = "ok" if signal_publisher else "not_initialized"
 
     # 전체 상태 결정
     if not is_ready:

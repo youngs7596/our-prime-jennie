@@ -364,28 +364,24 @@ class TestOllamaLLMProvider:
     def test_init_success(self, mock_state_manager, monkeypatch):
         """초기화 성공"""
         from shared.llm_providers import OllamaLLMProvider
-        
+
         monkeypatch.setenv('OLLAMA_HOST', 'http://localhost:11434')
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
+
         provider = OllamaLLMProvider(
             model='qwen3:32b',
             state_manager=mock_state_manager,
             is_fast_tier=False,
             is_thinking_tier=False
         )
-        
+
         assert provider.model == 'qwen3:32b'
         assert provider.timeout == 600
         assert provider.max_retries == 2
-        assert provider.use_gateway is False
     
     def test_init_fast_tier(self, mock_state_manager, monkeypatch):
         """Fast tier 초기화"""
         from shared.llm_providers import OllamaLLMProvider
-        
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
+
         provider = OllamaLLMProvider(
             model='qwen3:32b',
             state_manager=mock_state_manager,
@@ -394,29 +390,12 @@ class TestOllamaLLMProvider:
         
         assert provider.timeout == 60
     
-    def test_init_gateway_mode(self, mock_state_manager, monkeypatch):
-        """Gateway 모드 활성화"""
-        from shared.llm_providers import OllamaLLMProvider
-        
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'true')
-        monkeypatch.setenv('OLLAMA_GATEWAY_URL', 'http://gateway:11500')
-        
-        provider = OllamaLLMProvider(
-            model='qwen3:32b',
-            state_manager=mock_state_manager
-        )
-        
-        assert provider.use_gateway is True
-        assert provider.gateway_url == 'http://gateway:11500'
-    
     def test_clean_deepseek_tags(self, mock_state_manager, monkeypatch):
         """DeepSeek <think> 태그 제거"""
         from shared.llm_providers import OllamaLLMProvider
         
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
         provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
-        
+
         text_with_think = '<think>This is reasoning...</think>{"score": 80}'
         result = provider._clean_deepseek_tags(text_with_think)
         
@@ -426,7 +405,6 @@ class TestOllamaLLMProvider:
         """다른 모델로 전환 시 상태 업데이트"""
         from shared.llm_providers import OllamaLLMProvider
         
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
         mock_state_manager.get_current_model.return_value = 'llama3:8b'
         
         provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
@@ -436,21 +414,19 @@ class TestOllamaLLMProvider:
     
     @patch('requests.post')
     def test_generate_json_success(self, mock_post, mock_state_manager, monkeypatch, sample_response_schema):
-        """generate_json 성공"""
+        """generate_json 성공 (vLLM OpenAI-compatible API)"""
         from shared.llm_providers import OllamaLLMProvider
-        
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
+
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            'response': '{"score": 75, "grade": "B", "reason": "Good"}'
+            'choices': [{'message': {'content': '{"score": 75, "grade": "B", "reason": "Good"}'}}]
         }
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
-        
+
         provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
         result = provider.generate_json("Analyze this stock", sample_response_schema)
-        
+
         assert result['score'] == 75
         assert result['grade'] == 'B'
     
@@ -458,40 +434,36 @@ class TestOllamaLLMProvider:
     def test_generate_json_with_think_tags(self, mock_post, mock_state_manager, monkeypatch, sample_response_schema):
         """think 태그 포함 응답 처리"""
         from shared.llm_providers import OllamaLLMProvider
-        
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
+
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            'response': '<think>Analyzing...</think>{"score": 80, "grade": "A", "reason": "Excellent"}'
+            'choices': [{'message': {'content': '<think>Analyzing...</think>{"score": 80, "grade": "A", "reason": "Excellent"}'}}]
         }
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
-        
+
         provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
         result = provider.generate_json("Test", sample_response_schema)
-        
+
         assert result['score'] == 80
     
     @patch('requests.post')
     def test_generate_chat_success(self, mock_post, mock_state_manager, monkeypatch):
-        """generate_chat 성공"""
+        """generate_chat 성공 (vLLM OpenAI-compatible API)"""
         from shared.llm_providers import OllamaLLMProvider
-        
-        monkeypatch.setenv('USE_OLLAMA_GATEWAY', 'false')
-        
+
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            'message': {'content': 'This is a great stock to buy.'}
+            'choices': [{'message': {'content': 'This is a great stock to buy.'}}]
         }
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
-        
+
         provider = OllamaLLMProvider('qwen3:32b', mock_state_manager)
         history = [{'role': 'user', 'content': 'Analyze Samsung stock'}]
-        
+
         result = provider.generate_chat(history)
-        
+
         assert 'text' in result
         assert result['text'] == 'This is a great stock to buy.'
 

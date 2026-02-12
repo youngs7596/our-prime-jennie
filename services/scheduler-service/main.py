@@ -26,7 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy import inspect
 
-from shared.rabbitmq import RabbitMQPublisher
+from shared.messaging.trading_signals import TradingSignalPublisher, STREAM_JOBS_PREFIX
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 logger = logging.getLogger("scheduler-service")
@@ -35,7 +35,7 @@ SCHEDULER_SCOPE = os.getenv("SCHEDULER_SCOPE", "real")
 SCHEDULER_TICK_SECONDS = int(os.getenv("SCHEDULER_TICK_SECONDS", "5"))
 SCHEDULER_TIMEZONE = os.getenv("SCHEDULER_TIMEZONE", "Asia/Seoul")
 SCHEDULER_DB_PATH = os.getenv("SCHEDULER_DB_PATH", "/app/data/scheduler.db")
-RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
 # DB 타입 선택 (MARIADB 또는 SQLITE)
 DB_TYPE = os.getenv("DB_TYPE", "SQLITE").upper()
@@ -242,14 +242,17 @@ class JobRunUpdate(BaseModel):
     scope: Optional[str] = None
 
 
-publisher_cache: Dict[str, RabbitMQPublisher] = {}
+publisher_cache: Dict[str, TradingSignalPublisher] = {}
 apscheduler = BackgroundScheduler(timezone=TZ)
 
 
-def get_publisher(queue_name: str) -> RabbitMQPublisher:
-    if queue_name not in publisher_cache:
-        publisher_cache[queue_name] = RabbitMQPublisher(RABBITMQ_URL, queue_name)
-    return publisher_cache[queue_name]
+def get_publisher(queue_name: str) -> TradingSignalPublisher:
+    """queue_name을 Redis Stream 이름으로 변환하여 Publisher를 반환합니다."""
+    # 기존 RabbitMQ 큐 이름을 Redis Stream 이름으로 변환
+    stream_name = f"{STREAM_JOBS_PREFIX}{queue_name}" if not queue_name.startswith("stream:") else queue_name
+    if stream_name not in publisher_cache:
+        publisher_cache[stream_name] = TradingSignalPublisher(REDIS_URL, stream_name)
+    return publisher_cache[stream_name]
 
 
 def scoped_queue_name(queue: str) -> str:

@@ -239,12 +239,9 @@ def print_table(results: List[Dict]):
         print("\n⚠️ No successful configuration found.")
 
 def main():
-    # 환경 변수 설정
-    if not os.getenv("OLLAMA_GATEWAY_URL"):
-        os.environ["OLLAMA_GATEWAY_URL"] = "http://localhost:11500"
-        
-    # Gateway 사용 강제
-    os.environ["USE_OLLAMA_GATEWAY"] = "true"
+    # 환경 변수 설정 (vLLM direct)
+    if not os.getenv("VLLM_LLM_URL"):
+        os.environ["VLLM_LLM_URL"] = "http://localhost:8001/v1"
 
     print("\n🏎️  LLM Stress Test Benchmark (Fail-Fast Mode)")
     print(f"Models: {MODELS}")

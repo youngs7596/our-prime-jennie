@@ -174,7 +174,7 @@ class BuyOpportunityWatcher:
         """
         Args:
             config: ConfigManager 인스턴스
-            tasks_publisher: RabbitMQPublisher (buy-signals 큐)
+            tasks_publisher: TradingSignalPublisher (buy-signals stream)
             redis_url: Redis 연결 URL
         """
 
@@ -1717,9 +1717,9 @@ class BuyOpportunityWatcher:
             logger.warning(f"Cooldown 설정 실패: {e}")
 
     def publish_signal(self, signal: dict) -> bool:
-        """매수 신호 RabbitMQ 발행 및 Redis Pub/Sub 전송"""
+        """매수 신호 Redis Streams 발행 및 Redis Pub/Sub 전송"""
         if not self.tasks_publisher:
-            logger.warning("RabbitMQ Publisher 없음 - 신호 발행 불가")
+            logger.warning("Signal Publisher 없음 - 신호 발행 불가")
             return False
         
         try:
@@ -1770,7 +1770,7 @@ class BuyOpportunityWatcher:
                 'risk_setting': risk_setting,  # 최상위에도 백업용으로 추가
             }
             
-            # 1. RabbitMQ 발행
+            # 1. Redis Streams 발행
             msg_id = self.tasks_publisher.publish(payload)
             
             if msg_id:

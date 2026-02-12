@@ -15,11 +15,11 @@ class TestSchedulerIntegration:
     """Test scheduler service integration with database and job execution."""
     
     @pytest.fixture
-    def mock_rabbitmq(self, mocker):
-        """Mock RabbitMQ publisher for job triggers."""
+    def mock_signal_publisher(self, mocker):
+        """Mock Redis Streams publisher for job triggers."""
         mock_publisher = mocker.MagicMock()
-        mock_publisher.publish.return_value = True
-        mocker.patch('shared.rabbitmq.RabbitMQPublisher', return_value=mock_publisher)
+        mock_publisher.publish.return_value = "mock-msg-id"
+        mocker.patch('shared.messaging.trading_signals.TradingSignalPublisher', return_value=mock_publisher)
         return mock_publisher
     
     def test_job_config_crud_via_config_table(self, in_memory_db, patch_session_scope):
@@ -76,31 +76,31 @@ class TestSchedulerIntegration:
         deleted = session.scalars(stmt).first()
         assert deleted is None
     
-    def test_job_trigger_publishes_to_rabbitmq(self, mock_rabbitmq, mocker):
+    def test_job_trigger_publishes_to_stream(self, mock_signal_publisher, mocker):
         """
-        Verify that triggering a job publishes the correct message to RabbitMQ.
-        
+        Verify that triggering a job publishes the correct message to Redis Streams.
+
         This simulates the scheduler triggering a job execution.
         """
         # Simulate a job trigger function (mocked)
         def trigger_job(job_id: str, job_type: str):
-            """Simulated job trigger that would publish to RabbitMQ."""
+            """Simulated job trigger that publishes to Redis Streams."""
             message = {
                 'job_id': job_id,
                 'job_type': job_type,
                 'triggered_at': datetime.now(timezone.utc).isoformat()
             }
-            mock_rabbitmq.publish(routing_key=f'jobs.{job_type.lower()}', body=message)
+            mock_signal_publisher.publish(message)
             return True
-        
+
         # Trigger job
         result = trigger_job('scout_job_001', 'SCOUT')
-        
+
         # Verify
         assert result is True
-        mock_rabbitmq.publish.assert_called_once()
-        call_kwargs = mock_rabbitmq.publish.call_args
-        assert 'jobs.scout' in str(call_kwargs)
+        mock_signal_publisher.publish.assert_called_once()
+        call_args = mock_signal_publisher.publish.call_args
+        assert call_args[0][0]['job_type'] == 'SCOUT'
     
     def test_scout_to_db_flow_simulation(self, in_memory_db, patch_session_scope):
         """

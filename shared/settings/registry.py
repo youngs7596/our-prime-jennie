@@ -76,9 +76,6 @@ REGISTRY = {
     "DASHBOARD_PASSWORD": {"value": "", "type": "str", "desc": "대시보드 관리자 비밀번호", "category": "Secrets", "sensitive": True},
     "MARIADB_PASSWORD": {"value": "", "type": "str", "desc": "MariaDB 비밀번호", "category": "Secrets", "sensitive": True},
     "REDIS_PASSWORD": {"value": "", "type": "str", "desc": "Redis 비밀번호", "category": "Secrets", "sensitive": True},
-    "RABBITMQ_PASS": {"value": "", "type": "str", "desc": "RabbitMQ 패스워드", "category": "Secrets", "sensitive": True},
-    "RABBITMQ_USER": {"value": "", "type": "str", "desc": "RabbitMQ 사용자", "category": "Secrets", "sensitive": True},
-
     # ===== Portfolio Guard (포트폴리오 수준 리스크 관리) =====
     "PORTFOLIO_GUARD_ENABLED": {"value": True, "type": "bool", "desc": "Portfolio Guard 활성화 (False면 shadow mode: 로그만, 차단 안 함)", "category": "Risk", "db_priority": True},
     "MAX_SECTOR_STOCKS": {"value": 3, "type": "int", "desc": "동일 섹터(대분류) 최대 보유 종목 수", "category": "Risk", "db_priority": True},

@@ -28,7 +28,7 @@ from sqlalchemy.pool import StaticPool
 # Use unique DB path per process to avoid race conditions in xdist
 os.environ["SCHEDULER_DB_PATH"] = f"/tmp/test_scheduler_{os.getpid()}.db"
 
-with patch('shared.rabbitmq.RabbitMQPublisher'), \
+with patch('shared.messaging.trading_signals.TradingSignalPublisher'), \
      patch('apscheduler.schedulers.background.BackgroundScheduler'):
     
     # Dynamic import of scheduler-service main
