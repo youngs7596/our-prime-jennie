@@ -1,6 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
 ## 2026-02-13
+### Scout Worker 프로덕션 장애 수정 및 배포
+- **fix(deps)**: scout-job `langchain-ollama` → `langchain-openai` 전환 누락 수정 (RAG 비활성화 해소)
+- **fix(scout)**: 장 시작 전(08:30) 섹터 모멘텀 전부 0% → DB 전일 종가 대비 수익률 fallback 추가
+- **deploy**: scout-job + scout-worker Docker 이미지 재빌드 및 배포
+
 ### RabbitMQ 레거시 정리 + 테스트 격리 수정
 - **refactor(dashboard)**: RabbitMQ UI 제거 → Redis Streams 정보 카드, 아키텍처 다이어그램 업데이트
 - **refactor(test)**: E2E fixtures rabbitmq_fixtures.py → stream_fixtures.py 전환
