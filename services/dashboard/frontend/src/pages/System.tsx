@@ -111,13 +111,6 @@ function InfrastructureTab() {
     staleTime: 10000,
   })
 
-  const { data: rabbitmqStatus, refetch: refetchRabbitMQ } = useQuery({
-    queryKey: ['system-rabbitmq'],
-    queryFn: systemApi.getRabbitMQ,
-    refetchInterval: 15000, // 15초 (5초 → 15초)
-    staleTime: 10000,
-  })
-
   const { data: realtimeDetails, isLoading: realtimeLoading, refetch: refetchRealtime } = useQuery({
     queryKey: ['system-realtime'],
     queryFn: systemApi.getRealtimeMonitor,
@@ -135,7 +128,6 @@ function InfrastructureTab() {
 
   const handleRefreshAll = () => {
     refetchDocker()
-    refetchRabbitMQ()
     refetchRealtime()
   }
 
@@ -164,13 +156,8 @@ function InfrastructureTab() {
                 <MessageSquare className="w-5 h-5 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-semibold text-white">
-                  {rabbitmqStatus?.queues?.reduce(
-                    (sum: number, q: any) => sum + (q.messages || 0),
-                    0
-                  ) || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Pending Messages</p>
+                <p className="text-2xl font-semibold text-white">Redis Streams</p>
+                <p className="text-xs text-muted-foreground">Message Broker</p>
               </div>
             </div>
           </CardContent>
@@ -291,47 +278,6 @@ function InfrastructureTab() {
                   </div>
                   <p className="text-xs text-muted-foreground truncate">{container.Image}</p>
                   <p className="text-xs text-muted-foreground mt-1">{container.Status}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* RabbitMQ Queues */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-blue-500" />
-            RabbitMQ Queues
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {rabbitmqStatus?.error ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-500" />
-              <p>Unable to fetch RabbitMQ status</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {rabbitmqStatus?.queues?.map((queue: any) => (
-                <div
-                  key={queue.name}
-                  className="p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm truncate text-white">{queue.name}</span>
-                    <span
-                      className={cn(
-                        'px-2 py-0.5 rounded-full text-xs font-medium',
-                        queue.messages > 0
-                          ? 'bg-yellow-500/20 text-yellow-500'
-                          : 'bg-white/10 text-muted-foreground'
-                      )}
-                    >
-                      {queue.messages || 0}
-                    </span>
-                  </div>
                 </div>
               ))}
             </div>

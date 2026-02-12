@@ -24,11 +24,11 @@ if PROJECT_ROOT not in sys.path:
 from tests.e2e.mock_server.kis_mock_server import KISMockServer, MockKISClient
 from tests.e2e.mock_server.scenarios import Scenario, ScenarioManager, ResponseMode
 from tests.e2e.fixtures.redis_fixtures import StreamsEnabledFakeRedis, PriceStreamSimulator
-from tests.e2e.fixtures.rabbitmq_fixtures import (
-    MockRabbitMQPublisher,
-    MockRabbitMQConsumer,
-    RabbitMQTestBridge,
-    QueueNames
+from tests.e2e.fixtures.stream_fixtures import (
+    MockStreamPublisher,
+    MockStreamConsumer,
+    StreamTestBridge,
+    StreamNames
 )
 
 logger = logging.getLogger(__name__)
@@ -131,21 +131,21 @@ def mock_redis_connection(mocker, e2e_redis):
 
 
 # ============================================================================
-# RabbitMQ Fixtures
+# Redis Streams Fixtures (Trading Signal)
 # ============================================================================
 
 @pytest.fixture
 def mq_bridge():
     """
-    RabbitMQ test bridge for message queue testing.
+    Redis Streams test bridge for trading signal testing.
     """
-    bridge = RabbitMQTestBridge()
+    bridge = StreamTestBridge()
 
-    # Create standard queues
-    bridge.create_publisher(QueueNames.BUY_SIGNALS)
-    bridge.create_consumer(QueueNames.BUY_SIGNALS)
-    bridge.create_publisher(QueueNames.SELL_ORDERS)
-    bridge.create_consumer(QueueNames.SELL_ORDERS)
+    # Create standard streams
+    bridge.create_publisher(StreamNames.BUY_SIGNALS)
+    bridge.create_consumer(StreamNames.BUY_SIGNALS)
+    bridge.create_publisher(StreamNames.SELL_ORDERS)
+    bridge.create_consumer(StreamNames.SELL_ORDERS)
 
     yield bridge
 
@@ -153,15 +153,15 @@ def mq_bridge():
 
 
 @pytest.fixture
-def buy_signals_publisher(mq_bridge) -> MockRabbitMQPublisher:
-    """Publisher for buy signals queue"""
-    return mq_bridge.get_publisher(QueueNames.BUY_SIGNALS)
+def buy_signals_publisher(mq_bridge) -> MockStreamPublisher:
+    """Publisher for buy signals stream"""
+    return mq_bridge.get_publisher(StreamNames.BUY_SIGNALS)
 
 
 @pytest.fixture
-def sell_orders_publisher(mq_bridge) -> MockRabbitMQPublisher:
-    """Publisher for sell orders queue"""
-    return mq_bridge.get_publisher(QueueNames.SELL_ORDERS)
+def sell_orders_publisher(mq_bridge) -> MockStreamPublisher:
+    """Publisher for sell orders stream"""
+    return mq_bridge.get_publisher(StreamNames.SELL_ORDERS)
 
 
 # ============================================================================

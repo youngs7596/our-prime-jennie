@@ -1,5 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-13
+### RabbitMQ 레거시 정리 + 테스트 격리 수정
+- **refactor(dashboard)**: RabbitMQ UI 제거 → Redis Streams 정보 카드, 아키텍처 다이어그램 업데이트
+- **refactor(test)**: E2E fixtures rabbitmq_fixtures.py → stream_fixtures.py 전환
+- **fix(test)**: macro_council 23개 테스트 격리 실패 해결 (scripts/__init__.py 추가, reset_singletons 수정)
+
 ## 2026-02-12
 ### news-archiver Qdrant 장애 복구 + Redis Streams pending 자동 복구
 - **fix(infra)**: Qdrant 컨테이너 포트 바인딩 누락 복구 (5일간 news-archiver 아카이빙 중단)

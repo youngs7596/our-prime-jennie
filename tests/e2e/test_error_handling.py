@@ -6,7 +6,7 @@ Tests error handling scenarios including:
 - KIS Gateway timeout
 - KIS Gateway 500 errors
 - Redis connection failures
-- RabbitMQ connection failures
+- Redis Streams publish failures
 """
 
 import os
@@ -277,14 +277,14 @@ class TestDatabaseErrors:
 
 
 @pytest.mark.e2e
-class TestRabbitMQErrors:
-    """Tests for RabbitMQ error handling"""
+class TestStreamErrors:
+    """Tests for Redis Streams error handling"""
 
     def test_mq_publish_failure(
         self, e2e_redis, mock_config, opportunity_watcher_class
     ):
         """
-        Test: RabbitMQ publish failure is handled.
+        Test: Stream publish failure is handled.
         """
         BuyOpportunityWatcher = opportunity_watcher_class
 
@@ -319,7 +319,7 @@ class TestRabbitMQErrors:
         self, e2e_redis, mock_config, opportunity_watcher_class
     ):
         """
-        Test: Missing RabbitMQ publisher is handled.
+        Test: Missing stream publisher is handled.
         """
         BuyOpportunityWatcher = opportunity_watcher_class
 

@@ -3,17 +3,16 @@
 Test Fixtures for E2E Testing
 
 - Redis fixtures with Streams support
-- RabbitMQ mock fixtures
-- Database fixtures
+- Trading signal stream mock fixtures
 """
 
 from .redis_fixtures import StreamsEnabledFakeRedis, PriceStreamSimulator
-from .rabbitmq_fixtures import MockRabbitMQPublisher, MockRabbitMQConsumer, RabbitMQTestBridge
+from .stream_fixtures import MockStreamPublisher, MockStreamConsumer, StreamTestBridge
 
 __all__ = [
     'StreamsEnabledFakeRedis',
     'PriceStreamSimulator',
-    'MockRabbitMQPublisher',
-    'MockRabbitMQConsumer',
-    'RabbitMQTestBridge'
+    'MockStreamPublisher',
+    'MockStreamConsumer',
+    'StreamTestBridge'
 ]

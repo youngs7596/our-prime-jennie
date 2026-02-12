@@ -263,10 +263,11 @@ def reset_singletons():
     except Exception:
         pass
         
-    # 4. LLM Factory
+    # 4. LLM Factory + ModelStateManager
     try:
-        from shared.llm_factory import LLMFactory
-        LLMFactory._instance = None
+        from shared.llm_factory import LLMFactory, ModelStateManager
+        LLMFactory._providers = {}
+        ModelStateManager._instance = None
     except Exception:
         pass
         

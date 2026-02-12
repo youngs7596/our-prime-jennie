@@ -137,7 +137,7 @@ const PrimeJennieArchitecture = () => {
             // Infra & Storage
             'mariadb': { ...pMaria, category: 'infra', label: 'MariaDB', icon: '🐬', desc: '영속 저장소\n거래/종목 데이터' },
             'redis': { ...pRedis, category: 'infra', label: 'Redis', icon: '🔴', desc: '캐싱/분산락\n실시간 상태 공유' },
-            'rabbitmq': { ...pRabbit, category: 'infra', label: 'RabbitMQ', icon: '🐰', desc: '메시지 큐\n서비스 간 통신' },
+            'redis-streams': { ...pRabbit, category: 'infra', label: 'Redis Streams', icon: '📨', desc: '메시지 브로커\n서비스 간 통신' },
             'chromadb': { ...pChroma, category: 'infra', label: 'ChromaDB', icon: '🧠', desc: 'Vector DB / RAG\n뉴스/문서 검색' },
 
             // Interfaces & Reporting
@@ -160,8 +160,8 @@ const PrimeJennieArchitecture = () => {
 
         // Trading
         { from: 'scout-job', to: 'buy-scanner', type: 'data', flow: 'trading', label: 'Candidates' },
-        { from: 'buy-scanner', to: 'rabbitmq', type: 'signal', flow: 'trading', label: 'BuySignal' },
-        { from: 'rabbitmq', to: 'buy-executor', type: 'signal', flow: 'trading' },
+        { from: 'buy-scanner', to: 'redis-streams', type: 'signal', flow: 'trading', label: 'BuySignal' },
+        { from: 'redis-streams', to: 'buy-executor', type: 'signal', flow: 'trading' },
         { from: 'buy-executor', to: 'redis', type: 'data', flow: 'trading', label: 'Lock' },
         { from: 'buy-executor', to: 'kis-gateway', type: 'data', flow: 'trading', label: 'Order' },
         { from: 'sell-executor', to: 'kis-gateway', type: 'data', flow: 'trading' },
@@ -640,7 +640,7 @@ const PrimeJennieArchitecture = () => {
                     fontSize: 11,
                     borderTop: '1px solid rgba(255,255,255,0.06)',
                 }}>
-                    <strong style={{ color: '#9CA3AF' }}>my-prime-jennie</strong> Architecture · Tech Stack: Docker Compose, FastAPI, React, Ollama, MariaDB, Redis, RabbitMQ, ChromaDB
+                    <strong style={{ color: '#9CA3AF' }}>my-prime-jennie</strong> Architecture · Tech Stack: Docker Compose, FastAPI, React, vLLM, MariaDB, Redis Streams, Qdrant
                 </div>
             </div>
         </div>

@@ -152,14 +152,6 @@ async def get_docker_status():
         return {"containers": [], "count": 0, "error": str(e)}
 
 
-@router.get("/rabbitmq")
-@cache_response(ttl_seconds=5)
-async def get_rabbitmq_status():
-    """Redis Streams 상태 (레거시 엔드포인트명 유지)"""
-    # RabbitMQ 제거됨 — Redis Streams로 전환 완료
-    return {"queues": [], "count": 0, "note": "Migrated to Redis Streams"}
-
-
 @router.get("/scheduler")
 async def get_scheduler_jobs_api():
     """Scheduler Jobs 상세 상태 - DB 직접 조회 (캐시 없음)"""

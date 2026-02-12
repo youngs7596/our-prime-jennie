@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 import time
 
 from tests.e2e.conftest import create_scan_result, create_portfolio_item
-from tests.e2e.fixtures.rabbitmq_fixtures import RabbitMQTestBridge, QueueNames
+from tests.e2e.fixtures.stream_fixtures import StreamTestBridge, StreamNames
 
 # Dynamic import for services with hyphens in names
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -351,8 +351,8 @@ class TestMessageQueueIntegration:
         """
         Test: Buy signal flows correctly through message queue.
         """
-        publisher = mq_bridge.get_publisher(QueueNames.BUY_SIGNALS)
-        consumer = mq_bridge.get_consumer(QueueNames.BUY_SIGNALS)
+        publisher = mq_bridge.get_publisher(StreamNames.BUY_SIGNALS)
+        consumer = mq_bridge.get_consumer(StreamNames.BUY_SIGNALS)
 
         # Publish buy signal
         signal = {
@@ -379,8 +379,8 @@ class TestMessageQueueIntegration:
         """
         Test: Sell order flows correctly through message queue.
         """
-        publisher = mq_bridge.get_publisher(QueueNames.SELL_ORDERS)
-        consumer = mq_bridge.get_consumer(QueueNames.SELL_ORDERS)
+        publisher = mq_bridge.get_publisher(StreamNames.SELL_ORDERS)
+        consumer = mq_bridge.get_consumer(StreamNames.SELL_ORDERS)
 
         order = {
             'stock_code': '005930',
@@ -402,8 +402,8 @@ class TestMessageQueueIntegration:
         """
         Test: Message ordering is preserved in queue.
         """
-        publisher = mq_bridge.get_publisher(QueueNames.BUY_SIGNALS)
-        consumer = mq_bridge.get_consumer(QueueNames.BUY_SIGNALS)
+        publisher = mq_bridge.get_publisher(StreamNames.BUY_SIGNALS)
+        consumer = mq_bridge.get_consumer(StreamNames.BUY_SIGNALS)
 
         # Publish multiple messages
         for i in range(5):

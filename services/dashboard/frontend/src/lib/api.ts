@@ -90,10 +90,6 @@ export const systemApi = {
     const response = await api.get('/system/docker')
     return response.data
   },
-  getRabbitMQ: async () => {
-    const response = await api.get('/system/rabbitmq')
-    return response.data
-  },
   getScheduler: async () => {
     const response = await api.get('/system/scheduler')
     return response.data

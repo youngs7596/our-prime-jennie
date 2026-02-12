@@ -7,6 +7,7 @@
 import logging
 import time
 from typing import Dict, List, Optional
+import pandas as pd
 import shared.database as database
 from shared.crawlers.naver import get_kospi_top_stocks as _get_naver_top_stocks
 
@@ -88,7 +89,27 @@ def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
     try:
         # 네이버 스크래핑으로 현재 데이터 획득 (Top 200)
         top_stocks = _scrape_naver_finance_top_stocks(limit=200)
-        
+
+        # Pre-market 감지: 모든 change_pct가 0이면 DB 전일 대비 수익률로 대체
+        all_zero = all(s.get('change_pct', 0.0) == 0.0 for s in top_stocks) if top_stocks else False
+        if all_zero and top_stocks and db_conn:
+            logger.info("   (E) ⚠️ 네이버 등락률 전부 0% (장 시작 전/데이터 미반영) → DB 전일 대비 수익률로 대체")
+            codes = [s['code'] for s in top_stocks]
+            try:
+                prices_batch = database.get_daily_prices_batch(db_conn, codes, limit=2)
+                replaced = 0
+                for stock in top_stocks:
+                    df = prices_batch.get(stock['code'])
+                    if isinstance(df, pd.DataFrame) and len(df) >= 2:
+                        latest = float(df.iloc[-1]['CLOSE_PRICE'])
+                        prev = float(df.iloc[-2]['CLOSE_PRICE'])
+                        if prev > 0:
+                            stock['change_pct'] = round(((latest - prev) / prev) * 100, 2)
+                            replaced += 1
+                logger.info(f"   (E) ✅ DB 기반 수익률 대체 완료: {replaced}/{len(top_stocks)}개 종목")
+            except Exception as e:
+                logger.warning(f"   (E) ⚠️ DB 기반 수익률 계산 실패 (네이버 0% 데이터 유지): {e}")
+
         for stock in top_stocks:
             sector = stock.get('sector', '기타')
             change_pct = stock.get('change_pct', 0.0)
