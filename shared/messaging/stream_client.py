@@ -155,6 +155,66 @@ def ensure_consumer_group(
         raise
 
 
+def _recover_pending_messages(
+    client: redis.Redis,
+    group_name: str,
+    consumer_name: str,
+    handler: Callable[[str, Dict[str, Any]], bool],
+    stream_name: str,
+    batch_size: int
+) -> int:
+    """
+    이 Consumer에게 전달되었지만 ACK되지 않은 pending 메시지를 재처리합니다.
+    Redis Streams에서 ID "0"으로 읽으면 해당 consumer의 pending 메시지만 반환됩니다.
+    ACK된 메시지는 자동으로 pending 목록에서 제거되므로, 매번 "0"부터 읽어도 안전합니다.
+    """
+    recovered = 0
+    failed = 0
+
+    while True:
+        try:
+            messages = client.xreadgroup(
+                group_name,
+                consumer_name,
+                {stream_name: "0"},
+                count=batch_size,
+            )
+
+            if not messages or not messages[0][1]:
+                break
+
+            for msg_id, msg_data in messages[0][1]:
+                try:
+                    if not msg_data:
+                        # 메시지가 trim되어 데이터 없음 — ACK만 처리
+                        client.xack(stream_name, group_name, msg_id)
+                        continue
+
+                    page_content = msg_data[b"page_content"].decode("utf-8")
+                    metadata = json.loads(msg_data[b"metadata"].decode("utf-8"))
+                    success = handler(page_content, metadata)
+
+                    # 성공/실패 모두 ACK — pending 무한 누적 방지
+                    client.xack(stream_name, group_name, msg_id)
+                    if success:
+                        recovered += 1
+                    else:
+                        failed += 1
+
+                except Exception as e:
+                    client.xack(stream_name, group_name, msg_id)
+                    failed += 1
+                    logger.error(f"❌ [Stream] Pending 복구 오류 (ACK 처리): {e}")
+
+        except Exception as e:
+            logger.error(f"❌ [Stream] Pending 복구 중 오류: {e}")
+            break
+
+    if recovered > 0 or failed > 0:
+        logger.info(f"🔄 [Stream] Pending 복구 완료: 성공={recovered}, 실패={failed}")
+    return recovered
+
+
 def consume_messages(
     group_name: str,
     consumer_name: str,
@@ -166,7 +226,10 @@ def consume_messages(
 ) -> int:
     """
     Consumer Group 방식으로 메시지를 소비합니다.
-    
+
+    Phase 1: 이전 실행에서 ACK되지 않은 pending 메시지를 먼저 복구합니다.
+    Phase 2: 신규 메시지를 소비합니다.
+
     Args:
         group_name: Consumer Group 이름
         consumer_name: 이 Consumer의 고유 이름
@@ -175,23 +238,30 @@ def consume_messages(
         batch_size: 한 번에 읽을 메시지 수
         block_ms: 메시지가 없을 때 대기 시간 (ms)
         max_iterations: 최대 반복 횟수 (None=무한)
-    
+
     Returns:
         처리한 메시지 총 수
     """
     client = get_redis_client()
     ensure_consumer_group(stream_name, group_name)
-    
+
     total_processed = 0
     iteration = 0
-    
+
     logger.info(f"🚀 [Stream] Consumer 시작: {consumer_name} @ {group_name}/{stream_name}")
-    
+
+    # Phase 1: Pending 메시지 복구 (이전 실행에서 ACK 안 된 메시지)
+    recovered = _recover_pending_messages(
+        client, group_name, consumer_name, handler, stream_name, batch_size
+    )
+    total_processed += recovered
+
+    # Phase 2: 신규 메시지 소비
     while True:
         if max_iterations and iteration >= max_iterations:
             break
         iteration += 1
-        
+
         try:
             # Read new messages
             messages = client.xreadgroup(
@@ -201,21 +271,21 @@ def consume_messages(
                 count=batch_size,
                 block=block_ms
             )
-            
+
             if not messages:
                 logger.debug(f"[Stream] 새 메시지 없음, 대기 중... (iteration={iteration})")
                 continue
-            
+
             for stream, msg_list in messages:
                 for msg_id, msg_data in msg_list:
                     try:
                         # Deserialize
                         page_content = msg_data[b"page_content"].decode("utf-8")
                         metadata = json.loads(msg_data[b"metadata"].decode("utf-8"))
-                        
+
                         # Call handler
                         success = handler(page_content, metadata)
-                        
+
                         if success:
                             # ACK
                             client.xack(stream_name, group_name, msg_id)
@@ -224,10 +294,10 @@ def consume_messages(
                         else:
                             logger.warning(f"⚠️ [Stream] 핸들러 실패: {msg_id.decode()}")
                             # Message will be retried (not ACKed)
-                    
+
                     except Exception as e:
                         logger.error(f"❌ [Stream] 메시지 처리 오류: {e}")
-        
+
         except KeyboardInterrupt:
             logger.info("🛑 [Stream] Consumer 중단됨 (KeyboardInterrupt)")
             break
@@ -235,7 +305,7 @@ def consume_messages(
             logger.error(f"❌ [Stream] Consumer 오류: {e}")
             import time
             time.sleep(1)  # Backoff on error
-    
+
     logger.info(f"✅ [Stream] Consumer 종료: 총 {total_processed}개 처리")
     return total_processed
 

@@ -1,5 +1,11 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-12
+### news-archiver Qdrant 장애 복구 + Redis Streams pending 자동 복구
+- **fix(infra)**: Qdrant 컨테이너 포트 바인딩 누락 복구 (5일간 news-archiver 아카이빙 중단)
+- **feat(messaging)**: `_recover_pending_messages()` — Consumer 시작 시 미ACK pending 메시지 자동 재처리
+- **refactor(messaging)**: `consume_messages()` Phase 1(pending 복구) + Phase 2(신규 소비) 2단계 구조
+
 ## 2026-02-11
 ### Macro Council 구조화 JSON 파이프라인 + 토큰 효율화
 - **refactor(macro)**: subprocess+regex → 구조화 JSON 직접 호출 (`generate_json()` / `generate_json_with_thinking()`)
