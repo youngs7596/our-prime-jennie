@@ -57,6 +57,10 @@ class KISMockServer:
         def sell():
             return self._handle_sell_order(request.json)
 
+        @self.app.route('/api/trading/cancel', methods=['POST'])
+        def cancel():
+            return self._handle_cancel_order(request.json)
+
         @self.app.route('/api/market-data/snapshot/<stock_code>', methods=['GET'])
         def snapshot(stock_code: str):
             return self._handle_snapshot(stock_code)
@@ -270,6 +274,35 @@ class KISMockServer:
             "amount": sell_amount
         })
 
+    def _handle_cancel_order(self, data: dict) -> tuple:
+        """Handle cancel order request"""
+        self._track_request("/api/trading/cancel", "POST", data)
+
+        error_response = self._apply_response_mode()
+        if error_response:
+            return error_response
+
+        scenario = self.scenario_manager.current
+        if not scenario:
+            return jsonify({"error": "No scenario active"}), 500
+
+        order_no = data.get('order_no')
+        if not order_no:
+            return jsonify({"error": "Missing order_no"}), 400
+
+        # Check pre-configured cancel results
+        if order_no in scenario.cancel_results:
+            cancelled = scenario.cancel_results[order_no]
+        else:
+            # Default: cancel succeeds (order was not filled)
+            cancelled = True
+
+        return jsonify({
+            "status": "success",
+            "order_no": order_no,
+            "cancelled": cancelled,
+        })
+
     def _handle_snapshot(self, stock_code: str) -> tuple:
         """Handle stock snapshot request"""
         self._track_request(f"/api/market-data/snapshot/{stock_code}", "GET")
@@ -281,6 +314,14 @@ class KISMockServer:
         scenario = self.scenario_manager.current
         if not scenario:
             return jsonify({"error": "No scenario active"}), 500
+
+        # Per-stock snapshot errors (e.g. KIS API failure for specific stock)
+        if stock_code in scenario.snapshot_errors:
+            err = scenario.snapshot_errors[stock_code]
+            return jsonify({
+                "error": err.get("message", "Snapshot error"),
+                "code": err.get("code", "SNAPSHOT_ERROR"),
+            }), err.get("status", 500)
 
         stock = scenario.get_stock(stock_code)
         if not stock:
@@ -511,6 +552,17 @@ class MockKISClient:
         if resp.ok:
             return resp.json().get('order_no')
         return None
+
+    def cancel_order(self, order_no: str, quantity: int = 0) -> bool:
+        """Cancel an order. Returns True if cancelled (not filled), False if already filled."""
+        import requests
+        resp = requests.post(f"{self.base_url}/api/trading/cancel", json={
+            "order_no": order_no,
+            "quantity": quantity,
+        })
+        if resp.ok:
+            return resp.json().get('cancelled', True)
+        return True  # Default: assume cancelled on error
 
     def check_market_open(self) -> bool:
         """Check if market is open"""

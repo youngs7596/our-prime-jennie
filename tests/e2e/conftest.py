@@ -329,6 +329,18 @@ def mock_config():
         'CORRELATION_CHECK_ENABLED': False,  # Disable for simpler tests
         'ENABLE_RECON_BULL_ENTRY': True,
         'ENABLE_MOMENTUM_CONTINUATION': True,
+        # Momentum limit order
+        'MOMENTUM_LIMIT_ORDER_ENABLED': False,
+        'MOMENTUM_LIMIT_PREMIUM': 0.003,
+        'MOMENTUM_LIMIT_TIMEOUT_SEC': 0,  # No sleep in tests
+        'MOMENTUM_CONFIRMATION_BARS': 0,
+        # Portfolio Guard
+        'PORTFOLIO_GUARD_ENABLED': True,
+        'MAX_SECTOR_STOCKS': 3,
+        'CASH_FLOOR_STRONG_BULL_PCT': 5.0,
+        'CASH_FLOOR_BULL_PCT': 10.0,
+        'CASH_FLOOR_SIDEWAYS_PCT': 15.0,
+        'CASH_FLOOR_BEAR_PCT': 25.0,
     }
 
     def get_value(key, default=None):
@@ -407,6 +419,18 @@ def bull_momentum_scenario(kis_server):
     return kis_server.activate_scenario("bull_momentum")
 
 
+@pytest.fixture
+def momentum_limit_scenario(kis_server):
+    """Momentum limit order scenario with diverse price tiers"""
+    return kis_server.activate_scenario("momentum_limit_order")
+
+
+@pytest.fixture
+def sector_concentrated_scenario(kis_server):
+    """Sector concentrated portfolio (3 financial stocks)"""
+    return kis_server.activate_scenario("sector_concentrated")
+
+
 # ============================================================================
 # Time Manipulation Fixtures
 # ============================================================================
@@ -479,7 +503,8 @@ def danger_zone():
 def create_scan_result(stock_code: str, stock_name: str, llm_score: float = 80.0,
                        signal_type: str = "GOLDEN_CROSS", current_price: float = 70000,
                        market_regime: str = "BULL", is_tradable: bool = True,
-                       trade_tier: str = "TIER1", llm_scored_at: str = None) -> dict:
+                       trade_tier: str = "TIER1", llm_scored_at: str = None,
+                       stock_info: dict = None) -> dict:
     """
     Create a scan result for buy executor testing.
     """
@@ -495,6 +520,8 @@ def create_scan_result(stock_code: str, stock_name: str, llm_score: float = 80.0
     }
     if llm_scored_at:
         candidate['llm_scored_at'] = llm_scored_at
+    if stock_info:
+        candidate['stock_info'] = stock_info
 
     return {
         'candidates': [candidate],

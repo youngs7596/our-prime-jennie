@@ -51,6 +51,7 @@ class PortfolioItem:
     quantity: int
     avg_price: float
     current_price: float = 0.0
+    sector: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +95,15 @@ class Scenario:
     # Emergency flags
     emergency_stop: bool = False
     trading_paused: bool = False
+
+    # Per-stock snapshot errors: stock_code → {"status": int, "message": str}
+    snapshot_errors: Dict[str, Dict] = field(default_factory=dict)
+
+    # Cancel order results: order_no → True(미체결/취소 성공) | False(이미 체결)
+    cancel_results: Dict[str, bool] = field(default_factory=dict)
+
+    # Tick size validation mode
+    validate_tick_size: bool = False
 
     def get_stock(self, code: str) -> Optional[StockState]:
         """Get stock state by code"""
@@ -164,6 +174,8 @@ class Scenario:
         self.order_counter = 0
         self.today_buy_count = 0
         self.portfolio.clear()
+        self.snapshot_errors.clear()
+        self.cancel_results.clear()
 
 
 class ScenarioManager:
@@ -315,6 +327,42 @@ class ScenarioManager:
                 "000660": StockState("000660", "SK하이닉스", 160000, 150000, 162000, 149000, volume=1500000, change_pct=6.5),
             },
             market_regime="STRONG_BULL"
+        ))
+
+        # Momentum limit order — various price tiers for tick size testing
+        self.register(Scenario(
+            name="momentum_limit_order",
+            description="Momentum limit order with diverse price tiers",
+            cash_balance=20_000_000,
+            stocks={
+                "383220": StockState("383220", "F&F", 384200, 380000, 386000, 379000, volume=500000, change_pct=1.1),
+                "068270": StockState("068270", "셀트리온", 298000, 295000, 300000, 294000, volume=800000, change_pct=1.0),
+                "006400": StockState("006400", "삼성SDI", 550000, 545000, 555000, 540000, volume=300000, change_pct=0.9),
+                "004990": StockState("004990", "롯데지주", 34300, 33800, 34800, 33500, volume=200000, change_pct=1.5),
+                "001740": StockState("001740", "SK네트웍스", 4800, 4750, 4900, 4700, volume=400000, change_pct=1.0),
+            },
+            market_regime="BULL",
+            validate_tick_size=True,
+        ))
+
+        # Sector concentrated portfolio — 금융 3종목 보유
+        self.register(Scenario(
+            name="sector_concentrated",
+            description="Portfolio concentrated in financial sector (3 stocks)",
+            cash_balance=5_000_000,
+            portfolio=[
+                PortfolioItem("105560", "KB금융", 20, 70000, 72000, sector="금융"),
+                PortfolioItem("055550", "신한지주", 30, 45000, 46000, sector="금융"),
+                PortfolioItem("086790", "하나금융지주", 25, 52000, 53000, sector="금융"),
+            ],
+            stocks={
+                "105560": StockState("105560", "KB금융", 72000, 70000, 73000, 69000),
+                "055550": StockState("055550", "신한지주", 46000, 44000, 47000, 44000),
+                "086790": StockState("086790", "하나금융지주", 53000, 51000, 54000, 51000),
+                "316140": StockState("316140", "우리금융지주", 15000, 14500, 15500, 14000),
+                "005930": StockState("005930", "삼성전자", 72000, 70000, 73000, 69000),
+            },
+            market_regime="BULL",
         ))
 
     def register(self, scenario: Scenario):
