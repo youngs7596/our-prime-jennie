@@ -24,6 +24,34 @@ from shared.strategy_presets import (
 from shared.correlation import check_portfolio_correlation, get_correlation_risk_adjustment
 from shared.portfolio_guard import PortfolioGuard
 
+
+def align_to_tick_size(price: int) -> int:
+    """KRX 호가 단위에 맞게 가격을 올림 정렬.
+
+    호가 단위 (2023.01~ 기준):
+      ~2,000원: 1원 / ~5,000원: 5원 / ~20,000원: 10원
+      ~50,000원: 50원 / ~200,000원: 100원 / ~500,000원: 500원
+      500,000원~: 1,000원
+    """
+    if price <= 2_000:
+        tick = 1
+    elif price <= 5_000:
+        tick = 5
+    elif price <= 20_000:
+        tick = 10
+    elif price <= 50_000:
+        tick = 50
+    elif price <= 200_000:
+        tick = 100
+    elif price <= 500_000:
+        tick = 500
+    else:
+        tick = 1_000
+    remainder = price % tick
+    if remainder == 0:
+        return price
+    return price - remainder + tick  # 올림
+
 logger = logging.getLogger(__name__)
 
 # 모멘텀 계열 전략 (지정가 주문 대상)
@@ -525,7 +553,7 @@ class BuyExecutor:
             if dry_run:
                 if use_limit:
                     premium = self.config.get_float("MOMENTUM_LIMIT_PREMIUM", default=0.003)
-                    limit_price = int(current_price * (1 + premium))
+                    limit_price = align_to_tick_size(int(current_price * (1 + premium)))
                     logger.info(f"[DRY_RUN] 지정가 매수: {stock_name}({stock_code}) {position_size}주 @ {limit_price:,}원 (+{premium*100:.1f}%, 시그널가 {current_price:,})")
                 else:
                     logger.info(f"[DRY_RUN] 시장가 매수: {stock_name}({stock_code}) {position_size}주 @ {current_price:,}원")
@@ -533,7 +561,7 @@ class BuyExecutor:
             elif use_limit:
                 import time as _time
                 premium = self.config.get_float("MOMENTUM_LIMIT_PREMIUM", default=0.003)
-                limit_price = int(current_price * (1 + premium))
+                limit_price = align_to_tick_size(int(current_price * (1 + premium)))
                 timeout_sec = self.config.get_int("MOMENTUM_LIMIT_TIMEOUT_SEC", default=10)
 
                 logger.info(f"지정가 매수 주문: {stock_name}({stock_code}) {position_size}주 @ {limit_price:,}원 (+{premium*100:.1f}%)")

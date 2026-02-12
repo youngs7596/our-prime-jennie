@@ -1035,6 +1035,7 @@ def main():
                     if not kospi_prices.empty:
                         # [Fix] 실시간 코스피 지수 조회 (장중 변동성 즉각 반영)
                         kospi_current = None
+                        kospi_snapshot = None
                         try:
                             kospi_snapshot = kis_api.get_stock_snapshot("0001", is_index=True)
                             if kospi_snapshot:
@@ -1051,7 +1052,31 @@ def main():
                         current_regime, _ = detector.detect_regime(kospi_prices, kospi_current, quiet=True)
                     else:
                         current_regime = "SIDEWAYS"
-                    
+
+                    # [FIX] BEAR 급변 방어: 실시간 지수 조회 실패 + BEAR 판정 시 이전 국면 유지
+                    prev_regime = None
+                    try:
+                        redis_conn_chk = _get_redis()
+                        if redis_conn_chk:
+                            prev_data = redis_conn_chk.get("market:regime:data")
+                            if prev_data:
+                                prev_regime = json.loads(prev_data).get("regime")
+                    except Exception:
+                        pass
+
+                    if (
+                        current_regime == "BEAR"
+                        and kospi_current is not None
+                        and kospi_snapshot is None  # 실시간 조회 실패 시에만
+                        and prev_regime
+                        and prev_regime not in ("BEAR", "STRONG_BEAR")
+                    ):
+                        logger.warning(
+                            f"   ⚠️ [Regime Guard] 실시간 KOSPI 조회 실패 + BEAR 판정 → "
+                            f"이전 국면({prev_regime}) 유지 (급변 방어)"
+                        )
+                        current_regime = prev_regime
+
                     logger.info(f"   현재 시장 국면: {current_regime}")
 
                     # [NEW] Dashboard 표시를 위해 Redis에 저장
@@ -1060,7 +1085,7 @@ def main():
                         if redis_conn:
                             regime_data = {
                                 "regime": current_regime,
-                                "confidence": 0.8, # TODO: Detector에서 confidence 반환하도록 개선 필요
+                                "confidence": 0.8,
                                 "updated_at": datetime.now().isoformat(),
                                 "description": f"KOSPI Analysis Based on {len(kospi_prices)} days"
                             }

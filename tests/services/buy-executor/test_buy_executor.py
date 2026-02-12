@@ -1001,6 +1001,43 @@ class TestPortfolioGuardIntegration:
             assert 'DRY_RUN' in result.get('order_no', '')
 
 
+class TestAlignToTickSize(unittest.TestCase):
+    """KRX 호가 단위 정렬 함수 테스트 (2026-02-12 장애 회귀 방지)."""
+
+    def test_tick_sizes(self):
+        executor = load_executor_module()
+        align = executor.align_to_tick_size
+
+        # ~2,000원: 1원 단위
+        assert align(1500) == 1500
+        assert align(1501) == 1501
+
+        # ~5,000원: 5원 단위
+        assert align(3003) == 3005
+        assert align(3005) == 3005
+
+        # ~20,000원: 10원 단위
+        assert align(15003) == 15010
+        assert align(15010) == 15010
+
+        # ~50,000원: 50원 단위
+        assert align(34402) == 34450  # 삼성E&A 케이스
+        assert align(34400) == 34400
+
+        # ~200,000원: 100원 단위
+        assert align(100050) == 100100
+        assert align(100100) == 100100
+
+        # ~500,000원: 500원 단위
+        assert align(384650) == 385000  # POSCO홀딩스 케이스
+        assert align(298893) == 299000  # 한솔케미칼 케이스
+        assert align(385000) == 385000
+
+        # 500,000원~: 1,000원 단위
+        assert align(500500) == 501000
+        assert align(501000) == 501000
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
