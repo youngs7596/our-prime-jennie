@@ -1146,6 +1146,7 @@ services:
       - MARIADB_PORT=3306
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
       - KIS_GATEWAY_URL=http://host.docker.internal:8080
       - OLLAMA_GATEWAY_URL=http://host.docker.internal:11500
       - TZ=Asia/Seoul

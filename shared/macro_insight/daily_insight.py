@@ -233,9 +233,9 @@ def save_insight_to_db(insight: DailyMacroInsight, conn=None) -> bool:
             KOSPI_INSTITUTIONAL_NET, KOSPI_RETAIL_NET,
             DATA_COMPLETENESS_PCT
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
         ) ON DUPLICATE KEY UPDATE
             SOURCE_CHANNEL = VALUES(SOURCE_CHANNEL),
             SOURCE_ANALYST = VALUES(SOURCE_ANALYST),
