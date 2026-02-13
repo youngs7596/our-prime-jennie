@@ -154,9 +154,10 @@ class WebsocketManager:
                                 stock_code = fields[0]
                                 current_price = float(fields[2])
                                 current_high = float(fields[5])
-                                
+                                volume = int(fields[10]) if len(fields) > 10 else 0
+
                                 if on_price_func:
-                                    on_price_func(stock_code, current_price, current_high)
+                                    on_price_func(stock_code, current_price, current_high, volume)
                             else:
                                 logger.warning(f"   (WS) 메시지 필드 수 부족: {len(fields)}개")
                 except Exception as e:

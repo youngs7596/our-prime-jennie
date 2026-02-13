@@ -280,7 +280,7 @@ def _start_redis_streams_monitoring():
     websocket_thread.start()
 
 
-def _on_stream_price_update(stock_code: str, current_price: float, current_high: float):
+def _on_stream_price_update(stock_code: str, current_price: float, current_high: float, volume: int = 0):
     """Redis Streams 가격 업데이트 콜백"""
     # [Emergency Stop Check]
     if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
@@ -288,9 +288,9 @@ def _on_stream_price_update(stock_code: str, current_price: float, current_high:
 
     if not opportunity_watcher:
         return
-    
+
     # 매수 신호 체크
-    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=volume)
     
     if signal:
         # 매수 신호 발행
@@ -427,7 +427,8 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
         
         if stock_code and current_price > 0:
             # BuyOpportunityWatcher에 가격 업데이트 전달
-            signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+            volume = int(data.get('volume', 0))
+            signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=volume)
             if signal:
                 logger.info(f"   (Mock WS) 🎯 매수 신호 발생! {stock_code}")
                 opportunity_watcher.publish_signal(signal)
@@ -489,7 +490,7 @@ def _start_mock_websocket_loop(hot_codes: list, last_heartbeat_time: float):
             pass  # 소켓 정리 실패는 무시
 
 
-def _on_price_update(stock_code: str, current_price: float, current_high: float):
+def _on_price_update(stock_code: str, current_price: float, current_high: float, volume: int = 0):
     """WebSocket 가격 업데이트 콜백"""
     # [Emergency Stop Check]
     if redis_cache.is_trading_stopped() or redis_cache.is_trading_paused():
@@ -497,9 +498,9 @@ def _on_price_update(stock_code: str, current_price: float, current_high: float)
 
     if not opportunity_watcher:
         return
-    
+
     # 매수 신호 체크
-    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=0)
+    signal = opportunity_watcher.on_price_update(stock_code, current_price, volume=volume)
     
     if signal:
         # 매수 신호 발행

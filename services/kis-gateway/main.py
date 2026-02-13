@@ -249,11 +249,11 @@ class KISWebSocketStreamer:
         def ws_loop():
             logger.info(f"🚀 [Streamer] WebSocket 루프 시작 ({len(self.subscription_codes)}개 종목)")
             
-            def on_price(code, price, high):
+            def on_price(code, price, high, volume=0):
                 try:
                     self.redis_client.xadd(
                         STREAM_NAME,
-                        {"code": code, "price": str(price), "high": str(high)},
+                        {"code": code, "price": str(price), "high": str(high), "vol": str(volume)},
                         maxlen=STREAM_MAXLEN,
                         approximate=True
                     )

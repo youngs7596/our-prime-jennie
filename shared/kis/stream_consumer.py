@@ -151,9 +151,10 @@ class StreamPriceConsumer:
                                 code = data.get("code")
                                 price = float(data.get("price", 0))
                                 high = float(data.get("high", price))
-                                
+                                volume = int(data.get("vol", 0))
+
                                 if code and price > 0:
-                                    on_price_func(code, price, high)
+                                    on_price_func(code, price, high, volume)
                                 
                                 # ACK 처리
                                 self.redis_client.xack(STREAM_NAME, consumer_group, msg_id)
