@@ -231,7 +231,15 @@ my-prime-jennie/
 - **±15pt 가드레일**: `llm_score = clamp(raw, quant-15, quant+15)`
 - **Veto Power**: DISTRIBUTION_RISK → is_tradable=False, trade_tier=BLOCKED
 
-### 8.3 네이버 섹터 분류 (Single Source of Truth)
+### 8.3 동적 섹터 예산 (Dynamic Sector Budget)
+- **ENV**: `DYNAMIC_SECTOR_BUDGET_ENABLED=true` (false면 기존 고정 MAX_SECTOR_STOCKS 사용)
+- **코드**: `shared/sector_budget.py` (핵심 모듈), Scout `scout.py` (Greedy 선정), Portfolio Guard (동적 cap)
+- **티어**: HOT(cap 5, p75 & >0%), WARM(cap 3, 기본), COOL(cap 2, p25 & <0% or FALLING_KNIFE)
+- **데이터 흐름**: Scout sector_analysis → 대분류 집계 → 티어 배정 → Redis `sector_budget:active` (TTL 24h) → Portfolio Guard 읽기
+- **effective_cap**: `min(watchlist_cap, max(0, portfolio_cap - held) + 1)` — 보유 종목 수 반영
+- **Fallback**: Redis 실패/비활성 → 기존 MAX_SECTOR_STOCKS=3 고정값
+
+### 8.4 네이버 섹터 분류 (Single Source of Truth)
 - **79개 세분류 → 14개 대분류**: `STOCK_MASTER.SECTOR_NAVER` 컬럼
 - **초기 실행**: `python utilities/update_naver_sectors.py`
 - **주간 배치**: `update_naver_sectors_weekly` DAG (일요일 20:00)
@@ -377,25 +385,25 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-13 | 동적 섹터 예산 + cancel_order 버그 수정 + 계좌 동기화 | `session-2026-02-13-10-30.md` |
+| 2026-02-13 (아침) | Scout Worker 장애 진단: langchain_openai 누락 + 섹터 모멘텀 0% | `session-2026-02-13-08-24.md` |
 | 2026-02-12 (밤) | 인프라 단순화: RabbitMQ→Redis Streams, Ollama Gateway 제거 | `session-2026-02-12-23-00.md` |
 | 2026-02-12 | news-archiver Qdrant 장애 복구 + pending 자동 복구 | `session-2026-02-12-22-10.md` |
 | 2026-02-11 (밤) | 모멘텀 전략 지정가 주문 + 확인 바 (고점 매수 방지) | `session-2026-02-11-23-00.md` |
-| 2026-02-11 | LLM 사용 통계 서비스별 정확 기록 (_record_llm_usage 승격) | `session-2026-02-11-20-30.md` |
-| 2026-02-10 | Portfolio Guard Layer 2 (섹터 종목 수 + 현금 하한선) | `session-2026-02-10-20-30.md` |
 
-### 현재 시스템 상태 (2026-02-12)
+### 현재 시스템 상태 (2026-02-13)
 
 - **메시징**: RabbitMQ 제거 → Redis Streams (`shared/messaging/trading_signals.py`)
 - **LLM**: vLLM 직접 호출 (Ollama Gateway 제거), OllamaLLMProvider → `/v1/chat/completions`
-- **Scout**: Unified Analyst Pipeline (1-pass LLM), Quant Scorer v2 프로덕션
+- **Scout**: Unified Analyst Pipeline (1-pass LLM), Quant Scorer v2 프로덕션, **동적 섹터 예산**
 - **LLM Stats**: 서비스별 Redis 기록 (scout, briefing, macro_council) — Dashboard 자동 표시
 - **벡터DB**: Qdrant + vLLM KURE-v1 임베딩 (langchain-openai)
 - **섹터**: 네이버 업종 분류 Single Source of Truth (79개 세분류 → 14개 대분류)
 - **뉴스**: Redis 영속 중복 체크 (NewsDeduplicator), pending 자동 복구
 - **Dashboard**: Macro Insight 카드, 자산 스냅샷, LLM 사용 통계
-- **Portfolio Guard**: 섹터 종목 수 제한(3) + 국면별 현금 하한선 (shadow mode 토글 가능)
-- **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 (env var 토글)
-- **테스트**: 1162 shared + 174 services + 35 integration/scripts passed
+- **Portfolio Guard**: 동적 섹터 예산 연동 (HOT/WARM/COOL cap) + 국면별 현금 하한선
+- **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 + cancel_order 수정 완료
+- **테스트**: 1202 shared + 174 services passed
 
 ### 주요 데이터 흐름
 
@@ -410,5 +418,5 @@ git push
 ```
 
 ---
-*Last Updated: 2026-02-12*
+*Last Updated: 2026-02-13*
 *상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*
