@@ -34,6 +34,11 @@ TIER_CAPS = {
 REDIS_KEY = "sector_budget:active"
 REDIS_TTL = 86400  # 24h
 
+# Falling Knife 세분류의 종목 비중이 이 임계치 이상이면 대분류를 COOL로 강등
+# 예: 반도체/IT(~500종목) 중 디스플레이패널(5종목) = 1% → COOL 안 됨
+# 예: 대분류 내 30%+ 종목이 Falling Knife → COOL 강등
+FALLING_KNIFE_THRESHOLD = 0.3
+
 
 def aggregate_sector_analysis_to_groups(
     sector_analysis: Dict[str, dict],
@@ -60,14 +65,14 @@ def aggregate_sector_analysis_to_groups(
             group_data[group] = {
                 "total_return_weighted": 0.0,
                 "total_count": 0,
-                "has_falling_knife": False,
+                "falling_knife_count": 0,
             }
 
         g = group_data[group]
         g["total_return_weighted"] += avg_ret * count
         g["total_count"] += count
         if trend == "FALLING_KNIFE":
-            g["has_falling_knife"] = True
+            g["falling_knife_count"] += count
 
     result = {}
     for group, g in group_data.items():
@@ -75,7 +80,7 @@ def aggregate_sector_analysis_to_groups(
             result[group] = {
                 "avg_return": g["total_return_weighted"] / g["total_count"],
                 "stock_count": g["total_count"],
-                "has_falling_knife": g["has_falling_knife"],
+                "falling_knife_ratio": g["falling_knife_count"] / g["total_count"],
             }
 
     return result
@@ -90,7 +95,7 @@ def assign_sector_tiers(
     | 티어 | 조건 |
     |------|------|
     | HOT  | avg_return >= p75 AND > 0% |
-    | COOL | avg_return <= p25 AND < 0%, 또는 FALLING_KNIFE |
+    | COOL | avg_return <= p25 AND < 0%, 또는 falling_knife 비중 >= 30% |
     | WARM | 나머지 |
 
     Args:
@@ -117,9 +122,9 @@ def assign_sector_tiers(
     tiers = {}
     for group, info in group_analysis.items():
         avg_ret = info["avg_return"]
-        falling_knife = info.get("has_falling_knife", False)
+        fk_ratio = info.get("falling_knife_ratio", 0.0)
 
-        if falling_knife or (avg_ret <= p25 and avg_ret < 0):
+        if (fk_ratio >= FALLING_KNIFE_THRESHOLD) or (avg_ret <= p25 and avg_ret < 0):
             tiers[group] = "COOL"
         elif avg_ret >= p75 and avg_ret > 0:
             tiers[group] = "HOT"

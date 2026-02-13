@@ -16,6 +16,7 @@ from shared.sector_budget import (
     TIER_CAPS,
     REDIS_KEY,
     REDIS_TTL,
+    FALLING_KNIFE_THRESHOLD,
 )
 
 
@@ -48,21 +49,32 @@ class TestAggregateSectorAnalysis:
         assert result["반도체/IT"]["avg_return"] == pytest.approx(2.0)
         assert result["반도체/IT"]["stock_count"] == 20
 
-    def test_falling_knife_propagates(self):
-        """세분류 중 하나라도 FALLING_KNIFE면 대분류에 전파"""
+    def test_falling_knife_ratio_partial(self):
+        """세분류 일부가 FALLING_KNIFE → 비중 계산"""
         sa = {
             "은행": {"avg_return": -2.0, "stock_count": 5, "trend_status": "FALLING_KNIFE"},
-            "증권": {"avg_return": 1.0, "stock_count": 5, "trend_status": "NEUTRAL"},
+            "증권": {"avg_return": 1.0, "stock_count": 15, "trend_status": "NEUTRAL"},
         }
         result = aggregate_sector_analysis_to_groups(sa)
-        assert result["금융"]["has_falling_knife"] is True
+        # 5 / 20 = 0.25
+        assert result["금융"]["falling_knife_ratio"] == pytest.approx(0.25)
 
-    def test_no_falling_knife(self):
+    def test_falling_knife_ratio_zero(self):
         sa = {
             "은행": {"avg_return": 1.0, "stock_count": 5, "trend_status": "NEUTRAL"},
         }
         result = aggregate_sector_analysis_to_groups(sa)
-        assert result["금융"]["has_falling_knife"] is False
+        assert result["금융"]["falling_knife_ratio"] == 0.0
+
+    def test_falling_knife_ratio_high(self):
+        """대부분 종목이 FALLING_KNIFE → 비중 높음"""
+        sa = {
+            "은행": {"avg_return": -3.0, "stock_count": 15, "trend_status": "FALLING_KNIFE"},
+            "증권": {"avg_return": 1.0, "stock_count": 5, "trend_status": "NEUTRAL"},
+        }
+        result = aggregate_sector_analysis_to_groups(sa)
+        # 15 / 20 = 0.75
+        assert result["금융"]["falling_knife_ratio"] == pytest.approx(0.75)
 
     def test_unknown_sector_uses_raw_name(self):
         """NAVER_TO_GROUP에 없는 세분류 → 원본 이름 사용"""
@@ -93,40 +105,51 @@ class TestAssignSectorTiers:
 
     def test_single_sector_positive_is_hot(self):
         """하나의 섹터 양수 → HOT (p75 == p25 == 본인)"""
-        ga = {"반도체/IT": {"avg_return": 2.0, "stock_count": 10, "has_falling_knife": False}}
+        ga = {"반도체/IT": {"avg_return": 2.0, "stock_count": 10, "falling_knife_ratio": 0.0}}
         tiers = assign_sector_tiers(ga)
         assert tiers["반도체/IT"] == "HOT"
 
     def test_single_sector_negative_is_cool(self):
-        ga = {"반도체/IT": {"avg_return": -2.0, "stock_count": 10, "has_falling_knife": False}}
+        ga = {"반도체/IT": {"avg_return": -2.0, "stock_count": 10, "falling_knife_ratio": 0.0}}
         tiers = assign_sector_tiers(ga)
         assert tiers["반도체/IT"] == "COOL"
 
-    def test_falling_knife_forces_cool(self):
-        """FALLING_KNIFE 섹터는 수익률과 무관하게 COOL"""
+    def test_falling_knife_high_ratio_forces_cool(self):
+        """FALLING_KNIFE 비중 >= 30% → COOL"""
         ga = {
-            "금융": {"avg_return": 5.0, "stock_count": 10, "has_falling_knife": True},
-            "반도체/IT": {"avg_return": 3.0, "stock_count": 10, "has_falling_knife": False},
-            "바이오": {"avg_return": 1.0, "stock_count": 10, "has_falling_knife": False},
-            "자동차": {"avg_return": -1.0, "stock_count": 10, "has_falling_knife": False},
+            "금융": {"avg_return": 5.0, "stock_count": 10, "falling_knife_ratio": 0.5},
+            "반도체/IT": {"avg_return": 3.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "바이오": {"avg_return": 1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "자동차": {"avg_return": -1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
         }
         tiers = assign_sector_tiers(ga)
-        assert tiers["금융"] == "COOL"  # falling knife
+        assert tiers["금융"] == "COOL"  # falling knife ratio 50%
+
+    def test_falling_knife_low_ratio_not_cool(self):
+        """FALLING_KNIFE 비중 < 30% → COOL 강제 안 됨"""
+        ga = {
+            "반도체/IT": {"avg_return": 3.0, "stock_count": 500, "falling_knife_ratio": 0.01},
+            "금융": {"avg_return": 2.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "바이오": {"avg_return": 1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "자동차": {"avg_return": -1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+        }
+        tiers = assign_sector_tiers(ga)
+        # 반도체/IT: fk_ratio=1% → COOL 아님, avg_return 상위 → HOT
+        assert tiers["반도체/IT"] == "HOT"
 
     def test_multi_sector_tier_distribution(self):
         """다수 섹터 → HOT/WARM/COOL 분포"""
         ga = {
-            "반도체/IT": {"avg_return": 5.0, "stock_count": 10, "has_falling_knife": False},
-            "금융": {"avg_return": 3.0, "stock_count": 10, "has_falling_knife": False},
-            "바이오": {"avg_return": 1.0, "stock_count": 10, "has_falling_knife": False},
-            "자동차": {"avg_return": 0.5, "stock_count": 10, "has_falling_knife": False},
-            "소비재": {"avg_return": -0.5, "stock_count": 10, "has_falling_knife": False},
-            "건설/소재": {"avg_return": -2.0, "stock_count": 10, "has_falling_knife": False},
-            "철강/소재": {"avg_return": -3.0, "stock_count": 10, "has_falling_knife": False},
-            "운송": {"avg_return": -4.0, "stock_count": 10, "has_falling_knife": False},
+            "반도체/IT": {"avg_return": 5.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "금융": {"avg_return": 3.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "바이오": {"avg_return": 1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "자동차": {"avg_return": 0.5, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "소비재": {"avg_return": -0.5, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "건설/소재": {"avg_return": -2.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "철강/소재": {"avg_return": -3.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "운송": {"avg_return": -4.0, "stock_count": 10, "falling_knife_ratio": 0.0},
         }
         tiers = assign_sector_tiers(ga)
-        # Top returns should be HOT, bottom COOL
         assert tiers["반도체/IT"] == "HOT"
         assert tiers["운송"] == "COOL"
         assert tiers["철강/소재"] == "COOL"
@@ -134,23 +157,21 @@ class TestAssignSectorTiers:
     def test_all_positive_no_cool(self):
         """모든 수익률 양수 → COOL 조건(< 0) 불충족"""
         ga = {
-            "반도체/IT": {"avg_return": 5.0, "stock_count": 10, "has_falling_knife": False},
-            "금융": {"avg_return": 3.0, "stock_count": 10, "has_falling_knife": False},
-            "바이오": {"avg_return": 1.0, "stock_count": 10, "has_falling_knife": False},
-            "자동차": {"avg_return": 0.5, "stock_count": 10, "has_falling_knife": False},
+            "반도체/IT": {"avg_return": 5.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "금융": {"avg_return": 3.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "바이오": {"avg_return": 1.0, "stock_count": 10, "falling_knife_ratio": 0.0},
+            "자동차": {"avg_return": 0.5, "stock_count": 10, "falling_knife_ratio": 0.0},
         }
         tiers = assign_sector_tiers(ga)
-        # p25 = 0.5 > 0, so COOL 조건(< 0) 불충족 → WARM
         for group, tier in tiers.items():
             assert tier in ("HOT", "WARM"), f"{group} should not be COOL when all positive"
 
     def test_zero_return_not_hot(self):
         """avg_return = 0 → HOT 조건(> 0) 불충족"""
         ga = {
-            "반도체/IT": {"avg_return": 0.0, "stock_count": 10, "has_falling_knife": False},
+            "반도체/IT": {"avg_return": 0.0, "stock_count": 10, "falling_knife_ratio": 0.0},
         }
         tiers = assign_sector_tiers(ga)
-        # 0.0 >= p75(0.0) but NOT > 0 → WARM
         assert tiers["반도체/IT"] == "WARM"
 
 

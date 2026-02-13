@@ -19,6 +19,7 @@ class MockConfig:
             "CASH_FLOOR_BULL_PCT": 10.0,
             "CASH_FLOOR_SIDEWAYS_PCT": 15.0,
             "CASH_FLOOR_BEAR_PCT": 25.0,
+            "DYNAMIC_SECTOR_BUDGET_ENABLED": False,
         }
         if overrides:
             self._values.update(overrides)
