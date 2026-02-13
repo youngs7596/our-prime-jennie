@@ -46,6 +46,72 @@ PROMPTS_DIR = PROJECT_ROOT / "prompts" / "council"
 
 
 # ==============================================================================
+# 섹터 모멘텀 수집
+# ==============================================================================
+
+def _get_sector_momentum_text() -> str:
+    """네이버 업종 등락률을 크롤링하여 Council 컨텍스트용 텍스트 생성.
+
+    - get_naver_sector_list() 호출 (~1초, 79개 세분류)
+    - NAVER_TO_GROUP으로 대분류 집계 (단순 평균)
+    - 상승 TOP 5 / 하락 TOP 5 세분류 + 대분류 집계 반환
+    - 실패 시 빈 문자열 반환 (예외 안전)
+    """
+    try:
+        from shared.crawlers.naver import get_naver_sector_list
+        from shared.sector_taxonomy import NAVER_TO_GROUP
+
+        sectors = get_naver_sector_list()
+        if not sectors:
+            logger.warning("네이버 업종 목록이 비어 있음 — 섹터 모멘텀 스킵")
+            return ""
+
+        # 등락률 기준 정렬
+        sorted_sectors = sorted(sectors, key=lambda s: s["change_pct"], reverse=True)
+
+        lines = ["## 섹터별 모멘텀 (네이버 업종 기준, 실시간)"]
+
+        # 상승 TOP 5
+        top5 = [s for s in sorted_sectors if s["change_pct"] > 0][:5]
+        if top5:
+            lines.append("\n### 상승 섹터 TOP 5")
+            for i, s in enumerate(top5, 1):
+                lines.append(f"{i}. {s['sector_name']}: {s['change_pct']:+.2f}%")
+
+        # 하락 TOP 5
+        bottom5 = [s for s in reversed(sorted_sectors) if s["change_pct"] < 0][:5]
+        if bottom5:
+            lines.append("\n### 하락 섹터 TOP 5")
+            for i, s in enumerate(bottom5, 1):
+                lines.append(f"{i}. {s['sector_name']}: {s['change_pct']:+.2f}%")
+
+        # 대분류 집계 (단순 평균)
+        group_pcts: Dict[str, List[float]] = {}
+        for s in sectors:
+            group = NAVER_TO_GROUP.get(s["sector_name"])
+            if group:
+                group_pcts.setdefault(group, []).append(s["change_pct"])
+
+        if group_pcts:
+            group_avgs = {
+                g: sum(vals) / len(vals) for g, vals in group_pcts.items()
+            }
+            sorted_groups = sorted(group_avgs.items(), key=lambda x: x[1], reverse=True)
+
+            lines.append("\n### 대분류 집계 (평균 등락률)")
+            for group_name, avg_pct in sorted_groups:
+                lines.append(f"- {group_name}: {avg_pct:+.2f}%")
+
+        text = "\n".join(lines)
+        logger.info(f"섹터 모멘텀 텍스트 생성 완료: {len(sectors)}개 세분류, {len(group_pcts)}개 대분류")
+        return text
+
+    except Exception as e:
+        logger.warning(f"섹터 모멘텀 수집 실패 (Council 분석에 영향 없음): {e}")
+        return ""
+
+
+# ==============================================================================
 # 컨텍스트 빌더
 # ==============================================================================
 
@@ -53,6 +119,7 @@ def _build_context_text(
     message_content: str,
     global_snapshot: Optional[Dict[str, Any]] = None,
     political_news: Optional[List[Dict]] = None,
+    sector_momentum_text: str = "",
 ) -> str:
     """분석 컨텍스트 텍스트 생성 (모든 단계에서 공유)."""
 
@@ -96,6 +163,10 @@ def _build_context_text(
 ### Data Quality
 - 완성도: {(global_snapshot.get('completeness_score') or 0):.0%}
 - 데이터 소스: {', '.join(global_snapshot.get('data_sources', []))}""")
+
+    # 섹터 모멘텀 (글로벌 데이터 뒤, 정치 뉴스 앞)
+    if sector_momentum_text:
+        sections.append(sector_momentum_text)
 
     # 정치 뉴스
     if political_news:
@@ -734,11 +805,19 @@ async def main(args):
     else:
         logger.info("정치 뉴스 없음 (또는 수집 실패)")
 
+    # 2-3. 네이버 섹터 모멘텀 수집
+    sector_momentum_text = _get_sector_momentum_text()
+    if sector_momentum_text:
+        logger.info("섹터 모멘텀 데이터 수집 완료")
+    else:
+        logger.info("섹터 모멘텀 데이터 없음 (장 마감 후 또는 수집 실패)")
+
     # 3. 컨텍스트 빌드 + Council 분석
     context_text = _build_context_text(
         message_content=briefing["content"],
         global_snapshot=global_snapshot,
         political_news=political_news,
+        sector_momentum_text=sector_momentum_text,
     )
 
     council_result = run_structured_council(

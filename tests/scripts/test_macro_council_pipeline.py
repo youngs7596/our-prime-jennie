@@ -277,6 +277,140 @@ class TestBuildContextText:
         assert "북한 미사일 발사" in result
         assert "Reuters" in result
 
+    def test_with_sector_momentum_text(self):
+        """섹터 모멘텀 텍스트가 컨텍스트에 포함되는지 확인"""
+        from scripts.run_macro_council import _build_context_text
+
+        sector_text = "## 섹터별 모멘텀\n\n### 상승 섹터 TOP 5\n1. 증권: +9.00%"
+
+        result = _build_context_text("브리핑", sector_momentum_text=sector_text)
+        assert "섹터별 모멘텀" in result
+        assert "증권: +9.00%" in result
+        assert "브리핑" in result
+
+    def test_sector_momentum_between_macro_and_political(self):
+        """섹터 모멘텀이 글로벌 매크로 뒤, 정치 뉴스 앞에 배치되는지 확인"""
+        from scripts.run_macro_council import _build_context_text
+
+        snapshot = {
+            "fed_rate": 5.25, "vix": 18.5, "vix_regime": "normal",
+            "usd_krw": 1380, "kospi_index": 2650, "kospi_change_pct": 0.5,
+            "kosdaq_index": 850, "kosdaq_change_pct": -0.3,
+            "krw_pressure": "weak", "is_risk_off": False,
+            "treasury_10y": 4.5, "us_cpi_yoy": 3.2, "us_unemployment": 3.8,
+            "dxy_index": 104.5, "bok_rate": 3.5, "rate_differential": 1.75,
+            "kospi_foreign_net": -500, "kosdaq_foreign_net": 200,
+            "kospi_institutional_net": 300, "kospi_retail_net": 100,
+            "global_news_sentiment": "neutral", "korea_news_sentiment": "positive",
+            "completeness_score": 0.85, "data_sources": ["fred"],
+        }
+        news = [{"title": "뉴스 제목", "source": "Reuters", "category": "trade"}]
+        sector_text = "## 섹터별 모멘텀"
+
+        result = _build_context_text(
+            "브리핑", global_snapshot=snapshot,
+            political_news=news, sector_momentum_text=sector_text,
+        )
+
+        macro_pos = result.find("글로벌 매크로 데이터")
+        sector_pos = result.find("섹터별 모멘텀")
+        political_pos = result.find("글로벌 정치/지정학적 뉴스")
+
+        assert macro_pos < sector_pos < political_pos
+
+    def test_empty_sector_momentum_not_included(self):
+        """빈 섹터 모멘텀 텍스트는 포함되지 않음"""
+        from scripts.run_macro_council import _build_context_text
+
+        result = _build_context_text("브리핑", sector_momentum_text="")
+        assert "섹터별 모멘텀" not in result
+
+
+# ==============================================================================
+# _get_sector_momentum_text 테스트
+# ==============================================================================
+
+class TestGetSectorMomentumText:
+    """섹터 모멘텀 수집 함수 테스트"""
+
+    @patch("shared.crawlers.naver.get_naver_sector_list")
+    def test_basic_output(self, mock_sectors):
+        """기본 출력 형식 확인"""
+        mock_sectors.return_value = [
+            {"sector_no": "1", "sector_name": "증권", "change_pct": 9.0},
+            {"sector_no": "2", "sector_name": "반도체와반도체장비", "change_pct": 3.5},
+            {"sector_no": "3", "sector_name": "디스플레이패널", "change_pct": -4.0},
+            {"sector_no": "4", "sector_name": "자동차", "change_pct": -2.0},
+            {"sector_no": "5", "sector_name": "소프트웨어", "change_pct": 1.5},
+        ]
+
+        from scripts.run_macro_council import _get_sector_momentum_text
+
+        result = _get_sector_momentum_text()
+
+        assert "섹터별 모멘텀" in result
+        assert "상승 섹터 TOP 5" in result
+        assert "증권" in result
+        assert "하락 섹터 TOP 5" in result
+        assert "디스플레이패널" in result
+        assert "대분류 집계" in result
+
+    @patch("shared.crawlers.naver.get_naver_sector_list")
+    def test_group_aggregation(self, mock_sectors):
+        """대분류 집계가 올바른지 확인"""
+        mock_sectors.return_value = [
+            {"sector_no": "1", "sector_name": "반도체와반도체장비", "change_pct": 4.0},
+            {"sector_no": "2", "sector_name": "디스플레이패널", "change_pct": -2.0},
+            {"sector_no": "3", "sector_name": "증권", "change_pct": 5.0},
+            {"sector_no": "4", "sector_name": "은행", "change_pct": 3.0},
+        ]
+
+        from scripts.run_macro_council import _get_sector_momentum_text
+
+        result = _get_sector_momentum_text()
+
+        # 반도체/IT = (4.0 + -2.0) / 2 = 1.0
+        # 금융 = (5.0 + 3.0) / 2 = 4.0
+        assert "금융" in result
+        assert "반도체/IT" in result
+
+    @patch("shared.crawlers.naver.get_naver_sector_list")
+    def test_empty_sector_list(self, mock_sectors):
+        """빈 업종 목록일 때 빈 문자열 반환"""
+        mock_sectors.return_value = []
+
+        from scripts.run_macro_council import _get_sector_momentum_text
+
+        result = _get_sector_momentum_text()
+
+        assert result == ""
+
+    @patch("shared.crawlers.naver.get_naver_sector_list")
+    def test_exception_returns_empty(self, mock_sectors):
+        """예외 발생 시 빈 문자열 반환 (예외 안전)"""
+        mock_sectors.side_effect = Exception("네트워크 오류")
+
+        from scripts.run_macro_council import _get_sector_momentum_text
+
+        result = _get_sector_momentum_text()
+
+        assert result == ""
+
+    @patch("shared.crawlers.naver.get_naver_sector_list")
+    def test_all_positive_no_bottom_section(self, mock_sectors):
+        """모든 섹터가 상승일 때 하락 섹터 섹션 없음"""
+        mock_sectors.return_value = [
+            {"sector_no": "1", "sector_name": "증권", "change_pct": 5.0},
+            {"sector_no": "2", "sector_name": "은행", "change_pct": 3.0},
+        ]
+
+        from scripts.run_macro_council import _get_sector_momentum_text
+
+        result = _get_sector_momentum_text()
+
+        assert "상승 섹터 TOP 5" in result
+        assert "하락 섹터 TOP 5" not in result
+
 
 # ==============================================================================
 # _load_prompt 테스트
