@@ -878,6 +878,57 @@ def place_sell_order():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/trading/cancel', methods=['POST'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def cancel_order():
+    """주문 취소 (Proxy)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+
+    try:
+        data = request.get_json() or {}
+        order_no = data.get('order_no')
+        quantity = data.get('quantity', 0)
+
+        if not order_no:
+            stats['failed_requests'] += 1
+            return jsonify({"error": "order_no required"}), 400
+
+        logger.info(f"🚫 [Gateway] 주문 취소: {order_no}")
+        cancelled = call_kis_api_with_breaker(
+            kis_client.trading.cancel_order,
+            order_no,
+            quantity
+        )
+
+        stats['successful_requests'] += 1
+
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/trading/cancel',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success',
+            'order_no': order_no
+        })
+
+        return jsonify({
+            "success": True,
+            "cancelled": bool(cancelled),
+            "response_time": response_time
+        }), 200
+
+    except CircuitBreakerError as e:
+        stats['failed_requests'] += 1
+        logger.error(f"🚨 Circuit Breaker OPEN: {e}")
+        return jsonify({"error": "Circuit Breaker OPEN - KIS API 일시적으로 사용 불가"}), 503
+
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ 주문 취소 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/market-data/daily-prices', methods=['POST'])
 @limiter.limit(GLOBAL_RATE_LIMIT)
 def get_daily_prices():

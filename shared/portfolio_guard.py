@@ -8,6 +8,7 @@
 
 체크 항목:
 1. 섹터 종목 수 제한 (MAX_SECTOR_STOCKS): 동일 대분류에 N개 초과 보유 방지
+   - DYNAMIC_SECTOR_BUDGET_ENABLED=true 시 Redis sector_budget에서 동적 한도 사용
 2. 현금 하한선 (CASH_FLOOR_*_PCT): 국면별 최소 현금 비율 강제
 
 롤백: PORTFOLIO_GUARD_ENABLED=false → shadow mode (로그만, 차단 안 함)
@@ -47,6 +48,27 @@ class PortfolioGuard:
         self.config = config
         self.sector_classifier = sector_classifier
 
+    def _get_dynamic_sector_cap(self, sector_group: str) -> Optional[int]:
+        """
+        Redis sector_budget에서 해당 섹터의 동적 portfolio_cap 조회.
+
+        Returns:
+            동적 한도 (int) 또는 None (비활성/실패/키 없음)
+        """
+        if not self.config.get_bool("DYNAMIC_SECTOR_BUDGET_ENABLED", default=True):
+            return None
+
+        try:
+            from shared.sector_budget import load_sector_budget_from_redis
+
+            budget = load_sector_budget_from_redis()
+            if budget and sector_group in budget:
+                return budget[sector_group].get("portfolio_cap")
+        except Exception as e:
+            logger.debug(f"[PortfolioGuard] 동적 섹터 캡 조회 실패: {e}")
+
+        return None
+
     def check_sector_stock_count(
         self,
         candidate_code: str,
@@ -56,6 +78,9 @@ class PortfolioGuard:
         """
         동일 섹터(대분류) 보유 종목 수 제한 체크.
 
+        DYNAMIC_SECTOR_BUDGET_ENABLED=true 시 Redis에서 동적 한도 사용.
+        Redis 실패/비활성 시 기존 MAX_SECTOR_STOCKS 고정값 fallback.
+
         Args:
             candidate_code: 매수 후보 종목코드
             candidate_name: 매수 후보 종목명
@@ -64,8 +89,12 @@ class PortfolioGuard:
         Returns:
             {"passed": bool, "reason": str, "sector_group": str, "current_count": int, "max_allowed": int}
         """
-        max_sector_stocks = self.config.get_int("MAX_SECTOR_STOCKS", default=3)
+        static_max = self.config.get_int("MAX_SECTOR_STOCKS", default=3)
         candidate_group = self.sector_classifier.get_sector_group(candidate_code, candidate_name)
+
+        # 동적 섹터 캡 조회 → 실패 시 고정값
+        dynamic_cap = self._get_dynamic_sector_cap(candidate_group)
+        max_sector_stocks = dynamic_cap if dynamic_cap is not None else static_max
 
         # 현재 포트폴리오에서 같은 대분류 종목 수 카운트
         count = 0

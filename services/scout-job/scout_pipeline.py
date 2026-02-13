@@ -97,6 +97,11 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
         financial_trend = v2_caches.get('financial_trend', {}).get(code)
         sentiment_momentum = v2_caches.get('sentiment_momentum', {}).get(code)
 
+        # 수급 데이터: Phase 1.8에서 수집된 market_flow 데이터 활용
+        market_flow = info.get('market_flow', {}) or {}
+        flow_foreign = market_flow.get('foreign_net_buy')
+        flow_institution = market_flow.get('institution_net_buy')
+
         # 외인 보유비율 추세 계산 (v2용)
         foreign_ratio_trend = None
         ext_trading_df = v2_caches.get('investor_trading_ext', {}).get(code)
@@ -112,10 +117,11 @@ def process_quant_scoring_task(stock_info, quant_scorer, db_conn, kospi_prices_d
             stock_name=info['name'],
             daily_prices_df=daily_prices_df,
             kospi_prices_df=kospi_prices_df,
-            pbr=snapshot.get('pbr'),
-            per=snapshot.get('per'),
+            pbr=snapshot.get('pbr') if snapshot else None,
+            per=snapshot.get('per') if snapshot else None,
             current_sentiment_score=info.get('sentiment_score', 50),
-            foreign_net_buy=snapshot.get('foreign_net_buy'),
+            foreign_net_buy=flow_foreign,
+            institution_net_buy=flow_institution,
             # 섹터 정보 전달 (scout_universe에서 옴)
             sector=info.get('sector'),
             # 투자자 매매 동향 (smart_money_5d 계산용)

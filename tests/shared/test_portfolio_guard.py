@@ -3,7 +3,7 @@
 # 작업 LLM: Claude Opus 4.6
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from shared.portfolio_guard import PortfolioGuard
 
@@ -418,3 +418,91 @@ class TestCheckAll:
         assert "섹터 종목 수 초과" in result["reason"]
         # cash_floor 체크는 checks에 없어야 함 (fail-fast)
         assert "cash_floor" not in result["checks"]
+
+
+# ========================================================================
+# 4. 동적 섹터 캡 (Dynamic Sector Budget) 테스트
+# ========================================================================
+class TestDynamicSectorCap:
+
+    def test_dynamic_cap_from_redis(self):
+        """Redis sector_budget → 동적 한도 적용"""
+        group_map = {
+            "005930": "반도체/IT",
+            "000660": "반도체/IT",
+            "035720": "반도체/IT",
+            "035420": "반도체/IT",
+            "066570": "반도체/IT",
+        }
+        config = MockConfig({"DYNAMIC_SECTOR_BUDGET_ENABLED": True})
+        sc = _make_sector_classifier(group_map)
+        guard = PortfolioGuard(config, sc)
+
+        # Redis에서 반도체/IT → HOT(portfolio_cap=5) 반환하도록 mock
+        budget = {"반도체/IT": {"tier": "HOT", "watchlist_cap": 5, "portfolio_cap": 5, "effective_watchlist_cap": 5}}
+        with patch("shared.portfolio_guard.PortfolioGuard._get_dynamic_sector_cap", return_value=5):
+            portfolio = [
+                {"stock_code": "000660", "stock_name": "SK하이닉스"},
+                {"stock_code": "035720", "stock_name": "카카오"},
+                {"stock_code": "035420", "stock_name": "NAVER"},
+            ]
+            # 기존 MAX_SECTOR_STOCKS=3이면 차단, 동적 cap=5이면 통과
+            result = guard.check_sector_stock_count("005930", "삼성전자", portfolio)
+            assert result["passed"] is True
+            assert result["max_allowed"] == 5
+
+    def test_dynamic_cap_disabled_falls_back(self):
+        """DYNAMIC_SECTOR_BUDGET_ENABLED=false → 기존 고정값"""
+        group_map = {
+            "005930": "반도체/IT",
+            "000660": "반도체/IT",
+            "035720": "반도체/IT",
+            "035420": "반도체/IT",
+        }
+        config = MockConfig({"DYNAMIC_SECTOR_BUDGET_ENABLED": False, "MAX_SECTOR_STOCKS": 3})
+        sc = _make_sector_classifier(group_map)
+        guard = PortfolioGuard(config, sc)
+
+        portfolio = [
+            {"stock_code": "000660", "stock_name": "SK하이닉스"},
+            {"stock_code": "035720", "stock_name": "카카오"},
+            {"stock_code": "035420", "stock_name": "NAVER"},
+        ]
+        result = guard.check_sector_stock_count("005930", "삼성전자", portfolio)
+        assert result["passed"] is False
+        assert result["max_allowed"] == 3
+
+    def test_dynamic_cap_redis_failure_falls_back(self):
+        """Redis 실패 → 기존 고정값 fallback"""
+        group_map = {"005930": "반도체/IT", "000660": "반도체/IT", "035720": "반도체/IT", "035420": "반도체/IT"}
+        config = MockConfig({"DYNAMIC_SECTOR_BUDGET_ENABLED": True, "MAX_SECTOR_STOCKS": 3})
+        sc = _make_sector_classifier(group_map)
+        guard = PortfolioGuard(config, sc)
+
+        # _get_dynamic_sector_cap returns None (Redis failure)
+        with patch("shared.portfolio_guard.PortfolioGuard._get_dynamic_sector_cap", return_value=None):
+            portfolio = [
+                {"stock_code": "000660", "stock_name": "SK하이닉스"},
+                {"stock_code": "035720", "stock_name": "카카오"},
+                {"stock_code": "035420", "stock_name": "NAVER"},
+            ]
+            result = guard.check_sector_stock_count("005930", "삼성전자", portfolio)
+            assert result["passed"] is False
+            assert result["max_allowed"] == 3
+
+    def test_dynamic_cap_cool_sector_restricts(self):
+        """COOL 섹터 → portfolio_cap=2로 제한"""
+        group_map = {"A": "운송", "B": "운송", "C": "운송"}
+        config = MockConfig({"DYNAMIC_SECTOR_BUDGET_ENABLED": True, "MAX_SECTOR_STOCKS": 3})
+        sc = _make_sector_classifier(group_map)
+        guard = PortfolioGuard(config, sc)
+
+        with patch("shared.portfolio_guard.PortfolioGuard._get_dynamic_sector_cap", return_value=2):
+            portfolio = [
+                {"stock_code": "B", "stock_name": "운송B"},
+                {"stock_code": "C", "stock_name": "운송C"},
+            ]
+            # 기존 MAX_SECTOR_STOCKS=3이면 통과, 동적 cap=2이면 차단
+            result = guard.check_sector_stock_count("A", "운송A", portfolio)
+            assert result["passed"] is False
+            assert result["max_allowed"] == 2

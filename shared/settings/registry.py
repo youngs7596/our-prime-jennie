@@ -83,6 +83,7 @@ REGISTRY = {
     "CASH_FLOOR_BULL_PCT": {"value": 10.0, "type": "float", "desc": "상승장 현금 하한선 (%)", "category": "Risk", "db_priority": True},
     "CASH_FLOOR_SIDEWAYS_PCT": {"value": 15.0, "type": "float", "desc": "횡보장 현금 하한선 (%)", "category": "Risk", "db_priority": True},
     "CASH_FLOOR_BEAR_PCT": {"value": 25.0, "type": "float", "desc": "하락장 현금 하한선 (%)", "category": "Risk", "db_priority": True},
+    "DYNAMIC_SECTOR_BUDGET_ENABLED": {"value": True, "type": "bool", "desc": "동적 섹터 예산 활성화 (False면 기존 고정 MAX_SECTOR_STOCKS 사용)", "category": "Risk", "db_priority": True},
 
     # ===== 모멘텀 전략 실행 최적화 (Execution) =====
     "MOMENTUM_LIMIT_ORDER_ENABLED": {"value": False, "type": "bool", "desc": "모멘텀 전략 지정가 주문 활성화", "category": "Execution"},

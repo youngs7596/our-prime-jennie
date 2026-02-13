@@ -220,6 +220,35 @@ class KISGatewayClient:
             logger.error(f"❌ 매도 주문 실패: {stock_code}")
             return None
     
+    def cancel_order(self, order_no: str, quantity: int = 0) -> bool:
+        """
+        주문 취소 (Gateway를 통해)
+
+        Args:
+            order_no: 취소할 원주문 번호
+            quantity: 수량 (전량 취소이므로 미사용, 호환성 유지)
+
+        Returns:
+            True: 취소 성공 (미체결), False: 취소 실패 (이미 체결)
+        """
+        logger.info(f"🚫 [Gateway] 주문 취소: {order_no}")
+
+        response = self._request('POST', '/api/trading/cancel', {
+            'order_no': order_no,
+            'quantity': quantity
+        })
+
+        if response and response.get('success'):
+            cancelled = response.get('cancelled', False)
+            if cancelled:
+                logger.info(f"✅ 주문 취소 성공: {order_no}")
+            else:
+                logger.info(f"ℹ️ 주문 이미 체결됨: {order_no}")
+            return cancelled
+        else:
+            logger.error(f"❌ 주문 취소 실패: {order_no}")
+            return False
+
     def get_stock_daily_prices(self, stock_code: str, num_days_to_fetch: int = 30) -> Optional[Any]:
         """
         일봉 데이터 조회 (Gateway를 통해)

@@ -867,7 +867,11 @@ class FactorRepository:
             from collections import defaultdict
             grouped: Dict[str, list] = defaultdict(list)
             for row in rows:
-                grouped[row[0]].append((row[1], float(row[2]) if row[2] is not None else None))
+                # DB NEWS_DATE는 datetime이지만 모델은 Date → datetime 객체가 반환될 수 있음
+                d = row[1]
+                if hasattr(d, 'date') and callable(d.date):
+                    d = d.date()
+                grouped[row[0]].append((d, float(row[2]) if row[2] is not None else None))
 
             cutoff_7d = datetime.now().date() - timedelta(days=7)
 

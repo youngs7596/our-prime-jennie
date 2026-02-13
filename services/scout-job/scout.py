@@ -1289,7 +1289,77 @@ def main():
                         # Risk-Off 경계/위험 시 Watchlist 크기 축소 (절반, 최소 8)
                         MAX_WATCHLIST_SIZE = max(8, MAX_WATCHLIST_SIZE // 2)
                         logger.info(f"   (Risk-Off) Watchlist 크기 축소 → {MAX_WATCHLIST_SIZE} (Level {trading_context.risk_off_level})")
+
+                    # 동적 섹터 예산 적용
+                    _used_sector_budget = False
                     if len(final_approved_list) > MAX_WATCHLIST_SIZE:
+                        try:
+                            from shared.sector_budget import (
+                                aggregate_sector_analysis_to_groups,
+                                assign_sector_tiers,
+                                compute_sector_budget,
+                                select_with_sector_budget,
+                                save_sector_budget_to_redis,
+                            )
+                            from shared.sector_taxonomy import get_sector_group as _taxonomy_group
+                            from shared.config import ConfigManager as _SBConfigManager
+
+                            _sb_enabled = _SBConfigManager().get_bool("DYNAMIC_SECTOR_BUDGET_ENABLED", default=True)
+                            _sa = sector_analysis if 'sector_analysis' in dir() else {}
+
+                            if _sb_enabled and _sa:
+                                group_analysis = aggregate_sector_analysis_to_groups(_sa)
+                                tiers = assign_sector_tiers(group_analysis)
+
+                                # 현재 포트폴리오 보유 종목의 섹터별 카운트
+                                _portfolio_holdings: Dict[str, int] = {}
+                                try:
+                                    _held = repo.get_active_portfolio(session)
+                                    for p in _held:
+                                        _p_sector = candidate_stocks.get(
+                                            p.get('code', ''), {}
+                                        ).get('sector')
+                                        if _p_sector:
+                                            _p_group = _taxonomy_group(_p_sector)
+                                        else:
+                                            _p_group = "기타"
+                                        _portfolio_holdings[_p_group] = _portfolio_holdings.get(_p_group, 0) + 1
+                                except Exception:
+                                    _portfolio_holdings = {}
+
+                                budget = compute_sector_budget(tiers, _portfolio_holdings)
+
+                                # 섹터 리졸버: candidate_stocks에서 세분류 조회 → 대분류 변환
+                                def _sector_resolver(code, name):
+                                    raw = candidate_stocks.get(code, {}).get('sector')
+                                    return _taxonomy_group(raw) if raw else "기타"
+
+                                final_approved_list = select_with_sector_budget(
+                                    final_approved_list, budget, MAX_WATCHLIST_SIZE, _sector_resolver
+                                )
+                                _used_sector_budget = True
+
+                                # Redis에 섹터 예산 저장 (Portfolio Guard 연동)
+                                try:
+                                    _sb_redis = _get_redis()
+                                    save_sector_budget_to_redis(budget, _sb_redis)
+                                except Exception as e:
+                                    logger.warning(f"   ⚠️ 섹터 예산 Redis 저장 실패 (무시): {e}")
+
+                                # 로깅
+                                tier_summary = {}
+                                for g, t in tiers.items():
+                                    tier_summary.setdefault(t, []).append(g)
+                                logger.info(
+                                    f"   [Dynamic Sector Budget] HOT: {tier_summary.get('HOT', [])}, "
+                                    f"WARM: {len(tier_summary.get('WARM', []))}개, "
+                                    f"COOL: {tier_summary.get('COOL', [])}"
+                                )
+                        except Exception as e:
+                            logger.warning(f"   ⚠️ 동적 섹터 예산 실패 (기존 로직 사용): {e}")
+
+                    # 섹터 예산 미사용 시 기존 top-N fallback
+                    if not _used_sector_budget and len(final_approved_list) > MAX_WATCHLIST_SIZE:
                         final_approved_list_sorted = sorted(
                             final_approved_list,
                             key=lambda x: x.get('llm_score', 0),
