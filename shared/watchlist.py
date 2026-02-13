@@ -64,7 +64,9 @@ def save_hot_watchlist(
                 "rank": idx + 1,
                 "is_tradable": s.get("is_tradable", True),
                 # Strategy Injection (없으면 빈 리스트)
-                "strategies": s.get("strategies", []) 
+                "strategies": s.get("strategies", []),
+                "trade_tier": s.get("trade_tier"),
+                "hybrid_score": s.get("hybrid_score", 0),
             }
             # 기타 필요한 메타데이터가 있다면 추가 (호환성 유지)
             if "market_flow" in s:

@@ -294,6 +294,8 @@ services:
       - KIS_WS_APPROVAL_KEY_PROVIDER_URL=http://127.0.0.1:8080/api/ws-approval-key
       # 모멘텀 전략 실행 최적화
       - MOMENTUM_CONFIRMATION_BARS=${MOMENTUM_CONFIRMATION_BARS:-1}
+      # 선제 진입 전략
+      - ENABLE_WATCHLIST_CONVICTION_ENTRY=${ENABLE_WATCHLIST_CONVICTION_ENTRY:-true}
 
     # WSL2 mirrored mode: 127.0.0.1로 Windows MariaDB 접근
     network_mode: host

@@ -87,6 +87,28 @@ MOMENTUM_LIMIT_ORDER_ENABLED: "true"
 MOMENTUM_LIMIT_PREMIUM: "0.003"
 MOMENTUM_LIMIT_TIMEOUT_SEC: "10"
 MOMENTUM_CONFIRMATION_BARS: "1"
+MOMENTUM_CONT_MAX_GAIN_PCT: "5.0"             # MOMENTUM_CONTINUATION 상한선 (추격매수 방지)
+MOMENTUM_MAX_GAIN_PCT: "7.0"                  # MOMENTUM 상한선 (추격매수 방지)
+
+# 12-4. 선제 진입 전략 (WATCHLIST_CONVICTION_ENTRY)
+ENABLE_WATCHLIST_CONVICTION_ENTRY: "true"
+CONVICTION_MIN_HYBRID_SCORE: "70"
+CONVICTION_MIN_LLM_SCORE: "72"
+CONVICTION_MAX_INTRADAY_GAIN_PCT: "3.0"        # 당일 상승률 상한 (%)
+CONVICTION_MAX_VWAP_DEVIATION: "1.5"           # VWAP 이격 상한 (%)
+CONVICTION_ENTRY_WINDOW_START: "0915"          # 진입 시간대 시작 (KST)
+CONVICTION_ENTRY_WINDOW_END: "1030"            # 진입 시간대 종료 (KST)
+CONVICTION_MAX_DAYS_SINCE_ENTRY: "2"           # Watchlist 등록 후 최대 경과일
+
+# 12-5. 사문화 전략 토글 (타임프레임 불일치 — 기본 비활성화)
+ENABLE_BULL_PULLBACK: "false"
+ENABLE_VCP_BREAKOUT: "false"
+ENABLE_INSTITUTIONAL_ENTRY: "false"
+ENABLE_SHORT_TERM_HIGH_BREAKOUT: "false"
+
+# 12-6. DIP_BUY 국면별 완화
+DIP_BUY_MIN_DROP_BULL: "-0.5"                 # BULL 국면 최소 하락률 (%)
+DIP_BUY_MAX_DROP_BULL: "-3.0"                 # BULL 국면 최대 하락률 (%)
 
 # 13. Watchlist 크기 제한 (Scout → Hot Watchlist)
 # 하류 Scanner(9개 Risk Gate) + Executor(20개 필터)가 충분히 걸러내므로 넉넉하게 설정

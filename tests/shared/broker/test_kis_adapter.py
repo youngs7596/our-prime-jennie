@@ -1,11 +1,12 @@
 # tests/shared/broker/test_kis_adapter.py
-"""KISBrokerAdapter 테스트"""
+"""KISBrokerAdapter 테스트 + Spec Mock 검증"""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, create_autospec
 import os
 
 from shared.broker.kis.adapter import KISBrokerAdapter
+from shared.kis.gateway_client import KISGatewayClient
 
 
 class TestKISBrokerAdapterGatewayMode:
@@ -319,3 +320,38 @@ class TestKISBrokerAdapterIntegration:
         # 4. 매수 주문
         order_no = adapter.place_buy_order("005930", 10)
         assert order_no == "ORDER001"
+
+
+class TestSpecMockValidation:
+    """create_autospec vs MagicMock 차이 검증 + 회귀 방지
+
+    MagicMock은 존재하지 않는 메서드도 조용히 성공시켜 cancel_order 미구현 같은
+    버그를 숨긴다. create_autospec은 실제 클래스 시그니처를 검증하여 이를 방지.
+    """
+
+    def test_autospec_rejects_nonexistent_method(self):
+        """create_autospec으로 만든 mock은 존재하지 않는 메서드 호출 시 AttributeError"""
+        mock_client = create_autospec(KISGatewayClient, instance=True)
+        with pytest.raises(AttributeError):
+            mock_client.fake_nonexistent_method()
+
+    def test_autospec_accepts_existing_method(self):
+        """cancel_order는 실제 존재하므로 autospec에서 정상 호출"""
+        mock_client = create_autospec(KISGatewayClient, instance=True)
+        mock_client.cancel_order.return_value = True
+        result = mock_client.cancel_order("ORDER123")
+        assert result is True
+        mock_client.cancel_order.assert_called_once_with("ORDER123")
+
+    def test_autospec_validates_arg_count(self):
+        """place_buy_order(stock_code, quantity, price=0) — 필수 인자 누락 시 TypeError"""
+        mock_client = create_autospec(KISGatewayClient, instance=True)
+        with pytest.raises(TypeError):
+            mock_client.place_buy_order("005930")  # quantity 누락
+
+    def test_magicmock_silently_accepts_fake_method(self):
+        """MagicMock은 존재하지 않는 메서드도 조용히 성공 (문서화 목적)"""
+        mock_client = MagicMock()
+        # 이 호출은 에러 없이 성공 — 바로 이것이 cancel_order 버그의 원인
+        result = mock_client.fake_nonexistent_method("any", "args")
+        assert result is not None  # MagicMock 반환값

@@ -505,6 +505,8 @@ def _record_to_watchlist_entry(record: Dict) -> Dict:
         "sales_growth": record.get("sales_growth"),
         "eps_growth": record.get("eps_growth"),
         "financial_updated_at": _utcnow().isoformat(),
+        "trade_tier": record.get("trade_tier", "BLOCKED"),
+        "hybrid_score": record.get("hybrid_score", 0),
     }
 
 

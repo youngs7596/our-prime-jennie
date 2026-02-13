@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # 모멘텀 계열 전략 (확인 바 + 지정가 주문 대상)
 MOMENTUM_STRATEGIES = {
     "MOMENTUM", "MOMENTUM_CONTINUATION_BULL",
-    "SHORT_TERM_HIGH_BREAKOUT", "VCP_BREAKOUT",
+    "SHORT_TERM_HIGH_BREAKOUT",
 }
 
 
@@ -356,6 +356,7 @@ class BuyOpportunityWatcher:
                     'is_tradable': s.get('is_tradable', True),
                     'strategies': s.get('strategies', []),
                     'trade_tier': s.get('trade_tier'),
+                    'hybrid_score': s.get('hybrid_score', 0),
                 }
                 for s in stocks
             }
@@ -498,9 +499,6 @@ class BuyOpportunityWatcher:
 
         recent_bars = self.bar_aggregator.get_recent_bars(stock_code, count=30)
 
-        # [Config] 최소 바 개수 (기본 20개, Mock/Dev 모드에서 조절 가능)
-        min_bars = int(os.getenv('MIN_REQUIRED_BARS', 20))
-
         # [Logic Observability] Risk Gate 체크 결과 수집
         volume_info = self.bar_aggregator.get_volume_info(stock_code)
         vwap = self.bar_aggregator.get_vwap(stock_code)
@@ -511,6 +509,51 @@ class BuyOpportunityWatcher:
 
         risk_gate_checks = []
         risk_gate_passed = True
+
+        # ================================================================
+        # [조기 진입] CONVICTION_ENTRY는 Risk Gate 이전에 평가
+        # — 자체 안전장치(hybrid>=70, VWAP<1.5%, RSI<65, 상승률<3%) 보유
+        # — Min Bars, No-Trade Window 우회 (최소 3바만 필요)
+        # ================================================================
+        if len(recent_bars) >= 3:
+            conv_result = self._check_watchlist_conviction_entry(
+                stock_code, stock_info, current_price, recent_bars
+            )
+            if conv_result:
+                signal_type, signal_reason = conv_result
+                signal_checks = [{"strategy": "WATCHLIST_CONVICTION_ENTRY", "triggered": True, "reason": signal_reason}]
+                risk_gate_checks.append({"name": "Early Conviction", "passed": True, "value": signal_reason, "threshold": "Bypass"})
+                self._save_buy_logic_snapshot(stock_code, stock_info, current_price, vwap, volume_info,
+                                              current_rsi, True, risk_gate_checks, signal_checks, signal_type)
+
+                position_mult = self._get_position_multiplier()
+                ctx = self._get_trading_context()
+                signal = {
+                    'stock_code': stock_code,
+                    'stock_name': stock_info.get('name', stock_code),
+                    'signal_type': signal_type,
+                    'signal_reason': signal_reason,
+                    'current_price': current_price,
+                    'llm_score': stock_info.get('llm_score', 0),
+                    'market_regime': self.market_regime,
+                    'source': 'buy_scanner_websocket',
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'trade_tier': stock_info.get('trade_tier', 'TIER1'),
+                    'is_super_prime': False,
+                    'position_multiplier': position_mult,
+                    'macro_context': {
+                        'vix_regime': ctx.vix_regime if ctx else None,
+                        'risk_off_level': ctx.risk_off_level if ctx else 0,
+                        'stop_loss_multiplier': ctx.stop_loss_multiplier if ctx else 1.0,
+                    } if ctx else None,
+                }
+                self._set_cooldown(stock_code)
+                logger.info(f"[{stock_code}] {signal_type} 조기 신호 감지: {signal_reason}")
+                self._save_signal_history(stock_code, stock_info.get('name', stock_code), 'BUY', signal_type, signal_reason, current_price)
+                return signal
+
+        # [Config] 최소 바 개수 (기본 20개, Mock/Dev 모드에서 조절 가능)
+        min_bars = int(os.getenv('MIN_REQUIRED_BARS', 20))
 
         # 조건 0: 최소 바 개수
         bar_check_passed = len(recent_bars) >= min_bars
@@ -708,15 +751,11 @@ class BuyOpportunityWatcher:
                 return True  # 컨텍스트 없으면 모두 허용
             return strategy_name in allowed_strategies
 
+        # NOTE: WATCHLIST_CONVICTION_ENTRY는 Risk Gate 이전에 조기 평가됨 (line 514~553)
+        # 조기 평가에서 미발동 시 여기서 재평가 불필요 (동일 조건)
+
         # [NEW] 상승장 전용 전략 먼저 체크 (기존 전략보다 우선 적용)
         if self.market_regime in ['BULL', 'STRONG_BULL']:
-            # 1. RECON_BULL_ENTRY: 고점수 RECON 종목 자동 진입
-            result = self._check_recon_bull_entry(stock_code, stock_info)
-            if result:
-                signal_type, signal_reason = result
-                signal_checks.append({"strategy": "RECON_BULL_ENTRY", "triggered": True, "reason": signal_reason})
-            else:
-                signal_checks.append({"strategy": "RECON_BULL_ENTRY", "triggered": False, "reason": "Conditions not met"})
 
             # 2. MOMENTUM_CONTINUATION: 모멘텀 지속 종목
             if not signal_type:
@@ -727,14 +766,17 @@ class BuyOpportunityWatcher:
                 else:
                     signal_checks.append({"strategy": "MOMENTUM_CONTINUATION", "triggered": False, "reason": "MA5 <= MA20 or price change < 2%"})
 
-            # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파) - 브레이크아웃 전략, 매크로 필터 적용
+            # 3. SHORT_TERM_HIGH_BREAKOUT (60분 고가 돌파) - 기본 비활성화 (volume 데이터 미수신)
             if not signal_type and _is_strategy_allowed("SHORT_TERM_HIGH_BREAKOUT"):
-                result = self._check_short_term_high_breakout(stock_code, recent_bars)
-                if result:
-                    signal_type, signal_reason = result
-                    signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": True, "reason": signal_reason})
+                if self.config.get_bool("ENABLE_SHORT_TERM_HIGH_BREAKOUT", default=False):
+                    result = self._check_short_term_high_breakout(stock_code, recent_bars)
+                    if result:
+                        signal_type, signal_reason = result
+                        signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": True, "reason": signal_reason})
+                    else:
+                        signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "No breakout or volume < 2x"})
                 else:
-                    signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "No breakout or volume < 2x"})
+                    signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "Disabled (volume data unreliable)"})
             elif not signal_type:
                 signal_checks.append({"strategy": "SHORT_TERM_HIGH_BREAKOUT", "triggered": False, "reason": "Blocked by macro context"})
 
@@ -756,34 +798,43 @@ class BuyOpportunityWatcher:
             # [NEW] Jennie CSO 지시: 추가 Bull Market 전략 (2026-01-17)
             # ================================================================
 
-            # 5. BULL_PULLBACK: 상승 추세 중 건전한 조정 후 반등
+            # 5. BULL_PULLBACK: 기본 비활성화 (일봉 패턴을 1분봉에 적용 — 타임프레임 불일치)
             if not signal_type:
-                result = self._check_bull_pullback(recent_bars)
-                if result:
-                    signal_type, signal_reason = result
-                    signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": True, "reason": signal_reason})
+                if self.config.get_bool("ENABLE_BULL_PULLBACK", default=False):
+                    result = self._check_bull_pullback(recent_bars)
+                    if result:
+                        signal_type, signal_reason = result
+                        signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": True, "reason": signal_reason})
+                    else:
+                        signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": False, "reason": "No pullback pattern"})
                 else:
-                    signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": False, "reason": "No pullback pattern"})
+                    signal_checks.append({"strategy": "BULL_PULLBACK", "triggered": False, "reason": "Disabled (timeframe mismatch)"})
 
-            # 6. VCP_BREAKOUT: 변동성 축소 후 거래량 동반 돌파 - 공격적 전략, 매크로 필터 적용
+            # 6. VCP_BREAKOUT: 기본 비활성화 (주봉 패턴을 1분봉에 적용 — 타임프레임 불일치)
             if not signal_type and _is_strategy_allowed("VCP_BREAKOUT"):
-                result = self._check_vcp_breakout(recent_bars)
-                if result:
-                    signal_type, signal_reason = result
-                    signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": True, "reason": signal_reason})
+                if self.config.get_bool("ENABLE_VCP_BREAKOUT", default=False):
+                    result = self._check_vcp_breakout(recent_bars)
+                    if result:
+                        signal_type, signal_reason = result
+                        signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": True, "reason": signal_reason})
+                    else:
+                        signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "No VCP pattern"})
                 else:
-                    signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "No VCP pattern"})
+                    signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "Disabled (timeframe mismatch)"})
             elif not signal_type:
                 signal_checks.append({"strategy": "VCP_BREAKOUT", "triggered": False, "reason": "Blocked by macro context"})
 
-            # 7. INSTITUTIONAL_ENTRY: 기관/외국인 매수세 캔들 패턴
+            # 7. INSTITUTIONAL_ENTRY: 기본 비활성화 (Marubozu를 1분봉에 적용 — 타임프레임 불일치)
             if not signal_type:
-                result = self._check_institutional_buying(recent_bars)
-                if result:
-                    signal_type, signal_reason = result
-                    signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": True, "reason": signal_reason})
+                if self.config.get_bool("ENABLE_INSTITUTIONAL_ENTRY", default=False):
+                    result = self._check_institutional_buying(recent_bars)
+                    if result:
+                        signal_type, signal_reason = result
+                        signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": True, "reason": signal_reason})
+                    else:
+                        signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": False, "reason": "No institutional pattern"})
                 else:
-                    signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": False, "reason": "No institutional pattern"})
+                    signal_checks.append({"strategy": "INSTITUTIONAL_ENTRY", "triggered": False, "reason": "Disabled (timeframe mismatch)"})
 
         # [NEW] DIP_BUY: Watchlist 진입 1-3일 후 조정 매수 (시장 상황 무관)
         if not signal_type:
@@ -1017,9 +1068,13 @@ class BuyOpportunityWatcher:
         threshold = params.get('threshold', 3.0)
         if len(closes) < 2:
             return False, ""
-            
+
         momentum = ((closes[-1] - closes[0]) / closes[0]) * 100
         if momentum >= threshold:
+            # 상한선: 이미 너무 올랐으면 추격매수 방지
+            max_gain = self.config.get_float("MOMENTUM_MAX_GAIN_PCT", default=7.0)
+            if momentum >= max_gain:
+                return False, f"Momentum={momentum:.1f}% >= cap {max_gain}% (chase prevention)"
             return True, f"Momentum={momentum:.1f}% >= {threshold}%"
         return False, ""
 
@@ -1118,39 +1173,115 @@ class BuyOpportunityWatcher:
         except Exception as e:
             logger.warning(f"⚠️ Signal history 저장 실패 ({stock_code}): {e}")
 
-    def _check_recon_bull_entry(self, stock_code: str, stock_info: dict) -> Optional[tuple]:
+    def _check_watchlist_conviction_entry(self, stock_code: str, stock_info: dict,
+                                          current_price: float, bars: List[dict]) -> Optional[tuple]:
         """
-        RECON_BULL_ENTRY: 상승장에서 고점수 RECON 종목 자동 진입
-        
-        조건:
-        1. market_regime in ['BULL', 'STRONG_BULL']
-        2. LLM Score >= 70
-        3. Trade_Tier == 'RECON'
-        
+        WATCHLIST_CONVICTION_ENTRY: Scout 고확신 종목 장 초반 선제 진입
+
+        Scout이 A등급으로 선정한 종목을 가격 급등 전에 적정가로 매수.
+        RECON_BULL_ENTRY를 대체하며, trade_tier 불문 hybrid_score/llm_score 기반.
+
+        진입 조건:
+        1. 국면: BULL/STRONG_BULL (SIDEWAYS는 hybrid >= 75)
+        2. Watchlist 진입 0-2일 이내
+        3. 확신도: hybrid_score >= 70 OR llm_score >= 72
+        4. 시간대: 09:15-10:30 KST
+        5. 당일 상승률 < CONVICTION_MAX_INTRADAY_GAIN_PCT (기본 3%)
+        6. VWAP 이격 < CONVICTION_MAX_VWAP_DEVIATION (기본 1.5%)
+        7. RSI < 65
+
         Returns:
             (signal_type, reason) or None
         """
-        # 환경변수로 비활성화 가능
-        if not self.config.get_bool("ENABLE_RECON_BULL_ENTRY", default=True):
+        if not self.config.get_bool("ENABLE_WATCHLIST_CONVICTION_ENTRY", default=True):
             return None
-        
-        # 상승장 체크
-        if self.market_regime not in ['BULL', 'STRONG_BULL']:
+
+        # 1. 국면 체크
+        min_hybrid = self.config.get_float("CONVICTION_MIN_HYBRID_SCORE", default=70.0)
+        hybrid_score = stock_info.get('hybrid_score', 0)
+
+        if self.market_regime in ['BULL', 'STRONG_BULL']:
+            pass  # 허용
+        elif self.market_regime == 'SIDEWAYS' and hybrid_score >= 75:
+            pass  # SIDEWAYS는 고확신만 허용
+        else:
             return None
-        
-        # LLM Score 체크
+
+        # 2. Watchlist 진입 경과일 체크 (0-2일)
+        entry_data = self.watchlist_entry_cache.get(stock_code)
+        max_days = self.config.get_int("CONVICTION_MAX_DAYS_SINCE_ENTRY", default=2)
+        if entry_data and entry_data.get("entry_date"):
+            from datetime import date as date_cls
+            today = date_cls.today()
+            entry_date = entry_data["entry_date"]
+            if hasattr(entry_date, 'date'):
+                entry_date = entry_date.date()
+            days_since = (today - entry_date).days
+            if days_since > max_days:
+                return None
+        else:
+            # entry_cache에 없으면 당일 신규 등록으로 간주 (D+0)
+            days_since = 0
+
+        # 3. 확신도 체크 (hybrid_score OR llm_score)
         llm_score = stock_info.get('llm_score', 0)
-        if llm_score < 70:
+        min_llm = self.config.get_float("CONVICTION_MIN_LLM_SCORE", default=72.0)
+        if hybrid_score < min_hybrid and llm_score < min_llm:
             return None
-        
-        # Trade Tier 체크
-        trade_tier = stock_info.get('trade_tier', '')
-        if trade_tier != 'RECON':
+
+        # 4. 시간대 체크 (09:15-10:30 KST)
+        now_utc = datetime.now(timezone.utc)
+        now_kst = now_utc + timedelta(hours=9)
+        window_start_str = self.config.get("CONVICTION_ENTRY_WINDOW_START", default="0915")
+        window_end_str = self.config.get("CONVICTION_ENTRY_WINDOW_END", default="1030")
+        try:
+            ws_h, ws_m = int(window_start_str[:2]), int(window_start_str[2:])
+            we_h, we_m = int(window_end_str[:2]), int(window_end_str[2:])
+        except (ValueError, IndexError):
+            ws_h, ws_m = 9, 15
+            we_h, we_m = 10, 30
+
+        window_start = now_kst.replace(hour=ws_h, minute=ws_m, second=0, microsecond=0)
+        window_end = now_kst.replace(hour=we_h, minute=we_m, second=0, microsecond=0)
+        if not (window_start <= now_kst <= window_end):
             return None
-        
-        reason = f"LLM Score {llm_score:.1f} + RECON Tier + {self.market_regime} Market"
-        logger.info(f"🚀 [{stock_code}] RECON_BULL_ENTRY 조건 충족: {reason}")
-        return ("RECON_BULL_ENTRY", reason)
+
+        # 5. 당일 상승률 체크
+        max_gain = self.config.get_float("CONVICTION_MAX_INTRADAY_GAIN_PCT", default=3.0)
+        if bars and len(bars) >= 1:
+            # entry_price: watchlist 진입가 또는 당일 첫 bar open
+            ref_price = None
+            if entry_data and entry_data.get("entry_price"):
+                ref_price = entry_data["entry_price"]
+            if not ref_price:
+                ref_price = bars[0]['open']
+
+            intraday_gain = ((current_price - ref_price) / ref_price) * 100 if ref_price > 0 else 0
+            if intraday_gain >= max_gain:
+                return None
+        else:
+            return None  # 바 데이터 없으면 평가 불가
+
+        # 6. VWAP 이격 체크
+        max_vwap_dev = self.config.get_float("CONVICTION_MAX_VWAP_DEVIATION", default=1.5)
+        vwap = self.bar_aggregator.get_vwap(stock_code)
+        if vwap > 0:
+            vwap_deviation = ((current_price - vwap) / vwap) * 100
+            if vwap_deviation > max_vwap_dev:
+                return None
+
+        # 7. RSI 체크
+        closes = [b['close'] for b in bars]
+        rsi = self._calculate_simple_rsi(closes, period=14) if len(closes) >= 15 else None
+        if rsi is not None and rsi >= 65:
+            return None
+
+        # 모든 조건 충족
+        score_desc = f"hybrid={hybrid_score:.0f}" if hybrid_score >= min_hybrid else f"LLM={llm_score:.0f}"
+        reason = (f"D+{days_since} 선제진입, {score_desc}, "
+                 f"상승률 {intraday_gain:.1f}%, {self.market_regime}")
+        logger.info(f"🎯 [{stock_code}] WATCHLIST_CONVICTION_ENTRY 조건 충족: {reason}")
+        return ("WATCHLIST_CONVICTION_ENTRY", reason)
     
     def _check_momentum_continuation(self, stock_code: str, stock_info: dict, 
                                      bars: List[dict]) -> Optional[tuple]:
@@ -1198,7 +1329,13 @@ class BuyOpportunityWatcher:
         
         if price_change < 2.0:
             return None
-        
+
+        # 상한선: 이미 너무 올랐으면 추격매수 방지
+        max_gain = self.config.get_float("MOMENTUM_CONT_MAX_GAIN_PCT", default=5.0)
+        if price_change >= max_gain:
+            logger.debug(f"[{stock_code}] MOMENTUM_CONT 상한 초과: {price_change:.1f}% >= {max_gain}%")
+            return None
+
         reason = f"MA5({ma5:.0f}) > MA20({ma20:.0f}) + 상승률 {price_change:.1f}% + LLM {llm_score:.1f}"
         logger.info(f"📈 [{stock_code}] MOMENTUM_CONTINUATION 조건 충족: {reason}")
         return ("MOMENTUM_CONTINUATION_BULL", reason)
@@ -1502,13 +1639,23 @@ class BuyOpportunityWatcher:
 
             days_since_entry = (today - entry_date).days
 
-            if days_since_entry < 1 or days_since_entry > 3:
+            # 국면별 경과일/하락률 기준 (BULL: 완화, 기타: 기존 기준)
+            if self.market_regime in ['STRONG_BULL', 'BULL']:
+                dip_min = self.config.get_float("DIP_BUY_MIN_DROP_BULL", default=-0.5)
+                dip_max = self.config.get_float("DIP_BUY_MAX_DROP_BULL", default=-3.0)
+                max_days = 5
+            else:
+                dip_min = -2.0
+                dip_max = -5.0
+                max_days = 3
+
+            if days_since_entry < 1 or days_since_entry > max_days:
                 return None
 
-            # 3. 하락률 계산 (-2% ~ -5%)
+            # 하락률 계산
             price_change_pct = ((current_price - entry_price) / entry_price) * 100
 
-            if price_change_pct > -2.0 or price_change_pct < -5.0:
+            if price_change_pct > dip_min or price_change_pct < dip_max:
                 return None
 
             # 4. LLM Score 체크
