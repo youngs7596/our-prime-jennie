@@ -751,6 +751,73 @@ class TestEmergencyStopCheck:
             assert result['status'] == 'success'
 
 
+class TestSellExecutorStrictKIS:
+    """create_autospec으로 KIS 호출 시그니처 런타임 검증.
+
+    MagicMock은 존재하지 않는 메서드도 조용히 통과시키지만,
+    create_autospec은 AttributeError를 발생시켜 계약 위반을 잡는다.
+    """
+
+    def test_sell_order_with_strict_kis(self, executor_module, mock_kis_strict, mock_config, mock_telegram, sample_holding):
+        """기본 매도 흐름이 strict mock에서도 정상 작동"""
+        import pandas as pd
+
+        with patch('shared.db.connection.session_scope') as mock_session, \
+             patch('shared.db.repository.get_active_portfolio') as mock_portfolio, \
+             patch('shared.db.repository.was_traded_recently') as mock_traded, \
+             patch('shared.db.repository.check_duplicate_order', return_value=False), \
+             patch('shared.redis_cache.is_trading_paused', return_value=False), \
+             patch('shared.redis_cache.is_trading_stopped', return_value=False), \
+             patch('shared.database') as mock_db:
+
+            mock_portfolio.return_value = [sample_holding]
+            mock_traded.return_value = False
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = pd.DataFrame({
+                'CLOSE_PRICE': [75000]
+            })
+            mock_db.get_rag_context_with_validation.return_value = ("뉴스 없음", False, None)
+            mock_db.execute_trade_and_log.return_value = True
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            executor = executor_module[0]
+            executor.database = mock_db
+
+            sell_exec = executor.SellExecutor(
+                kis=mock_kis_strict,
+                config=mock_config,
+                telegram_bot=mock_telegram
+            )
+
+            result = sell_exec.execute_sell_order(
+                stock_code='005930',
+                stock_name='삼성전자',
+                quantity=10,
+                sell_reason='익절 (목표가 도달)',
+                dry_run=True
+            )
+
+            assert result['status'] == 'success'
+            assert 'DRY_RUN' in result['order_no']
+
+    def test_place_sell_order_signature_verified(self, executor_module, mock_kis_strict, mock_config, sample_holding):
+        """place_sell_order 시그니처 검증 — 잘못된 인자 시 TypeError"""
+        import pytest as _pytest
+
+        # 정상 호출 — 에러 없어야 함
+        mock_kis_strict.place_sell_order(stock_code='005930', quantity=10, price=0)
+        mock_kis_strict.place_sell_order.assert_called_with(
+            stock_code='005930', quantity=10, price=0
+        )
+
+        # 잘못된 시그니처 — TypeError 발생해야 함
+        with _pytest.raises(TypeError):
+            mock_kis_strict.place_sell_order('005930', 10, 0, 'extra_arg')
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 

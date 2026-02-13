@@ -14,7 +14,7 @@ Fixtures:
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, create_autospec, patch
 import sys
 import os
 
@@ -112,6 +112,26 @@ def mock_kis():
     kis.place_buy_order.return_value = 'BUY_ORDER_123456'
     kis.place_sell_order.return_value = 'SELL_ORDER_123456'
     return kis
+
+
+@pytest.fixture
+def mock_kis_strict():
+    """KIS Gateway Client Strict Mock (create_autospec 기반)
+
+    존재하지 않는 메서드 호출 → AttributeError
+    잘못된 인자 수 → TypeError
+    """
+    from shared.kis.gateway_client import KISGatewayClient
+
+    mock = create_autospec(KISGatewayClient, instance=True)
+    mock.get_cash_balance.return_value = 10_000_000
+    mock.get_stock_snapshot.return_value = {'price': 70000}
+    mock.place_buy_order.return_value = 'ORDER123456'
+    mock.place_sell_order.return_value = 'SELL_ORDER_123456'
+    mock.cancel_order.return_value = True
+    mock.check_market_open.return_value = True
+    mock.get_account_balance.return_value = {'total': 50_000_000, 'cash': 10_000_000}
+    return mock
 
 
 @pytest.fixture

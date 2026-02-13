@@ -1001,6 +1001,137 @@ class TestPortfolioGuardIntegration:
             assert 'DRY_RUN' in result.get('order_no', '')
 
 
+class TestBuyExecutorStrictKIS:
+    """create_autospec으로 KIS 호출 시그니처 런타임 검증.
+
+    MagicMock은 존재하지 않는 메서드도 조용히 통과시키지만,
+    create_autospec은 AttributeError를 발생시켜 계약 위반을 잡는다.
+    """
+
+    def test_process_signal_with_strict_kis(self, mock_kis_strict, mock_config):
+        """기본 매수 흐름이 strict mock에서도 정상 작동"""
+        executor_module = load_executor_module()
+
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
+
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = None
+            mock_db.execute_trade_and_log.return_value = True
+            mock_repo.get_active_portfolio.return_value = []
+            mock_repo.get_today_buy_count.return_value = 0
+            mock_repo.was_traded_recently.return_value = False
+            mock_redis.is_trading_stopped.return_value = False
+            mock_redis.is_trading_paused.return_value = False
+            mock_redis.get_redis_connection.return_value = MagicMock(set=MagicMock(return_value=True))
+            mock_redis.reset_trading_state_for_stock.return_value = None
+            mock_sector.return_value.get_sector.return_value = "IT"
+            mock_sizer.return_value.calculate_quantity.return_value = {
+                'quantity': 10, 'reason': 'test'
+            }
+            mock_sizer.return_value.calculate_intraday_atr.return_value = None
+            mock_sizer.return_value.refresh_from_config.return_value = None
+            mock_div.return_value.check_diversification.return_value = {
+                'approved': True, 'reason': 'OK'
+            }
+            mock_guard.return_value.check_all.return_value = {
+                'passed': True, 'reason': 'OK', 'shadow': False, 'checks': {}
+            }
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor_module.BuyExecutor(
+                kis=mock_kis_strict, config=mock_config
+            )
+
+            candidates = [{
+                'stock_code': '005930',
+                'stock_name': '삼성전자',
+                'llm_score': 80,
+                'is_tradable': True,
+                'current_price': 70000,
+                'trade_tier': 'TIER1',
+            }]
+
+            result = buy_exec.process_buy_signal({'candidates': candidates}, dry_run=True)
+
+            assert result['status'] == 'success'
+            # strict mock에서 get_cash_balance 시그니처 검증 통과
+            mock_kis_strict.get_cash_balance.assert_called()
+
+    def test_cancel_order_called_with_correct_args(self, mock_kis_strict, mock_config):
+        """지정가 주문 취소 시 cancel_order 시그니처 검증.
+
+        cancel_order(order_no: str, quantity: int = 0) 시그니처를
+        위반하면 TypeError가 발생한다.
+        """
+        executor_module = load_executor_module()
+
+        with patch.object(executor_module, 'session_scope') as mock_session, \
+             patch.object(executor_module, 'repo') as mock_repo, \
+             patch.object(executor_module, 'database') as mock_db, \
+             patch.object(executor_module, 'redis_cache') as mock_redis, \
+             patch.object(executor_module, 'PositionSizer') as mock_sizer, \
+             patch.object(executor_module, 'DiversificationChecker') as mock_div, \
+             patch.object(executor_module, 'SectorClassifier') as mock_sector, \
+             patch.object(executor_module, 'MarketRegimeDetector'), \
+             patch.object(executor_module, 'PortfolioGuard') as mock_guard, \
+             patch.object(executor_module, 'check_portfolio_correlation', return_value=(True, None, 0.0)), \
+             patch.object(executor_module, 'get_correlation_risk_adjustment', return_value=1.0):
+
+            mock_db.get_market_regime_cache.return_value = None
+            mock_db.get_daily_prices.return_value = None
+            mock_db.execute_trade_and_log.return_value = True
+            mock_repo.get_active_portfolio.return_value = []
+            mock_repo.get_today_buy_count.return_value = 0
+            mock_repo.was_traded_recently.return_value = False
+            mock_redis.is_trading_stopped.return_value = False
+            mock_redis.is_trading_paused.return_value = False
+            mock_redis.get_redis_connection.return_value = MagicMock(set=MagicMock(return_value=True))
+            mock_redis.reset_trading_state_for_stock.return_value = None
+            mock_sector.return_value.get_sector.return_value = "IT"
+            mock_sizer.return_value.calculate_quantity.return_value = {
+                'quantity': 10, 'reason': 'test'
+            }
+            mock_sizer.return_value.calculate_intraday_atr.return_value = None
+            mock_sizer.return_value.refresh_from_config.return_value = None
+            mock_div.return_value.check_diversification.return_value = {
+                'approved': True, 'reason': 'OK'
+            }
+            mock_guard.return_value.check_all.return_value = {
+                'passed': True, 'reason': 'OK', 'shadow': False, 'checks': {}
+            }
+
+            mock_ctx = MagicMock()
+            mock_session.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_session.return_value.__exit__ = MagicMock(return_value=False)
+
+            buy_exec = executor_module.BuyExecutor(
+                kis=mock_kis_strict, config=mock_config
+            )
+
+            # cancel_order를 직접 호출하여 시그니처 검증
+            # 정상 호출 — 에러 없어야 함
+            mock_kis_strict.cancel_order('ORDER123456', 10)
+            mock_kis_strict.cancel_order.assert_called_with('ORDER123456', 10)
+
+            # 잘못된 시그니처 — TypeError 발생해야 함
+            import pytest as _pytest
+            with _pytest.raises(TypeError):
+                mock_kis_strict.cancel_order('ORDER123456', 10, 'extra_arg')
+
+
 class TestAlignToTickSize(unittest.TestCase):
     """KRX 호가 단위 정렬 함수 테스트 (2026-02-12 장애 회귀 방지)."""
 
