@@ -391,7 +391,7 @@ def scrape_financial_data(stock_code: str) -> List[Dict[str, Any]]:
                         try:
                             value = float(value_text) if value_text else None
                             values.append(value)
-                        except:
+                        except (ValueError, TypeError):
                             values.append(None)
                     
                     for i, date_info in enumerate(dates):
@@ -470,7 +470,7 @@ def scrape_pbr_per_roe(
                                 if '배' in value_text:
                                     try:
                                         per = float(value_text.split('배')[0].replace(',', ''))
-                                    except:
+                                    except (ValueError, IndexError):
                                         pass
                         
                         if text.startswith('PBR') and 'BPS' in text:
@@ -479,7 +479,7 @@ def scrape_pbr_per_roe(
                                 if '배' in value_text:
                                     try:
                                         pbr = float(value_text.split('배')[0].replace(',', ''))
-                                    except:
+                                    except (ValueError, IndexError):
                                         pass
             
             # ROE, EPS 찾기 (주요재무정보 테이블)
@@ -498,7 +498,7 @@ def scrape_pbr_per_roe(
                                         roe_text = cells[3].get_text(strip=True).replace(',', '')
                                         if roe_text:
                                             roe = float(roe_text)
-                                    except:
+                                    except (ValueError, IndexError):
                                         pass
                             
                             if 'EPS' in first_cell and '원' in first_cell:
@@ -508,7 +508,7 @@ def scrape_pbr_per_roe(
                                             eps_text = cells[data_idx].get_text(strip=True).replace(',', '')
                                             if eps_text:
                                                 eps_list.append({'year': year, 'eps': float(eps_text)})
-                                        except:
+                                        except (ValueError, IndexError):
                                             pass
                     break
             
@@ -528,7 +528,7 @@ def scrape_pbr_per_roe(
                             market_cap = trillion * 1000000 + billion * 100
                         elif '억' in mc_text:
                             market_cap = float(mc_text.replace('억', '').strip()) * 100
-                    except:
+                    except (ValueError, IndexError):
                         pass
             
             if debug:

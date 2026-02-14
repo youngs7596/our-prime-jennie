@@ -4,19 +4,16 @@
 
 import time
 import logging
-import sys
 import os
 from datetime import datetime, timezone
 from threading import Event
 import pytz
 
-# shared 패키지 임포트
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-
-# [Fix] Import robustly from sibling (safety.py) even when run from root
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
+# GapDownSafety (sibling module, Docker PYTHONPATH=/app 에서 정상 작동)
+try:
+    from safety import GapDownSafety
+except ImportError:
+    GapDownSafety = None
 
 import shared.database as database
 import shared.strategy as strategy
@@ -83,6 +80,9 @@ class PriceMonitor:
         # [Phase: WebSocket 역할 분리] OpportunityWatcher는 buy-scanner로 이관됨
         # price-monitor는 매도 신호 감지에만 집중
         
+        # GapDownSafety 초기화
+        self.safety_guard = GapDownSafety(self.config) if GapDownSafety else None
+
         # Silent Stall 감지용
         self.last_ws_data_time = 0
     
@@ -354,8 +354,8 @@ class PriceMonitor:
                         logger.debug(f"   [{stock_name}] Macro Stop Mult: {macro_stop_mult:.2f} (VIX: {trading_ctx.vix_regime})")
             except ImportError:
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"⚠️ [{stock_name}] 매크로 손절 배율 조회 실패: {e}")
 
             # 1-1. ATR Trailing Stop (손절)
             if not potential_signal and atr:
@@ -390,12 +390,10 @@ class PriceMonitor:
 
                 if profit_pct <= stop_loss:
                     # [Gap Down Safety] 갭락 시 5분 대기
-                    if not hasattr(self, 'safety_guard'):
-                         # Lazy Init (sibling import)
-                         from safety import GapDownSafety
-                         self.safety_guard = GapDownSafety(self.config)
-                    
-                    safety = self.safety_guard.check_safety(datetime.now(), profit_pct)
+                    if self.safety_guard:
+                        safety = self.safety_guard.check_safety(datetime.now(), profit_pct)
+                    else:
+                        safety = {'is_safe': True}
                     
                     if safety['is_safe']:
                         potential_signal = {"signal": True, "reason": f"Fixed Stop Loss: {profit_pct:.2f}% (Limit: {stop_loss}%)", "quantity_pct": 100.0}

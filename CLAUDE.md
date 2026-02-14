@@ -385,13 +385,13 @@ git push
 
 | 날짜 | 주제 | 세션 파일 |
 |------|------|----------|
+| 2026-02-14 (밤) | Co-Authored-By 없는 커밋 전수 점검 + Gemini 잔존 코드 정리 | `session-2026-02-14-22-00.md` |
+| 2026-02-14 | Buy-Scanner 매수 전략 통합 테스트 34개 | `session-2026-02-14-19-00.md` |
 | 2026-02-13 (밤) | 3-Layer 테스트 강화 + 선제 진입 + 추격매수 방지 | `session-2026-02-13-22-00.md` |
 | 2026-02-13 | 동적 섹터 예산 + cancel_order 버그 수정 + 계좌 동기화 | `session-2026-02-13-10-30.md` |
 | 2026-02-13 (아침) | Scout Worker 장애 진단: langchain_openai 누락 + 섹터 모멘텀 0% | `session-2026-02-13-08-24.md` |
-| 2026-02-12 (밤) | 인프라 단순화: RabbitMQ→Redis Streams, Ollama Gateway 제거 | `session-2026-02-12-23-00.md` |
-| 2026-02-12 | news-archiver Qdrant 장애 복구 + pending 자동 복구 | `session-2026-02-12-22-10.md` |
 
-### 현재 시스템 상태 (2026-02-13)
+### 현재 시스템 상태 (2026-02-14)
 
 - **메시징**: RabbitMQ 제거 → Redis Streams (`shared/messaging/trading_signals.py`)
 - **LLM**: vLLM 직접 호출 (Ollama Gateway 제거), OllamaLLMProvider → `/v1/chat/completions`
@@ -404,7 +404,8 @@ git push
 - **Portfolio Guard**: 동적 섹터 예산 연동 (HOT/WARM/COOL cap) + 국면별 현금 하한선
 - **모멘텀 실행 최적화**: 지정가 주문 + 확인 바 + cancel_order 수정 완료
 - **Buy-Scanner**: WATCHLIST_CONVICTION_ENTRY (선제 진입) + 추격매수 방지 상한선
-- **테스트**: 1220 shared + 197 services passed (3-Layer 계약/경계값 테스트 강화)
+- **테스트**: 1220 shared + 250 services passed (3-Layer 계약/경계값 테스트 강화)
+- **Gemini 잔존 코드**: 전수 점검 완료 — HIGH 6건 + MEDIUM 4건 수정, 데드 코드 3건 삭제
 
 ### 주요 데이터 흐름
 
@@ -419,5 +420,5 @@ git push
 ```
 
 ---
-*Last Updated: 2026-02-13*
+*Last Updated: 2026-02-14*
 *상세 변경 이력은 `.ai/sessions/` 및 `docs/changelogs/` 참조*

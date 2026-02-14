@@ -151,7 +151,10 @@ class StreamPriceConsumer:
                                 code = data.get("code")
                                 price = float(data.get("price", 0))
                                 high = float(data.get("high", price))
-                                volume = int(data.get("vol", 0))
+                                vol_raw = data.get("vol")
+                                volume = int(vol_raw) if vol_raw is not None else 0
+                                if vol_raw is None:
+                                    logger.debug(f"⚠️ [StreamConsumer] {code} vol 필드 누락, 0으로 대체")
 
                                 if code and price > 0:
                                     on_price_func(code, price, high, volume)

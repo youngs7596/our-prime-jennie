@@ -1,5 +1,15 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-14
+### Co-Authored-By 없는 커밋 전수 점검 + Gemini 잔존 코드 정리
+- **fix(observability)**: volume=0/vol필드 누락 시 경고 로그 추가 (kis-gateway, stream_consumer, websocket)
+- **fix(quant)**: 수급 서브팩터 except:pass → 경고 로그 (flow_reversal, smart_money_sync)
+- **fix(market_data)**: 분봉 OHLCV `or 0` → None이면 해당 바 skip (지표 왜곡 방지)
+- **fix(news-analyzer)**: Fast Track except:pass → Normal Flow 폴백
+- **refactor(price-monitor)**: sys.path hack 제거, GapDownSafety __init__ 정상 초기화
+- **fix(naver)**: bare except 6곳 → 구체적 예외 타입 (ValueError, IndexError)
+- **cleanup**: 데드 코드 3건 삭제 (test_embedding_quality, smart_build, test_risk_injection)
+
 ## 2026-02-13
 ### Scout Worker 프로덕션 장애 수정 및 배포
 - **fix(deps)**: scout-job `langchain-ollama` → `langchain-openai` 전환 누락 수정 (RAG 비활성화 해소)

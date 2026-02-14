@@ -459,9 +459,8 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
         )
         session.add(new_sentiment)
         
-        # 2. STOCK_NEWS_SENTIMENT (Aggregated/Legacy) -> Sync!
-        # 모델 정의가 수정되었으므로 Raw SQL 대신 모델 사용 가능하나, 안전하게 Raw SQL 유지하되 컬럼명 맞춤
-        # 스키마: STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, SUMMARY, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE
+        # 2. STOCK_NEWS_SENTIMENT (Legacy) — factor_analyzer.py가 이 테이블에서 읽으므로 동기화 필요
+        # 읽는 컬럼: SENTIMENT_SCORE, CATEGORY, NEWS_DATE (factor_analyzer.py:972)
         
         # 카테고리 추출 (reason에서 "Duplicate" 등으로 시작하지 않는 한)
         category = "General"

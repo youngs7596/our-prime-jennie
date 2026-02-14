@@ -288,12 +288,13 @@ def handle_analyze_message(page_content: str, metadata: Dict[str, Any]) -> bool:
             fast_result = brain.analyze_news_fast_track(news_title, news_title)
             results = [fast_result]
         except Exception as e:
-            logger.error(f"❌ [Analyzer] Fast Track Failed: {e}")
-            # Fallback to normal flow? No, just fail or retry? 
-            # If fast track fails, we might want to ACK to avoid blocking or Retry?
-            # Let's retry via normal flow if Fast Track fails? 
-            # For now, if empty results, it goes to warning below.
-            pass
+            logger.error(f"❌ [Analyzer] Fast Track 실패, Normal Flow로 폴백: {e}")
+            # Fast Track 실패 시 Normal Flow로 폴백
+            try:
+                batch_item = {"id": 0, "title": news_title, "summary": news_title}
+                results = brain.analyze_news_unified([batch_item])
+            except Exception as e2:
+                logger.error(f"❌ [Analyzer] Normal Flow 폴백도 실패: {e2}")
     else:
         # 🐢 Use Local Ollama (Batched logic but here single)
         batch_item = {

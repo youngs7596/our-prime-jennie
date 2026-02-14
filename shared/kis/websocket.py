@@ -154,7 +154,11 @@ class WebsocketManager:
                                 stock_code = fields[0]
                                 current_price = float(fields[2])
                                 current_high = float(fields[5])
-                                volume = int(fields[10]) if len(fields) > 10 else 0
+                                if len(fields) > 10:
+                                    volume = int(fields[10])
+                                else:
+                                    volume = 0
+                                    logger.warning(f"⚠️ (WS) {stock_code} volume 필드 없음 (fields={len(fields)}개), 0으로 대체")
 
                                 if on_price_func:
                                     on_price_func(stock_code, current_price, current_high, volume)

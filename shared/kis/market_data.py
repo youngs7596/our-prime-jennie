@@ -273,16 +273,24 @@ class MarketData:
                     # 다른 형식 시도
                     try:
                         dt = datetime.strptime(f"{date_str} {time_str[:2]}:{time_str[2:4]}:{time_str[4:6]}", "%Y%m%d %H:%M:%S")
-                    except:
+                    except (ValueError, IndexError):
                         logger.debug(f"   (Data) 날짜 파싱 실패: {date_str}, {time_str}")
                         continue
                 
+                # OHLC 값이 없으면 해당 바 건너뛰기 (0으로 대체하면 지표 왜곡)
+                raw_high = minute_data.get("stck_hgpr")
+                raw_low = minute_data.get("stck_lwpr")
+                raw_close = minute_data.get("stck_clpr")
+                if not raw_high or not raw_low or not raw_close:
+                    logger.debug(f"   (Data) [{stock_code}] {dt} OHLC 누락 — 건너뛰기 (H={raw_high}, L={raw_low}, C={raw_close})")
+                    continue
+
                 rows.append({
                     'datetime': dt,
-                    'open': float(minute_data.get("stck_stdprc") or minute_data.get("stck_oprc") or minute_data.get("stck_oprc", 0)),
-                    'high': float(minute_data.get("stck_hgpr") or 0),
-                    'low': float(minute_data.get("stck_lwpr") or 0),
-                    'close': float(minute_data.get("stck_clpr") or 0),
+                    'open': float(minute_data.get("stck_stdprc") or minute_data.get("stck_oprc") or raw_close),
+                    'high': float(raw_high),
+                    'low': float(raw_low),
+                    'close': float(raw_close),
                     'volume': int(minute_data.get("acml_vol") or minute_data.get("acml_tr_pbmn") or 0)
                 })
             except Exception as e:

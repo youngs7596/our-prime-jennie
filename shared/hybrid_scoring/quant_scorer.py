@@ -1420,8 +1420,8 @@ class QuantScorer:
                     if flow_reversal_adj != 0:
                         factors['flow_prev_5d'] = int(prev_5d)
                         factors['flow_recent_5d'] = int(recent_5d)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"   (QuantScorer) {stock_code} 수급 흐름 반전 계산 오류: {e}")
 
             total_score += flow_reversal_adj
 
@@ -1462,8 +1462,8 @@ class QuantScorer:
                         factors['sync_institution_5d'] = int(i_sum)
                         if has_individual:
                             factors['sync_individual_5d'] = int(ind_sum)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"   (QuantScorer) {stock_code} 스마트머니 동시매수 계산 오류: {e}")
 
             total_score += sync_score
             factors['sync_score'] = round(sync_score, 2)
