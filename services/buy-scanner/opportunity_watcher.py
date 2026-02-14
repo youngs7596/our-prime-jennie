@@ -901,7 +901,8 @@ class BuyOpportunityWatcher:
                         break
                     else:
                         threshold = params.get('threshold', 30)
-                        signal_checks.append({"strategy": "RSI_REBOUND", "triggered": False, "reason": f"RSI {current_rsi:.1f if current_rsi else 'N/A'} > {threshold}"})
+                        rsi_str = f"{current_rsi:.1f}" if current_rsi else "N/A"
+                        signal_checks.append({"strategy": "RSI_REBOUND", "triggered": False, "reason": f"RSI {rsi_str} > {threshold}"})
 
                 elif strat_id == "RSI_OVERSOLD":
                     continue
