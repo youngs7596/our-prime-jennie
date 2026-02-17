@@ -17,46 +17,43 @@ logger = logging.getLogger(__name__)
 def audit_pipeline():
     ensure_engine_initialized()
     print("Starting News Pipeline Audit...")
-    
+
     with session_scope() as session:
         # 1. News Coverage (Last 24h)
-        # Using `text` for raw SQL to avoid ORM confusion just in case
         try:
-            # Check NEWS_SENTIMENT table (fresh data)
             query = text("""
-                SELECT COUNT(DISTINCT STOCK_CODE) 
-                FROM NEWS_SENTIMENT 
+                SELECT COUNT(DISTINCT STOCK_CODE)
+                FROM STOCK_NEWS_SENTIMENT
                 WHERE PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
             """)
             stocks_with_news = session.execute(query).scalar() or 0
-            
-            # Watchlist count
+
             wl_query = text("SELECT COUNT(*) FROM WATCHLIST WHERE IS_TRADABLE=1")
             watchlist_count = session.execute(wl_query).scalar() or 0
-            
+
             coverage = (stocks_with_news / watchlist_count * 100) if watchlist_count > 0 else 0
-            
+
             print(f"\n[News Coverage 24h]")
             print(f"- Watchlist Stocks: {watchlist_count}")
             print(f"- Stocks with News: {stocks_with_news}")
             print(f"- Coverage: {coverage:.1f}%")
-            
+
             if coverage < 10:
-                print("⚠️  WARNING: Very low news coverage. Crawler might be failing or idle.")
-            
+                print("WARNING: Very low news coverage. Crawler might be failing or idle.")
+
         except Exception as e:
             print(f"Error checking coverage: {e}")
 
         # 2. Average News Score (Last 7 Days) for Smart Fallback
         try:
             avg_query = text("""
-                SELECT AVG(SENTIMENT_SCORE) 
-                FROM NEWS_SENTIMENT 
+                SELECT AVG(SENTIMENT_SCORE)
+                FROM STOCK_NEWS_SENTIMENT
                 WHERE PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                 AND SENTIMENT_SCORE > 0
             """)
             avg_score = session.execute(avg_query).scalar()
-            
+
             print(f"\n[Smart Fallback Verification]")
             if avg_score:
                 print(f"- Avg Sentiment (7d): {avg_score:.2f}")
@@ -67,7 +64,7 @@ def audit_pipeline():
 
         except Exception as e:
             print(f"Error checking average score: {e}")
-            
+
     print("\nAudit Complete.")
 
 if __name__ == "__main__":

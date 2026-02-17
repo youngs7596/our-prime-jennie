@@ -344,7 +344,8 @@ def process_unified_analyst_task(stock_info, brain, quant_result, snapshot_cache
         recon_mom_min = _cfg.get_float("RECON_MOMENTUM_MIN", default=20)
         if mom is not None and float(mom) >= recon_mom_min:
             recon_signals.append(f"MOMENTUM_{float(mom):.1f}/25")
-    except Exception:
+    except (ValueError, TypeError) as e:
+        logger.warning(f"recon signal 계산 실패: {e}")
         recon_signals = []
 
     is_recon = (60 <= hybrid_score < 75) and bool(recon_signals)

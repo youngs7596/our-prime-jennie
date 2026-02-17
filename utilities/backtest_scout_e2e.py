@@ -9,7 +9,7 @@ Scout 기반 E2E 백테스트 시뮬레이터
 목적:
 - Scout이 과거에 선정했을 법한 종목을 시뮬레이션
 - 현재 시스템의 Buy/Sell Executor 로직으로 매매 시뮬레이션
-- NEWS_SENTIMENT 테이블의 뉴스 감성 데이터 활용 (2017~2026, 49만건)
+- STOCK_NEWS_SENTIMENT 테이블의 뉴스 감성 데이터 활용
 
 주요 기능:
 1. ScoutSimulator: Factor Score + 뉴스 감성 기반 Scout 결과 추정
@@ -84,28 +84,28 @@ def load_news_sentiment_history(
     lookback_days: int = 7
 ) -> Dict[str, pd.DataFrame]:
     """
-    NEWS_SENTIMENT 테이블에서 종목별 뉴스 감성 히스토리 로드
-    
+    STOCK_NEWS_SENTIMENT 테이블에서 종목별 뉴스 감성 히스토리 로드
+
     Args:
         connection: DB 연결
         stock_codes: 조회할 종목 코드 리스트
         start_date: 시작일
         end_date: 종료일
         lookback_days: 각 날짜에서 몇 일 이전까지 뉴스를 조회할지
-        
+
     Returns:
-        {stock_code: DataFrame(PUBLISHED_AT, SENTIMENT_SCORE, NEWS_TITLE)}
+        {stock_code: DataFrame(PUBLISHED_AT, SENTIMENT_SCORE, HEADLINE)}
     """
     if not stock_codes:
         return {}
-    
+
     # 조회 범위: start_date - lookback_days ~ end_date
     query_start = start_date - timedelta(days=lookback_days)
-    
+
     placeholders = ','.join(['%s'] * len(stock_codes))
     query = f"""
-        SELECT STOCK_CODE, PUBLISHED_AT, SENTIMENT_SCORE, NEWS_TITLE
-        FROM NEWS_SENTIMENT
+        SELECT STOCK_CODE, PUBLISHED_AT, SENTIMENT_SCORE, HEADLINE
+        FROM STOCK_NEWS_SENTIMENT
         WHERE STOCK_CODE IN ({placeholders})
           AND PUBLISHED_AT BETWEEN %s AND %s
         ORDER BY STOCK_CODE, PUBLISHED_AT
@@ -125,7 +125,7 @@ def load_news_sentiment_history(
     if isinstance(rows[0], dict):
         df = pd.DataFrame(rows)
     else:
-        df = pd.DataFrame(rows, columns=["STOCK_CODE", "PUBLISHED_AT", "SENTIMENT_SCORE", "NEWS_TITLE"])
+        df = pd.DataFrame(rows, columns=["STOCK_CODE", "PUBLISHED_AT", "SENTIMENT_SCORE", "HEADLINE"])
     
     df["PUBLISHED_AT"] = pd.to_datetime(df["PUBLISHED_AT"])
     

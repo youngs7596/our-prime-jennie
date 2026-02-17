@@ -58,11 +58,11 @@ def check_data_coverage():
         if res_invest[2] == 0:
             print("   ❌ 해당 기간 데이터 전멸 (외인순매수 0.0% 원인)")
 
-        # 4. 뉴스 데이터 (NEWS_SENTIMENT)
-        print("\n4. [뉴스] NEWS_SENTIMENT")
+        # 4. 뉴스 데이터 (STOCK_NEWS_SENTIMENT)
+        print("\n4. [뉴스] STOCK_NEWS_SENTIMENT")
         query_news = text("""
             SELECT MIN(PUBLISHED_AT), MAX(PUBLISHED_AT), COUNT(*)
-            FROM NEWS_SENTIMENT
+            FROM STOCK_NEWS_SENTIMENT
             WHERE PUBLISHED_AT BETWEEN :start AND :end
         """)
         res_news = session.execute(query_news, {'start': start_date, 'end': end_date}).fetchone()

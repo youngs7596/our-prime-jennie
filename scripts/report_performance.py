@@ -58,7 +58,7 @@ def report_performance():
                     metrics = json.loads(metrics_json)
                     pnl = float(metrics.get('profit_amount', 0))
                     pnl_pct = float(metrics.get('profit_rate', 0))
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError):
                     pass
             
             realized_trades.append({

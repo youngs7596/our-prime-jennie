@@ -34,6 +34,7 @@ _MOCK_TABLES = {
     "PORTFOLIO",
     "TRADELOG",
     "NEWS_SENTIMENT",
+    "STOCK_NEWS_SENTIMENT",
     "AGENT_COMMANDS",
     "ACTIVE_PORTFOLIO",
 }
@@ -505,10 +506,11 @@ class StockInvestorTrading(Base):
 
 class StockNewsSentiment(Base):
     """
-    종목별 뉴스 감성 점수 테이블
-    - 뉴스 카테고리별 감성 점수
+    종목별 뉴스 감성 점수 테이블 (Single Source of Truth)
+    - 뉴스 카테고리별 감성 점수 (0 ~ 100 스케일)
+    - NEWS_SENTIMENT 테이블 통합 (2026-02-17)
     """
-    __tablename__ = "STOCK_NEWS_SENTIMENT"
+    __tablename__ = resolve_table_name("STOCK_NEWS_SENTIMENT")
     __table_args__ = {"extend_existing": True}
 
     id = Column("ID", Integer, primary_key=True)
@@ -517,9 +519,11 @@ class StockNewsSentiment(Base):
     press = Column("PRESS", String(255), nullable=True)
     news_title = Column("HEADLINE", String(1000), nullable=True)
     news_summary = Column("SUMMARY", Text, nullable=True)
-    sentiment_score = Column("SENTIMENT_SCORE", Float, nullable=True)  # -100 ~ +100
+    sentiment_score = Column("SENTIMENT_SCORE", Float, nullable=True)  # 0 ~ 100
+    sentiment_reason = Column("SENTIMENT_REASON", String(2000), nullable=True)
     category = Column("CATEGORY", String(50), nullable=True)  # 실적, 수주, 규제 등
     article_url = Column("ARTICLE_URL", String(2000), nullable=True, unique=True)
+    published_at = Column("PUBLISHED_AT", DateTime, nullable=True)
     source = Column("SOURCE", String(50), default='NAVER')
     scraped_at = Column("SCRAPED_AT", DateTime, server_default=func.now())
 

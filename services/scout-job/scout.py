@@ -240,16 +240,15 @@ def enrich_candidates_with_market_data(candidate_stocks: Dict[str, Dict], sessio
         
         logger.info(f"   (Hash) ✅ DB에서 {len(rows)}개 종목 시장 데이터 로드")
         
-        # [Fix] 최신 뉴스 감성 점수 조회 (NEWS_SENTIMENT - Active Table)
-        # QuantScorer에 전달하기 위해 여기서 조회
+        # 최신 뉴스 감성 점수 조회 (STOCK_NEWS_SENTIMENT - Single Source of Truth)
         sent_query = text(f"""
-            SELECT STOCK_CODE, SENTIMENT_SCORE 
-            FROM NEWS_SENTIMENT
+            SELECT STOCK_CODE, SENTIMENT_SCORE
+            FROM STOCK_NEWS_SENTIMENT
             WHERE STOCK_CODE IN ({placeholders})
             AND PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 3 DAY)
             AND (STOCK_CODE, PUBLISHED_AT) IN (
                 SELECT STOCK_CODE, MAX(PUBLISHED_AT)
-                FROM NEWS_SENTIMENT
+                FROM STOCK_NEWS_SENTIMENT
                 WHERE STOCK_CODE IN ({placeholders})
                 GROUP BY STOCK_CODE
             )

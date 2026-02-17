@@ -109,40 +109,28 @@ def backfill_stock_news(stock_code, stock_name, classifier, session):
                 category = classification.category
                 reason = f"Category: {category} ({classification.sentiment})"
             
-            # Save to DB
-            from shared.db.models import NewsSentiment
-            from sqlalchemy import text, select
+            # Save to DB (STOCK_NEWS_SENTIMENT = Single Source of Truth)
+            from shared.db.models import StockNewsSentiment
+            from sqlalchemy import select
 
-            # Check DB existence
-            stmt = select(NewsSentiment).where(NewsSentiment.source_url == link)
+            # Check DB existence by article_url
+            stmt = select(StockNewsSentiment).where(StockNewsSentiment.article_url == link)
             existing = session.scalars(stmt).first()
             if existing:
                 continue
 
-            # 1. NEWS_SENTIMENT
-            new_sentiment = NewsSentiment(
+            new_sentiment = StockNewsSentiment(
                 stock_code=stock_code,
+                news_date=pub_date,
                 news_title=title,
                 sentiment_score=score,
                 sentiment_reason=reason,
-                source_url=link,
-                published_at=pub_date
+                category=category,
+                article_url=link,
+                published_at=pub_date,
+                source='NAVER',
             )
             session.add(new_sentiment)
-            
-            # 2. STOCK_NEWS_SENTIMENT (Raw SQL)
-            session.execute(text("""
-                INSERT IGNORE INTO STOCK_NEWS_SENTIMENT 
-                (STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE)
-                VALUES (:code, :date, :url, :title, :category, :score, NOW(), 'NAVER')
-            """), {
-                'code': stock_code,
-                'date': pub_date,
-                'url': link,
-                'title': title,
-                'category': category,
-                'score': score
-            })
             
             total_added += 1
             

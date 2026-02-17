@@ -418,19 +418,19 @@ def get_daily_prices_batch(connection, stock_codes: list, limit: int = 120, tabl
 
 def save_news_sentiment(session, stock_code, title, score, reason, url, published_at):
     """
-    뉴스 감성 분석 결과를 영구 저장합니다.
-    SQLAlchemy ORM을 사용합니다.
+    뉴스 감성 분석 결과를 STOCK_NEWS_SENTIMENT (Single Source of Truth)에 저장합니다.
+    2026-02-17: NEWS_SENTIMENT dual-write 제거, STOCK_NEWS_SENTIMENT 단일 저장으로 통합.
     """
     try:
-        from shared.db.models import NewsSentiment
+        from shared.db.models import StockNewsSentiment
         from datetime import datetime
-        from sqlalchemy import text, select
+        from sqlalchemy import select
 
         # 중복 URL 체크 (이미 저장된 뉴스면 Skip)
-        stmt = select(NewsSentiment).where(NewsSentiment.source_url == url)
+        stmt = select(StockNewsSentiment).where(StockNewsSentiment.article_url == url)
         existing = session.scalars(stmt).first()
         if existing:
-            logger.debug(f"ℹ️ [DB] 이미 존재하는 뉴스입니다. (Skip): {title[:20]}...")
+            logger.debug(f"[DB] 이미 존재하는 뉴스입니다. (Skip): {title[:20]}...")
             return
 
         # published_at이 int timestamp인 경우 변환
@@ -444,61 +444,40 @@ def save_news_sentiment(session, stock_code, title, score, reason, url, publishe
                 published_at_dt = datetime.strptime(published_at[:19], '%Y-%m-%d %H:%M:%S')
         elif isinstance(published_at, datetime):
             published_at_dt = published_at
-            
+
         if not published_at_dt:
             published_at_dt = datetime.utcnow()
 
-        # 1. NewsSentiment (Detail)
-        new_sentiment = NewsSentiment(
-            stock_code=stock_code,
-            news_title=title,
-            sentiment_score=score,
-            sentiment_reason=reason,
-            source_url=url,
-            published_at=published_at_dt
-        )
-        session.add(new_sentiment)
-        
-        # 2. STOCK_NEWS_SENTIMENT (Legacy) — factor_analyzer.py가 이 테이블에서 읽으므로 동기화 필요
-        # 읽는 컬럼: SENTIMENT_SCORE, CATEGORY, NEWS_DATE (factor_analyzer.py:972)
-        
-        # 카테고리 추출 (reason에서 "Duplicate" 등으로 시작하지 않는 한)
+        # 카테고리 추출 (reason에서 "Category: 실적 (Positive)" 형태 파싱)
         category = "General"
         if reason and "Category:" in reason:
             try:
-                # "Category: 실적 (Positive)" 형태 파싱
                 parts = reason.split("Category:")
                 if len(parts) > 1:
                     cat_part = parts[1].split("(")[0].strip()
                     if cat_part:
                         category = cat_part
             except (IndexError, ValueError, AttributeError):
-                pass  # 카테고리 파싱 실패는 무시
+                pass
 
-        session.execute(text("""
-            INSERT INTO STOCK_NEWS_SENTIMENT 
-            (STOCK_CODE, NEWS_DATE, ARTICLE_URL, HEADLINE, SUMMARY, CATEGORY, SENTIMENT_SCORE, SCRAPED_AT, SOURCE)
-            VALUES (:stock_code, :news_date, :url, :title, :summary, :category, :score, NOW(), 'ANALYZER')
-            ON DUPLICATE KEY UPDATE
-                SENTIMENT_SCORE = VALUES(SENTIMENT_SCORE),
-                CATEGORY = VALUES(CATEGORY),
-                SCRAPED_AT = NOW()
-        """), {
-            'stock_code': stock_code,
-            'news_date': published_at_dt,
-            'url': url,
-            'title': title,
-            'summary': reason[:1000] if reason else '', # reason을 summary로 활용
-            'category': category,
-            'score': score
-        })
+        new_sentiment = StockNewsSentiment(
+            stock_code=stock_code,
+            news_date=published_at_dt,
+            news_title=title,
+            news_summary=reason[:1000] if reason else '',
+            sentiment_score=score,
+            sentiment_reason=reason,
+            category=category,
+            article_url=url,
+            published_at=published_at_dt,
+            source='ANALYZER',
+        )
+        session.add(new_sentiment)
 
-        # session_scope 컨텍스트 매니저가 commit/rollback을 처리합니다.
-        logger.info(f"✅ [DB] 뉴스 감성 저장 완료 (Sync): {stock_code} ({score}점)")
-        
+        logger.info(f"[DB] 뉴스 감성 저장 완료: {stock_code} ({score}점)")
+
     except Exception as e:
-        logger.error(f"❌ [DB] 뉴스 감성 저장 실패: {e}")
-        # session_scope에서 rollback을 처리하도록 예외를 다시 발생시킵니다.
+        logger.error(f"[DB] 뉴스 감성 저장 실패: {e}")
         raise e
 
 

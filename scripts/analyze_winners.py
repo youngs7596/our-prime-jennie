@@ -173,7 +173,7 @@ def check_data_coverage(session):
     print(f"  일봉: {daily_count:,}건 / {daily_stocks:,}개 종목")
     print(f"  시총 ≥ 3,000억: {large_cap_count}개 종목")
 
-    from shared.db.models import StockInvestorTrading, NewsSentiment
+    from shared.db.models import StockInvestorTrading, StockNewsSentiment
 
     investor_count = session.query(sa_func.count(StockInvestorTrading.id)).filter(
         StockInvestorTrading.trade_date >= cutoff_date
@@ -181,8 +181,8 @@ def check_data_coverage(session):
     investor_stocks = session.query(sa_func.count(sa_func.distinct(StockInvestorTrading.stock_code))).filter(
         StockInvestorTrading.trade_date >= cutoff_date
     ).scalar()
-    news_count = session.query(sa_func.count(NewsSentiment.id)).filter(
-        NewsSentiment.created_at >= cutoff_date
+    news_count = session.query(sa_func.count(StockNewsSentiment.id)).filter(
+        StockNewsSentiment.scraped_at >= cutoff_date
     ).scalar()
 
     print(f"  수급: {investor_count:,}건 ({investor_stocks}개 종목)")

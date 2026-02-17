@@ -19,7 +19,7 @@ from collections import defaultdict
 from sqlalchemy import func as sa_func, and_
 from shared.db.connection import init_engine, session_scope
 from shared.db.models import (
-    StockDailyPrice, StockMaster, StockInvestorTrading, NewsSentiment,
+    StockDailyPrice, StockMaster, StockInvestorTrading, StockNewsSentiment,
 )
 
 # Step 1과 동일한 설정
@@ -178,12 +178,12 @@ def analyze_news_signals(session, stock_code, buy_date, pre_days=5):
     start_date = buy_date - timedelta(days=pre_days * 2)
 
     rows = session.query(
-        NewsSentiment.sentiment_score,
-        NewsSentiment.created_at,
+        StockNewsSentiment.sentiment_score,
+        StockNewsSentiment.scraped_at,
     ).filter(
-        NewsSentiment.stock_code == stock_code,
-        NewsSentiment.created_at >= start_date,
-        NewsSentiment.created_at <= buy_date + timedelta(days=1),
+        StockNewsSentiment.stock_code == stock_code,
+        StockNewsSentiment.scraped_at >= start_date,
+        StockNewsSentiment.scraped_at <= buy_date + timedelta(days=1),
     ).all()
 
     signals = {

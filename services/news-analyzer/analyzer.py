@@ -152,12 +152,12 @@ def _check_if_article_exists_in_db(source_url: str) -> bool:
         return False
         
     try:
-        from shared.db.models import NewsSentiment
+        from shared.db.models import StockNewsSentiment
         from shared.db.connection import session_scope
         from sqlalchemy import select
 
         with session_scope() as session:
-            stmt = select(NewsSentiment.id).where(NewsSentiment.source_url == source_url)
+            stmt = select(StockNewsSentiment.id).where(StockNewsSentiment.article_url == source_url)
             existing = session.execute(stmt).first()
             return existing is not None
     except Exception as e:

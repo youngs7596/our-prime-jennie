@@ -3,7 +3,7 @@
 데이터 보관 정책에 따른 오래된 데이터 정리 스크립트
 
 보관 기간: 1년 (365일) - 모든 테이블 동일
-- NEWS_SENTIMENT, STOCK_NEWS_SENTIMENT: 뉴스 감성 분석
+- STOCK_NEWS_SENTIMENT: 뉴스 감성 분석 (Single Source of Truth)
 - STOCK_MINUTE_PRICE: 분봉 데이터
 - MARKET_FLOW_SNAPSHOT: 시장 흐름
 - SHADOW_RADAR_LOG, LLM_DECISION_LEDGER: AI 분석 로그
@@ -43,8 +43,8 @@ logger = logging.getLogger(__name__)
 RETENTION_DAYS = 365  # 1년
 
 RETENTION_POLICIES = [
-    # 뉴스/감성 데이터
-    ("NEWS_SENTIMENT", "CREATED_AT", RETENTION_DAYS),
+    # 뉴스/감성 데이터 (STOCK_NEWS_SENTIMENT = Single Source of Truth)
+    # NEWS_SENTIMENT 정책 제거 (2026-02-17 통합) — 테이블은 유지, 코드 참조만 제거
     ("STOCK_NEWS_SENTIMENT", "NEWS_DATE", RETENTION_DAYS),
 
     # 장중 데이터 (분봉)

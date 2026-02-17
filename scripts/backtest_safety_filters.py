@@ -121,7 +121,7 @@ def run_backtest():
         if trade['KEY_METRICS_JSON']:
             try:
                 metrics = json.loads(trade['KEY_METRICS_JSON']) if isinstance(trade['KEY_METRICS_JSON'], str) else trade['KEY_METRICS_JSON']
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError):
                 pass
         
         trade_time_utc = trade['TRADE_TIMESTAMP']

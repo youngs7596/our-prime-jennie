@@ -9,7 +9,7 @@ Real Scout Pipeline Backfill Script
 대상 기간: 2024-01-02 ~ 현재 (필요에 따라 조정)
 데이터 소스:
   - 가격/거래량: DB (STOCK_DAILY_PRICES_3Y)
-  - 뉴스: DB (NEWS_SENTIMENT)
+  - 뉴스: DB (STOCK_NEWS_SENTIMENT)
   - 네이버 크롤링: DB 기반 시총 상위로 대체
 """
 
@@ -350,7 +350,7 @@ def mock_analyze_sector_momentum(kis_api, session, watchlist_snapshot=None):
 # ============================================================================
 def mock_fetch_stock_news(vectorstore, stock_code, stock_name, k=3, target_date=None, session=None):
     """
-    DB (NEWS_SENTIMENT)에서 해당 날짜 이전의 최신 뉴스를 조회
+    DB (STOCK_NEWS_SENTIMENT)에서 해당 날짜 이전의 최신 뉴스를 조회
     """
     if not session or not target_date:
         return "뉴스 데이터 없음 (Session/Date None)"
@@ -363,10 +363,10 @@ def mock_fetch_stock_news(vectorstore, stock_code, stock_name, k=3, target_date=
         
         # 일부 DB 설정(lower_case_table_names)에 따라 대소문자 민감할 수 있음 -> 대문자로 통일
         query = text("""
-            SELECT NEWS_TITLE, PUBLISHED_AT
-            FROM NEWS_SENTIMENT
-            WHERE STOCK_CODE = :code 
-              AND PUBLISHED_AT >= :start_date 
+            SELECT HEADLINE, PUBLISHED_AT
+            FROM STOCK_NEWS_SENTIMENT
+            WHERE STOCK_CODE = :code
+              AND PUBLISHED_AT >= :start_date
               AND PUBLISHED_AT <= :end_date
             ORDER BY PUBLISHED_AT DESC
             LIMIT :k

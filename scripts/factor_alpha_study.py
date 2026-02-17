@@ -21,7 +21,7 @@ from scipy import stats
 
 from sqlalchemy import func as sa_func
 from shared.db.connection import init_engine, session_scope
-from shared.db.models import StockDailyPrice, StockMaster, StockInvestorTrading, NewsSentiment
+from shared.db.models import StockDailyPrice, StockMaster, StockInvestorTrading, StockNewsSentiment
 
 MIN_MARKET_CAP = 3000_0000_0000  # 3,000억
 LOOKBACK_DAYS = 120  # 팩터 계산용 여유 데이터 확보 (90일 분석 + 20일 워밍업)
@@ -108,12 +108,12 @@ def load_all_data(session):
     # 4) 뉴스 감성
     print("   뉴스 감성 로드 중...")
     news_rows = session.query(
-        NewsSentiment.stock_code,
-        NewsSentiment.created_at,
-        NewsSentiment.sentiment_score,
+        StockNewsSentiment.stock_code,
+        StockNewsSentiment.scraped_at,
+        StockNewsSentiment.sentiment_score,
     ).filter(
-        NewsSentiment.created_at >= cutoff_date,
-        NewsSentiment.stock_code.in_(target_codes),
+        StockNewsSentiment.scraped_at >= cutoff_date,
+        StockNewsSentiment.stock_code.in_(target_codes),
     ).all()
 
     df_news = pd.DataFrame(news_rows, columns=['stock_code', 'date', 'sentiment'])

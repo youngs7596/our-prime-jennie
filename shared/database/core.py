@@ -46,7 +46,7 @@ def _get_table_name(base_name: str) -> str:
     """
     trading_mode = os.getenv("TRADING_MODE", "REAL")
     if trading_mode == "MOCK":
-        if base_name in ["Portfolio", "TradeLog", "NEWS_SENTIMENT"]:
+        if base_name in ["Portfolio", "TradeLog", "NEWS_SENTIMENT", "STOCK_NEWS_SENTIMENT"]:
             table_name = f"{base_name}_mock"
             logger.debug(f"   [MOCK 모드] 테이블명: {base_name} → {table_name}")
             return table_name

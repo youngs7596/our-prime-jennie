@@ -30,6 +30,7 @@ class TestDatabaseHelpers:
             assert core._get_table_name("Portfolio") == "Portfolio_mock"
             assert core._get_table_name("TradeLog") == "TradeLog_mock"
             assert core._get_table_name("NEWS_SENTIMENT") == "NEWS_SENTIMENT_mock"
+            assert core._get_table_name("STOCK_NEWS_SENTIMENT") == "STOCK_NEWS_SENTIMENT_mock"
             
             # Non-target tables
             assert core._get_table_name("WatchList") == "WatchList"
@@ -41,6 +42,7 @@ class TestDatabaseHelpers:
             assert core._get_table_name("Portfolio") == "Portfolio"
             assert core._get_table_name("TradeLog") == "TradeLog"
             assert core._get_table_name("NEWS_SENTIMENT") == "NEWS_SENTIMENT"
+            assert core._get_table_name("STOCK_NEWS_SENTIMENT") == "STOCK_NEWS_SENTIMENT"
 
 
 class TestConnectionPool:

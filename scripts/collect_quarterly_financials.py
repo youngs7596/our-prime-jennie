@@ -95,7 +95,7 @@ def parse_number(text: str) -> float:
     try:
         value = float(text)
         return -value if is_negative else value
-    except:
+    except (ValueError, TypeError):
         return None
 
 
@@ -272,7 +272,7 @@ def parse_quarter_date(quarter_str: str) -> str:
             return f"{year}-{month:02d}-{day}"
         
         return None
-    except:
+    except (ValueError, TypeError):
         return None
 
 

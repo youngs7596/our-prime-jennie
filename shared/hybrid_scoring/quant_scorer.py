@@ -1597,17 +1597,15 @@ class QuantScorer:
             else:
                 # [Fix] 뉴스 데이터 부재 시 "Smart Fallback" (Schema Mismatch Resolved)
                 # 기존: NEWS_FACTOR_STATS 없음 -> 무조건 고정 점수 (12.0)
-                # 변경: NEWS_SENTIMENT(Active Table) 조회하여 "시장 평균"의 80% 반영
-                
+                # STOCK_NEWS_SENTIMENT (Single Source of Truth) 조회하여 "시장 평균"의 80% 반영
+
                 try:
                     from sqlalchemy import text
-                    # self.db_conn checks
                     if self.db_conn:
-                        # 최근 7일간 뉴스 점수 평균 (Active Table used by Crawler)
-                        # NOTE: Crawler writes to NEWS_SENTIMENT, not STOCK_NEWS_SENTIMENT
+                        # 최근 7일간 뉴스 점수 평균
                         avg_query_sql = text("""
                             SELECT AVG(SENTIMENT_SCORE) as avg_sent, COUNT(DISTINCT STOCK_CODE) as cnt
-                            FROM NEWS_SENTIMENT
+                            FROM STOCK_NEWS_SENTIMENT
                             WHERE PUBLISHED_AT >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                             AND SENTIMENT_SCORE > 0
                         """)

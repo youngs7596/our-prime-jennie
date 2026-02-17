@@ -33,7 +33,7 @@ from shared.db.models import (
     IndustryCompetitors,
     EventImpactRules,
     SectorRelationStats,
-    NewsSentiment,
+    StockNewsSentiment,
 )
 from shared.news_classifier import (
     classify_news_category,
@@ -405,22 +405,22 @@ class CompetitorAnalyzer:
         """경쟁사의 최근 부정적 이벤트 조회"""
         cutoff_date = datetime.now() - timedelta(days=lookback_days)
         
-        # NEWS_SENTIMENT 테이블에서 부정적 뉴스 조회
-        stmt = select(NewsSentiment).where(
+        # STOCK_NEWS_SENTIMENT (Single Source of Truth) 에서 부정적 뉴스 조회
+        stmt = select(StockNewsSentiment).where(
             and_(
-                NewsSentiment.stock_code == stock_code,
-                NewsSentiment.sentiment_score < 40,  # 부정적 뉴스
-                NewsSentiment.created_at >= cutoff_date
+                StockNewsSentiment.stock_code == stock_code,
+                StockNewsSentiment.sentiment_score < 40,  # 부정적 뉴스
+                StockNewsSentiment.scraped_at >= cutoff_date
             )
-        ).order_by(NewsSentiment.created_at.desc())
+        ).order_by(StockNewsSentiment.scraped_at.desc())
         records = session.scalars(stmt).all()
-        
+
         events = []
         event_rules = self.get_event_impact_rules()
-        
+
         for record in records:
             title = record.news_title or ""
-            reason = record.sentiment_reason or ""
+            reason = record.sentiment_reason or record.news_summary or ""
             
             # 뉴스 카테고리 분류
             category = classify_news_category(title, reason)

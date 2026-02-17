@@ -75,7 +75,7 @@ def analyze_time_performance():
         try:
             if t.get('KEY_METRICS_JSON'):
                 key_metrics = json.loads(t['KEY_METRICS_JSON'])
-        except:
+        except (json.JSONDecodeError, KeyError, TypeError):
             pass
             
         if side == 'BUY':

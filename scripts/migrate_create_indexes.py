@@ -64,14 +64,15 @@ INDEXES_TO_CREATE = [
     # 뉴스/감성 테이블
     # ---------------------------------------------------------
 
-    # NEWS_SENTIMENT - 뉴스 감성 분석
+    # NEWS_SENTIMENT - 레거시 (향후 DROP 예정, 인덱스 유지)
     ("NEWS_SENTIMENT", "ix_news_sentiment_stock_code", "STOCK_CODE"),
     ("NEWS_SENTIMENT", "ix_news_sentiment_published_at", "PUBLISHED_AT"),
     ("NEWS_SENTIMENT", "ix_news_sentiment_created_at", "CREATED_AT"),
 
-    # STOCK_NEWS_SENTIMENT - 종목별 뉴스 감성
+    # STOCK_NEWS_SENTIMENT - Single Source of Truth (2026-02-17 통합)
     ("STOCK_NEWS_SENTIMENT", "ix_stock_news_stock_code", "STOCK_CODE"),
     ("STOCK_NEWS_SENTIMENT", "ix_stock_news_news_date", "NEWS_DATE"),
+    ("STOCK_NEWS_SENTIMENT", "ix_stock_news_published_at", "PUBLISHED_AT"),
 
     # ---------------------------------------------------------
     # 수급/투자자 테이블

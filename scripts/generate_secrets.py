@@ -211,7 +211,7 @@ def main():
         try:
             with open(SECRETS_FILE, "r") as f:
                 existing_secrets = json.load(f)
-        except:
+        except (json.JSONDecodeError, FileNotFoundError, PermissionError):
             existing_secrets = {}
         
         # 누락된 키 확인

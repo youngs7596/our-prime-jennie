@@ -47,7 +47,8 @@ def _resolve_sector(code: str, name: str = '') -> str:
                 result = '기타'
             _sector_cache[code] = result
             return result
-    except Exception:
+    except Exception as e:
+        logger.warning(f"섹터 조회 실패 [{code}]: {e}")
         return '기타'
 
 def _scrape_naver_finance_top_stocks(limit: int = 200) -> list:
@@ -170,8 +171,8 @@ def analyze_sector_momentum(kis_api, db_conn, watchlist_snapshot=None):
                                 if d not in aggregated_history: aggregated_history[d] = []
                                 aggregated_history[d].append(p)
                             valid_stock_count += 1
-                    except Exception:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        logger.debug(f"가격 집계 skip [{code}]: {e}")
                 
                 if valid_stock_count > 0:
                     # 날짜별 평균가 계산 (섹터 지수 대용)

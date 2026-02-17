@@ -363,17 +363,17 @@ class DailyReporter:
         }
     
     def _get_recent_news_sentiment(self, session) -> List[Dict]:
-        """최근 뉴스 감성 점수 조회 (NEWS_SENTIMENT + STOCK_MASTER JOIN)"""
+        """최근 뉴스 감성 점수 조회 (STOCK_NEWS_SENTIMENT + STOCK_MASTER JOIN)"""
         from sqlalchemy import text
         try:
             result = session.execute(text("""
                 SELECT ns.STOCK_CODE,
                        COALESCE(sm.STOCK_NAME, ns.STOCK_CODE) AS STOCK_NAME,
                        ns.SENTIMENT_SCORE,
-                       ns.NEWS_TITLE
-                FROM NEWS_SENTIMENT ns
+                       ns.HEADLINE
+                FROM STOCK_NEWS_SENTIMENT ns
                 LEFT JOIN STOCK_MASTER sm ON ns.STOCK_CODE = sm.STOCK_CODE COLLATE utf8mb4_unicode_ci
-                WHERE ns.CREATED_AT >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                WHERE ns.SCRAPED_AT >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
                 ORDER BY ns.SENTIMENT_SCORE DESC
                 LIMIT 5
             """))

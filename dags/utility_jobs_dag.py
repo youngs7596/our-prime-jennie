@@ -78,7 +78,7 @@ with DAG(
     )
 
 # 6. Data Cleanup (Weekly): 03:00 KST on Sunday
-# 보관 정책: NEWS_SENTIMENT(30일), STOCK_MINUTE_PRICE(7일), LLM_DECISION_LEDGER(90일) 등
+# 보관 정책: STOCK_NEWS_SENTIMENT(365일), STOCK_MINUTE_PRICE(365일), LLM_DECISION_LEDGER(365일) 등
 with DAG(
     'data_cleanup_weekly',
     default_args=default_args,
