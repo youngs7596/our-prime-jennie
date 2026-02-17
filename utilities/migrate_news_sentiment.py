@@ -56,10 +56,10 @@ MIGRATE_DATA_SQL = """
         'ANALYZER' AS SOURCE,
         ns.CREATED_AT AS SCRAPED_AT
     FROM NEWS_SENTIMENT ns
+    LEFT JOIN STOCK_NEWS_SENTIMENT sns
+        ON ns.SOURCE_URL = sns.ARTICLE_URL COLLATE utf8mb4_unicode_ci
     WHERE ns.SOURCE_URL IS NOT NULL
-      AND ns.SOURCE_URL NOT IN (
-          SELECT ARTICLE_URL FROM STOCK_NEWS_SENTIMENT WHERE ARTICLE_URL IS NOT NULL
-      )
+      AND sns.ID IS NULL
 """
 
 
@@ -73,14 +73,14 @@ def run_migration(dry_run: bool = False):
         logger.info(f"[사전] NEWS_SENTIMENT: {ns_count}건, STOCK_NEWS_SENTIMENT: {sns_count_before}건")
 
         if dry_run:
-            # dry-run: 복사 대상 건수만 확인
+            # dry-run: 복사 대상 건수만 확인 (LEFT JOIN으로 최적화)
             pending_count = session.execute(text("""
                 SELECT COUNT(*)
                 FROM NEWS_SENTIMENT ns
+                LEFT JOIN STOCK_NEWS_SENTIMENT sns
+                    ON ns.SOURCE_URL = sns.ARTICLE_URL COLLATE utf8mb4_unicode_ci
                 WHERE ns.SOURCE_URL IS NOT NULL
-                  AND ns.SOURCE_URL NOT IN (
-                      SELECT ARTICLE_URL FROM STOCK_NEWS_SENTIMENT WHERE ARTICLE_URL IS NOT NULL
-                  )
+                  AND sns.ID IS NULL
             """)).scalar()
             logger.info(f"[DRY-RUN] 복사 대상: {pending_count}건 (실제 실행하지 않음)")
             return
@@ -122,10 +122,10 @@ def run_migration(dry_run: bool = False):
         missing = session.execute(text("""
             SELECT COUNT(*)
             FROM NEWS_SENTIMENT ns
+            LEFT JOIN STOCK_NEWS_SENTIMENT sns
+                ON ns.SOURCE_URL = sns.ARTICLE_URL COLLATE utf8mb4_unicode_ci
             WHERE ns.SOURCE_URL IS NOT NULL
-              AND ns.SOURCE_URL NOT IN (
-                  SELECT ARTICLE_URL FROM STOCK_NEWS_SENTIMENT WHERE ARTICLE_URL IS NOT NULL
-              )
+              AND sns.ID IS NULL
         """)).scalar()
         if missing > 0:
             logger.warning(f"[검증] 아직 미복사 레코드 {missing}건 존재 (NULL URL 등)")
