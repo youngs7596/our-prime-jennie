@@ -853,7 +853,7 @@ services:
 
   # vLLM LLM Server (EXAONE 4.0 32B AWQ) - 메인 추론 엔진
   vllm-llm:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.15.1
     profiles: [ "infra" ]
     deploy:
       resources:
@@ -867,6 +867,8 @@ services:
     ports:
       - "8001:8000"
     ipc: host
+    environment:
+      - HF_HUB_OFFLINE=1
     command: >
       LGAI-EXAONE/EXAONE-4.0-32B-AWQ
       --quantization awq_marlin
@@ -887,7 +889,7 @@ services:
 
   # vLLM Embedding Server (KURE-v1) - 임베딩 전용
   vllm-embed:
-    image: vllm/vllm-openai:latest
+    image: vllm/vllm-openai:v0.15.1
     profiles: [ "infra" ]
     deploy:
       resources:
@@ -901,6 +903,8 @@ services:
     ports:
       - "8002:8000"
     ipc: host
+    environment:
+      - HF_HUB_OFFLINE=1
     command: >
       nlpai-lab/KURE-v1
       --dtype half

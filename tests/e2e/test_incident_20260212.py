@@ -447,6 +447,7 @@ class TestPortfolioGuardSectorConcentration:
         config = MagicMock()
         values = {
             "PORTFOLIO_GUARD_ENABLED": True,
+            "DYNAMIC_SECTOR_BUDGET_ENABLED": False,  # 동적 예산 비활성 (테스트 격리)
             "MAX_SECTOR_STOCKS": 3,
             "CASH_FLOOR_STRONG_BULL_PCT": 5.0,
             "CASH_FLOOR_BULL_PCT": 10.0,

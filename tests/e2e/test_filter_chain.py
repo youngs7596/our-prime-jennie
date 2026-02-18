@@ -175,21 +175,22 @@ class TestStaleScoreE2E:
 
         executor = buy_executor_class(kis=mock_kis, config=mock_config)
 
-        # Find scored_dt such that counting weekdays from scored_dt.date()+1
-        # to today yields exactly 2.
+        # Reverse-engineer scored_dt: executor counts weekdays from
+        # scored_dt.date()+1 to now.date() inclusive. We need exactly 2.
         now = datetime.now(timezone.utc)
+        # Walk backwards from now to find scored_dt where biz_days == 2
         scored_dt = now
-        biz_counted = 0
-        while biz_counted < 2:
+        for _ in range(30):  # Safety limit
             scored_dt -= timedelta(days=1)
-            if scored_dt.weekday() < 5:
-                biz_counted += 1
-        # Now scored_dt.date() is 2 biz days before today.
-        # The algorithm counts from scored_dt.date()+1 to now.date(),
-        # so we need to go 1 more calendar day back.
-        scored_dt -= timedelta(days=1)
-        while scored_dt.weekday() >= 5:
-            scored_dt -= timedelta(days=1)
+            # Count biz days from scored_dt.date()+1 to now.date()
+            biz_days = 0
+            d = scored_dt.date() + timedelta(days=1)
+            while d <= now.date():
+                if d.weekday() < 5:
+                    biz_days += 1
+                d += timedelta(days=1)
+            if biz_days == 2:
+                break
 
         scored_at = scored_dt.replace(hour=15, minute=0, second=0).isoformat()
 
@@ -226,20 +227,20 @@ class TestStaleScoreE2E:
 
         executor = buy_executor_class(kis=mock_kis, config=mock_config)
 
-        # Go back 3 business days from now
+        # Reverse-engineer scored_dt: executor counts weekdays from
+        # scored_dt.date()+1 to now.date() inclusive. We need exactly 3.
         now = datetime.now(timezone.utc)
         scored_dt = now
-        biz_counted = 0
-        target_biz_days = 3
-        while biz_counted < target_biz_days:
+        for _ in range(30):  # Safety limit
             scored_dt -= timedelta(days=1)
-            if scored_dt.weekday() < 5:
-                biz_counted += 1
-        # scored_dt is now 3 business days before today
-        # Algorithm counts from scored_dt.date()+1 to now.date(), so go 1 more day back
-        scored_dt -= timedelta(days=1)
-        while scored_dt.weekday() >= 5:
-            scored_dt -= timedelta(days=1)
+            biz_days = 0
+            d = scored_dt.date() + timedelta(days=1)
+            while d <= now.date():
+                if d.weekday() < 5:
+                    biz_days += 1
+                d += timedelta(days=1)
+            if biz_days == 3:
+                break
 
         scored_at = scored_dt.replace(hour=15, minute=0, second=0).isoformat()
 
@@ -257,14 +258,13 @@ class TestStaleScoreE2E:
         assert result['stale_multiplier'] == 0.3
 
     def test_friday_to_monday_no_penalty(
-        self, kis_server, mock_config, buy_executor_class, e2e_db, mock_redis_connection, mocker
+        self, kis_server, mock_config, e2e_db, mock_redis_connection, mocker
     ):
         """
         Scored on Friday 15:00, executed on Monday 10:00 → 1 business day.
         stale_multiplier=1.0 (no penalty for weekend gap).
 
-        We mock datetime in the dynamically-loaded executor module so that
-        "now" is Monday and scored_at is the preceding Friday.
+        Directly loads the executor module and patches datetime so "now" = Monday.
         """
         mocker.patch('shared.database.get_market_regime_cache', return_value={'regime': 'BULL'})
         mocker.patch('shared.db.repository.get_today_buy_count', return_value=0)
@@ -278,28 +278,33 @@ class TestStaleScoreE2E:
         mock_kis.get_stock_snapshot.return_value = {'price': 70000}
         mock_kis.place_buy_order.return_value = "BUY_WEEKEND"
 
-        executor = buy_executor_class(kis=mock_kis, config=mock_config)
-
         # Friday 15:00 UTC → Monday 10:00 UTC
         friday = datetime(2026, 2, 6, 15, 0, 0, tzinfo=timezone.utc)
         monday = datetime(2026, 2, 9, 10, 0, 0, tzinfo=timezone.utc)
 
-        # Patch datetime.now in the dynamically-loaded module
-        import sys
-        executor_module = sys.modules.get('buy_executor_dynamic')
-        if executor_module:
-            original_dt_class = executor_module.datetime
+        # Load executor module directly and patch datetime
+        import importlib.util
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        module_path = os.path.join(project_root, 'services', 'buy-executor', 'executor.py')
+        spec = importlib.util.spec_from_file_location("buy_executor_friday_test", module_path)
+        executor_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(executor_module)
 
-            class MockDatetime(original_dt_class):
-                @classmethod
-                def now(cls, tz=None):
-                    return monday if tz else monday.replace(tzinfo=None)
+        original_dt_class = executor_module.datetime
 
-                @classmethod
-                def fromisoformat(cls, s):
-                    return original_dt_class.fromisoformat(s)
+        class MockDatetime(original_dt_class):
+            @classmethod
+            def now(cls, tz=None):
+                return monday if tz else monday.replace(tzinfo=None)
 
-            mocker.patch.object(executor_module, 'datetime', MockDatetime)
+            @classmethod
+            def fromisoformat(cls, s):
+                return original_dt_class.fromisoformat(s)
+
+        mocker.patch.object(executor_module, 'datetime', MockDatetime)
+
+        executor = executor_module.BuyExecutor(kis=mock_kis, config=mock_config)
 
         scored_at = friday.isoformat()
         scan_result = create_scan_result(
@@ -484,17 +489,20 @@ class TestFilterChainIntegration:
 
         executor = buy_executor_class(kis=mock_kis, config=mock_config)
 
-        # Calculate scored_at for exactly 2 business days ago
+        # Reverse-engineer scored_dt: executor counts weekdays from
+        # scored_dt.date()+1 to now.date() inclusive. We need exactly 2.
         now = datetime.now(timezone.utc)
         scored_dt = now
-        biz_counted = 0
-        while biz_counted < 2:
+        for _ in range(30):  # Safety limit
             scored_dt -= timedelta(days=1)
-            if scored_dt.weekday() < 5:
-                biz_counted += 1
-        scored_dt -= timedelta(days=1)
-        while scored_dt.weekday() >= 5:
-            scored_dt -= timedelta(days=1)
+            biz_days = 0
+            d = scored_dt.date() + timedelta(days=1)
+            while d <= now.date():
+                if d.weekday() < 5:
+                    biz_days += 1
+                d += timedelta(days=1)
+            if biz_days == 2:
+                break
         scored_at = scored_dt.replace(hour=15, minute=0, second=0).isoformat()
 
         scan_result = create_scan_result(
