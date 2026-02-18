@@ -164,6 +164,36 @@ class KISGatewayClient:
             logger.warning(f"⚠️ [Gateway] 휴장일 확인 실패 (기본값 False 반환)")
             return False
     
+    def is_trading_day(self, target_date=None) -> bool:
+        """
+        KRX 거래일 여부 확인 (시간대 무관, Gateway를 통해)
+
+        Args:
+            target_date: date 객체 (None이면 오늘)
+
+        Returns:
+            True: 거래일, False: 휴장일
+        """
+        logger.debug("📅 [Gateway] Is Trading Day 요청")
+
+        params = {}
+        if target_date is not None:
+            params['date'] = target_date.isoformat()
+
+        endpoint = '/api/market-data/is-trading-day'
+        if params:
+            endpoint += f"?date={params['date']}"
+
+        response = self._request('GET', endpoint)
+
+        if response and response.get('success'):
+            is_trading = response.get('data', {}).get('is_trading_day', True)
+            logger.info(f"   (Gateway) Is Trading Day: {is_trading}")
+            return is_trading
+        else:
+            logger.warning("⚠️ [Gateway] 거래일 확인 실패 (기본값 True 반환)")
+            return True
+
     def place_buy_order(self, stock_code: str, quantity: int, price: int = 0) -> Optional[str]:
         """
         매수 주문 (Gateway를 통해)

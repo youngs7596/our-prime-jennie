@@ -4,9 +4,11 @@ tests/scripts/test_macro_council_pipeline.py
 Macro Council 구조화 JSON 파이프라인 테스트.
 """
 
+import asyncio
 import json
+import os
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -719,3 +721,143 @@ class TestClaudeThinking:
                 prompt="test",
                 response_schema={},
             )
+
+
+# ==============================================================================
+# 휴장일 가드 테스트
+# ==============================================================================
+
+class TestHolidayGuard:
+    """main()의 휴장일 가드 로직 테스트"""
+
+    def _make_args(self, dry_run=False, date_str=None):
+        args = MagicMock()
+        args.dry_run = dry_run
+        args.date = date_str
+        return args
+
+    @patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None)
+    @patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None)
+    def test_holiday_guard_skips_on_weekend(self, mock_briefing, mock_snapshot):
+        """주말이면 Council 분석을 스킵해야 함"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-15 = 일요일
+        args = self._make_args(date_str="2026-02-15")
+        result = asyncio.run(main(args))
+        assert result == 0
+        # 브리핑 수집이 호출되지 않아야 함
+        mock_briefing.assert_not_called()
+
+    @patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None)
+    @patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None)
+    def test_holiday_guard_skips_on_holiday(self, mock_briefing, mock_snapshot):
+        """KRX 휴장일(공휴일)이면 Council 분석을 스킵해야 함"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-19 = 수요일 (평일)
+        args = self._make_args(date_str="2026-02-19")
+
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.ok = True
+            mock_response.json.return_value = {"data": {"is_trading_day": False}}
+            mock_get.return_value = mock_response
+
+            result = asyncio.run(main(args))
+            assert result == 0
+            # 브리핑 수집이 호출되지 않아야 함
+            mock_briefing.assert_not_called()
+
+    @patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None)
+    @patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None)
+    def test_holiday_guard_allows_on_trading_day(self, mock_briefing, mock_snapshot):
+        """거래일이면 Council 분석이 진행되어야 함 (브리핑 없으면 0 반환)"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-19 = 목요일
+        args = self._make_args(date_str="2026-02-19")
+
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.ok = True
+            mock_response.json.return_value = {"data": {"is_trading_day": True}}
+            mock_get.return_value = mock_response
+
+            result = asyncio.run(main(args))
+            # 브리핑/스냅샷 모두 None이면 0 반환 (스킵)
+            assert result == 0
+            # 브리핑 수집이 시도되어야 함
+            mock_briefing.assert_called_once()
+
+    @patch.dict(os.environ, {"DISABLE_HOLIDAY_CHECK": "true"})
+    @patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None)
+    @patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None)
+    def test_holiday_guard_disabled_by_env(self, mock_briefing, mock_snapshot):
+        """DISABLE_HOLIDAY_CHECK=true이면 휴장일 가드 비활성"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-15 = 일요일이지만 가드 비활성
+        args = self._make_args(date_str="2026-02-15")
+        result = asyncio.run(main(args))
+        # 가드가 비활성이므로 브리핑 수집 시도 (결과는 None → 0 반환)
+        assert result == 0
+        mock_briefing.assert_called_once()
+
+    @patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None)
+    @patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None)
+    def test_holiday_guard_gateway_failure_continues(self, mock_briefing, mock_snapshot):
+        """Gateway 실패 시 fail-open (분석 계속)"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-19 = 목요일
+        args = self._make_args(date_str="2026-02-19")
+
+        with patch("requests.get", side_effect=ConnectionError("Gateway down")):
+            result = asyncio.run(main(args))
+            # Gateway 실패해도 계속 진행 (브리핑 수집 시도)
+            mock_briefing.assert_called_once()
+
+    def test_holiday_guard_skipped_in_dry_run(self):
+        """--dry-run 모드에서는 휴장일 가드가 비활성"""
+        from scripts.run_macro_council import main
+
+        # 2026-02-15 = 일요일이지만 dry_run 모드
+        args = self._make_args(dry_run=True, date_str="2026-02-15")
+
+        with patch("scripts.run_macro_council.get_global_macro_snapshot", return_value=None), \
+             patch("scripts.run_macro_council.fetch_morning_briefing", return_value=None) as mock_briefing:
+            result = asyncio.run(main(args))
+            # dry_run이므로 가드 스킵 → 브리핑 수집 시도
+            mock_briefing.assert_called_once()
+
+
+# ==============================================================================
+# _build_context_text published_at 테스트
+# ==============================================================================
+
+class TestBuildContextTextPublishedAt:
+    """정치 뉴스에 published_at이 포함되는지 확인"""
+
+    def test_published_at_in_context(self):
+        from scripts.run_macro_council import _build_context_text
+
+        news = [
+            {
+                "title": "트럼프 관세 발표",
+                "source": "Reuters",
+                "category": "trade",
+                "published_at": "2026-02-18 07:30",
+            },
+        ]
+
+        result = _build_context_text("브리핑", political_news=news)
+        assert "2026-02-18 07:30" in result
+        assert "Reuters" in result
+
+    def test_context_header_says_18_hours(self):
+        from scripts.run_macro_council import _build_context_text
+
+        news = [{"title": "test", "source": "BBC", "category": "world"}]
+        result = _build_context_text("브리핑", political_news=news)
+        assert "최근 18시간" in result

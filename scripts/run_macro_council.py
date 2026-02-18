@@ -173,10 +173,15 @@ def _build_context_text(
         news_lines = []
         for i, news in enumerate(political_news[:15], 1):
             line = f"{i}. [{news.get('category', 'news')}] {news.get('title', '')}"
+            source_parts = []
             if news.get('source'):
-                line += f" (출처: {news['source']})"
+                source_parts.append(news['source'])
+            if news.get('published_at'):
+                source_parts.append(news['published_at'])
+            if source_parts:
+                line += f" ({', '.join(source_parts)})"
             news_lines.append(line)
-        sections.append("## 글로벌 정치/지정학적 뉴스 (최근 24시간)\n\n" + "\n".join(news_lines))
+        sections.append("## 글로벌 정치/지정학적 뉴스 (최근 18시간)\n\n" + "\n".join(news_lines))
 
     # 텔레그램 브리핑
     sections.append(f"## 원문 메시지 (텔레그램 브리핑)\n\n{message_content}")
@@ -609,17 +614,24 @@ async def get_political_news_headlines(max_items: int = 15) -> list:
 
         client = PoliticalNewsClient()
         try:
-            alerts = await client.fetch_alerts(max_age_hours=24, min_severity="medium")
+            alerts = await client.fetch_alerts(max_age_hours=18, min_severity="medium")
 
             headlines = []
             seen_titles = set()
             for alert in alerts[:max_items]:
                 if alert.title not in seen_titles:
+                    published_str = ""
+                    if alert.published_at:
+                        try:
+                            published_str = alert.published_at.strftime("%Y-%m-%d %H:%M")
+                        except Exception:
+                            pass
                     headlines.append({
                         "title": alert.title,
                         "source": alert.source,
                         "category": alert.category,
                         "severity": alert.severity,
+                        "published_at": published_str,
                     })
                     seen_titles.add(alert.title)
 
@@ -764,6 +776,22 @@ async def main(args):
         hours_ago = 24
 
     logger.info(f"분석 대상 날짜: {target_date}")
+
+    # 휴장일 가드: 주말/공휴일에는 Council 분석 스킵 (비용 절감)
+    skip_holiday = os.getenv("DISABLE_HOLIDAY_CHECK", "false").lower() in {"1", "true", "yes", "on"}
+    if not skip_holiday and not args.dry_run:
+        if target_date.weekday() >= 5:
+            logger.info(f"주말이므로 Council 분석 스킵 ({target_date}, weekday={target_date.weekday()})")
+            return 0
+        try:
+            import requests as req
+            gateway_url = os.getenv("KIS_GATEWAY_URL", "http://kis-gateway:8080")
+            resp = req.get(f"{gateway_url}/api/market-data/is-trading-day", timeout=5)
+            if resp.ok and not resp.json().get("data", {}).get("is_trading_day", True):
+                logger.info(f"오늘({target_date})은 KRX 휴장일. Council 분석 스킵")
+                return 0
+        except Exception as e:
+            logger.warning(f"휴장일 체크 실패 (계속 진행): {e}")
 
     # 1. 글로벌 매크로 스냅샷 수집
     global_snapshot = get_global_macro_snapshot()

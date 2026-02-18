@@ -3,7 +3,7 @@
 # [모듈] KIS API 시세 및 데이터 조회
 
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import pytz
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,50 @@ class MarketData:
         except Exception as e:
             logger.error(f"   (Market) KIS API: 휴장일 확인 중 오류 발생: {e}")
             return False
+
+    def is_trading_day(self, target_date: date = None) -> bool:
+        """KRX 거래일 여부 확인 (시간대 무관, 날짜만 확인).
+
+        check_market_open()은 09:00-15:30 시간 체크를 포함하므로
+        장 시작 전(07:30 등)에 호출하면 항상 False를 반환합니다.
+        이 메서드는 시간 체크 없이 날짜만 확인합니다.
+
+        Args:
+            target_date: 확인할 날짜 (None이면 오늘)
+
+        Returns:
+            True: 거래일 (평일 & 비휴일)
+            False: 비거래일 (주말 또는 공휴일)
+        """
+        target = target_date or date.today()
+
+        if target.weekday() >= 5:
+            logger.info(f"   (Market) {target} 주말 (weekday={target.weekday()})")
+            return False
+
+        if self.client.TRADING_MODE == "MOCK":
+            logger.info(f"   (Market) MOCK 모드: {target} 평일이므로 거래일로 간주")
+            return True
+
+        try:
+            target_str = target.strftime('%Y%m%d')
+            URL = f"{self.client.BASE_URL}/uapi/domestic-stock/v1/quotations/chk-holiday"
+            params = {"BASS_DT": target_str, "CTX_AREA_NK": "", "CTX_AREA_FK": ""}
+            res_data = self.client.request('GET', URL, params=params, tr_id="CTCA0903R")
+
+            if res_data and res_data.get('output'):
+                if res_data['output'][0]['opnd_yn'] == 'Y':
+                    logger.info(f"   (Market) KIS API: {target} 거래일")
+                    return True
+                else:
+                    logger.info(f"   (Market) KIS API: {target} 휴장일")
+                    return False
+            else:
+                logger.warning("   (Market) KIS API: 휴장일 API 응답 형식 오류 (거래일로 간주)")
+                return True
+        except Exception as e:
+            logger.warning(f"   (Market) KIS API: 휴장일 확인 실패 (거래일로 간주): {e}")
+            return True
 
     def get_stock_daily_prices(self, stock_code, num_days_to_fetch=30):
         """특정 종목 또는 지수의 과거 일봉 데이터를 조회합니다."""

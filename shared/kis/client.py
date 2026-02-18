@@ -71,6 +71,7 @@ class KISClient:
     # --- 편의를 위한 바로가기(Shortcut) 메소드 ---
     # 기존 KIS_API 클래스와의 호환성을 위해 자주 사용하는 메소드들을 바로 호출할 수 있도록 연결합니다.
     def check_market_open(self): return self.market_data.check_market_open()
+    def is_trading_day(self, *args, **kwargs): return self.market_data.is_trading_day(*args, **kwargs)
     def get_stock_daily_prices(self, *args, **kwargs): return self.market_data.get_stock_daily_prices(*args, **kwargs)
     def get_stock_snapshot(self, *args, **kwargs): return self.market_data.get_stock_snapshot(*args, **kwargs)
     def get_overseas_stock_price(self, *args, **kwargs): return self.market_data.get_overseas_stock_price(*args, **kwargs)

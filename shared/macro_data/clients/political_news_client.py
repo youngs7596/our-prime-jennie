@@ -135,17 +135,37 @@ class PoliticalNewsClient(MacroDataClient):
                 "금리 인상": "bearish",
             }
         },
-        # 미국 행정부 발언 (High - 정책 불확실성)
+        # 미국 행정부 (Medium - 일반 정치 뉴스 가중치 축소)
         "us_politics": {
             "keywords": [
-                "trump", "biden", "white house", "executive order",
+                "white house", "executive order", "행정명령", "백악관",
                 "treasury secretary", "commerce secretary",
-                "트럼프", "바이든", "백악관", "행정명령",
+                "presidential", "congress", "senate",
+                "정부 정책", "대통령령",
             ],
-            "severity": "high",
-            "impact_direction_hints": {}
+            "severity": "medium",
+            "impact_direction_hints": {
+                "executive order": "bearish",
+                "행정명령": "bearish",
+                "bipartisan": "bullish",
+            }
         },
-        # 무역/관세 (Critical - 한국 수출 영향)
+        # 미국 무역/관세 정책 (Critical - 한국 직접 영향)
+        "us_trade_policy": {
+            "keywords": [
+                "trump tariff", "trump sanction", "trump trade",
+                "biden tariff", "biden sanction",
+                "section 301", "section 232",
+                "chips act", "ira", "inflation reduction act",
+                "한미 무역", "대한 관세", "korea tariff",
+            ],
+            "severity": "critical",
+            "impact_direction_hints": {
+                "exemption": "bullish", "면제": "bullish",
+                "tariff increase": "bearish", "관세 인상": "bearish",
+            }
+        },
+        # 무역/관세 일반 (Critical - 한국 수출 영향)
         "trade": {
             "keywords": [
                 "tariff", "trade war", "trade deal", "sanction",
@@ -163,25 +183,25 @@ class PoliticalNewsClient(MacroDataClient):
                 "제재": "bearish",
             }
         },
-        # 지정학적 리스크 (High)
+        # 지정학적 리스크 (High) — 복합 키워드만 (단독 "war" 등 제거)
         "geopolitical": {
             "keywords": [
-                "war", "military", "conflict", "invasion", "attack",
-                "missile", "nuclear", "crisis", "tension",
-                "north korea", "china taiwan", "russia ukraine",
-                "전쟁", "군사", "갈등", "침공", "공격", "미사일",
-                "핵", "위기", "긴장", "북한", "대만", "우크라이나",
+                "military conflict", "armed conflict", "invasion",
+                "missile launch", "nuclear test", "crisis escalat",
+                "north korea missile", "north korea nuclear",
+                "china taiwan conflict", "china taiwan tension",
+                "russia ukraine", "middle east conflict", "iran israel",
+                "군사 충돌", "미사일 발사", "핵실험",
+                "침공", "긴장 고조", "북한 도발", "대만 해협",
             ],
             "severity": "high",
             "impact_direction_hints": {
-                "peace": "bullish",
-                "ceasefire": "bullish",
-                "평화": "bullish",
-                "휴전": "bullish",
-                "war": "bearish",
-                "전쟁": "bearish",
-                "attack": "bearish",
-                "공격": "bearish",
+                "peace": "bullish", "ceasefire": "bullish",
+                "peace deal": "bullish", "de-escalat": "bullish",
+                "평화": "bullish", "휴전": "bullish",
+                "military conflict": "bearish", "invasion": "bearish",
+                "missile launch": "bearish", "nuclear test": "bearish",
+                "전쟁": "bearish", "침공": "bearish", "미사일 발사": "bearish",
             }
         },
         # 중앙은행 관련 (Medium)
@@ -194,22 +214,21 @@ class PoliticalNewsClient(MacroDataClient):
             "severity": "medium",
             "impact_direction_hints": {}
         },
-        # 경제 위기 시그널 (Critical)
+        # 경제 위기 시그널 (Critical) — 복합 키워드만 (단독 "recession" 등 제거)
         "crisis": {
             "keywords": [
-                "recession", "depression", "crash", "collapse",
-                "default", "bankruptcy", "bailout", "meltdown",
-                "경기 침체", "불황", "폭락", "붕괴", "디폴트",
-                "파산", "구제금융", "금융 위기",
+                "recession warning", "recession risk", "economic depression",
+                "market crash", "financial collapse", "sovereign default",
+                "bank bankruptcy", "bailout package", "market meltdown",
+                "systemic risk", "credit crisis",
+                "경기 침체 경고", "금융 위기", "시장 폭락",
+                "디폴트 선언", "은행 파산", "구제금융",
             ],
             "severity": "critical",
             "impact_direction_hints": {
-                "recovery": "bullish",
-                "회복": "bullish",
-                "recession": "bearish",
-                "침체": "bearish",
-                "crash": "bearish",
-                "폭락": "bearish",
+                "recovery": "bullish", "회복": "bullish",
+                "recession": "bearish", "crash": "bearish",
+                "collapse": "bearish", "침체": "bearish", "폭락": "bearish",
             }
         },
     }
@@ -355,6 +374,9 @@ class PoliticalNewsClient(MacroDataClient):
         """
         텍스트에서 키워드 감지.
 
+        짧은 영문 키워드(5자 이하, ASCII)는 word boundary(\b)를 적용하여
+        부분 매칭을 방지합니다. 예: "war"가 "award"에 매칭되는 것을 방지.
+
         Returns:
             List of (keyword, category, severity, impact_direction)
         """
@@ -363,20 +385,29 @@ class PoliticalNewsClient(MacroDataClient):
 
         for category, config in self.KEYWORD_CONFIG.items():
             for keyword in config["keywords"]:
-                if keyword.lower() in text_lower:
-                    # 영향 방향 결정
-                    impact = "unknown"
-                    for hint_kw, direction in config.get("impact_direction_hints", {}).items():
-                        if hint_kw.lower() in text_lower:
-                            impact = direction
-                            break
+                kw_lower = keyword.lower()
 
-                    detected.append((
-                        keyword,
-                        category,
-                        config["severity"],
-                        impact
-                    ))
+                # 짧은 ASCII 키워드는 word boundary 적용
+                if len(kw_lower) <= 5 and kw_lower.isascii():
+                    if not re.search(r'\b' + re.escape(kw_lower) + r'\b', text_lower):
+                        continue
+                else:
+                    if kw_lower not in text_lower:
+                        continue
+
+                # 영향 방향 결정
+                impact = "unknown"
+                for hint_kw, direction in config.get("impact_direction_hints", {}).items():
+                    if hint_kw.lower() in text_lower:
+                        impact = direction
+                        break
+
+                detected.append((
+                    keyword,
+                    category,
+                    config["severity"],
+                    impact
+                ))
 
         return detected
 

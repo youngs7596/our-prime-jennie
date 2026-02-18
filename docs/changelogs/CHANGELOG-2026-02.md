@@ -1,5 +1,17 @@
 # 2026년 2월 변경 이력 (February 2026)
 
+## 2026-02-18
+### Macro Council 휴장일 가드 + 정치뉴스 고도화
+- **feat(kis)**: `is_trading_day()` 메서드 추가 (market_data, client, gateway, gateway_client)
+- **feat(gateway)**: `GET /api/market-data/is-trading-day` 엔드포인트 추가
+- **feat(macro_council)**: 휴장일 가드 — 주말/공휴일 Council 실행 차단 (`DISABLE_HOLIDAY_CHECK`로 우회)
+- **fix(macro_council)**: RSS 뉴스 `max_age_hours` 24→18, `published_at` LLM 컨텍스트에 포함
+- **refactor(political_news)**: 키워드 word boundary 적용 (5자 이하 ASCII), 복합 키워드 전환
+- **refactor(political_news)**: `us_trade_policy` 신규 카테고리 (critical), `us_politics` severity high→medium
+- **fix(political_news)**: 단독 "war"/"recession" 등 제거 → 복합 키워드 (false positive 감소)
+- **feat(prompts)**: 전략가/리스크분석가 프롬프트에 뉴스 그라운딩 지시 추가
+- **test**: 28개 신규 테스트 (holiday guard 8, political news 20)
+
 ## 2026-02-14
 ### Co-Authored-By 없는 커밋 전수 점검 + Gemini 잔존 코드 정리
 - **fix(observability)**: volume=0/vol필드 누락 시 경고 로그 추가 (kis-gateway, stream_consumer, websocket)

@@ -1061,6 +1061,55 @@ def get_investor_trend():
 
 
 
+@app.route('/api/market-data/is-trading-day', methods=['GET'])
+@limiter.limit(GLOBAL_RATE_LIMIT)
+def is_trading_day():
+    """거래일 여부 확인 (시간대 무관, 날짜만 확인)"""
+    start_time = time.time()
+    stats['total_requests'] += 1
+
+    try:
+        target_date_str = request.args.get('date')
+        target_date = None
+        if target_date_str:
+            from datetime import date as date_type
+            target_date = date_type.fromisoformat(target_date_str)
+
+        logger.info(f"📅 [Gateway] Is Trading Day 요청: {target_date or 'today'}")
+        result = call_kis_api_with_breaker(
+            kis_client.is_trading_day,
+            target_date
+        )
+
+        stats['successful_requests'] += 1
+
+        response_time = time.time() - start_time
+        stats['request_history'].append({
+            'endpoint': '/api/market-data/is-trading-day',
+            'timestamp': datetime.now().isoformat(),
+            'response_time': response_time,
+            'status': 'success'
+        })
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "is_trading_day": result
+            },
+            "response_time": response_time
+        }), 200
+
+    except CircuitBreakerError as e:
+        stats['failed_requests'] += 1
+        logger.error(f"🚨 Circuit Breaker OPEN: {e}")
+        return jsonify({"error": "Circuit Breaker OPEN - KIS API 일시적으로 사용 불가"}), 503
+
+    except Exception as e:
+        stats['failed_requests'] += 1
+        logger.error(f"❌ Is Trading Day 오류: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/market-data/check-market-open', methods=['GET'])
 @limiter.limit(GLOBAL_RATE_LIMIT)
 def check_market_open():
